@@ -57,7 +57,7 @@
 | **타깃 누수 차단** — 재무(t년) → 등급(t+1년) 매핑을 코드로 강제 | [`src/bfd/data/splitters.py`](src/bfd/data/splitters.py), [`src/bfd/validation/leakage.py`](src/bfd/validation/leakage.py) |
 | **시장별 분리** — KOSPI/KOSDAQ은 구조적으로 달라 동일 모델 금지 | [`configs/market/`](configs/market/), [`scripts/train_market_model.py`](scripts/train_market_model.py) |
 | **투명성** — EBM 경로는 항상 학습되어 리포트에 shape function 포함 | [`src/bfd/models/ebm_model.py`](src/bfd/models/ebm_model.py), [`src/bfd/reporting/explanations.py`](src/bfd/reporting/explanations.py) |
-| **편향 제거 위원회** — 악마의 대변인 등 다수 기법을 Strategy로 조합 | [`src/bfd/agents/committee/`](src/bfd/agents/committee/) |
+| **편향 제거 위원회** — 다수 기법을 Strategy로 조합 | [`src/bfd/agents/committee/`](src/bfd/agents/committee/) |
 | **내부정보 보안** — 기본 비활성, 활성화 시 세션 격리·감사로그 | [`src/bfd/rag/internal_info/`](src/bfd/rag/internal_info/), [`docs/security_policy.md`](docs/security_policy.md) |
 
 ## 설치
@@ -139,13 +139,3 @@ src/bfd/
 - **LangGraph** — LangChain AI. [`langchain-ai/langgraph`](https://github.com/langchain-ai/langgraph)
 - **LightGBM** — Ke et al. (2017). [`microsoft/LightGBM`](https://github.com/microsoft/LightGBM)
 - **pandera** — tabular schema validation. [`unionai-oss/pandera`](https://github.com/unionai-oss/pandera)
-
-## 라이선스
-
-Apache License 2.0. 세부사항은 [LICENSE](LICENSE) 참조.
-
-## 기여
-
-이 프로젝트는 학습/연구 목적의 프로토타입입니다.
-실제 투자/대출 의사결정에 본 시스템의 출력을 단독 근거로 사용해서는 안 됩니다.
-신용평가등급의 보조 지표로만 활용하세요.
