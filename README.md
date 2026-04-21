@@ -1,4 +1,4 @@
-# Borderline Firm Detector
+# Corporate-Analysis-System
 
 > KOSPI/KOSDAQ 상장사의 **한계기업 징후**를 신용평가과정에 대응되는 AI 에이전트 파이프라인으로 조기에 포착합니다.
 
