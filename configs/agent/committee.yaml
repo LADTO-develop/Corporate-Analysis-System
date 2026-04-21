@@ -1,0 +1,60 @@
+# ---------------------------------------------------------------------------
+# 위원회 노드 — 편향 제거 토론 기법 설정
+#
+# 원 프로젝트 목표: 신용평가과정 중 '회의기반 최종신용등급결정'을 모사.
+# 지금까지 분석에 사용되지 않은 독립 LLM들이 베이스 예측 + 오버레이를 검토하여
+# 최종 판정에 도달.
+# ---------------------------------------------------------------------------
+
+# 위원회 LLM — 앙상블에 참여하지 않은 별도 모델을 쓰는 것이 원칙.
+committee_llm:
+  model: "claude-sonnet-4-6"
+  temperature: 0.3                    # 약간의 다양성
+  max_tokens: 1024
+
+# 적용할 기법들 (순차적으로 실행)
+strategies:
+  - kind: "devils_advocate"
+    enabled: true
+    params:
+      # 현재 다수 의견에 반대하는 논거를 강제로 생성
+      num_objections: 3
+      force_contrarian: true
+
+  - kind: "six_hats"
+    enabled: true
+    params:
+      # Edward de Bono의 6모자 — 각 모자별 관점을 개별 LLM 호출로
+      hats:
+        - white       # 사실/데이터
+        - red         # 직관/감정
+        - black       # 비판/위험
+        - yellow      # 긍정/이익
+        - green       # 창의/대안
+        - blue        # 프로세스/종합
+
+  - kind: "nominal_group"
+    enabled: true
+    params:
+      # 독립적으로 의견 수집 → 정리 → 투표
+      num_voters: 5
+      voting_method: "borda"           # "majority" | "borda" | "weighted"
+
+  - kind: "step_ladder"
+    enabled: false                     # 기본 비활성. 계산 비용 큼.
+    params:
+      # 점진적으로 참여자 추가하며 의견 통합
+      initial_panel_size: 2
+      max_panel_size: 5
+
+# 최종 판정 로직
+aggregation:
+  method: "weighted_vote"              # "majority" | "weighted_vote" | "llm_synthesis"
+  # weighted_vote 사용시 각 기법의 가중치
+  weights:
+    devils_advocate: 0.25
+    six_hats: 0.35
+    nominal_group: 0.30
+    step_ladder: 0.10
+  # 불확실성이 이 임계값을 넘으면 "uncertain" 판정 (재검토 플래그)
+  uncertainty_threshold: 0.15

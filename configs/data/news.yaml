@@ -1,0 +1,47 @@
+# ---------------------------------------------------------------------------
+# 뉴스 / 공시 RAG 설정
+# ---------------------------------------------------------------------------
+
+# 로컬 RAG 코퍼스 — 파일로 수집된 뉴스/공시를 임베딩해 질의 가능하게 함
+corpus:
+  raw_path: "./data/raw/news"
+  chunk_size: 800
+  chunk_overlap: 120
+
+# ChromaDB 설정 (초기 구현, 추후 교체 가능)
+vector_store:
+  kind: "chroma"
+  persist_directory: "./data/interim/chroma"
+  collection_name: "bfd_news_v1"
+  distance_metric: "cosine"
+
+embedding:
+  provider: "anthropic_voyage"       # Voyage AI (Anthropic 파트너)
+  model: "voyage-3"
+  batch_size: 64
+
+# LLM 피처화 설정 — 뉴스/공시를 스칼라 피처로 변환
+llm_featurizer:
+  model: "claude-sonnet-4-6"
+  max_tokens: 512
+  temperature: 0.0
+  # 한 기업당 한 시점의 뉴스 집계에 사용할 최대 문서 수
+  top_k: 15
+  # LLM이 추출해야 하는 피처 스키마 — 정형 JSON 강제
+  output_schema:
+    firm_specific_sentiment: "float in [-1, 1]"
+    industry_sentiment: "float in [-1, 1]"
+    event_risk_flag: "bool"          # M&A, 소송, 리콜, 횡령 등 이벤트 리스크
+    going_concern_mention: "bool"    # '계속기업' 의심 문구 여부
+    governance_issue_mention: "bool" # 지배구조 / 횡령 / 감사의견
+    summary_ko: "str, <= 200 chars"
+
+# 관심 토픽 — 검색 쿼리 템플릿에 활용
+topics:
+  - "기업 실적 발표"
+  - "감사의견 한정"
+  - "자본잠식"
+  - "부도 파산 법정관리"
+  - "M&A 인수합병"
+  - "소송 규제 제재"
+  - "산업 동향"

@@ -1,0 +1,41 @@
+# ---------------------------------------------------------------------------
+# LightGBM 설정
+# 참고: https://lightgbm.readthedocs.io/en/latest/Parameters.html
+# ---------------------------------------------------------------------------
+
+# 시장별 YAML(kospi.yaml / kosdaq.yaml)에서 num_leaves, learning_rate,
+# n_estimators, is_unbalance 등을 오버라이드합니다.
+
+objective: "binary"
+metric: ["binary_logloss", "auc", "average_precision"]
+boosting_type: "gbdt"
+
+# 기본 하이퍼파라미터 — 시장 config에서 덮어쓰지 않으면 이 값이 사용됨
+num_leaves: 63
+max_depth: -1
+learning_rate: 0.05
+n_estimators: 500
+min_data_in_leaf: 20
+min_sum_hessian_in_leaf: 1.0e-3
+
+# 정규화
+lambda_l1: 0.0
+lambda_l2: 0.0
+feature_fraction: 0.9
+bagging_fraction: 0.9
+bagging_freq: 5
+
+# 클래스 불균형 처리 — 시장 config에서 오버라이드
+is_unbalance: true
+# scale_pos_weight와 is_unbalance는 상호 배타적. is_unbalance=true일 때는 unset.
+# scale_pos_weight: 9.0
+
+# Early stopping (fit 시 callbacks로 전달)
+early_stopping_rounds: 50
+verbose: -1
+seed: 42
+n_jobs: -1
+
+# 범주형 피처 이름 — features/registry.py가 자동으로 감지하지만,
+# 명시적으로 강제하고 싶은 컬럼이 있으면 여기에 기재.
+categorical_features: []

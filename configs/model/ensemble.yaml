@@ -1,0 +1,42 @@
+# ---------------------------------------------------------------------------
+# OOF 스태킹 앙상블 설정
+#
+# 베이스 모델(TabPFN / LightGBM / EBM)의 OOF 예측 확률을 입력으로
+# 메타러너를 학습. EBM은 "해석 경로"로 따로 유지하며, 여기서는
+# 앙상블 기여자로도 함께 사용.
+# ---------------------------------------------------------------------------
+
+strategy: "stacking"                  # "stacking" | "weighted_average" | "single_best"
+
+base_models:
+  - name: "tabpfn"
+    weight: 0.5                        # weighted_average 모드에서 사용
+    enabled: true
+  - name: "lightgbm"
+    weight: 0.3
+    enabled: true
+  - name: "ebm"
+    weight: 0.2
+    enabled: true
+
+# 스태킹 메타러너 설정
+meta_learner:
+  kind: "logistic_regression"          # "logistic_regression" | "lightgbm"
+  C: 1.0
+  penalty: "l2"
+  class_weight: "balanced"
+  max_iter: 1000
+
+# Calibration — 앙상블 최종 출력에 대한 보정
+calibration:
+  method: "isotonic"                   # "isotonic" | "sigmoid" (Platt)
+  cv: 5
+
+# 판정 임계값 — 이 값을 넘으면 "borderline"으로 분류
+# Walk-forward 검증 중 F1 / 기대비용 최소화 지점을 탐색하여 갱신됨.
+decision_threshold:
+  initial: 0.5
+  optimize_metric: "expected_cost"     # "f1" | "youden_j" | "expected_cost"
+  # expected_cost 사용시 오탐/미탐 비용 — 미탐(한계기업 놓침) 비용이 훨씬 큼
+  cost_fn: 1.0                         # false negative
+  cost_fp: 0.2                         # false positive

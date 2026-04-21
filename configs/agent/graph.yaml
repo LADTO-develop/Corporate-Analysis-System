@@ -1,0 +1,61 @@
+# ---------------------------------------------------------------------------
+# LangGraph 그래프 토폴로지
+#
+# 실제 그래프는 src/bfd/agents/graph.py의 build_graph()가 이 설정을 읽어
+# StateGraph에 노드/엣지를 추가합니다.
+# ---------------------------------------------------------------------------
+
+entry_node: "data"
+
+nodes:
+  - name: "data"
+    module: "bfd.agents.nodes.data_node"
+    fn: "run"
+  - name: "feature"
+    module: "bfd.agents.nodes.feature_node"
+    fn: "run"
+  - name: "base_prediction"
+    module: "bfd.agents.nodes.base_prediction_node"
+    fn: "run"
+  - name: "macro_overlay"
+    module: "bfd.agents.nodes.macro_overlay_node"
+    fn: "run"
+  - name: "news_overlay"
+    module: "bfd.agents.nodes.news_overlay_node"
+    fn: "run"
+  - name: "committee"
+    module: "bfd.agents.nodes.committee_node"
+    fn: "run"
+  - name: "report"
+    module: "bfd.agents.nodes.report_node"
+    fn: "run"
+
+edges:
+  - [data, feature]
+  - [feature, base_prediction]
+  # base_prediction 이후 macro/news 오버레이를 병렬 실행 (fan-out)
+  - [base_prediction, macro_overlay]
+  - [base_prediction, news_overlay]
+  # fan-in: 둘 다 끝나면 committee로 수렴
+  - [macro_overlay, committee]
+  - [news_overlay, committee]
+  - [committee, report]
+
+# Conditional edges — 예: 데이터 부족 시 조기 종료
+conditional_edges:
+  data:
+    condition_fn: "bfd.agents.nodes.data_node:has_enough_data"
+    mapping:
+      "enough": "feature"
+      "insufficient": "report"         # 보고서에 insufficient_data 플래그로 종료
+
+# Checkpointer — 상태 persistence
+checkpointer:
+  kind: "memory"                       # "memory" | "sqlite"
+  # sqlite 사용시 경로
+  sqlite_path: "./data/interim/langgraph_checkpoints.db"
+
+# 노드별 재시도 정책
+retry:
+  max_attempts: 3
+  backoff_seconds: 2

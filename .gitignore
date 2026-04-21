@@ -1,0 +1,92 @@
+# ---------------------------------------------------------------------------
+# Borderline Firm Detector — .gitignore
+# ---------------------------------------------------------------------------
+
+# --- Python ----------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+*.egg
+.eggs/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+.tox/
+.nox/
+
+# --- Virtual envs ----------------------------------------------------------
+.venv/
+venv/
+env/
+ENV/
+
+# --- Package managers ------------------------------------------------------
+pip-log.txt
+pip-delete-this-directory.txt
+uv.lock
+poetry.lock
+
+# --- Environment variables -------------------------------------------------
+.env
+.env.*
+!.env.example
+
+# --- Jupyter ---------------------------------------------------------------
+.ipynb_checkpoints/
+notebooks/**/*.html
+notebooks/**/*_files/
+
+# --- Data ------------------------------------------------------------------
+# All raw/interim/processed data is tracked via DVC or LFS, not git.
+data/raw/**/
+data/interim/**/
+data/processed/**/
+!data/**/.gitkeep
+!data/**/README.md
+# External mapping tables ARE tracked (small, versioned reference data).
+!data/external/**
+
+# --- Model artifacts -------------------------------------------------------
+*.ckpt
+*.pt
+*.pth
+*.joblib
+*.pkl
+*.h5
+mlruns/
+lightning_logs/
+wandb/
+
+# --- Hydra / experiment output --------------------------------------------
+outputs/
+multirun/
+.hydra/
+
+# --- TabPFN model cache ---------------------------------------------------
+# Default location; TABPFN_MODEL_CACHE_DIR env var can override.
+.cache/tabpfn/
+
+# --- OS --------------------------------------------------------------------
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# --- IDE -------------------------------------------------------------------
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# --- Claude / AI assistants -----------------------------------------------
+.claude/
+.cursor/

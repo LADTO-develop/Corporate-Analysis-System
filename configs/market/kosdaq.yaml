@@ -1,0 +1,43 @@
+# ---------------------------------------------------------------------------
+# KOSDAQ 시장 설정
+#
+# KOSDAQ은 중소·벤처 중심이어서 이크레더블·나이스디앤비의 비중이 상대적으로
+# 큼. 대형 평가 3사(한기평/한신평/NICE)는 커버리지가 좁음. 기업 규모 편차가
+# 크고 결측이 많으므로 결측 처리 정책을 KOSPI보다 관대하게 잡음.
+# ---------------------------------------------------------------------------
+
+market: KOSDAQ
+
+dominant_agencies:
+  - 이크레더블
+  - 나이스디앤비
+  - NICE신용평가
+  - 한국기업평가
+
+feature_subset: "kosdaq_v1"          # 규모 정규화 + 변동성 피처 강화 서브셋
+
+target:
+  kind: "binary"
+  positive_class: "borderline"
+  negative_class: "healthy"
+
+cv:
+  kind: "walk_forward"
+  train_years: 5
+  val_years: 1
+  step_years: 1
+  min_train_year: 2015
+  gap_years: 0
+
+models:
+  tabpfn:
+    ignore_pretraining_limits: false
+  lightgbm:
+    # 관측치가 KOSPI보다 많아(상장사 수 기준) 복잡도를 올려도 overfit 덜함
+    num_leaves: 127
+    learning_rate: 0.03
+    n_estimators: 800
+    is_unbalance: true
+  ebm:
+    outer_bags: 12                    # 분산 큰 소형주 → bag 수 증가
+    interactions: 20

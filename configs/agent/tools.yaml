@@ -1,0 +1,49 @@
+# ---------------------------------------------------------------------------
+# 툴 카탈로그 — 레이어별 툴 등록
+#
+# src/bfd/agents/tools/ 아래의 실제 함수에 LangChain @tool 데코레이터가
+# 붙어있고, 이 파일은 각 노드가 어떤 툴을 사용할 수 있는지를 결정합니다.
+# ---------------------------------------------------------------------------
+
+# 레이어별 툴 정의 — "module:callable" 형식
+layers:
+  data:
+    - "bfd.agents.tools.data_tools:load_financial_statements"
+    - "bfd.agents.tools.data_tools:load_ratings"
+    - "bfd.agents.tools.data_tools:list_available_years"
+  feature:
+    - "bfd.agents.tools.feature_tools:compute_balance_sheet_features"
+    - "bfd.agents.tools.feature_tools:compute_cash_flow_features"
+    - "bfd.agents.tools.feature_tools:compute_income_statement_features"
+    - "bfd.agents.tools.feature_tools:compute_equity_changes_features"
+    - "bfd.agents.tools.feature_tools:lookup_feature_definition"
+  macro:
+    - "bfd.agents.tools.macro_tools:fetch_ecos_series"
+    - "bfd.agents.tools.macro_tools:compute_credit_spread"
+    - "bfd.agents.tools.macro_tools:compute_fx_volatility"
+  prediction:
+    - "bfd.agents.tools.prediction_tools:predict_with_tabpfn"
+    - "bfd.agents.tools.prediction_tools:predict_with_lightgbm"
+    - "bfd.agents.tools.prediction_tools:predict_with_ebm"
+    - "bfd.agents.tools.prediction_tools:ensemble_predictions"
+    - "bfd.agents.tools.prediction_tools:explain_with_ebm"
+  rag:
+    - "bfd.agents.tools.rag_tools:search_news"
+    - "bfd.agents.tools.rag_tools:extract_llm_features"
+  validation:
+    - "bfd.agents.tools.validation_tools:check_leakage"
+    - "bfd.agents.tools.validation_tools:check_schema"
+    - "bfd.agents.tools.validation_tools:check_drift"
+  reporting:
+    - "bfd.agents.tools.reporting_tools:build_audit_entry"
+    - "bfd.agents.tools.reporting_tools:render_final_report"
+
+# 노드별 허용 툴 — 보안 원칙: 각 노드는 자기 작업에 필요한 툴만 접근
+node_permissions:
+  data: ["data", "validation"]
+  feature: ["feature", "validation"]
+  base_prediction: ["prediction", "validation"]
+  macro_overlay: ["macro", "prediction"]
+  news_overlay: ["rag"]
+  committee: ["prediction", "rag", "reporting"]
+  report: ["reporting"]
