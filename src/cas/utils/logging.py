@@ -15,6 +15,11 @@ except ImportError:  # pragma: no cover
     Processor = Any  # type: ignore[misc, assignment]
 
 
+def _env(primary: str, legacy: str, default: str) -> str:
+    """Read a new env var name first and fall back to the legacy one."""
+    return os.getenv(primary) or os.getenv(legacy) or default
+
+
 def configure_logging(
     level: str | int | None = None,
     *,
@@ -22,7 +27,7 @@ def configure_logging(
 ) -> None:
     """Configure logging with or without structlog."""
     if level is None:
-        level = os.getenv("BFD_LOG_LEVEL", "INFO")
+        level = _env("CAS_LOG_LEVEL", "BFD_LOG_LEVEL", "INFO")
     if isinstance(level, str):
         level = getattr(logging, level.upper(), logging.INFO)
 

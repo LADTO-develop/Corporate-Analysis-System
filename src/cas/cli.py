@@ -6,6 +6,8 @@ import argparse
 import json
 from pathlib import Path
 
+from dotenv import load_dotenv
+
 from cas.agents.graph import run_once
 from cas.utils.logging import configure_logging, get_logger
 
@@ -25,6 +27,7 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     """Execute the LangGraph pipeline and print output artifact paths."""
+    load_dotenv()
     configure_logging()
     logger = get_logger(__name__)
     args = parse_args()

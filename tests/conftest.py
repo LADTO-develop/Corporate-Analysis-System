@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from dotenv import load_dotenv
 
 PROJECT_ROOT = Path(__file__).parent.parent
 SRC_ROOT = PROJECT_ROOT / "src"
@@ -18,6 +19,7 @@ from cas.utils.seeds import set_seeds
 
 @pytest.fixture(autouse=True, scope="session")
 def _setup_logging_and_seeds() -> None:
+    load_dotenv()
     configure_logging(level="WARNING", json_output=False)
     set_seeds(42)
 

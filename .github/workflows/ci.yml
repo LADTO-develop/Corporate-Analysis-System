@@ -20,7 +20,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.12"
           cache: "pip"
 
       - name: Install dev dependencies
@@ -38,19 +38,15 @@ jobs:
         run: mypy src
 
   test:
-    name: Test (Python ${{ matrix.python-version }})
+    name: Test (Python 3.12)
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: ["3.11", "3.12"]
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python ${{ matrix.python-version }}
+      - name: Set up Python 3.12
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: "3.12"
           cache: "pip"
 
       - name: Install package with dev + viz extras
@@ -59,13 +55,12 @@ jobs:
           pip install -e ".[dev,viz]"
 
       - name: Run unit tests (fast)
-        run: pytest tests/unit -v --cov=bfd --cov-report=xml -m "not slow and not requires_llm and not requires_gpu"
+        run: pytest tests/unit -v --cov=cas --cov-report=xml -m "not slow and not requires_llm and not requires_gpu"
 
       - name: Run integration tests (graph smoke)
         run: pytest tests/integration -v -m "not requires_llm and not requires_gpu"
 
       - name: Upload coverage
-        if: matrix.python-version == '3.11'
         uses: codecov/codecov-action@v4
         with:
           files: ./coverage.xml
