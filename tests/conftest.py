@@ -13,8 +13,8 @@ SRC_ROOT = PROJECT_ROOT / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
-from cas.utils.logging import configure_logging
-from cas.utils.seeds import set_seeds
+from cas.utils.logging import configure_logging  # noqa: E402
+from cas.utils.seeds import set_seeds  # noqa: E402
 
 
 @pytest.fixture(autouse=True, scope="session")

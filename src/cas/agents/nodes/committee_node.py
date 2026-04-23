@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from cas.agents.state import AgentState, AuditEntry, CommitteeReview, Recommendation
 from cas.utils.io import read_yaml
@@ -108,4 +108,4 @@ def _mean(values: list[float]) -> float:
 
 
 def _now() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+    return datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z")

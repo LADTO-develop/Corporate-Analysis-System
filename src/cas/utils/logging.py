@@ -83,7 +83,7 @@ class _StdlibBoundLogger:
         self._logger = logger
         self._context = context or {}
 
-    def bind(self, **values: Any) -> "_StdlibBoundLogger":
+    def bind(self, **values: Any) -> _StdlibBoundLogger:
         return _StdlibBoundLogger(self._logger, {**self._context, **values})
 
     def debug(self, event: str, **values: Any) -> None:

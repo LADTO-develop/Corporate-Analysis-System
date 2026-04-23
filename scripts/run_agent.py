@@ -1,5 +1,7 @@
 """Compatibility wrapper for the package CLI."""
 
+from __future__ import annotations
+
 from cas.cli import main
 
 

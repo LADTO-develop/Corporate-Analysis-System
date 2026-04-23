@@ -30,7 +30,7 @@ def to_markdown(entries: list[AuditEntry] | list[dict[str, Any]]) -> str:
     lines = ["| Timestamp | Node | Summary | Metrics |", "|---|---|---|---|"]
     for _, row in df.iterrows():
         metrics = row.get("metrics", {}) or {}
-        metrics_s = ", ".join(f"`{k}={v:.3f}`" for k, v in metrics.items() if isinstance(v, (int, float)))
+        metrics_s = ", ".join(f"`{k}={v:.3f}`" for k, v in metrics.items() if isinstance(v, int | float))
         summary = str(row.get("summary", "")).replace("|", r"\|")
         lines.append(f"| {row['timestamp']} | `{row['node']}` | {summary} | {metrics_s} |")
     return "\n".join(lines)

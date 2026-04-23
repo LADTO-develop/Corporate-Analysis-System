@@ -10,10 +10,10 @@ nodes:
   - name: "base_prediction"
     module: "cas.agents.nodes.base_prediction_node"
     fn: "run"
-  - name: "market_overlay"
+  - name: "market_context"
     module: "cas.agents.nodes.macro_overlay_node"
     fn: "run"
-  - name: "news_overlay"
+  - name: "qualitative_context"
     module: "cas.agents.nodes.news_overlay_node"
     fn: "run"
   - name: "committee"
@@ -26,9 +26,9 @@ nodes:
 edges:
   - [data, feature]
   - [feature, base_prediction]
-  - [base_prediction, market_overlay]
-  - [market_overlay, news_overlay]
-  - [news_overlay, committee]
+  - [base_prediction, market_context]
+  - [market_context, qualitative_context]
+  - [qualitative_context, committee]
   - [committee, report]
 
 conditional_edges:

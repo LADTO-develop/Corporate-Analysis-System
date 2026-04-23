@@ -108,10 +108,10 @@ __all__ = [
     "AuditEntry",
     "BaseAssessment",
     "CommitteeReview",
+    "merge_dict",
+    "NodeName",
     "OverlayAssessment",
     "Recommendation",
-    "NodeName",
     "append_audit",
     "append_opinions",
-    "merge_dict",
 ]

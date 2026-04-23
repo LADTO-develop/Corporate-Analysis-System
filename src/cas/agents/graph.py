@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import importlib
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from cas.agents.state import AgentState
 from cas.utils.io import read_yaml
@@ -36,7 +37,7 @@ def _import_node_fn(module_path: str, fn_name: str) -> Callable[[AgentState], di
     return getattr(module, fn_name)  # type: ignore[no-any-return]
 
 
-def build_graph(config_path: str | Path = "configs/agent/graph.yaml") -> Any:
+def build_graph(config_path: str | Path = "configs/agent/graph.yaml") -> object:
     """Build and compile the main StateGraph."""
     cfg = read_yaml(config_path)
     if HAS_LANGGRAPH:
@@ -44,7 +45,7 @@ def build_graph(config_path: str | Path = "configs/agent/graph.yaml") -> Any:
     return _build_fallback_graph(cfg)
 
 
-def _build_langgraph(cfg: dict[str, Any]) -> Any:
+def _build_langgraph(cfg: dict[str, Any]) -> object:
     builder: StateGraph = StateGraph(AgentState)
 
     for node in cfg["nodes"]:
@@ -71,7 +72,7 @@ def _build_langgraph(cfg: dict[str, Any]) -> Any:
     return graph
 
 
-def _build_fallback_graph(cfg: dict[str, Any]) -> "_FallbackGraph":
+def _build_fallback_graph(cfg: dict[str, Any]) -> _FallbackGraph:
     logger.info("graph_compiled", n_nodes=len(cfg["nodes"]), backend="fallback")
     return _FallbackGraph(cfg)
 
@@ -123,9 +124,7 @@ class _FallbackGraph:
 def _merge_state(current: AgentState, updates: dict[str, Any]) -> AgentState:
     merged = dict(current)
     for key, value in updates.items():
-        if key == "audit":
-            merged[key] = [*(merged.get(key) or []), *(value or [])]
-        elif key == "committee_reviews":
+        if key in {"audit", "committee_reviews"}:
             merged[key] = [*(merged.get(key) or []), *(value or [])]
         elif key in {"base_assessments", "artifacts"}:
             existing = dict(merged.get(key) or {})

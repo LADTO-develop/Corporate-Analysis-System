@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from cas.agents.state import AgentState
@@ -33,7 +33,7 @@ def render_report(state: AgentState | dict[str, Any]) -> dict[str, Any]:
         f"- **Company ID**: `{company_id}`",
         f"- **Market**: {market}",
         f"- **Analysis Year**: {analysis_year}",
-        f"- **Generated At**: {datetime.now(timezone.utc).isoformat(timespec='seconds').replace('+00:00', 'Z')}",
+        f"- **Generated At**: {datetime.now(UTC).isoformat(timespec='seconds').replace('+00:00', 'Z')}",
         "",
     ]
 
