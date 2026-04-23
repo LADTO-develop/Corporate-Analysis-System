@@ -17,16 +17,16 @@ def run(state: AgentState) -> dict[str, object]:
     """Run the committee, aggregate reviews, and set the final recommendation."""
     cfg = read_yaml("configs/agent/committee.yaml")
     features = dict(state.get("normalized_features") or {})
-    features["qualitative_adjustment"] = float((state.get("news_overlay") or {}).get("adjustment", 0.0))
+    features["qualitative_adjustment"] = float(
+        (state.get("news_overlay") or {}).get("adjustment", 0.0)
+    )
     overall_score = float(state.get("overall_score", 0.0))
 
     reviews: list[CommitteeReview] = []
     for spec in cfg["perspectives"]:
         perspective = str(spec["kind"])
         focus_metrics = list(spec.get("focus_metrics", []))
-        focus_score = _mean(
-            [float(features.get(metric, 0.5)) for metric in focus_metrics]
-        )
+        focus_score = _mean([float(features.get(metric, 0.5)) for metric in focus_metrics])
         blended_score = round((overall_score * 0.6) + (focus_score * 0.4), 4)
         recommendation = _recommendation_from_score(
             blended_score,
@@ -73,10 +73,7 @@ def _aggregate(
 
     perspectives = cfg["perspectives"]  # type: ignore[index]
     aggregation = cfg["aggregation"]  # type: ignore[index]
-    weights = {
-        str(spec["kind"]): float(spec.get("weight", 0.25))
-        for spec in perspectives
-    }
+    weights = {str(spec["kind"]): float(spec.get("weight", 0.25)) for spec in perspectives}
     scores: dict[Recommendation, float] = {
         "priority": 0.0,
         "watch": 0.0,
@@ -117,9 +114,7 @@ def _build_rationale(
     features: dict[str, float],
     blended_score: float,
 ) -> str:
-    preview = ", ".join(
-        f"{metric}={features.get(metric, 0.5):.2f}" for metric in focus_metrics[:3]
-    )
+    preview = ", ".join(f"{metric}={features.get(metric, 0.5):.2f}" for metric in focus_metrics[:3])
     return f"{perspective} lens reviewed {preview}; blended score={blended_score:.2f}."
 
 

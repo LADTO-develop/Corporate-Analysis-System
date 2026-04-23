@@ -87,7 +87,9 @@ class _FallbackGraph:
 
     def __init__(self, cfg: dict[str, Any]) -> None:
         self._entry = cfg["entry_node"]
-        self._nodes = {node["name"]: _import_node_fn(node["module"], node["fn"]) for node in cfg["nodes"]}
+        self._nodes = {
+            node["name"]: _import_node_fn(node["module"], node["fn"]) for node in cfg["nodes"]
+        }
         self._edges = {src: dst for src, dst in cfg["edges"]}
         self._conditionals = {
             src: {

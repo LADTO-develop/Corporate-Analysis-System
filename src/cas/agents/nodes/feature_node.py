@@ -33,12 +33,8 @@ def run(state: AgentState) -> dict[str, Any]:
         "profitability_score": _score(
             financials.get("operating_margin_pct"), ranges["operating_margin_pct"]
         ),
-        "leverage_health_score": _score(
-            financials.get("debt_to_equity"), ranges["debt_to_equity"]
-        ),
-        "liquidity_score": _score(
-            financials.get("current_ratio"), ranges["current_ratio"]
-        ),
+        "leverage_health_score": _score(financials.get("debt_to_equity"), ranges["debt_to_equity"]),
+        "liquidity_score": _score(financials.get("current_ratio"), ranges["current_ratio"]),
         "cash_generation_score": _score(
             financials.get("free_cash_flow_margin_pct"), ranges["free_cash_flow_margin_pct"]
         ),
@@ -46,9 +42,7 @@ def run(state: AgentState) -> dict[str, Any]:
             financials.get("interest_coverage"),
             ranges["interest_coverage"],
         ),
-        "governance_score": _score(
-            qualitative.get("governance_score"), ranges["governance_score"]
-        ),
+        "governance_score": _score(qualitative.get("governance_score"), ranges["governance_score"]),
         "product_momentum_score": _score(
             qualitative.get("product_momentum_score"), ranges["product_momentum_score"]
         ),
