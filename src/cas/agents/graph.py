@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import importlib
+from collections.abc import Callable, Hashable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, cast
 
 from cas.agents.state import AgentState
 from cas.utils.io import read_yaml
@@ -18,8 +19,8 @@ try:
 
     HAS_LANGGRAPH = True
 except ImportError:  # pragma: no cover
-    MemorySaver = None  # type: ignore[assignment]
-    StateGraph = None  # type: ignore[assignment]
+    MemorySaver = None  # type: ignore[misc,assignment]
+    StateGraph = None  # type: ignore[misc,assignment]
     START = "__start__"
     END = "__end__"
     HAS_LANGGRAPH = False
@@ -28,15 +29,18 @@ except ImportError:  # pragma: no cover
 def _import_callable(spec: str) -> Callable[..., Any]:
     module_name, attr = spec.split(":")
     module = importlib.import_module(module_name)
-    return getattr(module, attr)
+    return cast(Callable[..., Any], getattr(module, attr))
 
 
-def _import_node_fn(module_path: str, fn_name: str) -> Callable[[AgentState], dict[str, Any]]:
+def _import_node_fn(
+    module_path: str,
+    fn_name: str,
+) -> Callable[[AgentState], dict[str, Any]]:
     module = importlib.import_module(module_path)
     return getattr(module, fn_name)  # type: ignore[no-any-return]
 
 
-def build_graph(config_path: str | Path = "configs/agent/graph.yaml") -> Any:
+def build_graph(config_path: str | Path = "configs/agent/graph.yaml") -> object:
     """Build and compile the main StateGraph."""
     cfg = read_yaml(config_path)
     if HAS_LANGGRAPH:
@@ -44,7 +48,7 @@ def build_graph(config_path: str | Path = "configs/agent/graph.yaml") -> Any:
     return _build_fallback_graph(cfg)
 
 
-def _build_langgraph(cfg: dict[str, Any]) -> Any:
+def _build_langgraph(cfg: dict[str, Any]) -> object:
     builder: StateGraph = StateGraph(AgentState)
 
     for node in cfg["nodes"]:
@@ -62,7 +66,9 @@ def _build_langgraph(cfg: dict[str, Any]) -> Any:
 
     for src, spec in (cfg.get("conditional_edges") or {}).items():
         cond_fn = _import_callable(spec["condition_fn"])
-        mapping: dict[str, Any] = {k: (END if v == "END" else v) for k, v in spec["mapping"].items()}
+        mapping: dict[Hashable, str] = {
+            k: (END if v == "END" else v) for k, v in spec["mapping"].items()
+        }
         builder.add_conditional_edges(src, cond_fn, mapping)
 
     builder.add_edge("report", END)
@@ -71,7 +77,7 @@ def _build_langgraph(cfg: dict[str, Any]) -> Any:
     return graph
 
 
-def _build_fallback_graph(cfg: dict[str, Any]) -> "_FallbackGraph":
+def _build_fallback_graph(cfg: dict[str, Any]) -> _FallbackGraph:
     logger.info("graph_compiled", n_nodes=len(cfg["nodes"]), backend="fallback")
     return _FallbackGraph(cfg)
 
@@ -82,8 +88,7 @@ class _FallbackGraph:
     def __init__(self, cfg: dict[str, Any]) -> None:
         self._entry = cfg["entry_node"]
         self._nodes = {
-            node["name"]: _import_node_fn(node["module"], node["fn"])
-            for node in cfg["nodes"]
+            node["name"]: _import_node_fn(node["module"], node["fn"]) for node in cfg["nodes"]
         }
         self._edges = {src: dst for src, dst in cfg["edges"]}
         self._conditionals = {
@@ -116,16 +121,18 @@ class _FallbackGraph:
             node_name = next_node
         return state
 
-    def stream(self, initial: AgentState, config: dict[str, Any] | None = None) -> list[AgentState]:
+    def stream(
+        self,
+        initial: AgentState,
+        config: dict[str, Any] | None = None,
+    ) -> list[AgentState]:
         return [self.invoke(initial, config=config)]
 
 
 def _merge_state(current: AgentState, updates: dict[str, Any]) -> AgentState:
     merged = dict(current)
     for key, value in updates.items():
-        if key == "audit":
-            merged[key] = [*(merged.get(key) or []), *(value or [])]
-        elif key == "committee_reviews":
+        if key in {"audit", "committee_reviews"}:
             merged[key] = [*(merged.get(key) or []), *(value or [])]
         elif key in {"base_assessments", "artifacts"}:
             existing = dict(merged.get(key) or {})
@@ -133,7 +140,7 @@ def _merge_state(current: AgentState, updates: dict[str, Any]) -> AgentState:
             merged[key] = existing
         else:
             merged[key] = value
-    return merged  # type: ignore[return-value]
+    return merged
 
 
 def run_once(
@@ -158,5 +165,5 @@ def run_once(
         "insufficient_data": False,
     }
     config = {"configurable": {"thread_id": thread_id or company_id}}
-    final: AgentState = graph.invoke(initial, config=config)  # type: ignore[assignment]
+    final: AgentState = graph.invoke(initial, config=config)  # type: ignore[attr-defined]
     return final

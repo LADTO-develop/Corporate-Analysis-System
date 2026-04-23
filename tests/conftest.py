@@ -6,18 +6,20 @@ import sys
 from pathlib import Path
 
 import pytest
+from dotenv import load_dotenv
 
 PROJECT_ROOT = Path(__file__).parent.parent
 SRC_ROOT = PROJECT_ROOT / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
-from cas.utils.logging import configure_logging
-from cas.utils.seeds import set_seeds
+from cas.utils.logging import configure_logging  # noqa: E402
+from cas.utils.seeds import set_seeds  # noqa: E402
 
 
 @pytest.fixture(autouse=True, scope="session")
 def _setup_logging_and_seeds() -> None:
+    load_dotenv()
     configure_logging(level="WARNING", json_output=False)
     set_seeds(42)
 

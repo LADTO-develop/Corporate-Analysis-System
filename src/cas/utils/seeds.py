@@ -8,6 +8,11 @@ import random
 import numpy as np
 
 
+def _env(primary: str, legacy: str, default: str) -> str:
+    """Read a new env var name first and fall back to the legacy one."""
+    return os.getenv(primary) or os.getenv(legacy) or default
+
+
 def set_seeds(seed: int | None = None) -> int:
     """Set global random seeds on stdlib, numpy, and torch if available.
 
@@ -18,7 +23,7 @@ def set_seeds(seed: int | None = None) -> int:
         The seed actually used.
     """
     if seed is None:
-        seed = int(os.getenv("BFD_RANDOM_SEED", "42"))
+        seed = int(_env("CAS_RANDOM_SEED", "BFD_RANDOM_SEED", "42"))
 
     random.seed(seed)
     np.random.seed(seed)
@@ -31,7 +36,7 @@ def set_seeds(seed: int | None = None) -> int:
         if torch.cuda.is_available():
             torch.cuda.manual_seed_all(seed)
         # Deterministic algorithms slow things down; only flip on demand via env.
-        if os.getenv("BFD_TORCH_DETERMINISTIC", "0") == "1":
+        if _env("CAS_TORCH_DETERMINISTIC", "BFD_TORCH_DETERMINISTIC", "0") == "1":
             torch.use_deterministic_algorithms(True, warn_only=True)
     except ImportError:
         pass

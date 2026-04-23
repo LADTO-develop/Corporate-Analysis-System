@@ -1,11 +1,11 @@
 """Fiscal-calendar helpers for the Korean markets.
 
-Most Korean listed firms use a calendar-year fiscal year (12월 결산).
-Sec filings deadlines:
-  - annual report 사업보고서: within 90 days of fiscal year end
-  - quarterly reports:         within 45 days of quarter end
+Most Korean listed firms use a calendar-year fiscal year.
+Sec filing deadlines:
+  - annual report: within 90 days of fiscal year end
+  - quarterly reports: within 45 days of quarter end
 This means for FY ``t`` data, the earliest legitimate observation date is
-roughly ``t+1`` March/April, which is why ``t → t+1`` rating mapping is safe.
+roughly ``t+1`` March or April, which is why ``t -> t+1`` rating mapping is safe.
 """
 
 from __future__ import annotations
@@ -19,16 +19,15 @@ def fiscal_year_end(year: int) -> date:
 
 
 def annual_report_deadline(fiscal_year: int) -> date:
-    """Annual report filing deadline (사업보고서 제출 기한).
+    """Annual report filing deadline.
 
-    Korean Financial Investment Services Act §159: 90 days after fiscal year end.
+    Korean practice uses 90 days after fiscal year end as a conservative bound.
     """
     return fiscal_year_end(fiscal_year) + timedelta(days=90)
 
 
 def earliest_observable_date(fiscal_year: int) -> date:
-    """Earliest date at which a firm's FY ``year`` financials are publicly
-    observable — used as the anchor for ``t → t+1`` rating mapping.
+    """Earliest date at which FY ``t`` financials are publicly observable.
 
     We use the annual report deadline as the conservative upper bound.
     """

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from cas.agents.state import AgentState, AuditEntry
@@ -27,14 +27,25 @@ def run(state: AgentState) -> dict[str, Any]:
 
     ranges = cfg["feature_ranges"]
     features = {
-        "revenue_growth_score": _score(financials.get("revenue_growth_pct"), ranges["revenue_growth_pct"]),
-        "profitability_score": _score(financials.get("operating_margin_pct"), ranges["operating_margin_pct"]),
+        "revenue_growth_score": _score(
+            financials.get("revenue_growth_pct"), ranges["revenue_growth_pct"]
+        ),
+        "profitability_score": _score(
+            financials.get("operating_margin_pct"), ranges["operating_margin_pct"]
+        ),
         "leverage_health_score": _score(financials.get("debt_to_equity"), ranges["debt_to_equity"]),
         "liquidity_score": _score(financials.get("current_ratio"), ranges["current_ratio"]),
-        "cash_generation_score": _score(financials.get("free_cash_flow_margin_pct"), ranges["free_cash_flow_margin_pct"]),
-        "interest_coverage_score": _score(financials.get("interest_coverage"), ranges["interest_coverage"]),
+        "cash_generation_score": _score(
+            financials.get("free_cash_flow_margin_pct"), ranges["free_cash_flow_margin_pct"]
+        ),
+        "interest_coverage_score": _score(
+            financials.get("interest_coverage"),
+            ranges["interest_coverage"],
+        ),
         "governance_score": _score(qualitative.get("governance_score"), ranges["governance_score"]),
-        "product_momentum_score": _score(qualitative.get("product_momentum_score"), ranges["product_momentum_score"]),
+        "product_momentum_score": _score(
+            qualitative.get("product_momentum_score"), ranges["product_momentum_score"]
+        ),
         "concentration_health_score": _score(
             qualitative.get("customer_concentration_pct", 0.0),
             ranges["customer_concentration_pct"],
@@ -43,7 +54,9 @@ def run(state: AgentState) -> dict[str, Any]:
             market_context.get("industry_growth_score", 0.5),
             ranges["industry_growth_score"],
         ),
-        "controversy_penalty": _controversy_penalty(str(qualitative.get("controversy_level", "low"))),
+        "controversy_penalty": _controversy_penalty(
+            str(qualitative.get("controversy_level", "low"))
+        ),
     }
 
     audit = AuditEntry(
@@ -75,4 +88,4 @@ def _controversy_penalty(level: str) -> float:
 
 
 def _now() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+    return datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z")

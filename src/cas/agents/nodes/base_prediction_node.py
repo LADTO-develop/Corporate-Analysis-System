@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from cas.agents.state import AgentState, AuditEntry, BaseAssessment
@@ -48,7 +48,8 @@ def run(state: AgentState) -> dict[str, Any]:
             + ", ".join(f"{k}={v.score:.3f}" for k, v in lens_scores.items())
             + f" | overall={overall_score:.3f}"
         ),
-        metrics={f"score_{k}": v.score for k, v in lens_scores.items()} | {"overall_score": overall_score},
+        metrics={f"score_{k}": v.score for k, v in lens_scores.items()}
+        | {"overall_score": overall_score},
     )
     return {
         "base_assessments": lens_scores,
@@ -76,4 +77,4 @@ def _lens_summary(lens_name: str, score: float) -> str:
 
 
 def _now() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+    return datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z")

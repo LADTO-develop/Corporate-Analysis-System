@@ -2,17 +2,25 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from typing import Any
 
-from cas.agents.state import AgentState, AuditEntry, CommitteeReview, Recommendation
+from cas.agents.state import (
+    AgentState,
+    AuditEntry,
+    CommitteeReview,
+    Recommendation,
+)
 from cas.utils.io import read_yaml
 
 
-def run(state: AgentState) -> dict[str, object]:
+def run(state: AgentState) -> dict[str, Any]:
     """Run the committee, aggregate reviews, and set the final recommendation."""
     cfg = read_yaml("configs/agent/committee.yaml")
     features = dict(state.get("normalized_features") or {})
-    features["qualitative_adjustment"] = float((state.get("news_overlay") or {}).get("adjustment", 0.0))
+    features["qualitative_adjustment"] = float(
+        (state.get("news_overlay") or {}).get("adjustment", 0.0)
+    )
     overall_score = float(state.get("overall_score", 0.0))
 
     reviews: list[CommitteeReview] = []
@@ -30,7 +38,12 @@ def run(state: AgentState) -> dict[str, object]:
                 perspective=perspective,
                 recommendation=recommendation,
                 confidence=round(abs(blended_score - 0.5) * 2, 4),
-                rationale=_build_rationale(perspective, focus_metrics, features, blended_score),
+                rationale=_build_rationale(
+                    perspective,
+                    focus_metrics,
+                    features,
+                    blended_score,
+                ),
             )
         )
 
@@ -54,15 +67,20 @@ def run(state: AgentState) -> dict[str, object]:
 
 def _aggregate(
     reviews: list[CommitteeReview],
-    cfg: dict[str, object],
+    cfg: dict[str, Any],
 ) -> tuple[Recommendation, float]:
     if not reviews:
         return "review", 0.0
 
-    perspectives = cfg["perspectives"]  # type: ignore[index]
-    aggregation = cfg["aggregation"]  # type: ignore[index]
+    perspectives = cfg["perspectives"]
+    aggregation = cfg["aggregation"]
     weights = {str(spec["kind"]): float(spec.get("weight", 0.25)) for spec in perspectives}
-    scores: dict[Recommendation, float] = {"priority": 0.0, "watch": 0.0, "review": 0.0, "defer": 0.0}
+    scores: dict[Recommendation, float] = {
+        "priority": 0.0,
+        "watch": 0.0,
+        "review": 0.0,
+        "defer": 0.0,
+    }
     total_weight = 0.0
     for review in reviews:
         weight = weights.get(review.perspective, 0.25) * review.confidence
@@ -108,4 +126,4 @@ def _mean(values: list[float]) -> float:
 
 
 def _now() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+    return datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z")
