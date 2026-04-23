@@ -1,0 +1,71 @@
+required_fields:
+  financials:
+    - revenue_growth_pct
+    - operating_margin_pct
+    - debt_to_equity
+    - current_ratio
+    - free_cash_flow_margin_pct
+    - interest_coverage
+  qualitative:
+    - governance_score
+    - product_momentum_score
+
+feature_ranges:
+  revenue_growth_pct: { min: -20.0, max: 30.0, higher_is_better: true }
+  operating_margin_pct: { min: -10.0, max: 20.0, higher_is_better: true }
+  debt_to_equity: { min: 0.0, max: 3.0, higher_is_better: false }
+  current_ratio: { min: 0.8, max: 3.0, higher_is_better: true }
+  free_cash_flow_margin_pct: { min: -10.0, max: 15.0, higher_is_better: true }
+  interest_coverage: { min: 0.0, max: 10.0, higher_is_better: true }
+  governance_score: { min: 0.0, max: 1.0, higher_is_better: true }
+  product_momentum_score: { min: 0.0, max: 1.0, higher_is_better: true }
+  customer_concentration_pct: { min: 0.0, max: 100.0, higher_is_better: false }
+  industry_growth_score: { min: 0.0, max: 1.0, higher_is_better: true }
+
+lenses:
+  fundamentals:
+    revenue_growth_score: 0.20
+    profitability_score: 0.35
+    cash_generation_score: 0.25
+    interest_coverage_score: 0.20
+  resilience:
+    leverage_health_score: 0.35
+    liquidity_score: 0.35
+    concentration_health_score: 0.30
+  execution:
+    governance_score: 0.35
+    product_momentum_score: 0.35
+    industry_position_score: 0.30
+
+overall_weights:
+  fundamentals: 0.45
+  resilience: 0.35
+  execution: 0.20
+
+overlays:
+  market:
+    demand_outlook:
+      positive: 0.03
+      neutral: 0.00
+      negative: -0.03
+    cost_pressure:
+      low: 0.02
+      moderate: 0.00
+      high: -0.03
+    regulatory_pressure:
+      low: 0.01
+      moderate: 0.00
+      high: -0.02
+  qualitative:
+    controversy_level:
+      low: 0.01
+      moderate: -0.03
+      high: -0.08
+    execution_risk:
+      low: 0.02
+      moderate: 0.00
+      high: -0.04
+
+score_caps:
+  market_adjustment: 0.05
+  qualitative_adjustment: 0.08

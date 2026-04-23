@@ -1,0 +1,35 @@
+company:
+  id: "sample-company"
+  name: "Sample Components"
+  market: "KOSDAQ"
+  sector: "Industrial Components"
+  summary: "Mid-cap manufacturer with stable contracts and improving operating discipline."
+
+analysis_year: 2025
+
+financials:
+  revenue_growth_pct: 12.4
+  operating_margin_pct: 8.1
+  debt_to_equity: 0.6
+  current_ratio: 1.8
+  free_cash_flow_margin_pct: 6.5
+  interest_coverage: 5.4
+
+qualitative:
+  governance_score: 0.72
+  product_momentum_score: 0.68
+  customer_concentration_pct: 28.0
+  controversy_level: "low"
+
+market_context:
+  demand_outlook: "positive"
+  cost_pressure: "moderate"
+  regulatory_pressure: "low"
+  industry_growth_score: 0.64
+
+news_context:
+  sentiment_score: 0.35
+  execution_risk: "low"
+  notable_events:
+    - "Expanded supply agreement with two anchor customers."
+    - "Completed a capacity automation project in the main plant."

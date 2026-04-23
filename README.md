@@ -1,141 +1,83 @@
-# Corporate-Analysis-System
+# Corporate Analysis System
 
-> KOSPI/KOSDAQ 상장사의 **한계기업 징후**를 신용평가과정에 대응되는 AI 에이전트 파이프라인으로 조기에 포착합니다.
+기업 재무제표와 한국은행 ECOS 거시지표를 결합해 투자적격성을 판단하는 LangGraph 기반 분석 시스템입니다. 목표는 단순 점수 산출이 아니라, 시장 구분(KOSPI/KOSDAQ), 입력 검증, 특성 생성, 머신러닝 예측, SHAP 기반 설명, 시나리오 재평가, 최종 리포트까지 하나의 일관된 파이프라인으로 연결하는 것입니다.
 
-[![CI](https://github.com/LADTO-develop/Corporate-Analysis-System/actions/workflows/ci.yml/badge.svg)](https://github.com/LADTO-develop/Corporate-Analysis-System/actions/workflows/ci.yml)
-[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
-[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-green.svg)](LICENSE)
+현재 저장소는 그 전체 구조를 구현하기 위한 실행 가능한 베이스라인입니다. 데이터 수집, 검증, 예측, 설명, 리포트 흐름을 먼저 안정적으로 구축하는 데 집중합니다.
 
----
+## What This Project Aims To Build
 
-## 프로젝트 개요
+- 재무제표와 ECOS 거시데이터를 결합한 투자적격성 판단 파이프라인
+- `KOSPI`와 `KOSDAQ` 시장별 설정과 모델 선택이 가능한 라우팅 구조
+- 로지스틱 회귀, XGBoost 등 후보 모델 비교 후 최적 모델 채택
+- SHAP 기반 핵심 원인 설명과 시나리오별 위험도 재계산
+- 최종 심사 코멘트와 요약 리포트 생성
 
-기존 신용평가등급은 전문기관의 수 개월에 걸친 심사를 거쳐야 하며, 모든 상장사가 평가를 받는 것도 아닙니다.
-본 프로젝트는 **TS2000 재무제표 + ECOS 거시경제지표 + 뉴스/공시 LLM 해석**을 결합하여,
-다음 두 가지 질문에 빠르게 답하는 *간이 등급*을 생성합니다.
+## Target Workflow
 
-1. 현재 이 기업은 한계기업 징후(흑자도산, 자본잠식, 이자보상배율 악화 등)를 보이고 있는가?
-2. 그 판단의 근거는 무엇인가? — **EBM 기반 글로벌/로컬 설명**과 **에이전트 위원회의 토론 로그**를 함께 제공.
-
-실제 신용평가등급을 완전히 대체하는 것이 아니라, 평가 전/평가 불가 상태의 기업에 대한 **의사결정 보조 도구**를 지향합니다.
-
-## 파이프라인 아키텍처
-
-```
-┌──────────────┐   ┌──────────────┐   ┌──────────────┐
-│  TS2000      │   │  ECOS 거시   │   │  뉴스/공시   │
-│  재무제표 5본 │   │  경제지표    │   │  DART, 언론  │
-└──────┬───────┘   └──────┬───────┘   └──────┬───────┘
-       │                  │                  │
-       ▼                  ▼                  ▼
-   [ 재무 피처 ]     [ 거시 오버레이 ]    [ LLM 피처화 ]
-       │                  │                  │
-       └──────────┬───────┴──────────────────┘
-                  ▼
-        ┌─────────────────────┐
-        │  시장별 분리 모델   │  KOSPI / KOSDAQ
-        │  TabPFN v2.5 (주)   │
-        │  + LightGBM         │  (OOF 스태킹)
-        │  + EBM (해석 경로)  │
-        └──────────┬──────────┘
-                   ▼
-        ┌─────────────────────┐
-        │  위원회 노드         │  
-        │  (LangGraph)        │  
-        └──────────┬──────────┘
-                   ▼
-           [ 이진 판정: borderline / healthy ]
-           [ 감사 트레일 + EBM shape functions ]
+```text
+input
+-> validate
+-> resolve_market
+-> load_financials
+-> attach_ecos_macro
+-> build_features
+-> select_model_by_market
+-> predict_investment_suitability
+-> explain_with_shap
+-> run_scenarios
+-> generate_report
 ```
 
-각 컴포넌트의 상세 설명은 [`docs/architecture.md`](docs/architecture.md)를 참고하세요.
+## Why LangGraph
 
-## 핵심 설계 원칙
+LangGraph는 이 프로젝트에서 모델 자체를 대신하는 도구가 아니라, 여러 처리 단계를 안정적으로 연결하는 오케스트레이션 레이어입니다. 즉, `KOSPI/KOSDAQ` 분기, 입력 경로별 검증, 예측 후 설명 단계, 예외 처리, 리포트 생성 같은 흐름 제어를 담당합니다.
 
-| 원칙 | 구현 위치 |
-|------|----------|
-| **타깃 누수 차단** — 재무(t년) → 등급(t+1년) 매핑을 코드로 강제 | [`src/bfd/data/splitters.py`](src/bfd/data/splitters.py), [`src/bfd/validation/leakage.py`](src/bfd/validation/leakage.py) |
-| **시장별 분리** — KOSPI/KOSDAQ은 구조적으로 달라 동일 모델 금지 | [`configs/market/`](configs/market/), [`scripts/train_market_model.py`](scripts/train_market_model.py) |
-| **투명성** — EBM 경로는 항상 학습되어 리포트에 shape function 포함 | [`src/bfd/models/ebm_model.py`](src/bfd/models/ebm_model.py), [`src/bfd/reporting/explanations.py`](src/bfd/reporting/explanations.py) |
-| **편향 제거 위원회** — 다수 기법을 Strategy로 조합 | [`src/bfd/agents/committee/`](src/bfd/agents/committee/) |
-| **내부정보 보안** — 기본 비활성, 활성화 시 세션 격리·감사로그 | [`src/bfd/rag/internal_info/`](src/bfd/rag/internal_info/), [`docs/security_policy.md`](docs/security_policy.md) |
+권장 구조는 시장별로 완전히 다른 그래프를 만드는 방식보다, 공통 그래프 안에서 시장별 설정과 모델을 선택하는 방식입니다. 이렇게 하면 전처리와 리포트 구조는 공유하고, 시장별 차이는 피처 정책, 임계값, 모델 파일, 후처리 규칙에서 관리할 수 있어 유지보수가 훨씬 쉬워집니다.
 
-## 설치
+## Current Repository Structure
+
+- `src/cas/agents/graph.py`: LangGraph 파이프라인 구성
+- `src/cas/agents/state.py`: 상태 스키마 정의
+- `src/cas/agents/nodes/`: 데이터 적재, 피처 생성, 예측, 리포트 노드
+- `src/cas/cli.py`: 공식 CLI 진입점
+- `configs/agent/graph.yaml`: 그래프 노드와 엣지 설정
+- `configs/agent/committee.yaml`: 최종 판단 정책 설정
+- `configs/runtime/analysis.yaml`: 피처 범위와 점수 계산 설정
+- `data/input/companies/`: 샘플 입력 데이터
+
+## Quick Start
 
 ```bash
-# Python 3.11 또는 3.12 권장
-git clone https://github.com/LADTO-develop/Corporate-Analysis-System.git
-cd Corporate-Analysis-System
-
-# uv 권장 (LangGraph 의존성 resolve 속도 차이가 큼)
-uv venv
-source .venv/bin/activate
-uv pip install -e ".[dev,viz]"
-
-# 또는 pip
-python -m venv .venv && source .venv/bin/activate
-pip install -e ".[dev,viz]"
-
-# 환경 변수
-cp .env.example .env   # ANTHROPIC_API_KEY, ECOS_API_KEY 등을 채워넣기
-
-# pre-commit 훅 설치
-pre-commit install
+python -m venv .venv
+.venv\Scripts\activate
+pip install -e ".[dev]"
 ```
-
-### TabPFN v2.5 체크포인트
-
-첫 실행 시 자동으로 HuggingFace에서 체크포인트를 다운로드합니다.
-캐시 위치를 바꾸려면 `.env`에 `TABPFN_MODEL_CACHE_DIR`을 설정하세요.
-
-## 사용법
-
-### 1. 데이터셋 빌드
 
 ```bash
-bfd-build-dataset --config configs/data/ts2000.yaml
+cas-agent --company-id sample-company
 ```
 
-TS2000 5본(재무상태표/손익계산서/현금흐름표/자본변동표/주석)을 정합성 검증 후
-`data/processed/{kospi,kosdaq}/`에 parquet으로 저장합니다.
+결과물은 아래 경로에 생성됩니다.
 
-### 2. 시장별 모델 학습
-
-```bash
-bfd-train --market kospi
-bfd-train --market kosdaq
+```text
+data/outputs/reports/sample-company/latest.md
+data/outputs/reports/sample-company/latest.json
 ```
 
-Walk-forward CV로 TabPFN/LightGBM/EBM을 학습하고 OOF 예측을 `data/processed/oof/`에 저장합니다.
+## Input Modes We Are Designing For
 
-### 3. 단일 종목 평가 (에이전트 실행)
+- 회사 검색 기반 입력
+- CSV 업로드 기반 입력
+- 최소 직접 입력 기반 입력
 
-```bash
-bfd-agent --corp-code 005930 --fiscal-year 2024
-```
+현재 베이스라인은 `data/input/companies/sample-company.yaml` 같은 로컬 파일 입력을 기준으로 동작하며, 이후 위 3가지 입력 경로로 확장할 예정입니다.
 
-LangGraph 파이프라인이 기동되어 데이터 수집 → 피처화 → 예측 → 거시/뉴스 오버레이 →
-위원회 토론 → 최종 판정 + 감사 트레일을 출력합니다.
+## Implementation Roadmap
 
-## 프로젝트 구조
-
-```
-src/bfd/
-├── data/              # TS2000, ECOS, 뉴스 로더 + 스키마 + 누수 방지 스플리터
-├── features/          # 재무제표 5본별 파생변수 + ECOS 거시 + 피처 카탈로그
-├── ratings/           # 평가사별 등급 정규화 + 투자적격/투기 이진화
-├── models/            # TabPFN / LightGBM / EBM + OOF 스태킹 + 캘리브레이션
-├── rag/               # 뉴스 RAG + LLM 피처화 + 내부정보 보안 정책
-├── agents/            # LangGraph State + 노드 + 위원회 전략 + 툴 카탈로그
-├── validation/        # 누수 어서션 + 메트릭 + 백테스트 + 드리프트
-├── reporting/         # 감사 트레일 + 설명(EBM) + 최종 리포트 export
-└── utils/             # 로깅 / 시드 / I/O / 시간 유틸
-```
-
-## 관련 문헌 및 의존 라이브러리
-
-- **TabPFN v2.5** — Hollmann et al., *Nature* (2025). [`PriorLabs/TabPFN`](https://github.com/PriorLabs/TabPFN)
-- **Explainable Boosting Machines** — Nori et al. (2019). [`interpretml/interpret`](https://github.com/interpretml/interpret)
-- **LangGraph** — LangChain AI. [`langchain-ai/langgraph`](https://github.com/langchain-ai/langgraph)
-- **LightGBM** — Ke et al. (2017). [`microsoft/LightGBM`](https://github.com/microsoft/LightGBM)
-- **pandera** — tabular schema validation. [`unionai-oss/pandera`](https://github.com/unionai-oss/pandera)
+1. 패키지명과 실행 구조를 `cas` 기준으로 통일합니다.
+2. 입력 경로를 회사 검색, CSV 업로드, 직접 입력으로 확장합니다.
+3. ECOS 및 재무제표 데이터 결합 레이어를 구축합니다.
+4. 시장별 피처셋과 모델 선택 로직을 추가합니다.
+5. 로지스틱 회귀, XGBoost 등 후보 모델을 비교하고 최적 모델을 채택합니다.
+6. SHAP 설명과 시나리오 분석 결과를 리포트에 통합합니다.
+7. 최종적으로 투자적격성 판단 리포트를 자동 생성합니다.
