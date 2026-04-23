@@ -97,7 +97,9 @@ def _build_rationale(
     features: dict[str, float],
     blended_score: float,
 ) -> str:
-    preview = ", ".join(f"{metric}={features.get(metric, 0.5):.2f}" for metric in focus_metrics[:3])
+    preview = ", ".join(
+        f"{metric}={features.get(metric, 0.5):.2f}" for metric in focus_metrics[:3]
+    )
     return f"{perspective} lens reviewed {preview}; blended score={blended_score:.2f}."
 
 

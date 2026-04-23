@@ -48,7 +48,8 @@ def run(state: AgentState) -> dict[str, Any]:
             + ", ".join(f"{k}={v.score:.3f}" for k, v in lens_scores.items())
             + f" | overall={overall_score:.3f}"
         ),
-        metrics={f"score_{k}": v.score for k, v in lens_scores.items()} | {"overall_score": overall_score},
+        metrics={f"score_{k}": v.score for k, v in lens_scores.items()}
+        | {"overall_score": overall_score},
     )
     return {
         "base_assessments": lens_scores,

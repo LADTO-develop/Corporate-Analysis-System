@@ -33,7 +33,10 @@ def render_report(state: AgentState | dict[str, Any]) -> dict[str, Any]:
         f"- **Company ID**: `{company_id}`",
         f"- **Market**: {market}",
         f"- **Analysis Year**: {analysis_year}",
-        f"- **Generated At**: {datetime.now(UTC).isoformat(timespec='seconds').replace('+00:00', 'Z')}",
+        (
+            f"- **Generated At**: "
+            f"{datetime.now(UTC).isoformat(timespec='seconds').replace('+00:00', 'Z')}"
+        ),
         "",
     ]
 
@@ -56,9 +59,19 @@ def render_report(state: AgentState | dict[str, Any]) -> dict[str, Any]:
             "",
         ]
         for name, assessment in base_assessments.items():
-            score = assessment.get("score") if isinstance(assessment, dict) else getattr(assessment, "score", None)
-            summary = assessment.get("summary") if isinstance(assessment, dict) else getattr(assessment, "summary", "")
-            md_lines.append(f"- `{name}`: {score:.3f} - {summary}" if score is not None else f"- `{name}`: n/a")
+            score = (
+                assessment.get("score")
+                if isinstance(assessment, dict)
+                else getattr(assessment, "score", None)
+            )
+            summary = (
+                assessment.get("summary")
+                if isinstance(assessment, dict)
+                else getattr(assessment, "summary", "")
+            )
+            md_lines.append(
+                f"- `{name}`: {score:.3f} - {summary}" if score is not None else f"- `{name}`: n/a"
+            )
         md_lines.append("")
 
         md_lines += [
@@ -80,7 +93,7 @@ def render_report(state: AgentState | dict[str, Any]) -> dict[str, Any]:
                 md_lines.append(
                     f"| {review_dict.get('perspective','')} | "
                     f"`{review_dict.get('recommendation','')}` | {float(review_dict.get('confidence',0.0)):.3f} | "
-                    f"{str(review_dict.get('rationale','')).replace('|', chr(92)+'|')} |"
+                    f"{str(review_dict.get('rationale','')).replace('|', chr(92) + '|')} |"
                 )
         md_lines.append("")
 

@@ -63,7 +63,9 @@ def _build_langgraph(cfg: dict[str, Any]) -> object:
 
     for src, spec in (cfg.get("conditional_edges") or {}).items():
         cond_fn = _import_callable(spec["condition_fn"])
-        mapping: dict[str, Any] = {k: (END if v == "END" else v) for k, v in spec["mapping"].items()}
+        mapping: dict[str, Any] = {
+            k: (END if v == "END" else v) for k, v in spec["mapping"].items()
+        }
         builder.add_conditional_edges(src, cond_fn, mapping)
 
     builder.add_edge("report", END)
@@ -82,10 +84,7 @@ class _FallbackGraph:
 
     def __init__(self, cfg: dict[str, Any]) -> None:
         self._entry = cfg["entry_node"]
-        self._nodes = {
-            node["name"]: _import_node_fn(node["module"], node["fn"])
-            for node in cfg["nodes"]
-        }
+        self._nodes = {node["name"]: _import_node_fn(node["module"], node["fn"]) for node in cfg["nodes"]}
         self._edges = {src: dst for src, dst in cfg["edges"]}
         self._conditionals = {
             src: {
