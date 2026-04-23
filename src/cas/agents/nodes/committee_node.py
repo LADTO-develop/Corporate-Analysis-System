@@ -4,7 +4,12 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from cas.agents.state import AgentState, AuditEntry, CommitteeReview, Recommendation
+from cas.agents.state import (
+    AgentState,
+    AuditEntry,
+    CommitteeReview,
+    Recommendation,
+)
 from cas.utils.io import read_yaml
 
 
@@ -19,7 +24,9 @@ def run(state: AgentState) -> dict[str, object]:
     for spec in cfg["perspectives"]:
         perspective = str(spec["kind"])
         focus_metrics = list(spec.get("focus_metrics", []))
-        focus_score = _mean([float(features.get(metric, 0.5)) for metric in focus_metrics])
+        focus_score = _mean(
+            [float(features.get(metric, 0.5)) for metric in focus_metrics]
+        )
         blended_score = round((overall_score * 0.6) + (focus_score * 0.4), 4)
         recommendation = _recommendation_from_score(
             blended_score,
@@ -30,7 +37,12 @@ def run(state: AgentState) -> dict[str, object]:
                 perspective=perspective,
                 recommendation=recommendation,
                 confidence=round(abs(blended_score - 0.5) * 2, 4),
-                rationale=_build_rationale(perspective, focus_metrics, features, blended_score),
+                rationale=_build_rationale(
+                    perspective,
+                    focus_metrics,
+                    features,
+                    blended_score,
+                ),
             )
         )
 
@@ -61,8 +73,16 @@ def _aggregate(
 
     perspectives = cfg["perspectives"]  # type: ignore[index]
     aggregation = cfg["aggregation"]  # type: ignore[index]
-    weights = {str(spec["kind"]): float(spec.get("weight", 0.25)) for spec in perspectives}
-    scores: dict[Recommendation, float] = {"priority": 0.0, "watch": 0.0, "review": 0.0, "defer": 0.0}
+    weights = {
+        str(spec["kind"]): float(spec.get("weight", 0.25))
+        for spec in perspectives
+    }
+    scores: dict[Recommendation, float] = {
+        "priority": 0.0,
+        "watch": 0.0,
+        "review": 0.0,
+        "defer": 0.0,
+    }
     total_weight = 0.0
     for review in reviews:
         weight = weights.get(review.perspective, 0.25) * review.confidence

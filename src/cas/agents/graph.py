@@ -32,7 +32,10 @@ def _import_callable(spec: str) -> Callable[..., Any]:
     return getattr(module, attr)
 
 
-def _import_node_fn(module_path: str, fn_name: str) -> Callable[[AgentState], dict[str, Any]]:
+def _import_node_fn(
+    module_path: str,
+    fn_name: str,
+) -> Callable[[AgentState], dict[str, Any]]:
     module = importlib.import_module(module_path)
     return getattr(module, fn_name)  # type: ignore[no-any-return]
 
@@ -116,7 +119,11 @@ class _FallbackGraph:
             node_name = next_node
         return state
 
-    def stream(self, initial: AgentState, config: dict[str, Any] | None = None) -> list[AgentState]:
+    def stream(
+        self,
+        initial: AgentState,
+        config: dict[str, Any] | None = None,
+    ) -> list[AgentState]:
         return [self.invoke(initial, config=config)]
 
 

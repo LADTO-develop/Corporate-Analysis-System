@@ -70,15 +70,27 @@ def render_report(state: AgentState | dict[str, Any]) -> dict[str, Any]:
                 else getattr(assessment, "summary", "")
             )
             md_lines.append(
-                f"- `{name}`: {score:.3f} - {summary}" if score is not None else f"- `{name}`: n/a"
+                (
+                    f"- `{name}`: {score:.3f} - {summary}"
+                    if score is not None
+                    else f"- `{name}`: n/a"
+                )
             )
         md_lines.append("")
 
         md_lines += [
             "## Context Adjustments",
             "",
-            f"- **Market**: {market_overlay.get('adjustment', 0.0):+.3f} - {market_overlay.get('rationale', '')}",
-            f"- **Qualitative**: {qualitative_overlay.get('adjustment', 0.0):+.3f} - {qualitative_overlay.get('rationale', '')}",
+            (
+                f"- **Market**: "
+                f"{market_overlay.get('adjustment', 0.0):+.3f} - "
+                f"{market_overlay.get('rationale', '')}"
+            ),
+            (
+                f"- **Qualitative**: "
+                f"{qualitative_overlay.get('adjustment', 0.0):+.3f} - "
+                f"{qualitative_overlay.get('rationale', '')}"
+            ),
             "",
             "## Committee Reviews",
             "",
@@ -89,7 +101,9 @@ def render_report(state: AgentState | dict[str, Any]) -> dict[str, Any]:
             md_lines.append("| Perspective | Recommendation | Confidence | Rationale |")
             md_lines.append("|---|---|---|---|")
             for review in reviews:
-                review_dict = review if isinstance(review, dict) else review.model_dump()
+                review_dict = (
+                    review if isinstance(review, dict) else review.model_dump()
+                )
                 md_lines.append(
                     f"| {review_dict.get('perspective','')} | "
                     f"`{review_dict.get('recommendation','')}` | {float(review_dict.get('confidence',0.0)):.3f} | "
@@ -122,8 +136,12 @@ def render_report(state: AgentState | dict[str, Any]) -> dict[str, Any]:
         "market_overlay": market_overlay,
         "news_overlay": qualitative_overlay,
         "committee_reviews": [
-            (review if isinstance(review, dict) else review.model_dump()) for review in reviews
+            (review if isinstance(review, dict) else review.model_dump())
+            for review in reviews
         ],
-        "audit": [(entry if isinstance(entry, dict) else entry.model_dump()) for entry in audit],
+        "audit": [
+            (entry if isinstance(entry, dict) else entry.model_dump())
+            for entry in audit
+        ],
         "markdown": "\n".join(md_lines),
     }

@@ -33,13 +33,22 @@ def run(state: AgentState) -> dict[str, Any]:
         "profitability_score": _score(
             financials.get("operating_margin_pct"), ranges["operating_margin_pct"]
         ),
-        "leverage_health_score": _score(financials.get("debt_to_equity"), ranges["debt_to_equity"]),
-        "liquidity_score": _score(financials.get("current_ratio"), ranges["current_ratio"]),
+        "leverage_health_score": _score(
+            financials.get("debt_to_equity"), ranges["debt_to_equity"]
+        ),
+        "liquidity_score": _score(
+            financials.get("current_ratio"), ranges["current_ratio"]
+        ),
         "cash_generation_score": _score(
             financials.get("free_cash_flow_margin_pct"), ranges["free_cash_flow_margin_pct"]
         ),
-        "interest_coverage_score": _score(financials.get("interest_coverage"), ranges["interest_coverage"]),
-        "governance_score": _score(qualitative.get("governance_score"), ranges["governance_score"]),
+        "interest_coverage_score": _score(
+            financials.get("interest_coverage"),
+            ranges["interest_coverage"],
+        ),
+        "governance_score": _score(
+            qualitative.get("governance_score"), ranges["governance_score"]
+        ),
         "product_momentum_score": _score(
             qualitative.get("product_momentum_score"), ranges["product_momentum_score"]
         ),
@@ -51,7 +60,9 @@ def run(state: AgentState) -> dict[str, Any]:
             market_context.get("industry_growth_score", 0.5),
             ranges["industry_growth_score"],
         ),
-        "controversy_penalty": _controversy_penalty(str(qualitative.get("controversy_level", "low"))),
+        "controversy_penalty": _controversy_penalty(
+            str(qualitative.get("controversy_level", "low"))
+        ),
     }
 
     audit = AuditEntry(
