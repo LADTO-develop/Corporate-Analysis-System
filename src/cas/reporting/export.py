@@ -70,11 +70,9 @@ def render_report(state: AgentState | dict[str, Any]) -> dict[str, Any]:
                 else getattr(assessment, "summary", "")
             )
             md_lines.append(
-                (
-                    f"- `{name}`: {score:.3f} - {summary}"
-                    if score is not None
-                    else f"- `{name}`: n/a"
-                )
+                f"- `{name}`: {score:.3f} - {summary}"
+                if score is not None
+                else f"- `{name}`: n/a"
             )
         md_lines.append("")
 
