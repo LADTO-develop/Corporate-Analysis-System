@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import Any
 
 from cas.agents.state import (
     AgentState,
@@ -13,7 +14,7 @@ from cas.agents.state import (
 from cas.utils.io import read_yaml
 
 
-def run(state: AgentState) -> dict[str, object]:
+def run(state: AgentState) -> dict[str, Any]:
     """Run the committee, aggregate reviews, and set the final recommendation."""
     cfg = read_yaml("configs/agent/committee.yaml")
     features = dict(state.get("normalized_features") or {})
@@ -66,13 +67,13 @@ def run(state: AgentState) -> dict[str, object]:
 
 def _aggregate(
     reviews: list[CommitteeReview],
-    cfg: dict[str, object],
+    cfg: dict[str, Any],
 ) -> tuple[Recommendation, float]:
     if not reviews:
         return "review", 0.0
 
-    perspectives = cfg["perspectives"]  # type: ignore[index]
-    aggregation = cfg["aggregation"]  # type: ignore[index]
+    perspectives = cfg["perspectives"]
+    aggregation = cfg["aggregation"]
     weights = {str(spec["kind"]): float(spec.get("weight", 0.25)) for spec in perspectives}
     scores: dict[Recommendation, float] = {
         "priority": 0.0,

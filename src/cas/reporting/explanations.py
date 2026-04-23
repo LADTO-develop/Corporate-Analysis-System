@@ -28,23 +28,20 @@ def local_explanation(
     if not attributions:
         return []
 
-    ranked = sorted(
-        (
-            {
-                "feature": str(item.get("feature", "")),
-                "score": float(item.get("score", 0.0)),
-                "contribution_direction": str(
-                    item.get(
-                        "contribution_direction",
-                        "+" if float(item.get("score", 0.0)) > 0 else "-",
-                    )
-                ),
-            }
-            for item in attributions
-        ),
-        key=lambda item: abs(item["score"]),
-        reverse=True,
-    )
+    normalized: list[dict[str, Any]] = [
+        {
+            "feature": str(item.get("feature", "")),
+            "score": float(item.get("score", 0.0)),
+            "contribution_direction": str(
+                item.get(
+                    "contribution_direction",
+                    "+" if float(item.get("score", 0.0)) > 0 else "-",
+                )
+            ),
+        }
+        for item in attributions
+    ]
+    ranked = sorted(normalized, key=lambda item: abs(item["score"]), reverse=True)
     return ranked[:top_k]
 
 
