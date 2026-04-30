@@ -1,6 +1,6 @@
 {
   "manifest_name": "TS2000 Core 29",
-  "description": "현재 공식 Core29는 후속 변수 검증 결과를 반영한 29개 핵심 변수셋입니다. audit_qualified_flag, lag1_current_ratio, gross_margin, total_borrowings_growth, inventory_days_diff, usd_krw를 제외하고 gross_profit, listed_year, accruals_ratio, depreciation, cash_ratio, net_margin_diff를 공식 반영했습니다.",
+  "description": "멘토 피드백과 후속 검증을 반영해 정리한 공식 29개 feature set입니다. 설명 가능성과 성능의 균형을 위해 gross_profit, listed_year, accruals_ratio, depreciation, cash_ratio, net_margin_diff를 포함합니다.",
   "dataset_file": "TS2000_Credit_Model_Dataset_Model_V1.csv",
   "target_column": "is_speculative",
   "id_columns": [
@@ -124,22 +124,25 @@
     "is_2y_consecutive_ocf_deficit"
   ],
   "deferred_candidates_to_compare_next": [
-    "audit_qualified_flag",
-    "lag1_current_ratio",
-    "gross_margin",
-    "total_borrowings_growth",
-    "inventory_days_diff",
-    "usd_krw"
+    "audit_non_clean_flag",
+    "audit_strong_risk_flag",
+    "audit_missing_flag",
+    "ppi_yoy",
+    "operating_margin",
+    "operating_roe",
+    "market_to_book",
+    "pretax_roe"
   ],
   "notes": [
-    "현재 공식 Core29는 후속 변수 검증에서 최종 채택된 구성입니다.",
-    "공식 1차 학습에서는 market별 train 기준 중앙값/최빈값 대치를 기본으로 사용합니다.",
-    "audit_qualified_flag는 full 검증에서 일관된 기여가 약해 공식 Core29에서 제외했습니다.",
-    "lag1_current_ratio는 후속 실험에서 제거한 쪽이 더 안정적으로 좋아져 공식 Core29에서 제외했습니다.",
-    "gross_margin은 gross_profit을 공식 반영한 뒤 중복 신호로 판단되어 제외했습니다.",
-    "total_borrowings_growth는 제거 시 test PR-AUC, Precision, Recall이 함께 개선되어 제외했습니다.",
-    "usd_krw는 제거 시 test PR-AUC, Precision, Recall이 함께 개선되어 공식 Core29에서 제외했습니다.",
-    "gross_profit, listed_year, accruals_ratio, depreciation, cash_ratio는 후속 변수 검증에서 의미 있는 개선 또는 해석력을 보여 공식 반영했습니다.",
-    "net_margin_diff는 operating_margin_diff보다 test 기준으로 더 우수해 공식 반영했습니다."
+    "1차 XGBoost baseline은 core29_feature_columns만 사용하고, target_column을 y로 둡니다.",
+    "멘토님이 언급한 변수 목록 중 현재 데이터에서 안정적으로 정의 가능한 항목을 우선 반영했습니다.",
+    "영업수익/영업비용은 현재 TS2000 구조에서 정확히 대응하는 operating expense 항목이 없어 프록시를 억지로 만들지 않았습니다.",
+    "audit_non_clean_flag와 audit_strong_risk_flag는 SHAP/XGBoost importance가 0에 가깝고, 대체 변수 조합 대비 우위가 약해 Core29에서 제외했습니다.",
+    "audit_missing_flag는 capped interest_coverage_ratio와 구조적 상관이 커서 Core29에서 제외하고 deferred로 이동했습니다.",
+    "결측 대치는 전체 train 기준보다 market별 train 기준 중앙값/최빈값 대치를 공식 기본안으로 사용합니다.",
+    "operating_margin은 net_margin과의 공선성이 크고 후속 검증에서 유지 근거가 약해 Core29에서 제외했습니다.",
+    "gross_margin, lag1_current_ratio, total_borrowings_growth, usd_krw, operating_margin_diff는 후속 검증에서 제거 또는 대체 시 성능이 더 좋아져 Core29에서 제외했습니다.",
+    "gross_profit, listed_year, accruals_ratio, depreciation, cash_ratio, net_margin_diff는 후속 검증에서 성능과 해석력이 모두 납득되어 공식 Core29에 반영했습니다.",
+    "short_term_borrowings_share는 operating_roe 대체안으로 비교 시 test PR-AUC와 Recall 측면에서 더 안정적으로 작동해 공식 Core29에 유지합니다."
   ]
 }

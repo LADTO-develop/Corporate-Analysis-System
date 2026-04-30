@@ -8,11 +8,11 @@
 
 ## Test Overall
 
-- `logistic_regression`: PR-AUC 0.6881, ROC-AUC 0.8835, Precision@0.5 0.5498, Recall@0.5 0.8313
-- `xgboost`: PR-AUC 0.7812, ROC-AUC 0.9088, Precision@0.5 0.6250, Recall@0.5 0.8434
-- `lightgbm`: PR-AUC 0.7722, ROC-AUC 0.9065, Precision@0.5 0.6520, Recall@0.5 0.8012
+- `logistic_regression`: PR-AUC 0.6839, ROC-AUC 0.8783, Precision@0.5 0.5472, Recall@0.5 0.8323
+- `xgboost`: PR-AUC 0.7621, ROC-AUC 0.8998, Precision@0.5 0.6233, Recall@0.5 0.8323
+- `lightgbm`: PR-AUC 0.7661, ROC-AUC 0.9040, Precision@0.5 0.6373, Recall@0.5 0.7784
 
 ## Versus Logistic Baseline
 
-- `xgboost`: PR-AUC Δ +0.0931, ROC-AUC Δ +0.0253, Precision Δ +0.0752, Recall Δ +0.0120
-- `lightgbm`: PR-AUC Δ +0.0841, ROC-AUC Δ +0.0229, Precision Δ +0.1022, Recall Δ -0.0301
+- `xgboost`: PR-AUC Δ +0.0782, ROC-AUC Δ +0.0214, Precision Δ +0.0761, Recall Δ +0.0000
+- `lightgbm`: PR-AUC Δ +0.0821, ROC-AUC Δ +0.0256, Precision Δ +0.0900, Recall Δ -0.0539

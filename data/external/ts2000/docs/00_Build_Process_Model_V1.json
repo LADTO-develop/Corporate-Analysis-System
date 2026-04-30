@@ -76,8 +76,9 @@
       "missing_day": "month_end"
     },
     "matched_fiscal_year_rule": "matched_fiscal_year = evaluation_year - 1",
-    "exclude_foreign_agencies": true,
-    "same_company_eval_year_selection": "Use the lowest grade among BIG3 if any BIG3 ratings exist; otherwise use the lowest grade among other domestic agencies."
+    "domestic_agencies_primary": true,
+    "foreign_agencies_backfill_only": true,
+    "same_company_eval_year_selection": "Use the lowest grade among BIG3 if any BIG3 ratings exist; otherwise use the lowest grade among other domestic agencies. If no domestic agency exists, use foreign backfill, preferring issuer/company/ICR-style ratings and otherwise the lowest grade among plain long-term corporate bond style foreign ratings."
   },
   "macro_preprocessing_rules": {
     "input_file": "ECOS_Macro.csv",

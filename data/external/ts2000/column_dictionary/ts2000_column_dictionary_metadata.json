@@ -2,7 +2,7 @@
   "summary": {
     "full_dataset_file": "TS2000_Credit_Model_Dataset.csv",
     "model_dataset_file": "TS2000_Credit_Model_Dataset_Model_V1.csv",
-    "row_count": 5166,
+    "row_count": 5199,
     "full_column_count": 164,
     "model_column_count": 142,
     "fiscal_year_range": "2014-2024",
@@ -12,12 +12,12 @@
     "leakage_note": "상장폐지일은 feature로 쓰지 않고 analysis-only labels를 만들 때만 사용",
     "two_file_note": "TS2000_Credit_Model_Dataset.csv는 전체 마스터입니다. TS2000_Credit_Model_Dataset_Model_V1.csv는 1차 기본셋으로 credit_rating, analysis-only labels, feature_deferred를 제외했습니다. 공식 핵심 변수셋 실험은 TS2000_Model_Core29_Manifest.json 기준으로 진행합니다.",
     "model_v1_manifest_file": "TS2000_Model_V1_Manifest.json",
-    "core29_manifest_file": "TS2000_Model_Core29_Manifest.json",
-    "core29_feature_file": "TS2000_Model_Core29_Features.csv",
     "model_feature_count": 137,
     "feature_deferred_count": 18,
-    "core29_feature_count": 29,
-    "dataset_variant_note": "TS2000_Credit_Model_Dataset.csv는 전체 마스터입니다. TS2000_Credit_Model_Dataset_Model_V1.csv는 1차 기본셋으로 credit_rating, analysis-only labels, feature_deferred를 제외했습니다. 공식 핵심 변수셋 실험은 TS2000_Model_Core29_Manifest.json 기준으로 진행합니다."
+    "dataset_variant_note": "TS2000_Credit_Model_Dataset.csv는 전체 마스터입니다. TS2000_Credit_Model_Dataset_Model_V1.csv는 1차 기본셋으로 credit_rating, analysis-only labels, feature_deferred를 제외했습니다. 공식 핵심 변수셋 실험은 TS2000_Model_Core29_Manifest.json 기준으로 진행합니다.",
+    "core29_manifest_file": "TS2000_Model_Core29_Manifest.json",
+    "core29_feature_file": "TS2000_Model_Core29_Features.csv",
+    "core29_feature_count": 29
   },
   "role_counts": [
     {
