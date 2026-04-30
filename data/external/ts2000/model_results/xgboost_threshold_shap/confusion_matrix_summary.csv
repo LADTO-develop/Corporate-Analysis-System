@@ -1,0 +1,7 @@
+﻿threshold_label,threshold,segment,rows,tp,fp,fn,tn
+pred_label_default_0_5,0.5,overall,668,134,101,32,401
+pred_label_default_0_5,0.5,KOSDAQ,383,114,88,24,157
+pred_label_default_0_5,0.5,KOSPI,285,20,13,8,244
+pred_label_tuned,0.48,overall,668,134,102,32,400
+pred_label_tuned,0.48,KOSDAQ,383,114,88,24,157
+pred_label_tuned,0.48,KOSPI,285,20,14,8,243

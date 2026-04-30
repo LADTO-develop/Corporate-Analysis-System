@@ -1,0 +1,150 @@
+{
+  "package_name": "TS2000 Core29 Sharing Package",
+  "purpose": "Binary credit-risk classification for Korean listed firms: investment-grade (0) vs speculative-grade (1).",
+  "primary_dataset_file": "01_Dataset/TS2000_Credit_Model_Dataset_Model_V1.csv",
+  "primary_manifest_file": "02_Core29_Definition/TS2000_Model_Core29_Manifest.json",
+  "dictionary_metadata_file": "03_Dictionary/ts2000_column_dictionary_metadata.json",
+  "row_count": 5166,
+  "feature_column_count_model_v1": 137,
+  "official_core_feature_count": 29,
+  "unit_of_analysis": "One row per market-stock_code-fiscal_year after keeping the latest fiscal_month within the same company-year.",
+  "id_columns": [
+    "stock_code",
+    "corp_name"
+  ],
+  "time_columns": [
+    "fiscal_year",
+    "eval_year"
+  ],
+  "target_column": "is_speculative",
+  "target_definition": {
+    "0": "investment_grade",
+    "1": "speculative_grade"
+  },
+  "oot_split": {
+    "train": "2014-2020",
+    "valid": "2021-2022",
+    "test": "2023-2024"
+  },
+  "imputation_policy": {
+    "categorical": "market-wise train mode with global-train fallback",
+    "numeric": "market-wise train median with global-train fallback"
+  },
+  "recommended_categorical_columns": [
+    "market",
+    "firm_size_group",
+    "industry_macro_category"
+  ],
+  "core29_features": [
+    "market",
+    "listed_year",
+    "firm_size_group",
+    "industry_macro_category",
+    "current_ratio",
+    "cash_ratio",
+    "assets_total",
+    "equity_ratio",
+    "debt_ratio",
+    "total_borrowings_ratio",
+    "capital_impairment_ratio",
+    "net_margin",
+    "gross_profit",
+    "interest_coverage_ratio",
+    "pretax_roa",
+    "operating_roa",
+    "pretax_roe",
+    "ocf_to_total_liabilities",
+    "accruals_ratio",
+    "depreciation",
+    "intangible_assets_ratio",
+    "total_debt_turnover",
+    "dividend_payer",
+    "market_to_book",
+    "spec_spread",
+    "short_term_borrowings_share",
+    "total_assets_growth",
+    "net_margin_diff",
+    "is_2y_consecutive_ocf_deficit"
+  ],
+  "feature_groups": {
+    "context": [
+      "market",
+      "listed_year",
+      "firm_size_group",
+      "industry_macro_category"
+    ],
+    "stability_leverage": [
+      "current_ratio",
+      "cash_ratio",
+      "assets_total",
+      "equity_ratio",
+      "debt_ratio",
+      "total_borrowings_ratio",
+      "capital_impairment_ratio"
+    ],
+    "profitability_returns": [
+      "net_margin",
+      "gross_profit",
+      "interest_coverage_ratio",
+      "pretax_roa",
+      "operating_roa",
+      "pretax_roe"
+    ],
+    "cashflow_structure": [
+      "ocf_to_total_liabilities",
+      "accruals_ratio",
+      "depreciation",
+      "intangible_assets_ratio",
+      "total_debt_turnover"
+    ],
+    "market_shareholder": [
+      "dividend_payer",
+      "market_to_book"
+    ],
+    "macro": [
+      "spec_spread"
+    ],
+    "trend_early_warning": [
+      "short_term_borrowings_share",
+      "total_assets_growth",
+      "net_margin_diff",
+      "is_2y_consecutive_ocf_deficit"
+    ]
+  },
+  "official_model_results_test_overall": {
+    "logistic_regression": {
+      "pr_auc": 0.6881066858222064,
+      "roc_auc": 0.8835141362261795,
+      "precision_at_0_5": 0.549800796812749,
+      "recall_at_0_5": 0.8313253012048193
+    },
+    "xgboost": {
+      "pr_auc": 0.7812212022115401,
+      "roc_auc": 0.9088285412566601,
+      "precision_at_0_5": 0.625,
+      "recall_at_0_5": 0.8433734939759037
+    },
+    "lightgbm": {
+      "pr_auc": 0.7722131038415927,
+      "roc_auc": 0.9064525032400518,
+      "precision_at_0_5": 0.6519607843137255,
+      "recall_at_0_5": 0.8012048192771084
+    }
+  },
+  "xgboost_thresholds": {
+    "default_0_5": {
+      "precision": 0.625,
+      "recall": 0.8433734939759037
+    },
+    "tuned_0_5437": {
+      "precision": 0.6308411214953271,
+      "recall": 0.8132530120481928
+    }
+  },
+  "llm_usage_guidance": [
+    "Prefer Core29 plus SHAP top features for explanation tasks.",
+    "Use actual amounts and ratios, not only transformed features.",
+    "Do not ask the LLM to reconstruct hidden preprocessing logic from raw one-hot or engineered columns.",
+    "For explanation/report generation, provide corp_name, market, firm_size_group, industry_macro_category, prediction score, and top SHAP drivers."
+  ]
+}
