@@ -1,0 +1,183 @@
+{
+  "document_name": "TS2000 Model_V1 Build Process",
+  "purpose": "Explain how raw TS2000 source files are transformed into the final Model_V1 and Core29 datasets.",
+  "source_files": {
+    "financial_profile": [
+      "01_Raw_Data/KOSPI_Profile.csv",
+      "01_Raw_Data/KOSDAQ_Profile.csv"
+    ],
+    "financial_bs": [
+      "01_Raw_Data/KOSPI_BS.csv",
+      "01_Raw_Data/KOSDAQ_BS.csv"
+    ],
+    "financial_is": [
+      "01_Raw_Data/KOSPI_IS.csv",
+      "01_Raw_Data/KOSDAQ_IS.csv"
+    ],
+    "financial_cf": [
+      "01_Raw_Data/KOSPI_CF.csv",
+      "01_Raw_Data/KOSDAQ_CF.csv"
+    ],
+    "target_raw": [
+      "01_Raw_Data/KOSPI_Target.csv",
+      "01_Raw_Data/KOSDAQ_Target.csv"
+    ],
+    "macro_raw": [
+      "01_Raw_Data/ECOS_Macro.csv"
+    ],
+    "market_div_raw": [
+      "01_Raw_Data/KOSPI_market_and_div.csv",
+      "01_Raw_Data/KOSDAQ_market_and_div.csv"
+    ]
+  },
+  "pipeline_scripts": [
+    {
+      "file": "01_Raw_Data/preprocess_target_ratings.py",
+      "output_files": [
+        "02_Processed_Data/Target_Processed.csv",
+        "02_Processed_Data/Target_Processed_audit.csv"
+      ]
+    },
+    {
+      "file": "01_Raw_Data/process_ecos_macro.py",
+      "output_files": [
+        "02_Processed_Data/ECOS_Macro_Processed.csv"
+      ]
+    },
+    {
+      "file": "01_Raw_Data/build_ts2000_credit_model_dataset.py",
+      "output_files": [
+        "03_Outputs/ts2000/TS2000_Credit_Model_Dataset.csv"
+      ]
+    },
+    {
+      "file": "01_Raw_Data/export_ts2000_model_outputs.py",
+      "output_files": [
+        "03_Outputs/ts2000/TS2000_Credit_Model_Dataset_Model_V1.csv",
+        "03_Outputs/ts2000/TS2000_Model_V1_Manifest.json",
+        "03_Outputs/ts2000/TS2000_Model_Core29_Manifest.json"
+      ]
+    }
+  ],
+  "target_preprocessing_rules": {
+    "keep_only_long_term_ratings": true,
+    "investment_grade_cutoff": "BBB-",
+    "binary_target": {
+      "0": "investment_grade",
+      "1": "speculative_grade"
+    },
+    "allowed_security_type_codes": [
+      "10",
+      "40"
+    ],
+    "exclude_short_term_and_structured": true,
+    "normalize_evaluation_date": {
+      "missing_month": "December",
+      "missing_day": "month_end"
+    },
+    "matched_fiscal_year_rule": "matched_fiscal_year = evaluation_year - 1",
+    "exclude_foreign_agencies": true,
+    "same_company_eval_year_selection": "Use the lowest grade among BIG3 if any BIG3 ratings exist; otherwise use the lowest grade among other domestic agencies."
+  },
+  "macro_preprocessing_rules": {
+    "input_file": "ECOS_Macro.csv",
+    "output_file": "ECOS_Macro_Processed.csv",
+    "derived_columns": [
+      "market_spread",
+      "spec_spread",
+      "ppi_yoy"
+    ],
+    "macro_merge_key": "fiscal_year",
+    "official_definition": "annual single-value macro file, not H2 average"
+  },
+  "panel_construction_rules": {
+    "primary_key": [
+      "market",
+      "stock_code",
+      "fiscal_year"
+    ],
+    "fiscal_period_handling": "Parse fiscal_year and fiscal_month from YYYY/MM, then keep the latest fiscal_month within the same company-year.",
+    "financial_merge_sequence": [
+      "profile INNER JOIN bs",
+      "INNER JOIN income",
+      "INNER JOIN cashflow",
+      "LEFT JOIN market_div"
+    ],
+    "final_master_merge_sequence": [
+      "target INNER JOIN panel on market-stock_code-fiscal_year",
+      "INNER JOIN macro on fiscal_year"
+    ]
+  },
+  "market_div_rules": {
+    "aggregate_key": [
+      "market",
+      "stock_code",
+      "fiscal_year"
+    ],
+    "shares_outstanding": "max within group",
+    "close_price": "max within group",
+    "cash_dividend_thousand": "value with largest absolute magnitude within group",
+    "dividend_payer": "1 if any non-zero dividend exists within group, else 0",
+    "market_cap_formula": "shares_outstanding * close_price",
+    "market_to_book_formula": "market_cap / (equity_total * 1000)"
+  },
+  "calculation_rules": {
+    "safe_ratio": "Return NaN unless numerator and denominator both exist and denominator != 0",
+    "capped_ratio": "Return numerator/denominator if denominator != 0; otherwise cap at 1,000,000",
+    "growth_ratio": "Return growth only when current and previous both exist and previous != 0"
+  },
+  "important_derived_features": [
+    "current_ratio",
+    "cash_ratio",
+    "equity_ratio",
+    "debt_ratio",
+    "total_borrowings_ratio",
+    "short_term_borrowings_share",
+    "net_margin",
+    "gross_profit",
+    "interest_coverage_ratio",
+    "pretax_roa",
+    "operating_roa",
+    "pretax_roe",
+    "ocf_to_total_liabilities",
+    "accruals_ratio",
+    "depreciation",
+    "market_to_book",
+    "dividend_payer",
+    "total_assets_growth",
+    "net_margin_diff",
+    "is_2y_consecutive_ocf_deficit"
+  ],
+  "model_v1_rules": {
+    "base_master_file": "TS2000_Credit_Model_Dataset.csv",
+    "keep_roles": [
+      "feature_x",
+      "id_reference",
+      "time_reference",
+      "target_y"
+    ],
+    "exclude_roles": [
+      "analysis_only_label",
+      "feature_deferred"
+    ],
+    "explicit_excluded_column": "credit_rating",
+    "output_file": "TS2000_Credit_Model_Dataset_Model_V1.csv"
+  },
+  "official_modeling_rules": {
+    "oot_split": {
+      "train": "2014-2020",
+      "valid": "2021-2022",
+      "test": "2023-2024"
+    },
+    "imputation": {
+      "categorical": "market-wise train mode with global-train fallback",
+      "numeric": "market-wise train median with global-train fallback"
+    }
+  },
+  "notes": [
+    "The final dataset is conservative because target, panel, and macro are joined with inner joins.",
+    "The official dataset is one row per company-year after collapsing multiple fiscal months to the latest month.",
+    "Interest coverage ratio uses a cap of 1,000,000 when interest expense is zero, which can create structural patterns.",
+    "Model_V1 is not the raw merged file; it is an exported modeling subset from the final master dataset."
+  ]
+}

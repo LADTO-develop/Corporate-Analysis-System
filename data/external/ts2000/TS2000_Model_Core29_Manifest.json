@@ -1,0 +1,145 @@
+{
+  "manifest_name": "TS2000 Core 29",
+  "description": "현재 공식 Core29는 후속 변수 검증 결과를 반영한 29개 핵심 변수셋입니다. audit_qualified_flag, lag1_current_ratio, gross_margin, total_borrowings_growth, inventory_days_diff, usd_krw를 제외하고 gross_profit, listed_year, accruals_ratio, depreciation, cash_ratio, net_margin_diff를 공식 반영했습니다.",
+  "dataset_file": "TS2000_Credit_Model_Dataset_Model_V1.csv",
+  "target_column": "is_speculative",
+  "id_columns": [
+    "stock_code",
+    "corp_name"
+  ],
+  "time_columns": [
+    "fiscal_year",
+    "eval_year"
+  ],
+  "recommended_categorical_columns": [
+    "market",
+    "firm_size_group",
+    "industry_macro_category"
+  ],
+  "feature_groups": {
+    "context": [
+      "market",
+      "listed_year",
+      "firm_size_group",
+      "industry_macro_category"
+    ],
+    "stability_leverage": [
+      "current_ratio",
+      "cash_ratio",
+      "assets_total",
+      "equity_ratio",
+      "debt_ratio",
+      "total_borrowings_ratio",
+      "capital_impairment_ratio"
+    ],
+    "profitability_returns": [
+      "net_margin",
+      "gross_profit",
+      "interest_coverage_ratio",
+      "pretax_roa",
+      "operating_roa",
+      "pretax_roe"
+    ],
+    "cashflow_structure": [
+      "ocf_to_total_liabilities",
+      "accruals_ratio",
+      "depreciation",
+      "intangible_assets_ratio",
+      "total_debt_turnover"
+    ],
+    "market_shareholder": [
+      "dividend_payer",
+      "market_to_book"
+    ],
+    "macro": [
+      "spec_spread"
+    ],
+    "trend_early_warning": [
+      "short_term_borrowings_share",
+      "total_assets_growth",
+      "net_margin_diff",
+      "is_2y_consecutive_ocf_deficit"
+    ]
+  },
+  "feature_columns": [
+    "market",
+    "listed_year",
+    "firm_size_group",
+    "industry_macro_category",
+    "current_ratio",
+    "cash_ratio",
+    "assets_total",
+    "equity_ratio",
+    "debt_ratio",
+    "total_borrowings_ratio",
+    "capital_impairment_ratio",
+    "net_margin",
+    "gross_profit",
+    "interest_coverage_ratio",
+    "pretax_roa",
+    "operating_roa",
+    "pretax_roe",
+    "ocf_to_total_liabilities",
+    "accruals_ratio",
+    "depreciation",
+    "intangible_assets_ratio",
+    "total_debt_turnover",
+    "dividend_payer",
+    "market_to_book",
+    "spec_spread",
+    "short_term_borrowings_share",
+    "total_assets_growth",
+    "net_margin_diff",
+    "is_2y_consecutive_ocf_deficit"
+  ],
+  "core29_feature_columns": [
+    "market",
+    "listed_year",
+    "firm_size_group",
+    "industry_macro_category",
+    "current_ratio",
+    "cash_ratio",
+    "assets_total",
+    "equity_ratio",
+    "debt_ratio",
+    "total_borrowings_ratio",
+    "capital_impairment_ratio",
+    "net_margin",
+    "gross_profit",
+    "interest_coverage_ratio",
+    "pretax_roa",
+    "operating_roa",
+    "pretax_roe",
+    "ocf_to_total_liabilities",
+    "accruals_ratio",
+    "depreciation",
+    "intangible_assets_ratio",
+    "total_debt_turnover",
+    "dividend_payer",
+    "market_to_book",
+    "spec_spread",
+    "short_term_borrowings_share",
+    "total_assets_growth",
+    "net_margin_diff",
+    "is_2y_consecutive_ocf_deficit"
+  ],
+  "deferred_candidates_to_compare_next": [
+    "audit_qualified_flag",
+    "lag1_current_ratio",
+    "gross_margin",
+    "total_borrowings_growth",
+    "inventory_days_diff",
+    "usd_krw"
+  ],
+  "notes": [
+    "현재 공식 Core29는 후속 변수 검증에서 최종 채택된 구성입니다.",
+    "공식 1차 학습에서는 market별 train 기준 중앙값/최빈값 대치를 기본으로 사용합니다.",
+    "audit_qualified_flag는 full 검증에서 일관된 기여가 약해 공식 Core29에서 제외했습니다.",
+    "lag1_current_ratio는 후속 실험에서 제거한 쪽이 더 안정적으로 좋아져 공식 Core29에서 제외했습니다.",
+    "gross_margin은 gross_profit을 공식 반영한 뒤 중복 신호로 판단되어 제외했습니다.",
+    "total_borrowings_growth는 제거 시 test PR-AUC, Precision, Recall이 함께 개선되어 제외했습니다.",
+    "usd_krw는 제거 시 test PR-AUC, Precision, Recall이 함께 개선되어 공식 Core29에서 제외했습니다.",
+    "gross_profit, listed_year, accruals_ratio, depreciation, cash_ratio는 후속 변수 검증에서 의미 있는 개선 또는 해석력을 보여 공식 반영했습니다.",
+    "net_margin_diff는 operating_margin_diff보다 test 기준으로 더 우수해 공식 반영했습니다."
+  ]
+}

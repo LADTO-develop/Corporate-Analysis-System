@@ -1,0 +1,2344 @@
+{
+  "summary": {
+    "full_dataset_file": "TS2000_Credit_Model_Dataset.csv",
+    "model_dataset_file": "TS2000_Credit_Model_Dataset_Model_V1.csv",
+    "row_count": 5166,
+    "full_column_count": 164,
+    "model_column_count": 142,
+    "fiscal_year_range": "2014-2024",
+    "target_column": "is_speculative",
+    "target_mapping": "0=investment grade (AAA~BBB-), 1=speculative grade (BB+ and below)",
+    "join_rule": "stock_code + fiscal_year 기준으로 Profile/BS/IS/CF/macro를 병합하고, fiscal_year t에 eval_year t+1 신용등급을 연결",
+    "leakage_note": "상장폐지일은 feature로 쓰지 않고 analysis-only labels를 만들 때만 사용",
+    "two_file_note": "TS2000_Credit_Model_Dataset.csv는 전체 마스터입니다. TS2000_Credit_Model_Dataset_Model_V1.csv는 1차 기본셋으로 credit_rating, analysis-only labels, feature_deferred를 제외했습니다. 공식 핵심 변수셋 실험은 TS2000_Model_Core29_Manifest.json 기준으로 진행합니다.",
+    "model_v1_manifest_file": "TS2000_Model_V1_Manifest.json",
+    "core29_manifest_file": "TS2000_Model_Core29_Manifest.json",
+    "core29_feature_file": "TS2000_Model_Core29_Features.csv",
+    "model_feature_count": 137,
+    "feature_deferred_count": 18,
+    "core29_feature_count": 29,
+    "dataset_variant_note": "TS2000_Credit_Model_Dataset.csv는 전체 마스터입니다. TS2000_Credit_Model_Dataset_Model_V1.csv는 1차 기본셋으로 credit_rating, analysis-only labels, feature_deferred를 제외했습니다. 공식 핵심 변수셋 실험은 TS2000_Model_Core29_Manifest.json 기준으로 진행합니다."
+  },
+  "role_counts": [
+    {
+      "usage_role": "analysis_only_label",
+      "count": 3
+    },
+    {
+      "usage_role": "feature_deferred",
+      "count": 18
+    },
+    {
+      "usage_role": "feature_x",
+      "count": 137
+    },
+    {
+      "usage_role": "id_reference",
+      "count": 2
+    },
+    {
+      "usage_role": "target_reference",
+      "count": 1
+    },
+    {
+      "usage_role": "target_y",
+      "count": 1
+    },
+    {
+      "usage_role": "time_reference",
+      "count": 2
+    }
+  ],
+  "section_counts": [
+    {
+      "section": "activity",
+      "count": 6
+    },
+    {
+      "section": "analysis_label",
+      "count": 3
+    },
+    {
+      "section": "audit",
+      "count": 6
+    },
+    {
+      "section": "business_structure",
+      "count": 5
+    },
+    {
+      "section": "cashflow_solvency",
+      "count": 7
+    },
+    {
+      "section": "financial_bs",
+      "count": 18
+    },
+    {
+      "section": "financial_cf",
+      "count": 7
+    },
+    {
+      "section": "financial_is",
+      "count": 7
+    },
+    {
+      "section": "growth",
+      "count": 6
+    },
+    {
+      "section": "identifier",
+      "count": 3
+    },
+    {
+      "section": "macro",
+      "count": 9
+    },
+    {
+      "section": "market_features",
+      "count": 2
+    },
+    {
+      "section": "profile",
+      "count": 9
+    },
+    {
+      "section": "profitability",
+      "count": 16
+    },
+    {
+      "section": "stability",
+      "count": 10
+    },
+    {
+      "section": "target",
+      "count": 2
+    },
+    {
+      "section": "time_reference",
+      "count": 2
+    },
+    {
+      "section": "trend",
+      "count": 46
+    }
+  ],
+  "columns": [
+    {
+      "variable_name": "market",
+      "section": "identifier",
+      "usage_role": "feature_x",
+      "korean_name": "시장구분",
+      "description": "상장시장 구분",
+      "source": "Target selected / TS2000 merge key",
+      "formula_or_logic": "KOSPI 또는 KOSDAQ",
+      "unit": "category",
+      "note": "시장 더미 변수로 활용 가능",
+      "order": 1
+    },
+    {
+      "variable_name": "stock_code",
+      "section": "identifier",
+      "usage_role": "id_reference",
+      "korean_name": "종목코드",
+      "description": "6자리 종목코드",
+      "source": "Target selected / TS2000 merge key",
+      "formula_or_logic": "거래소코드 6자리 zero-padding",
+      "unit": "string(6)",
+      "note": "기업 식별용 ID",
+      "order": 2
+    },
+    {
+      "variable_name": "corp_name",
+      "section": "identifier",
+      "usage_role": "id_reference",
+      "korean_name": "회사명",
+      "description": "기업명",
+      "source": "Target selected + Profile",
+      "formula_or_logic": "타겟 파일 기준 이름, 결측 시 Profile 보완",
+      "unit": "text",
+      "note": "표시용 reference 컬럼",
+      "order": 3
+    },
+    {
+      "variable_name": "fiscal_year",
+      "section": "time_reference",
+      "usage_role": "time_reference",
+      "korean_name": "회계연도",
+      "description": "재무 및 거시변수 기준 연도",
+      "source": "Profile/BS/IS/CF/Macro",
+      "formula_or_logic": "회계연도 t",
+      "unit": "year",
+      "note": "신용등급은 다음 해 평가연도와 연결",
+      "order": 4
+    },
+    {
+      "variable_name": "eval_year",
+      "section": "time_reference",
+      "usage_role": "time_reference",
+      "korean_name": "평가연도",
+      "description": "신용등급 평가연도",
+      "source": "Target selected",
+      "formula_or_logic": "eval_year = fiscal_year + 1",
+      "unit": "year",
+      "note": "타겟 기준 시점 reference",
+      "order": 5
+    },
+    {
+      "variable_name": "credit_rating",
+      "section": "target",
+      "usage_role": "target_reference",
+      "korean_name": "최종 신용등급",
+      "description": "대표 신용등급의 정제된 등급값",
+      "source": "Target selected",
+      "formula_or_logic": "시장별 규칙으로 선별된 최종 등급",
+      "unit": "rating",
+      "note": "원래 등급 문자열의 정제 결과",
+      "order": 6
+    },
+    {
+      "variable_name": "is_speculative",
+      "section": "target",
+      "usage_role": "target_y",
+      "korean_name": "투기등급 여부",
+      "description": "이진 분류용 타겟 변수",
+      "source": "Target selected",
+      "formula_or_logic": "0=투자적격(AAA~BBB-), 1=투기등급(BB+ 이하)",
+      "unit": "0/1",
+      "note": "모델의 정답 Y",
+      "order": 7
+    },
+    {
+      "variable_name": "analysis_eventually_delisted_flag",
+      "section": "analysis_label",
+      "usage_role": "analysis_only_label",
+      "korean_name": "추후 상장폐지 여부",
+      "description": "평가일 이후 언젠가 상장폐지되었는지 여부",
+      "source": "Profile delisted_date + Target evaluation_date",
+      "formula_or_logic": "delisted_date >= evaluation_date 이면 1",
+      "unit": "0/1",
+      "note": "사후분석용 라벨, feature로 사용 금지",
+      "order": 8
+    },
+    {
+      "variable_name": "analysis_delisted_within_1y_flag",
+      "section": "analysis_label",
+      "usage_role": "analysis_only_label",
+      "korean_name": "1년 내 상장폐지 여부",
+      "description": "평가일 이후 1년 내 상장폐지 여부",
+      "source": "Profile delisted_date + Target evaluation_date",
+      "formula_or_logic": "0 <= delisted_date - evaluation_date <= 365일",
+      "unit": "0/1",
+      "note": "사후분석용 라벨, feature로 사용 금지",
+      "order": 9
+    },
+    {
+      "variable_name": "analysis_delisted_within_2y_flag",
+      "section": "analysis_label",
+      "usage_role": "analysis_only_label",
+      "korean_name": "2년 내 상장폐지 여부",
+      "description": "평가일 이후 2년 내 상장폐지 여부",
+      "source": "Profile delisted_date + Target evaluation_date",
+      "formula_or_logic": "0 <= delisted_date - evaluation_date <= 730일",
+      "unit": "0/1",
+      "note": "사후분석용 라벨, feature로 사용 금지",
+      "order": 10
+    },
+    {
+      "variable_name": "founded_year",
+      "section": "profile",
+      "usage_role": "feature_x",
+      "korean_name": "설립연도",
+      "description": "설립일에서 추출한 연도",
+      "source": "Profile",
+      "formula_or_logic": "설립일의 연도",
+      "unit": "year",
+      "note": "",
+      "order": 11
+    },
+    {
+      "variable_name": "listed_year",
+      "section": "profile",
+      "usage_role": "feature_x",
+      "korean_name": "상장연도",
+      "description": "상장일에서 추출한 연도",
+      "source": "Profile",
+      "formula_or_logic": "상장일의 연도",
+      "unit": "year",
+      "note": "",
+      "order": 12
+    },
+    {
+      "variable_name": "firm_age",
+      "section": "profile",
+      "usage_role": "feature_x",
+      "korean_name": "업력",
+      "description": "회계연도 기준 기업 업력",
+      "source": "Profile",
+      "formula_or_logic": "fiscal_year - founded_year",
+      "unit": "years",
+      "note": "",
+      "order": 13
+    },
+    {
+      "variable_name": "firm_size_code",
+      "section": "profile",
+      "usage_role": "feature_deferred",
+      "korean_name": "기업규모코드",
+      "description": "TS2000 기업규모 코드",
+      "source": "Profile",
+      "formula_or_logic": "원천 코드 유지",
+      "unit": "code",
+      "note": "firm_size_group과 중복 — 1차 모델 제외 후보",
+      "order": 14
+    },
+    {
+      "variable_name": "firm_size_name",
+      "section": "profile",
+      "usage_role": "feature_deferred",
+      "korean_name": "기업규모명",
+      "description": "TS2000 기업규모명",
+      "source": "Profile",
+      "formula_or_logic": "원천 범주 유지",
+      "unit": "text",
+      "note": "firm_size_group과 중복 — 1차 모델 제외 후보",
+      "order": 15
+    },
+    {
+      "variable_name": "firm_size_group",
+      "section": "profile",
+      "usage_role": "feature_x",
+      "korean_name": "기업규모 그룹",
+      "description": "모델링용 기업규모 그룹",
+      "source": "Derived from Profile",
+      "formula_or_logic": "대기업/중견기업/중소기업/기타 그룹화",
+      "unit": "category",
+      "note": "",
+      "order": 16
+    },
+    {
+      "variable_name": "ksic_section_code",
+      "section": "profile",
+      "usage_role": "feature_deferred",
+      "korean_name": "KSIC 대분류 코드",
+      "description": "표준산업분류 11차 대분류 코드",
+      "source": "Profile",
+      "formula_or_logic": "원천 대분류 코드 유지",
+      "unit": "code",
+      "note": "industry_macro_category와 중복 — 1차 모델 제외 후보",
+      "order": 17
+    },
+    {
+      "variable_name": "ksic_section_name",
+      "section": "profile",
+      "usage_role": "feature_deferred",
+      "korean_name": "KSIC 대분류명",
+      "description": "표준산업분류 11차 대분류명",
+      "source": "Profile",
+      "formula_or_logic": "원천 대분류명 유지",
+      "unit": "text",
+      "note": "industry_macro_category와 중복 — 1차 모델 제외 후보",
+      "order": 18
+    },
+    {
+      "variable_name": "industry_macro_category",
+      "section": "profile",
+      "usage_role": "feature_x",
+      "korean_name": "산업 대분류",
+      "description": "모델링용 산업 대분류",
+      "source": "Derived from Profile",
+      "formula_or_logic": "제조업/건설업/도소매업/IT·서비스업/운수·창고업/기타",
+      "unit": "category",
+      "note": "",
+      "order": 19
+    },
+    {
+      "variable_name": "audit_opinion_code",
+      "section": "audit",
+      "usage_role": "feature_deferred",
+      "korean_name": "감사의견코드",
+      "description": "연결 감사의견 코드",
+      "source": "Profile",
+      "formula_or_logic": "TS2000 원천 코드 유지",
+      "unit": "code",
+      "note": "파생 flag(audit_non_clean/strong_risk/qualified/missing)와 중복 — 1차 모델 제외 후보",
+      "order": 20
+    },
+    {
+      "variable_name": "audit_opinion_category",
+      "section": "audit",
+      "usage_role": "feature_deferred",
+      "korean_name": "감사의견 범주",
+      "description": "감사의견코드의 해석용 범주",
+      "source": "Derived from audit_opinion_code",
+      "formula_or_logic": "예: unqualified / qualified / adverse / disclaimer",
+      "unit": "category",
+      "note": "공식 기본셋에서는 사용하지 않고 해석/보류 변수로 관리",
+      "order": 21
+    },
+    {
+      "variable_name": "audit_non_clean_flag",
+      "section": "audit",
+      "usage_role": "feature_deferred",
+      "korean_name": "비적정 감사 여부",
+      "description": "적정(UQ)이 아닌 감사의견 여부",
+      "source": "Derived from audit_opinion_code",
+      "formula_or_logic": "audit_opinion_code != UQ and not blank",
+      "unit": "0/1",
+      "note": "SHAP/XGBoost importance가 거의 0이고 대체 가능해 1차 모델에서는 보류",
+      "order": 22
+    },
+    {
+      "variable_name": "audit_strong_risk_flag",
+      "section": "audit",
+      "usage_role": "feature_deferred",
+      "korean_name": "강한 감사위험 플래그",
+      "description": "부적정·의견거절 계열 감사의견 여부",
+      "source": "Derived from audit_opinion_code",
+      "formula_or_logic": "AG/DS/DU/DI/ZZ 이면 1",
+      "unit": "0/1",
+      "note": "강한 위험 신호지만 1차 Core29에서는 보류",
+      "order": 23
+    },
+    {
+      "variable_name": "audit_qualified_flag",
+      "section": "audit",
+      "usage_role": "feature_x",
+      "korean_name": "한정의견 플래그",
+      "description": "한정의견 계열 감사의견 여부",
+      "source": "Derived from audit_opinion_code",
+      "formula_or_logic": "QQ/QS/QU/QA/QG/QC 이면 1",
+      "unit": "0/1",
+      "note": "단일 추가 실험에서 test PR-AUC 개선을 보여 공식 Core29 변수로 채택",
+      "order": 24
+    },
+    {
+      "variable_name": "audit_missing_flag",
+      "section": "audit",
+      "usage_role": "feature_deferred",
+      "korean_name": "감사의견 결측/미제출 플래그",
+      "description": "감사의견 정보 부재 또는 미감사/미제출 여부",
+      "source": "Derived from audit_opinion_category",
+      "formula_or_logic": "missing/report_not_submitted/unaudited 이면 1",
+      "unit": "0/1",
+      "note": "현재 데이터에서는 capped interest_coverage_ratio와 구조적으로 강하게 묶여 있어 1차 모델에서는 보류",
+      "order": 25
+    },
+    {
+      "variable_name": "assets_total",
+      "section": "financial_bs",
+      "usage_role": "feature_x",
+      "korean_name": "자산총계",
+      "description": "총자산",
+      "source": "BS",
+      "formula_or_logic": "원천값",
+      "unit": "KRW thousand",
+      "note": "",
+      "order": 26
+    },
+    {
+      "variable_name": "liabilities_total",
+      "section": "financial_bs",
+      "usage_role": "feature_x",
+      "korean_name": "부채총계",
+      "description": "총부채",
+      "source": "BS",
+      "formula_or_logic": "원천값",
+      "unit": "KRW thousand",
+      "note": "",
+      "order": 27
+    },
+    {
+      "variable_name": "equity_total",
+      "section": "financial_bs",
+      "usage_role": "feature_x",
+      "korean_name": "자본총계",
+      "description": "총자본",
+      "source": "BS",
+      "formula_or_logic": "원천값",
+      "unit": "KRW thousand",
+      "note": "",
+      "order": 28
+    },
+    {
+      "variable_name": "current_assets",
+      "section": "financial_bs",
+      "usage_role": "feature_x",
+      "korean_name": "유동자산",
+      "description": "유동자산",
+      "source": "BS",
+      "formula_or_logic": "원천값",
+      "unit": "KRW thousand",
+      "note": "",
+      "order": 29
+    },
+    {
+      "variable_name": "current_liabilities",
+      "section": "financial_bs",
+      "usage_role": "feature_x",
+      "korean_name": "유동부채",
+      "description": "유동부채",
+      "source": "BS",
+      "formula_or_logic": "원천값",
+      "unit": "KRW thousand",
+      "note": "",
+      "order": 30
+    },
+    {
+      "variable_name": "noncurrent_liabilities",
+      "section": "financial_bs",
+      "usage_role": "feature_x",
+      "korean_name": "비유동부채",
+      "description": "비유동부채",
+      "source": "BS",
+      "formula_or_logic": "원천값",
+      "unit": "KRW thousand",
+      "note": "",
+      "order": 31
+    },
+    {
+      "variable_name": "cash_and_equivalents",
+      "section": "financial_bs",
+      "usage_role": "feature_x",
+      "korean_name": "현금및현금성자산",
+      "description": "현금및현금성자산",
+      "source": "BS",
+      "formula_or_logic": "원천값",
+      "unit": "KRW thousand",
+      "note": "",
+      "order": 32
+    },
+    {
+      "variable_name": "accounts_receivable",
+      "section": "financial_bs",
+      "usage_role": "feature_x",
+      "korean_name": "매출채권",
+      "description": "매출채권",
+      "source": "BS",
+      "formula_or_logic": "원천값",
+      "unit": "KRW thousand",
+      "note": "",
+      "order": 33
+    },
+    {
+      "variable_name": "inventories",
+      "section": "financial_bs",
+      "usage_role": "feature_x",
+      "korean_name": "재고자산",
+      "description": "재고자산",
+      "source": "BS",
+      "formula_or_logic": "원천값",
+      "unit": "KRW thousand",
+      "note": "",
+      "order": 34
+    },
+    {
+      "variable_name": "contract_assets",
+      "section": "financial_bs",
+      "usage_role": "feature_x",
+      "korean_name": "계약자산",
+      "description": "계약자산",
+      "source": "BS",
+      "formula_or_logic": "원천값",
+      "unit": "KRW thousand",
+      "note": "",
+      "order": 35
+    },
+    {
+      "variable_name": "short_term_borrowings",
+      "section": "financial_bs",
+      "usage_role": "feature_x",
+      "korean_name": "단기차입금",
+      "description": "단기차입금",
+      "source": "BS",
+      "formula_or_logic": "원천값",
+      "unit": "KRW thousand",
+      "note": "",
+      "order": 36
+    },
+    {
+      "variable_name": "long_term_borrowings",
+      "section": "financial_bs",
+      "usage_role": "feature_x",
+      "korean_name": "장기차입금",
+      "description": "장기차입금",
+      "source": "BS",
+      "formula_or_logic": "원천값",
+      "unit": "KRW thousand",
+      "note": "",
+      "order": 37
+    },
+    {
+      "variable_name": "bonds_payable",
+      "section": "financial_bs",
+      "usage_role": "feature_x",
+      "korean_name": "사채",
+      "description": "사채",
+      "source": "BS",
+      "formula_or_logic": "원천값",
+      "unit": "KRW thousand",
+      "note": "",
+      "order": 38
+    },
+    {
+      "variable_name": "accounts_payable",
+      "section": "financial_bs",
+      "usage_role": "feature_x",
+      "korean_name": "매입채무",
+      "description": "매입채무",
+      "source": "BS",
+      "formula_or_logic": "원천값",
+      "unit": "KRW thousand",
+      "note": "",
+      "order": 39
+    },
+    {
+      "variable_name": "property_plant_equipment",
+      "section": "financial_bs",
+      "usage_role": "feature_x",
+      "korean_name": "유형자산",
+      "description": "유형자산",
+      "source": "BS",
+      "formula_or_logic": "원천값",
+      "unit": "KRW thousand",
+      "note": "",
+      "order": 40
+    },
+    {
+      "variable_name": "intangible_assets",
+      "section": "financial_bs",
+      "usage_role": "feature_x",
+      "korean_name": "무형자산",
+      "description": "무형자산",
+      "source": "BS",
+      "formula_or_logic": "원천값",
+      "unit": "KRW thousand",
+      "note": "",
+      "order": 41
+    },
+    {
+      "variable_name": "advances_from_customers",
+      "section": "financial_bs",
+      "usage_role": "feature_x",
+      "korean_name": "선수금",
+      "description": "선수금",
+      "source": "BS",
+      "formula_or_logic": "원천값",
+      "unit": "KRW thousand",
+      "note": "",
+      "order": 42
+    },
+    {
+      "variable_name": "capital_stock",
+      "section": "financial_bs",
+      "usage_role": "feature_x",
+      "korean_name": "자본금",
+      "description": "자본금",
+      "source": "BS",
+      "formula_or_logic": "원천값",
+      "unit": "KRW thousand",
+      "note": "",
+      "order": 43
+    },
+    {
+      "variable_name": "revenue",
+      "section": "financial_is",
+      "usage_role": "feature_x",
+      "korean_name": "매출액",
+      "description": "매출액(수익)",
+      "source": "IS",
+      "formula_or_logic": "원천값",
+      "unit": "KRW thousand",
+      "note": "",
+      "order": 44
+    },
+    {
+      "variable_name": "cost_of_sales",
+      "section": "financial_is",
+      "usage_role": "feature_x",
+      "korean_name": "매출원가",
+      "description": "매출원가",
+      "source": "IS",
+      "formula_or_logic": "원천값",
+      "unit": "KRW thousand",
+      "note": "",
+      "order": 45
+    },
+    {
+      "variable_name": "gross_profit",
+      "section": "financial_is",
+      "usage_role": "feature_x",
+      "korean_name": "매출총이익",
+      "description": "매출총이익(손실)",
+      "source": "IS",
+      "formula_or_logic": "원천값",
+      "unit": "KRW thousand",
+      "note": "",
+      "order": 46
+    },
+    {
+      "variable_name": "operating_income",
+      "section": "financial_is",
+      "usage_role": "feature_x",
+      "korean_name": "영업이익",
+      "description": "정상 영업이익(보고서기재)",
+      "source": "IS",
+      "formula_or_logic": "원천값",
+      "unit": "KRW thousand",
+      "note": "",
+      "order": 47
+    },
+    {
+      "variable_name": "pretax_income",
+      "section": "financial_is",
+      "usage_role": "feature_x",
+      "korean_name": "법인세차감전순이익",
+      "description": "법인세비용차감전순이익(손실)",
+      "source": "IS",
+      "formula_or_logic": "원천값",
+      "unit": "KRW thousand",
+      "note": "",
+      "order": 48
+    },
+    {
+      "variable_name": "net_income",
+      "section": "financial_is",
+      "usage_role": "feature_x",
+      "korean_name": "당기순이익",
+      "description": "당기순이익(손실)",
+      "source": "IS",
+      "formula_or_logic": "원천값",
+      "unit": "KRW thousand",
+      "note": "",
+      "order": 49
+    },
+    {
+      "variable_name": "interest_expense",
+      "section": "financial_is",
+      "usage_role": "feature_x",
+      "korean_name": "이자비용",
+      "description": "이자비용",
+      "source": "IS",
+      "formula_or_logic": "원천값",
+      "unit": "KRW thousand",
+      "note": "",
+      "order": 50
+    },
+    {
+      "variable_name": "ocf",
+      "section": "financial_cf",
+      "usage_role": "feature_x",
+      "korean_name": "영업현금흐름",
+      "description": "영업활동으로 인한 현금흐름",
+      "source": "CF",
+      "formula_or_logic": "원천값",
+      "unit": "KRW thousand",
+      "note": "",
+      "order": 51
+    },
+    {
+      "variable_name": "icf",
+      "section": "financial_cf",
+      "usage_role": "feature_x",
+      "korean_name": "투자현금흐름",
+      "description": "투자활동으로 인한 현금흐름",
+      "source": "CF",
+      "formula_or_logic": "원천값",
+      "unit": "KRW thousand",
+      "note": "",
+      "order": 52
+    },
+    {
+      "variable_name": "cff",
+      "section": "financial_cf",
+      "usage_role": "feature_x",
+      "korean_name": "재무현금흐름",
+      "description": "재무활동으로 인한 현금흐름",
+      "source": "CF",
+      "formula_or_logic": "원천값",
+      "unit": "KRW thousand",
+      "note": "",
+      "order": 53
+    },
+    {
+      "variable_name": "net_change_in_cash",
+      "section": "financial_cf",
+      "usage_role": "feature_x",
+      "korean_name": "현금증감",
+      "description": "현금및현금성자산의 증가",
+      "source": "CF",
+      "formula_or_logic": "원천값",
+      "unit": "KRW thousand",
+      "note": "",
+      "order": 54
+    },
+    {
+      "variable_name": "depreciation",
+      "section": "financial_cf",
+      "usage_role": "feature_x",
+      "korean_name": "감가상각비",
+      "description": "감가상각비",
+      "source": "CF",
+      "formula_or_logic": "원천값",
+      "unit": "KRW thousand",
+      "note": "",
+      "order": 55
+    },
+    {
+      "variable_name": "amortization_dev_cost",
+      "section": "financial_cf",
+      "usage_role": "feature_x",
+      "korean_name": "개발비상각",
+      "description": "개발비상각",
+      "source": "CF",
+      "formula_or_logic": "원천값",
+      "unit": "KRW thousand",
+      "note": "",
+      "order": 56
+    },
+    {
+      "variable_name": "amortization_other_intangibles",
+      "section": "financial_cf",
+      "usage_role": "feature_x",
+      "korean_name": "기타무형자산상각비",
+      "description": "기타무형자산상각비",
+      "source": "CF",
+      "formula_or_logic": "원천값",
+      "unit": "KRW thousand",
+      "note": "",
+      "order": 57
+    },
+    {
+      "variable_name": "base_rate",
+      "section": "macro",
+      "usage_role": "feature_x",
+      "korean_name": "기준금리",
+      "description": "연평균 기준금리",
+      "source": "ECOS_Macro_Processed.csv",
+      "formula_or_logic": "원천값",
+      "unit": "%",
+      "note": "",
+      "order": 58
+    },
+    {
+      "variable_name": "treasury_3y",
+      "section": "macro",
+      "usage_role": "feature_x",
+      "korean_name": "국고채 3년 금리",
+      "description": "연평균 국고채 3년 금리",
+      "source": "ECOS_Macro_Processed.csv",
+      "formula_or_logic": "원천값",
+      "unit": "%",
+      "note": "",
+      "order": 59
+    },
+    {
+      "variable_name": "corp_aa_3y",
+      "section": "macro",
+      "usage_role": "feature_x",
+      "korean_name": "회사채 AA- 3년 금리",
+      "description": "연평균 회사채 AA- 무보증 3년 금리",
+      "source": "ECOS_Macro_Processed.csv",
+      "formula_or_logic": "원천값",
+      "unit": "%",
+      "note": "",
+      "order": 60
+    },
+    {
+      "variable_name": "corp_bbb_3y",
+      "section": "macro",
+      "usage_role": "feature_x",
+      "korean_name": "회사채 BBB- 3년 금리",
+      "description": "연평균 회사채 BBB- 무보증 3년 금리",
+      "source": "ECOS_Macro_Processed.csv",
+      "formula_or_logic": "원천값",
+      "unit": "%",
+      "note": "",
+      "order": 61
+    },
+    {
+      "variable_name": "ppi",
+      "section": "macro",
+      "usage_role": "feature_x",
+      "korean_name": "생산자물가지수",
+      "description": "PPI 총지수",
+      "source": "ECOS_Macro_Processed.csv",
+      "formula_or_logic": "원천값",
+      "unit": "index",
+      "note": "",
+      "order": 62
+    },
+    {
+      "variable_name": "usd_krw",
+      "section": "macro",
+      "usage_role": "feature_x",
+      "korean_name": "원/달러 환율",
+      "description": "원달러 환율",
+      "source": "ECOS_Macro_Processed.csv",
+      "formula_or_logic": "원천값",
+      "unit": "KRW/USD",
+      "note": "",
+      "order": 63
+    },
+    {
+      "variable_name": "market_spread",
+      "section": "macro",
+      "usage_role": "feature_x",
+      "korean_name": "시장위험 스프레드",
+      "description": "회사채 AA-와 국고채 간 스프레드",
+      "source": "ECOS_Macro_Processed.csv",
+      "formula_or_logic": "corp_aa_3y - treasury_3y",
+      "unit": "%p",
+      "note": "",
+      "order": 64
+    },
+    {
+      "variable_name": "spec_spread",
+      "section": "macro",
+      "usage_role": "feature_x",
+      "korean_name": "투기경계 스프레드",
+      "description": "회사채 BBB-와 AA- 간 스프레드",
+      "source": "ECOS_Macro_Processed.csv",
+      "formula_or_logic": "corp_bbb_3y - corp_aa_3y",
+      "unit": "%p",
+      "note": "",
+      "order": 65
+    },
+    {
+      "variable_name": "ppi_yoy",
+      "section": "macro",
+      "usage_role": "feature_deferred",
+      "korean_name": "생산자물가지수 등락률",
+      "description": "PPI 전년 대비 증감률",
+      "source": "ECOS_Macro_Processed.csv",
+      "formula_or_logic": "(ppi_t / ppi_t-1 - 1) * 100",
+      "unit": "%",
+      "note": "공식 Core29에서는 제외하고 확장/보류 변수로 관리",
+      "order": 66
+    },
+    {
+      "variable_name": "dividend_payer",
+      "section": "market_features",
+      "usage_role": "feature_x",
+      "korean_name": "배당금 지급 여부",
+      "description": "해당 회계연도에 현금배당을 지급했는지 여부",
+      "source": "KOSPI_market_and_div.csv / KOSDAQ_market_and_div.csv",
+      "formula_or_logic": "종목코드-회계년도 그룹 내 배당금지급(-) 값이 0이 아니면 1, 아니면 0",
+      "unit": "0/1",
+      "note": "Core29 공식 입력변수. 배당정책을 통해 기업 성숙도·안정성을 반영",
+      "order": 67
+    },
+    {
+      "variable_name": "market_to_book",
+      "section": "market_features",
+      "usage_role": "feature_x",
+      "korean_name": "Market-to-Book",
+      "description": "시가총액 대비 장부가치 비율",
+      "source": "KOSPI_market_and_div.csv / KOSDAQ_market_and_div.csv + BS",
+      "formula_or_logic": "market_cap / (equity_total * 1000)",
+      "unit": "ratio",
+      "note": "자본총계가 천원 단위이므로 1000을 곱해 계산. 1차 Core29 공식 입력변수로 반영",
+      "order": 68
+    },
+    {
+      "variable_name": "total_borrowings",
+      "section": "stability",
+      "usage_role": "feature_x",
+      "korean_name": "총차입금",
+      "description": "총차입금",
+      "source": "Derived from BS",
+      "formula_or_logic": "short_term_borrowings + long_term_borrowings + bonds_payable",
+      "unit": "KRW thousand",
+      "note": "",
+      "order": 69
+    },
+    {
+      "variable_name": "current_ratio",
+      "section": "stability",
+      "usage_role": "feature_x",
+      "korean_name": "유동비율",
+      "description": "유동자산 대비 유동부채 비율",
+      "source": "Derived from BS",
+      "formula_or_logic": "current_assets / current_liabilities",
+      "unit": "ratio",
+      "note": "",
+      "order": 70
+    },
+    {
+      "variable_name": "debt_ratio",
+      "section": "stability",
+      "usage_role": "feature_x",
+      "korean_name": "부채비율",
+      "description": "자기자본 대비 총부채 비율",
+      "source": "Derived from BS",
+      "formula_or_logic": "liabilities_total / equity_total",
+      "unit": "ratio",
+      "note": "총부채 레버리지 관점 보완 변수",
+      "order": 71
+    },
+    {
+      "variable_name": "total_borrowings_ratio",
+      "section": "stability",
+      "usage_role": "feature_x",
+      "korean_name": "총차입금비율",
+      "description": "총자산 대비 총차입금 비율",
+      "source": "Derived from BS",
+      "formula_or_logic": "total_borrowings / assets_total",
+      "unit": "ratio",
+      "note": "",
+      "order": 72
+    },
+    {
+      "variable_name": "short_term_borrowings_share",
+      "section": "stability",
+      "usage_role": "feature_x",
+      "korean_name": "단기차입금 비중",
+      "description": "총차입금 중 단기차입금 비중",
+      "source": "Derived from BS",
+      "formula_or_logic": "short_term_borrowings / total_borrowings",
+      "unit": "ratio",
+      "note": "공식 Core29에서 operating_roe 대신 채택된 단기 유동성 압박 구조 변수",
+      "order": 73
+    },
+    {
+      "variable_name": "noncurrent_liabilities_share",
+      "section": "stability",
+      "usage_role": "feature_x",
+      "korean_name": "비유동부채 비중",
+      "description": "총부채 중 비유동부채 비중",
+      "source": "Derived from BS",
+      "formula_or_logic": "noncurrent_liabilities / liabilities_total",
+      "unit": "ratio",
+      "note": "",
+      "order": 74
+    },
+    {
+      "variable_name": "cash_ratio",
+      "section": "stability",
+      "usage_role": "feature_x",
+      "korean_name": "현금비율",
+      "description": "유동부채 대비 현금및현금성자산 비율",
+      "source": "Derived from BS",
+      "formula_or_logic": "cash_and_equivalents / current_liabilities",
+      "unit": "ratio",
+      "note": "",
+      "order": 75
+    },
+    {
+      "variable_name": "equity_ratio",
+      "section": "stability",
+      "usage_role": "feature_x",
+      "korean_name": "자기자본비율",
+      "description": "총자산 대비 자기자본 비율",
+      "source": "Derived from BS",
+      "formula_or_logic": "equity_total / assets_total",
+      "unit": "ratio",
+      "note": "",
+      "order": 76
+    },
+    {
+      "variable_name": "capital_impairment_ratio",
+      "section": "stability",
+      "usage_role": "feature_x",
+      "korean_name": "자본잠식률",
+      "description": "자본금 대비 자본잠식 정도",
+      "source": "Derived from BS",
+      "formula_or_logic": "(capital_stock - equity_total) / capital_stock",
+      "unit": "ratio",
+      "note": "양수일수록 자본잠식 신호 가능",
+      "order": 77
+    },
+    {
+      "variable_name": "operating_margin",
+      "section": "profitability",
+      "usage_role": "feature_deferred",
+      "korean_name": "영업이익률",
+      "description": "매출액 대비 영업이익 비율",
+      "source": "Derived from IS",
+      "formula_or_logic": "operating_income / revenue",
+      "unit": "ratio",
+      "note": "net_margin과 공선성이 높고 lag1_current_ratio 대체안이 더 안정적으로 보여 1차 Core29에서는 보류",
+      "order": 78
+    },
+    {
+      "variable_name": "net_margin",
+      "section": "profitability",
+      "usage_role": "feature_x",
+      "korean_name": "순이익률",
+      "description": "매출액 대비 당기순이익 비율",
+      "source": "Derived from IS",
+      "formula_or_logic": "net_income / revenue",
+      "unit": "ratio",
+      "note": "공식 Core29 핵심 수익성 변수",
+      "order": 79
+    },
+    {
+      "variable_name": "gross_margin",
+      "section": "profitability",
+      "usage_role": "feature_x",
+      "korean_name": "매출총이익률",
+      "description": "매출액 대비 매출총이익 비율",
+      "source": "Derived from IS",
+      "formula_or_logic": "gross_profit / revenue",
+      "unit": "ratio",
+      "note": "",
+      "order": 80
+    },
+    {
+      "variable_name": "interest_burden_ratio",
+      "section": "profitability",
+      "usage_role": "feature_x",
+      "korean_name": "금융비용부담률",
+      "description": "매출액 대비 이자비용 비율",
+      "source": "Derived from IS",
+      "formula_or_logic": "interest_expense / revenue",
+      "unit": "ratio",
+      "note": "",
+      "order": 81
+    },
+    {
+      "variable_name": "cost_of_sales_ratio",
+      "section": "profitability",
+      "usage_role": "feature_x",
+      "korean_name": "매출원가율",
+      "description": "매출액 대비 매출원가 비율",
+      "source": "Derived from IS",
+      "formula_or_logic": "cost_of_sales / revenue",
+      "unit": "ratio",
+      "note": "",
+      "order": 82
+    },
+    {
+      "variable_name": "intangible_amortization",
+      "section": "profitability",
+      "usage_role": "feature_x",
+      "korean_name": "무형자산상각비",
+      "description": "개발비상각과 기타무형자산상각비 합계",
+      "source": "Derived from CF",
+      "formula_or_logic": "amortization_dev_cost + amortization_other_intangibles",
+      "unit": "KRW thousand",
+      "note": "",
+      "order": 83
+    },
+    {
+      "variable_name": "ebitda",
+      "section": "profitability",
+      "usage_role": "feature_x",
+      "korean_name": "EBITDA",
+      "description": "영업이익에 감가상각·무형자산상각비를 더한 값",
+      "source": "Derived from IS + CF",
+      "formula_or_logic": "operating_income + depreciation + intangible_amortization",
+      "unit": "KRW thousand",
+      "note": "",
+      "order": 84
+    },
+    {
+      "variable_name": "ebitda_margin",
+      "section": "profitability",
+      "usage_role": "feature_x",
+      "korean_name": "EBITDA 마진",
+      "description": "매출액 대비 EBITDA 비율",
+      "source": "Derived",
+      "formula_or_logic": "ebitda / revenue",
+      "unit": "ratio",
+      "note": "",
+      "order": 85
+    },
+    {
+      "variable_name": "roe",
+      "section": "profitability",
+      "usage_role": "feature_x",
+      "korean_name": "ROE",
+      "description": "자기자본 대비 당기순이익 비율",
+      "source": "Derived from IS + BS",
+      "formula_or_logic": "net_income / equity_total",
+      "unit": "ratio",
+      "note": "",
+      "order": 86
+    },
+    {
+      "variable_name": "pretax_roa",
+      "section": "profitability",
+      "usage_role": "feature_x",
+      "korean_name": "세전계속사업이익 기준 ROA",
+      "description": "총자산 대비 세전이익 비율",
+      "source": "Derived from IS + BS",
+      "formula_or_logic": "pretax_income / assets_total",
+      "unit": "ratio",
+      "note": "",
+      "order": 87
+    },
+    {
+      "variable_name": "operating_roa",
+      "section": "profitability",
+      "usage_role": "feature_x",
+      "korean_name": "총자산영업이익률",
+      "description": "총자산 대비 영업이익 비율",
+      "source": "Derived from IS + BS",
+      "formula_or_logic": "operating_income / assets_total",
+      "unit": "ratio",
+      "note": "",
+      "order": 88
+    },
+    {
+      "variable_name": "pretax_roe",
+      "section": "profitability",
+      "usage_role": "feature_x",
+      "korean_name": "세전계속사업이익 기준 ROE",
+      "description": "자기자본 대비 세전이익 비율",
+      "source": "Derived from IS + BS",
+      "formula_or_logic": "pretax_income / equity_total",
+      "unit": "ratio",
+      "note": "",
+      "order": 89
+    },
+    {
+      "variable_name": "operating_roe",
+      "section": "profitability",
+      "usage_role": "feature_x",
+      "korean_name": "영업이익 기준 ROE",
+      "description": "자기자본 대비 영업이익 비율",
+      "source": "Derived from IS + BS",
+      "formula_or_logic": "operating_income / equity_total",
+      "unit": "ratio",
+      "note": "단일 변수로는 유효했지만 short_term_borrowings_share 대체 조합이 성능과 안정성 측면에서 더 좋아 공식 Core29에서는 제외",
+      "order": 90
+    },
+    {
+      "variable_name": "asset_turnover",
+      "section": "profitability",
+      "usage_role": "feature_x",
+      "korean_name": "자산회전율",
+      "description": "총자산 대비 매출액 비율",
+      "source": "Derived from IS + BS",
+      "formula_or_logic": "revenue / assets_total",
+      "unit": "ratio",
+      "note": "",
+      "order": 91
+    },
+    {
+      "variable_name": "ppe_turnover",
+      "section": "profitability",
+      "usage_role": "feature_x",
+      "korean_name": "유형자산회전율",
+      "description": "유형자산 대비 매출액 비율",
+      "source": "Derived from IS + BS",
+      "formula_or_logic": "revenue / property_plant_equipment",
+      "unit": "ratio",
+      "note": "",
+      "order": 92
+    },
+    {
+      "variable_name": "total_debt_turnover",
+      "section": "profitability",
+      "usage_role": "feature_x",
+      "korean_name": "총부채회전율",
+      "description": "총부채 대비 매출액 비율",
+      "source": "Derived from IS + BS",
+      "formula_or_logic": "revenue / liabilities_total",
+      "unit": "ratio",
+      "note": "",
+      "order": 93
+    },
+    {
+      "variable_name": "revenue_growth",
+      "section": "growth",
+      "usage_role": "feature_x",
+      "korean_name": "매출액증가율",
+      "description": "전년 대비 매출액 증가율",
+      "source": "Derived from IS history",
+      "formula_or_logic": "(revenue_t - revenue_t-1) / revenue_t-1",
+      "unit": "ratio",
+      "note": "전기 값이 0이면 결측",
+      "order": 94
+    },
+    {
+      "variable_name": "operating_income_growth",
+      "section": "growth",
+      "usage_role": "feature_x",
+      "korean_name": "영업이익증가율",
+      "description": "전년 대비 영업이익 증가율",
+      "source": "Derived from IS history",
+      "formula_or_logic": "(operating_income_t - operating_income_t-1) / abs(operating_income_t-1)",
+      "unit": "ratio",
+      "note": "전기 값 절대값 기준",
+      "order": 95
+    },
+    {
+      "variable_name": "net_income_growth",
+      "section": "growth",
+      "usage_role": "feature_x",
+      "korean_name": "순이익증가율",
+      "description": "전년 대비 당기순이익 증가율",
+      "source": "Derived from IS history",
+      "formula_or_logic": "(net_income_t - net_income_t-1) / abs(net_income_t-1)",
+      "unit": "ratio",
+      "note": "전기 값 절대값 기준",
+      "order": 96
+    },
+    {
+      "variable_name": "pretax_income_growth",
+      "section": "growth",
+      "usage_role": "feature_x",
+      "korean_name": "세전이익증가율",
+      "description": "전년 대비 법인세차감전순이익 증가율",
+      "source": "Derived from IS history",
+      "formula_or_logic": "(pretax_income_t - pretax_income_t-1) / abs(pretax_income_t-1)",
+      "unit": "ratio",
+      "note": "전기 값 절대값 기준",
+      "order": 97
+    },
+    {
+      "variable_name": "equity_growth",
+      "section": "growth",
+      "usage_role": "feature_x",
+      "korean_name": "자기자본증가율",
+      "description": "전년 대비 자기자본 증가율",
+      "source": "Derived from BS history",
+      "formula_or_logic": "(equity_total_t - equity_total_t-1) / abs(equity_total_t-1)",
+      "unit": "ratio",
+      "note": "전기 값 절대값 기준",
+      "order": 98
+    },
+    {
+      "variable_name": "total_borrowings_growth",
+      "section": "trend",
+      "usage_role": "feature_x",
+      "korean_name": "총차입금 증감률",
+      "description": "전년 대비 총차입금 증감률",
+      "source": "Derived from BS history",
+      "formula_or_logic": "(total_borrowings_t - total_borrowings_t-1) / total_borrowings_t-1",
+      "unit": "ratio",
+      "note": "전기 총차입금이 0이면 결측",
+      "order": 99
+    },
+    {
+      "variable_name": "total_borrowings_diff",
+      "section": "trend",
+      "usage_role": "feature_deferred",
+      "korean_name": "총차입금 증감액",
+      "description": "전년 대비 총차입금 증감액 (원시 금액)",
+      "source": "Derived from BS history",
+      "formula_or_logic": "total_borrowings_t - total_borrowings_t-1",
+      "unit": "KRW thousand",
+      "note": "기업 규모 효과 큼 — total_borrowings_growth/total_borrowings_ratio_diff로 대체 권장",
+      "order": 100
+    },
+    {
+      "variable_name": "base_rate_diff",
+      "section": "trend",
+      "usage_role": "feature_x",
+      "korean_name": "기준금리 변동폭",
+      "description": "전년 대비 기준금리 변화폭",
+      "source": "Derived from ECOS macro history",
+      "formula_or_logic": "base_rate_t - base_rate_t-1",
+      "unit": "%p",
+      "note": "",
+      "order": 101
+    },
+    {
+      "variable_name": "treasury_3y_diff",
+      "section": "trend",
+      "usage_role": "feature_x",
+      "korean_name": "국고채 3년 금리 변동폭",
+      "description": "전년 대비 국고채 3년 금리 변화폭",
+      "source": "Derived from ECOS macro history",
+      "formula_or_logic": "treasury_3y_t - treasury_3y_t-1",
+      "unit": "%p",
+      "note": "",
+      "order": 102
+    },
+    {
+      "variable_name": "usd_krw_diff",
+      "section": "trend",
+      "usage_role": "feature_x",
+      "korean_name": "원/달러 환율 변동폭",
+      "description": "전년 대비 원/달러 환율 변화폭",
+      "source": "Derived from ECOS macro history",
+      "formula_or_logic": "usd_krw_t - usd_krw_t-1",
+      "unit": "KRW/USD",
+      "note": "",
+      "order": 103
+    },
+    {
+      "variable_name": "market_spread_diff",
+      "section": "trend",
+      "usage_role": "feature_x",
+      "korean_name": "시장위험 스프레드 변동폭",
+      "description": "전년 대비 시장위험 스프레드 변화폭",
+      "source": "Derived from ECOS macro history",
+      "formula_or_logic": "market_spread_t - market_spread_t-1",
+      "unit": "%p",
+      "note": "",
+      "order": 104
+    },
+    {
+      "variable_name": "spec_spread_diff",
+      "section": "trend",
+      "usage_role": "feature_x",
+      "korean_name": "투기경계 스프레드 변동폭",
+      "description": "전년 대비 투기경계 스프레드 변화폭",
+      "source": "Derived from ECOS macro history",
+      "formula_or_logic": "spec_spread_t - spec_spread_t-1",
+      "unit": "%p",
+      "note": "",
+      "order": 105
+    },
+    {
+      "variable_name": "lag1_operating_income",
+      "section": "trend",
+      "usage_role": "feature_deferred",
+      "korean_name": "전년도 영업이익",
+      "description": "직전 회계연도의 영업이익 (원시 금액 — 규모 효과 주의)",
+      "source": "Derived from IS history",
+      "formula_or_logic": "operating_income_t-1",
+      "unit": "KRW thousand",
+      "note": "기업 규모 효과 큼 — 비율 기반 추세 변수로 대체 권장",
+      "order": 106
+    },
+    {
+      "variable_name": "lag1_current_ratio",
+      "section": "trend",
+      "usage_role": "feature_x",
+      "korean_name": "전년도 유동비율",
+      "description": "직전 회계연도의 유동비율",
+      "source": "Derived from BS history",
+      "formula_or_logic": "current_ratio_t-1",
+      "unit": "ratio",
+      "note": "공식 Core29에서 operating_margin 대체 변수로 채택",
+      "order": 107
+    },
+    {
+      "variable_name": "lag1_ocf",
+      "section": "trend",
+      "usage_role": "feature_deferred",
+      "korean_name": "전년도 영업현금흐름",
+      "description": "직전 회계연도의 영업현금흐름 (원시 금액 — 규모 효과 주의)",
+      "source": "Derived from CF history",
+      "formula_or_logic": "ocf_t-1",
+      "unit": "KRW thousand",
+      "note": "기업 규모 효과 큼 — 비율 기반 추세 변수로 대체 권장",
+      "order": 108
+    },
+    {
+      "variable_name": "rolling_3y_avg_operating_income",
+      "section": "trend",
+      "usage_role": "feature_deferred",
+      "korean_name": "최근 최대 3년 평균 영업이익",
+      "description": "최근 3개 연도 평균 영업이익 (원시 금액 — 규모 효과 주의)",
+      "source": "Derived from IS history",
+      "formula_or_logic": "rolling_mean(operating_income, window=3, min_periods=1)",
+      "unit": "KRW thousand",
+      "note": "기업 규모 효과 큼 — rolling_3y_cv_operating_margin으로 대체 권장",
+      "order": 109
+    },
+    {
+      "variable_name": "rolling_3y_avg_ocf",
+      "section": "trend",
+      "usage_role": "feature_deferred",
+      "korean_name": "최근 최대 3년 평균 영업현금흐름",
+      "description": "최근 3개 연도 평균 영업현금흐름 (원시 금액 — 규모 효과 주의)",
+      "source": "Derived from CF history",
+      "formula_or_logic": "rolling_mean(ocf, window=3, min_periods=1)",
+      "unit": "KRW thousand",
+      "note": "기업 규모 효과 큼 — rolling_3y_cv_ocf_to_total_borrowings로 대체 권장",
+      "order": 110
+    },
+    {
+      "variable_name": "rolling_3y_obs_count",
+      "section": "trend",
+      "usage_role": "feature_deferred",
+      "korean_name": "최근 3년 가용 관측치 수",
+      "description": "최근 3년 창에서 실제 사용된 관측치 개수 (window 보정용 보조 변수)",
+      "source": "Derived from panel history",
+      "formula_or_logic": "rolling_count(window=3, min_periods=1)",
+      "unit": "count",
+      "note": "모델 입력보다 데이터 품질 점검용으로 활용",
+      "order": 111
+    },
+    {
+      "variable_name": "is_2y_consecutive_operating_loss",
+      "section": "trend",
+      "usage_role": "feature_x",
+      "korean_name": "2년 연속 영업적자 여부",
+      "description": "당기와 전기 모두 영업이익이 음수인지 여부",
+      "source": "Derived from IS history",
+      "formula_or_logic": "operating_income_t < 0 and operating_income_t-1 < 0",
+      "unit": "0/1",
+      "note": "지속적 수익성 악화 신호",
+      "order": 112
+    },
+    {
+      "variable_name": "is_2y_consecutive_ocf_deficit",
+      "section": "trend",
+      "usage_role": "feature_x",
+      "korean_name": "2년 연속 OCF 적자 여부",
+      "description": "당기와 전기 모두 영업현금흐름이 음수인지 여부",
+      "source": "Derived from CF history",
+      "formula_or_logic": "ocf_t < 0 and ocf_t-1 < 0",
+      "unit": "0/1",
+      "note": "지속적 현금흐름 악화 신호",
+      "order": 113
+    },
+    {
+      "variable_name": "icr_under_1",
+      "section": "trend",
+      "usage_role": "feature_x",
+      "korean_name": "ICR 1 미만 여부",
+      "description": "이자보상배율이 1 미만인지 여부 (영업이익으로 이자도 못 내는 상태)",
+      "source": "Derived from interest_coverage_ratio",
+      "formula_or_logic": "interest_coverage_ratio < 1 이면 1",
+      "unit": "0/1",
+      "note": "",
+      "order": 114
+    },
+    {
+      "variable_name": "is_zombie_3y",
+      "section": "trend",
+      "usage_role": "feature_x",
+      "korean_name": "3년 연속 좀비기업 여부",
+      "description": "최근 3년 연속 이자보상배율이 1 미만인 경우 (좀비기업 판별)",
+      "source": "Derived from icr_under_1 history",
+      "formula_or_logic": "rolling_sum(icr_under_1, window=3, min_periods=3) == 3",
+      "unit": "0/1",
+      "note": "초기 2년간은 min_periods=3 미충족으로 0",
+      "order": 115
+    },
+    {
+      "variable_name": "accruals_ratio",
+      "section": "trend",
+      "usage_role": "feature_x",
+      "korean_name": "발생액 비율",
+      "description": "총자산 대비 순이익과 영업현금흐름의 차이 (이익품질 지표)",
+      "source": "Derived from IS + CF + BS",
+      "formula_or_logic": "(net_income - ocf) / assets_total",
+      "unit": "ratio",
+      "note": "양수면 현금흐름 대비 회계이익 과다 — 이익 과장 신호",
+      "order": 116
+    },
+    {
+      "variable_name": "delta_accruals_ratio",
+      "section": "trend",
+      "usage_role": "feature_x",
+      "korean_name": "발생액 비율 변화",
+      "description": "전년 대비 발생액 비율 변화폭",
+      "source": "Derived from accruals_ratio history",
+      "formula_or_logic": "accruals_ratio_t - accruals_ratio_t-1",
+      "unit": "ratio",
+      "note": "",
+      "order": 117
+    },
+    {
+      "variable_name": "non_paid_in_equity_ratio",
+      "section": "trend",
+      "usage_role": "feature_x",
+      "korean_name": "납입자본 초과 자본 비율",
+      "description": "총자산 대비 자본총계-자본금 비율 (이익잉여금·자본잉여금 등 포함 대리변수)",
+      "source": "Derived from BS",
+      "formula_or_logic": "(equity_total - capital_stock) / assets_total",
+      "unit": "ratio",
+      "note": "이익잉여금만의 근사치이나 자본잉여금 등도 포함됨 — 보조 변수로 활용",
+      "order": 118
+    },
+    {
+      "variable_name": "delta_non_paid_in_equity_ratio",
+      "section": "trend",
+      "usage_role": "feature_x",
+      "korean_name": "납입자본 초과 자본 비율 변화",
+      "description": "전년 대비 납입자본 초과 자본 비율 변화폭",
+      "source": "Derived from non_paid_in_equity_ratio history",
+      "formula_or_logic": "non_paid_in_equity_ratio_t - non_paid_in_equity_ratio_t-1",
+      "unit": "ratio",
+      "note": "",
+      "order": 119
+    },
+    {
+      "variable_name": "delta_st_borrowings_share",
+      "section": "trend",
+      "usage_role": "feature_x",
+      "korean_name": "단기차입금 비중 변화",
+      "description": "전년 대비 단기차입금 비중 변화폭 (단기차입 의존도 악화 속도)",
+      "source": "Derived from short_term_borrowings_share history",
+      "formula_or_logic": "short_term_borrowings_share_t - short_term_borrowings_share_t-1",
+      "unit": "ratio",
+      "note": "",
+      "order": 120
+    },
+    {
+      "variable_name": "operating_margin_diff",
+      "section": "trend",
+      "usage_role": "feature_x",
+      "korean_name": "영업이익률 변화",
+      "description": "전년 대비 영업이익률 변화폭",
+      "source": "Derived from operating_margin history",
+      "formula_or_logic": "operating_margin_t - operating_margin_t-1",
+      "unit": "ratio",
+      "note": "",
+      "order": 121
+    },
+    {
+      "variable_name": "ebitda_margin_diff",
+      "section": "trend",
+      "usage_role": "feature_x",
+      "korean_name": "EBITDA 마진 변화",
+      "description": "전년 대비 EBITDA 마진 변화폭",
+      "source": "Derived from ebitda_margin history",
+      "formula_or_logic": "ebitda_margin_t - ebitda_margin_t-1",
+      "unit": "ratio",
+      "note": "",
+      "order": 122
+    },
+    {
+      "variable_name": "equity_ratio_diff",
+      "section": "trend",
+      "usage_role": "feature_x",
+      "korean_name": "자기자본비율 변화",
+      "description": "전년 대비 자기자본비율 변화폭",
+      "source": "Derived from equity_ratio history",
+      "formula_or_logic": "equity_ratio_t - equity_ratio_t-1",
+      "unit": "ratio",
+      "note": "",
+      "order": 123
+    },
+    {
+      "variable_name": "current_ratio_diff",
+      "section": "trend",
+      "usage_role": "feature_x",
+      "korean_name": "유동비율 변화",
+      "description": "전년 대비 유동비율 변화폭",
+      "source": "Derived from current_ratio history",
+      "formula_or_logic": "current_ratio_t - current_ratio_t-1",
+      "unit": "ratio",
+      "note": "",
+      "order": 124
+    },
+    {
+      "variable_name": "capital_impairment_diff",
+      "section": "trend",
+      "usage_role": "feature_x",
+      "korean_name": "자본잠식률 변화",
+      "description": "전년 대비 자본잠식률 변화폭",
+      "source": "Derived from capital_impairment_ratio history",
+      "formula_or_logic": "capital_impairment_ratio_t - capital_impairment_ratio_t-1",
+      "unit": "ratio",
+      "note": "",
+      "order": 125
+    },
+    {
+      "variable_name": "ocf_to_total_borrowings_diff",
+      "section": "trend",
+      "usage_role": "feature_x",
+      "korean_name": "OCF/총차입금 변화",
+      "description": "전년 대비 OCF 대비 총차입금 비율 변화폭",
+      "source": "Derived from ocf_to_total_borrowings history",
+      "formula_or_logic": "ocf_to_total_borrowings_t - ocf_to_total_borrowings_t-1",
+      "unit": "ratio",
+      "note": "",
+      "order": 126
+    },
+    {
+      "variable_name": "net_margin_diff",
+      "section": "trend",
+      "usage_role": "feature_x",
+      "korean_name": "순이익률 변화",
+      "description": "전년 대비 순이익률 변화폭",
+      "source": "Derived from net_margin history",
+      "formula_or_logic": "net_margin_t - net_margin_t-1",
+      "unit": "ratio",
+      "note": "",
+      "order": 127
+    },
+    {
+      "variable_name": "cash_ratio_diff",
+      "section": "trend",
+      "usage_role": "feature_x",
+      "korean_name": "현금비율 변화",
+      "description": "전년 대비 현금비율 변화폭",
+      "source": "Derived from cash_ratio history",
+      "formula_or_logic": "cash_ratio_t - cash_ratio_t-1",
+      "unit": "ratio",
+      "note": "",
+      "order": 128
+    },
+    {
+      "variable_name": "total_borrowings_ratio_diff",
+      "section": "trend",
+      "usage_role": "feature_x",
+      "korean_name": "총차입금비율 변화",
+      "description": "전년 대비 총차입금비율 변화폭",
+      "source": "Derived from total_borrowings_ratio history",
+      "formula_or_logic": "total_borrowings_ratio_t - total_borrowings_ratio_t-1",
+      "unit": "ratio",
+      "note": "양수면 레버리지 확대",
+      "order": 129
+    },
+    {
+      "variable_name": "ocf_to_total_liabilities_diff",
+      "section": "trend",
+      "usage_role": "feature_x",
+      "korean_name": "OCF/부채총계 변화",
+      "description": "전년 대비 OCF/부채총계 비율 변화폭",
+      "source": "Derived from ocf_to_total_liabilities history",
+      "formula_or_logic": "ocf_to_total_liabilities_t - ocf_to_total_liabilities_t-1",
+      "unit": "ratio",
+      "note": "",
+      "order": 130
+    },
+    {
+      "variable_name": "lag1_equity_ratio",
+      "section": "trend",
+      "usage_role": "feature_x",
+      "korean_name": "전년도 자기자본비율",
+      "description": "직전 회계연도의 자기자본비율",
+      "source": "Derived from equity_ratio history",
+      "formula_or_logic": "equity_ratio_t-1",
+      "unit": "ratio",
+      "note": "",
+      "order": 131
+    },
+    {
+      "variable_name": "lag1_interest_coverage_ratio",
+      "section": "trend",
+      "usage_role": "feature_deferred",
+      "korean_name": "전년도 이자보상배율",
+      "description": "직전 회계연도의 이자보상배율 (cap 왜곡 주의)",
+      "source": "Derived from interest_coverage_ratio history",
+      "formula_or_logic": "interest_coverage_ratio_t-1",
+      "unit": "ratio",
+      "note": "이자비용=0 cap 처리로 극단값 발생 가능 — icr_under_1/is_zombie_3y 사용 권장",
+      "order": 132
+    },
+    {
+      "variable_name": "rolling_3y_cv_operating_margin",
+      "section": "trend",
+      "usage_role": "feature_x",
+      "korean_name": "최근 3년 영업이익률 변동계수",
+      "description": "최근 3개 연도 영업이익률의 변동계수 (규모 중립적 수익 변동성)",
+      "source": "Derived from operating_margin history",
+      "formula_or_logic": "rolling_std(operating_margin, w=3) / |rolling_mean(operating_margin, w=3)|",
+      "unit": "ratio",
+      "note": "클수록 수익 불안정; 상한 10.0으로 클리핑 (평균≈0 극단값 방지)",
+      "order": 133
+    },
+    {
+      "variable_name": "rolling_3y_cv_ocf_to_total_borrowings",
+      "section": "trend",
+      "usage_role": "feature_x",
+      "korean_name": "최근 3년 OCF/총차입금 변동계수",
+      "description": "최근 3개 연도 OCF/총차입금 비율의 변동계수 (규모 중립적 현금흐름 변동성)",
+      "source": "Derived from ocf_to_total_borrowings history",
+      "formula_or_logic": "rolling_std(ocf_to_total_borrowings, w=3) / |rolling_mean(ocf_to_total_borrowings, w=3)|",
+      "unit": "ratio",
+      "note": "클수록 상환능력 불안정; 상한 10.0으로 클리핑",
+      "order": 134
+    },
+    {
+      "variable_name": "rolling_3y_cv_revenue_growth",
+      "section": "trend",
+      "usage_role": "feature_x",
+      "korean_name": "최근 3년 매출성장률 변동계수",
+      "description": "최근 3개 연도 매출성장률의 변동계수 (매출 불안정성)",
+      "source": "Derived from revenue_growth history",
+      "formula_or_logic": "rolling_std(revenue_growth, w=3) / |rolling_mean(revenue_growth, w=3)|",
+      "unit": "ratio",
+      "note": "클수록 매출 변동성 높음; 상한 10.0으로 클리핑",
+      "order": 135
+    },
+    {
+      "variable_name": "is_3y_consecutive_operating_loss",
+      "section": "trend",
+      "usage_role": "feature_x",
+      "korean_name": "3년 연속 영업적자 여부",
+      "description": "당기·전기·전전기 모두 영업이익이 음수인지 여부",
+      "source": "Derived from IS history",
+      "formula_or_logic": "operating_income_t < 0 and t-1 < 0 and t-2 < 0",
+      "unit": "0/1",
+      "note": "is_2y_consecutive_operating_loss의 강화 버전",
+      "order": 136
+    },
+    {
+      "variable_name": "is_3y_consecutive_ocf_deficit",
+      "section": "trend",
+      "usage_role": "feature_x",
+      "korean_name": "3년 연속 OCF 적자 여부",
+      "description": "당기·전기·전전기 모두 영업현금흐름이 음수인지 여부",
+      "source": "Derived from CF history",
+      "formula_or_logic": "ocf_t < 0 and t-1 < 0 and t-2 < 0",
+      "unit": "0/1",
+      "note": "is_2y_consecutive_ocf_deficit의 강화 버전",
+      "order": 137
+    },
+    {
+      "variable_name": "total_assets_growth",
+      "section": "growth",
+      "usage_role": "feature_x",
+      "korean_name": "총자산증가율",
+      "description": "전년 대비 총자산 증가율",
+      "source": "Derived from BS history",
+      "formula_or_logic": "(assets_total_t - assets_total_t-1) / assets_total_t-1",
+      "unit": "ratio",
+      "note": "자산 축소/급팽창은 구조조정·무리한 확장 신호",
+      "order": 138
+    },
+    {
+      "variable_name": "negative_equity_flag",
+      "section": "stability",
+      "usage_role": "feature_x",
+      "korean_name": "완전 자본잠식 여부",
+      "description": "자본총계가 음수인 완전 자본잠식 상태 여부",
+      "source": "Derived from BS",
+      "formula_or_logic": "equity_total < 0 이면 1",
+      "unit": "0/1",
+      "note": "",
+      "order": 139
+    },
+    {
+      "variable_name": "is_operating_income_turn_negative",
+      "section": "trend",
+      "usage_role": "feature_x",
+      "korean_name": "영업이익 적자 전환 여부",
+      "description": "직전 연도 영업이익이 양수였으나 당기에 음수로 전환된 첫 시점",
+      "source": "Derived from IS history",
+      "formula_or_logic": "operating_income_t < 0 and operating_income_t-1 >= 0",
+      "unit": "0/1",
+      "note": "연속 적자 변수와 달리 첫 악화 진입 시점 포착",
+      "order": 140
+    },
+    {
+      "variable_name": "is_ocf_turn_negative",
+      "section": "trend",
+      "usage_role": "feature_x",
+      "korean_name": "OCF 적자 전환 여부",
+      "description": "직전 연도 OCF가 양수였으나 당기에 음수로 전환된 첫 시점",
+      "source": "Derived from CF history",
+      "formula_or_logic": "ocf_t < 0 and ocf_t-1 >= 0",
+      "unit": "0/1",
+      "note": "",
+      "order": 141
+    },
+    {
+      "variable_name": "is_current_ratio_below_1",
+      "section": "trend",
+      "usage_role": "feature_x",
+      "korean_name": "유동비율 1 미만 전환 여부",
+      "description": "직전 연도 유동비율이 1 이상이었으나 당기에 1 미만으로 떨어진 첫 시점",
+      "source": "Derived from current_ratio history",
+      "formula_or_logic": "current_ratio_t < 1 and current_ratio_t-1 >= 1",
+      "unit": "0/1",
+      "note": "유동성 위기 진입 신호",
+      "order": 142
+    },
+    {
+      "variable_name": "is_negative_equity_entry",
+      "section": "trend",
+      "usage_role": "feature_x",
+      "korean_name": "완전 자본잠식 첫 진입 여부",
+      "description": "직전 연도 자본총계가 양수였으나 당기에 음수로 전환된 첫 시점",
+      "source": "Derived from BS history",
+      "formula_or_logic": "equity_total_t < 0 and equity_total_t-1 >= 0",
+      "unit": "0/1",
+      "note": "negative_equity_flag와 달리 진입 연도만 1",
+      "order": 143
+    },
+    {
+      "variable_name": "ar_days_diff",
+      "section": "trend",
+      "usage_role": "feature_x",
+      "korean_name": "매출채권회전기간 변화",
+      "description": "전년 대비 매출채권 회수기간 변화폭",
+      "source": "Derived from ar_days history",
+      "formula_or_logic": "ar_days_t - ar_days_t-1",
+      "unit": "days",
+      "note": "양수면 회수 지연 심화",
+      "order": 144
+    },
+    {
+      "variable_name": "inventory_days_diff",
+      "section": "trend",
+      "usage_role": "feature_x",
+      "korean_name": "재고자산회전기간 변화",
+      "description": "전년 대비 재고자산 회전기간 변화폭",
+      "source": "Derived from inventory_days history",
+      "formula_or_logic": "inventory_days_t - inventory_days_t-1",
+      "unit": "days",
+      "note": "양수면 재고 적체 심화",
+      "order": 145
+    },
+    {
+      "variable_name": "ap_days_diff",
+      "section": "trend",
+      "usage_role": "feature_x",
+      "korean_name": "매입채무회전기간 변화",
+      "description": "전년 대비 매입채무 지급기간 변화폭",
+      "source": "Derived from ap_days history",
+      "formula_or_logic": "ap_days_t - ap_days_t-1",
+      "unit": "days",
+      "note": "양수면 지급 지연 심화 — 유동성 위기 또는 협상력 개선 중 하나",
+      "order": 146
+    },
+    {
+      "variable_name": "interest_coverage_ratio",
+      "section": "cashflow_solvency",
+      "usage_role": "feature_x",
+      "korean_name": "이자보상배율",
+      "description": "영업이익 대비 이자비용 배수",
+      "source": "Derived from IS",
+      "formula_or_logic": "operating_income / interest_expense",
+      "unit": "ratio",
+      "note": "이자비용 0이면 1,000,000으로 capped",
+      "order": 147
+    },
+    {
+      "variable_name": "ocf_to_sales",
+      "section": "cashflow_solvency",
+      "usage_role": "feature_x",
+      "korean_name": "OCF/매출액",
+      "description": "매출액 대비 영업현금흐름 비율",
+      "source": "Derived from CF + IS",
+      "formula_or_logic": "ocf / revenue",
+      "unit": "ratio",
+      "note": "",
+      "order": 148
+    },
+    {
+      "variable_name": "ocf_to_total_borrowings",
+      "section": "cashflow_solvency",
+      "usage_role": "feature_x",
+      "korean_name": "OCF/총차입금",
+      "description": "총차입금 대비 영업현금흐름 비율",
+      "source": "Derived from CF + BS",
+      "formula_or_logic": "ocf / total_borrowings",
+      "unit": "ratio",
+      "note": "",
+      "order": 149
+    },
+    {
+      "variable_name": "ocf_to_total_liabilities",
+      "section": "cashflow_solvency",
+      "usage_role": "feature_x",
+      "korean_name": "OCF/부채총계",
+      "description": "총부채 대비 영업현금흐름 비율",
+      "source": "Derived from CF + BS",
+      "formula_or_logic": "ocf / liabilities_total",
+      "unit": "ratio",
+      "note": "",
+      "order": 150
+    },
+    {
+      "variable_name": "ocf_to_total_assets",
+      "section": "cashflow_solvency",
+      "usage_role": "feature_x",
+      "korean_name": "OCF/자산총계",
+      "description": "총자산 대비 영업현금흐름 비율",
+      "source": "Derived from CF + BS",
+      "formula_or_logic": "ocf / assets_total",
+      "unit": "ratio",
+      "note": "",
+      "order": 151
+    },
+    {
+      "variable_name": "ocf_deficit_flag",
+      "section": "cashflow_solvency",
+      "usage_role": "feature_x",
+      "korean_name": "OCF 적자 여부",
+      "description": "영업현금흐름이 음수인지 여부",
+      "source": "Derived from CF",
+      "formula_or_logic": "ocf < 0 이면 1",
+      "unit": "0/1",
+      "note": "",
+      "order": 152
+    },
+    {
+      "variable_name": "cashflow_coverage_ratio",
+      "section": "cashflow_solvency",
+      "usage_role": "feature_x",
+      "korean_name": "현금흐름 커버리지",
+      "description": "이자비용 대비 영업현금흐름 배수",
+      "source": "Derived from CF + IS",
+      "formula_or_logic": "ocf / interest_expense",
+      "unit": "ratio",
+      "note": "이자비용 0이면 1,000,000으로 capped",
+      "order": 153
+    },
+    {
+      "variable_name": "accounts_receivable_ratio",
+      "section": "activity",
+      "usage_role": "feature_x",
+      "korean_name": "매출채권 비중",
+      "description": "총자산 대비 매출채권 비율",
+      "source": "Derived from BS",
+      "formula_or_logic": "accounts_receivable / assets_total",
+      "unit": "ratio",
+      "note": "",
+      "order": 154
+    },
+    {
+      "variable_name": "inventory_ratio",
+      "section": "activity",
+      "usage_role": "feature_x",
+      "korean_name": "재고자산 비중",
+      "description": "총자산 대비 재고자산 비율",
+      "source": "Derived from BS",
+      "formula_or_logic": "inventories / assets_total",
+      "unit": "ratio",
+      "note": "",
+      "order": 155
+    },
+    {
+      "variable_name": "contract_assets_ratio",
+      "section": "activity",
+      "usage_role": "feature_x",
+      "korean_name": "계약자산 비중",
+      "description": "매출액 대비 계약자산 비율",
+      "source": "Derived from BS + IS",
+      "formula_or_logic": "contract_assets / revenue",
+      "unit": "ratio",
+      "note": "",
+      "order": 156
+    },
+    {
+      "variable_name": "ar_days",
+      "section": "activity",
+      "usage_role": "feature_x",
+      "korean_name": "매출채권회전기간",
+      "description": "매출채권 회수기간 추정치",
+      "source": "Derived from BS + IS",
+      "formula_or_logic": "(accounts_receivable / revenue) * 365",
+      "unit": "days",
+      "note": "",
+      "order": 157
+    },
+    {
+      "variable_name": "inventory_days",
+      "section": "activity",
+      "usage_role": "feature_x",
+      "korean_name": "재고자산회전기간",
+      "description": "재고자산 회전기간 추정치",
+      "source": "Derived from BS + IS",
+      "formula_or_logic": "(inventories / cost_of_sales) * 365",
+      "unit": "days",
+      "note": "",
+      "order": 158
+    },
+    {
+      "variable_name": "ap_days",
+      "section": "activity",
+      "usage_role": "feature_x",
+      "korean_name": "매입채무회전기간",
+      "description": "매입채무 지급기간 추정치",
+      "source": "Derived from BS + IS",
+      "formula_or_logic": "(accounts_payable / cost_of_sales) * 365",
+      "unit": "days",
+      "note": "",
+      "order": 159
+    },
+    {
+      "variable_name": "ppe_ratio",
+      "section": "business_structure",
+      "usage_role": "feature_x",
+      "korean_name": "유형자산 비중",
+      "description": "총자산 대비 유형자산 비율",
+      "source": "Derived from BS",
+      "formula_or_logic": "property_plant_equipment / assets_total",
+      "unit": "ratio",
+      "note": "",
+      "order": 160
+    },
+    {
+      "variable_name": "intangible_assets_ratio",
+      "section": "business_structure",
+      "usage_role": "feature_x",
+      "korean_name": "무형자산 비중",
+      "description": "총자산 대비 무형자산 비율",
+      "source": "Derived from BS",
+      "formula_or_logic": "intangible_assets / assets_total",
+      "unit": "ratio",
+      "note": "",
+      "order": 161
+    },
+    {
+      "variable_name": "advances_from_customers_ratio",
+      "section": "business_structure",
+      "usage_role": "feature_x",
+      "korean_name": "선수금 비중",
+      "description": "총부채 대비 선수금 비율",
+      "source": "Derived from BS",
+      "formula_or_logic": "advances_from_customers / liabilities_total",
+      "unit": "ratio",
+      "note": "",
+      "order": 162
+    },
+    {
+      "variable_name": "ppe_intensity",
+      "section": "business_structure",
+      "usage_role": "feature_x",
+      "korean_name": "유형자산집약도",
+      "description": "매출액 대비 유형자산 규모",
+      "source": "Derived from BS + IS",
+      "formula_or_logic": "property_plant_equipment / revenue",
+      "unit": "ratio",
+      "note": "",
+      "order": 163
+    },
+    {
+      "variable_name": "intangible_intensity",
+      "section": "business_structure",
+      "usage_role": "feature_x",
+      "korean_name": "무형자산집약도",
+      "description": "매출액 대비 무형자산 규모",
+      "source": "Derived from BS + IS",
+      "formula_or_logic": "intangible_assets / revenue",
+      "unit": "ratio",
+      "note": "",
+      "order": 164
+    }
+  ],
+  "code_values": [
+    {
+      "field_name": "market",
+      "code_or_value": "KOSPI",
+      "meaning": "유가증권시장",
+      "note": ""
+    },
+    {
+      "field_name": "market",
+      "code_or_value": "KOSDAQ",
+      "meaning": "코스닥시장",
+      "note": ""
+    },
+    {
+      "field_name": "is_speculative",
+      "code_or_value": "0",
+      "meaning": "투자적격",
+      "note": "AAA ~ BBB-"
+    },
+    {
+      "field_name": "is_speculative",
+      "code_or_value": "1",
+      "meaning": "투기등급",
+      "note": "BB+ 이하"
+    },
+    {
+      "field_name": "firm_size_group",
+      "code_or_value": "large",
+      "meaning": "대기업",
+      "note": ""
+    },
+    {
+      "field_name": "firm_size_group",
+      "code_or_value": "mid_sized",
+      "meaning": "중견기업",
+      "note": ""
+    },
+    {
+      "field_name": "firm_size_group",
+      "code_or_value": "small_and_medium",
+      "meaning": "중소기업",
+      "note": ""
+    },
+    {
+      "field_name": "firm_size_group",
+      "code_or_value": "other",
+      "meaning": "기타/결측",
+      "note": ""
+    },
+    {
+      "field_name": "industry_macro_category",
+      "code_or_value": "manufacturing",
+      "meaning": "제조업",
+      "note": ""
+    },
+    {
+      "field_name": "industry_macro_category",
+      "code_or_value": "construction",
+      "meaning": "건설업",
+      "note": ""
+    },
+    {
+      "field_name": "industry_macro_category",
+      "code_or_value": "wholesale_retail",
+      "meaning": "도소매업",
+      "note": ""
+    },
+    {
+      "field_name": "industry_macro_category",
+      "code_or_value": "it_services",
+      "meaning": "IT·서비스업",
+      "note": "정보통신/전문과학기술/사업지원/교육/예술/숙박음식 포함"
+    },
+    {
+      "field_name": "industry_macro_category",
+      "code_or_value": "transport_storage",
+      "meaning": "운수·창고업",
+      "note": ""
+    },
+    {
+      "field_name": "industry_macro_category",
+      "code_or_value": "other",
+      "meaning": "기타",
+      "note": ""
+    },
+    {
+      "field_name": "dividend_payer",
+      "code_or_value": "0",
+      "meaning": "무배당",
+      "note": "배당금지급(-) 값이 0인 경우"
+    },
+    {
+      "field_name": "dividend_payer",
+      "code_or_value": "1",
+      "meaning": "배당 지급",
+      "note": "배당금지급(-) 값이 0이 아닌 경우"
+    },
+    {
+      "field_name": "audit_opinion_code",
+      "code_or_value": "UQ",
+      "meaning": "적정의견",
+      "note": ""
+    },
+    {
+      "field_name": "audit_opinion_code",
+      "code_or_value": "QQ",
+      "meaning": "한정의견",
+      "note": ""
+    },
+    {
+      "field_name": "audit_opinion_code",
+      "code_or_value": "QS",
+      "meaning": "한정의견-감사범위제한",
+      "note": ""
+    },
+    {
+      "field_name": "audit_opinion_code",
+      "code_or_value": "QU",
+      "meaning": "한정의견-불확실성",
+      "note": ""
+    },
+    {
+      "field_name": "audit_opinion_code",
+      "code_or_value": "QA",
+      "meaning": "한정의견-계속기업전제",
+      "note": ""
+    },
+    {
+      "field_name": "audit_opinion_code",
+      "code_or_value": "QG",
+      "meaning": "한정의견-GAAP위반",
+      "note": ""
+    },
+    {
+      "field_name": "audit_opinion_code",
+      "code_or_value": "QC",
+      "meaning": "한정의견-GAAP위반/계속성변경",
+      "note": ""
+    },
+    {
+      "field_name": "audit_opinion_code",
+      "code_or_value": "AG",
+      "meaning": "부적정의견-GAAP위반",
+      "note": ""
+    },
+    {
+      "field_name": "audit_opinion_code",
+      "code_or_value": "DS",
+      "meaning": "의견거절-감사범위제한",
+      "note": ""
+    },
+    {
+      "field_name": "audit_opinion_code",
+      "code_or_value": "DU",
+      "meaning": "의견거절-불확실성",
+      "note": ""
+    },
+    {
+      "field_name": "audit_opinion_code",
+      "code_or_value": "DI",
+      "meaning": "의견거절-독립성",
+      "note": ""
+    },
+    {
+      "field_name": "audit_opinion_code",
+      "code_or_value": "ZZ",
+      "meaning": "부분 의견거절",
+      "note": ""
+    },
+    {
+      "field_name": "audit_opinion_code",
+      "code_or_value": "NA",
+      "meaning": "미감사보고서",
+      "note": ""
+    },
+    {
+      "field_name": "audit_opinion_code",
+      "code_or_value": "NS",
+      "meaning": "보고서 미제출",
+      "note": ""
+    },
+    {
+      "field_name": "analysis_eventually_delisted_flag",
+      "code_or_value": "0",
+      "meaning": "평가일 이후 상장폐지 정보 없음",
+      "note": "analysis-only"
+    },
+    {
+      "field_name": "analysis_eventually_delisted_flag",
+      "code_or_value": "1",
+      "meaning": "평가일 이후 언젠가 상장폐지됨",
+      "note": "analysis-only"
+    },
+    {
+      "field_name": "analysis_delisted_within_1y_flag",
+      "code_or_value": "0",
+      "meaning": "평가일 이후 1년 내 상장폐지 아님",
+      "note": "analysis-only"
+    },
+    {
+      "field_name": "analysis_delisted_within_1y_flag",
+      "code_or_value": "1",
+      "meaning": "평가일 이후 1년 내 상장폐지",
+      "note": "analysis-only"
+    },
+    {
+      "field_name": "analysis_delisted_within_2y_flag",
+      "code_or_value": "0",
+      "meaning": "평가일 이후 2년 내 상장폐지 아님",
+      "note": "analysis-only"
+    },
+    {
+      "field_name": "analysis_delisted_within_2y_flag",
+      "code_or_value": "1",
+      "meaning": "평가일 이후 2년 내 상장폐지",
+      "note": "analysis-only"
+    }
+  ],
+  "source_files": [
+    {
+      "source": "03_Outputs/ts2000/TS2000_Credit_Model_Dataset.csv",
+      "purpose": "전체 마스터 데이터셋 (참조/사후분석/보류변수 포함)"
+    },
+    {
+      "source": "03_Outputs/ts2000/TS2000_Credit_Model_Dataset_Model_V1.csv",
+      "purpose": "1차 모델 기본셋"
+    },
+    {
+      "source": "03_Outputs/ts2000/TS2000_Model_V1_Manifest.json",
+      "purpose": "Model_V1 feature/id/time/target 정의"
+    },
+    {
+      "source": "03_Outputs/ts2000/TS2000_Model_Core29_Manifest.json",
+      "purpose": "Core29 공식 입력변수와 선정 메모"
+    },
+    {
+      "source": "03_Outputs/ts2000/TS2000_Model_Core29_Features.csv",
+      "purpose": "Core29 변수 리스트와 선정 이유"
+    },
+    {
+      "source": "03_Outputs/ts2000/column_dictionary/TS2000_Credit_Model_Column_Dictionary.xlsx",
+      "purpose": "컬럼 설명 워크북"
+    },
+    {
+      "source": "03_Outputs/ts2000/column_dictionary/ts2000_column_dictionary_metadata.json",
+      "purpose": "컬럼 역할 및 메타데이터 JSON"
+    }
+  ]
+}

@@ -1,0 +1,344 @@
+{
+  "config": {
+    "dataset": "/Users/inji/Documents/금융 데이터 분석/Project/03_Outputs/ts2000/TS2000_Credit_Model_Dataset_Model_V1.csv",
+    "manifest": "/Users/inji/Documents/금융 데이터 분석/Project/03_Outputs/ts2000/TS2000_Model_Core29_Manifest.json",
+    "feature_columns": [
+      "market",
+      "listed_year",
+      "firm_size_group",
+      "industry_macro_category",
+      "current_ratio",
+      "cash_ratio",
+      "assets_total",
+      "equity_ratio",
+      "debt_ratio",
+      "total_borrowings_ratio",
+      "capital_impairment_ratio",
+      "net_margin",
+      "gross_profit",
+      "interest_coverage_ratio",
+      "pretax_roa",
+      "operating_roa",
+      "pretax_roe",
+      "ocf_to_total_liabilities",
+      "accruals_ratio",
+      "depreciation",
+      "intangible_assets_ratio",
+      "total_debt_turnover",
+      "dividend_payer",
+      "market_to_book",
+      "spec_spread",
+      "short_term_borrowings_share",
+      "total_assets_growth",
+      "net_margin_diff",
+      "is_2y_consecutive_ocf_deficit"
+    ],
+    "categorical_columns": [
+      "market",
+      "firm_size_group",
+      "industry_macro_category"
+    ],
+    "numeric_columns": [
+      "listed_year",
+      "current_ratio",
+      "cash_ratio",
+      "assets_total",
+      "equity_ratio",
+      "debt_ratio",
+      "total_borrowings_ratio",
+      "capital_impairment_ratio",
+      "net_margin",
+      "gross_profit",
+      "interest_coverage_ratio",
+      "pretax_roa",
+      "operating_roa",
+      "pretax_roe",
+      "ocf_to_total_liabilities",
+      "accruals_ratio",
+      "depreciation",
+      "intangible_assets_ratio",
+      "total_debt_turnover",
+      "dividend_payer",
+      "market_to_book",
+      "spec_spread",
+      "short_term_borrowings_share",
+      "total_assets_growth",
+      "net_margin_diff",
+      "is_2y_consecutive_ocf_deficit"
+    ],
+    "train_end_year": 2020,
+    "valid_end_year": 2022,
+    "imputation_strategy": "marketwise_train_stats",
+    "threshold": 0.5,
+    "seed": 42
+  },
+  "models": {
+    "logistic_regression": {
+      "train": {
+        "rows": 3150,
+        "positive_rows": 708,
+        "positive_rate": 0.22476190476190477,
+        "pr_auc": 0.7720630704610174,
+        "roc_auc": 0.9033553006010633,
+        "precision_at_0_5": 0.5246636771300448,
+        "recall_at_0_5": 0.826271186440678,
+        "by_market": {
+          "KOSDAQ": {
+            "rows": 1566,
+            "positive_rows": 518,
+            "positive_rate": 0.33077905491698595,
+            "pr_auc": 0.780772105047456,
+            "roc_auc": 0.8546845987208583,
+            "precision_at_0_5": 0.5180023228803716,
+            "recall_at_0_5": 0.861003861003861
+          },
+          "KOSPI": {
+            "rows": 1584,
+            "positive_rows": 190,
+            "positive_rate": 0.11994949494949494,
+            "pr_auc": 0.7462144395726734,
+            "roc_auc": 0.9332590802688214,
+            "precision_at_0_5": 0.547244094488189,
+            "recall_at_0_5": 0.7315789473684211
+          }
+        }
+      },
+      "valid": {
+        "rows": 1348,
+        "positive_rows": 341,
+        "positive_rate": 0.2529673590504451,
+        "pr_auc": 0.7415129364109303,
+        "roc_auc": 0.8919717403396168,
+        "precision_at_0_5": 0.5551257253384912,
+        "recall_at_0_5": 0.841642228739003,
+        "by_market": {
+          "KOSDAQ": {
+            "rows": 797,
+            "positive_rows": 269,
+            "positive_rate": 0.33751568381430364,
+            "pr_auc": 0.7659256936963991,
+            "roc_auc": 0.8563598344035148,
+            "precision_at_0_5": 0.5471264367816092,
+            "recall_at_0_5": 0.8847583643122676
+          },
+          "KOSPI": {
+            "rows": 551,
+            "positive_rows": 72,
+            "positive_rate": 0.1306715063520871,
+            "pr_auc": 0.6595138469092501,
+            "roc_auc": 0.9251333797262816,
+            "precision_at_0_5": 0.5975609756097561,
+            "recall_at_0_5": 0.6805555555555556
+          }
+        }
+      },
+      "test": {
+        "rows": 668,
+        "positive_rows": 166,
+        "positive_rate": 0.24850299401197604,
+        "pr_auc": 0.6881066858222064,
+        "roc_auc": 0.8835141362261795,
+        "precision_at_0_5": 0.549800796812749,
+        "recall_at_0_5": 0.8313253012048193,
+        "by_market": {
+          "KOSDAQ": {
+            "rows": 383,
+            "positive_rows": 138,
+            "positive_rate": 0.360313315926893,
+            "pr_auc": 0.7109173928996513,
+            "roc_auc": 0.8235285418515232,
+            "precision_at_0_5": 0.54337899543379,
+            "recall_at_0_5": 0.8623188405797102
+          },
+          "KOSPI": {
+            "rows": 285,
+            "positive_rows": 28,
+            "positive_rate": 0.09824561403508772,
+            "pr_auc": 0.5941697662927687,
+            "roc_auc": 0.9308643690939411,
+            "precision_at_0_5": 0.59375,
+            "recall_at_0_5": 0.6785714285714286
+          }
+        }
+      }
+    },
+    "xgboost": {
+      "train": {
+        "rows": 3150,
+        "positive_rows": 708,
+        "positive_rate": 0.22476190476190477,
+        "pr_auc": 0.9865572740799092,
+        "roc_auc": 0.995617535871773,
+        "precision_at_0_5": 0.8331318016928658,
+        "recall_at_0_5": 0.9731638418079096,
+        "by_market": {
+          "KOSDAQ": {
+            "rows": 1566,
+            "positive_rows": 518,
+            "positive_rate": 0.33077905491698595,
+            "pr_auc": 0.9815541984334564,
+            "roc_auc": 0.9896714462554157,
+            "precision_at_0_5": 0.7984126984126985,
+            "recall_at_0_5": 0.971042471042471
+          },
+          "KOSPI": {
+            "rows": 1584,
+            "positive_rows": 190,
+            "positive_rate": 0.11994949494949494,
+            "pr_auc": 0.99631055287578,
+            "roc_auc": 0.9994374386468323,
+            "precision_at_0_5": 0.9441624365482234,
+            "recall_at_0_5": 0.9789473684210527
+          }
+        }
+      },
+      "valid": {
+        "rows": 1348,
+        "positive_rows": 341,
+        "positive_rate": 0.2529673590504451,
+        "pr_auc": 0.8010375009304195,
+        "roc_auc": 0.9191116728356052,
+        "precision_at_0_5": 0.6428571428571429,
+        "recall_at_0_5": 0.8181818181818182,
+        "by_market": {
+          "KOSDAQ": {
+            "rows": 797,
+            "positive_rows": 269,
+            "positive_rate": 0.33751568381430364,
+            "pr_auc": 0.803601891813787,
+            "roc_auc": 0.8826180015771095,
+            "precision_at_0_5": 0.6256830601092896,
+            "recall_at_0_5": 0.8513011152416357
+          },
+          "KOSPI": {
+            "rows": 551,
+            "positive_rows": 72,
+            "positive_rate": 0.1306715063520871,
+            "pr_auc": 0.8108777623058718,
+            "roc_auc": 0.9620447691950823,
+            "precision_at_0_5": 0.7352941176470589,
+            "recall_at_0_5": 0.6944444444444444
+          }
+        }
+      },
+      "test": {
+        "rows": 668,
+        "positive_rows": 166,
+        "positive_rate": 0.24850299401197604,
+        "pr_auc": 0.7812212022115401,
+        "roc_auc": 0.9088285412566601,
+        "precision_at_0_5": 0.625,
+        "recall_at_0_5": 0.8433734939759037,
+        "by_market": {
+          "KOSDAQ": {
+            "rows": 383,
+            "positive_rows": 138,
+            "positive_rate": 0.360313315926893,
+            "pr_auc": 0.7879735593586232,
+            "roc_auc": 0.8526175687666371,
+            "precision_at_0_5": 0.6157894736842106,
+            "recall_at_0_5": 0.8478260869565217
+          },
+          "KOSPI": {
+            "rows": 285,
+            "positive_rows": 28,
+            "positive_rate": 0.09824561403508772,
+            "pr_auc": 0.7666057128615464,
+            "roc_auc": 0.9632434685936633,
+            "precision_at_0_5": 0.6764705882352942,
+            "recall_at_0_5": 0.8214285714285714
+          }
+        }
+      }
+    },
+    "lightgbm": {
+      "train": {
+        "rows": 3150,
+        "positive_rows": 708,
+        "positive_rate": 0.22476190476190477,
+        "pr_auc": 0.9968965347648652,
+        "roc_auc": 0.9990852755683264,
+        "precision_at_0_5": 0.912987012987013,
+        "recall_at_0_5": 0.9929378531073446,
+        "by_market": {
+          "KOSDAQ": {
+            "rows": 1566,
+            "positive_rows": 518,
+            "positive_rate": 0.33077905491698595,
+            "pr_auc": 0.9946897971533817,
+            "roc_auc": 0.9972985867546935,
+            "precision_at_0_5": 0.8875432525951558,
+            "recall_at_0_5": 0.9903474903474904
+          },
+          "KOSPI": {
+            "rows": 1584,
+            "positive_rows": 190,
+            "positive_rate": 0.11994949494949494,
+            "pr_auc": 0.9999174746075715,
+            "roc_auc": 0.9999924488408971,
+            "precision_at_0_5": 0.9895833333333334,
+            "recall_at_0_5": 1.0
+          }
+        }
+      },
+      "valid": {
+        "rows": 1348,
+        "positive_rows": 341,
+        "positive_rate": 0.2529673590504451,
+        "pr_auc": 0.8069882511861954,
+        "roc_auc": 0.9227329514512781,
+        "precision_at_0_5": 0.6691542288557214,
+        "recall_at_0_5": 0.7888563049853372,
+        "by_market": {
+          "KOSDAQ": {
+            "rows": 797,
+            "positive_rows": 269,
+            "positive_rate": 0.33751568381430364,
+            "pr_auc": 0.8060972960538441,
+            "roc_auc": 0.8859024726822126,
+            "precision_at_0_5": 0.6528189910979229,
+            "recall_at_0_5": 0.8178438661710037
+          },
+          "KOSPI": {
+            "rows": 551,
+            "positive_rows": 72,
+            "positive_rate": 0.1306715063520871,
+            "pr_auc": 0.8219084519320479,
+            "roc_auc": 0.9651762932034331,
+            "precision_at_0_5": 0.7538461538461538,
+            "recall_at_0_5": 0.6805555555555556
+          }
+        }
+      },
+      "test": {
+        "rows": 668,
+        "positive_rows": 166,
+        "positive_rate": 0.24850299401197604,
+        "pr_auc": 0.7722131038415927,
+        "roc_auc": 0.9064525032400518,
+        "precision_at_0_5": 0.6519607843137255,
+        "recall_at_0_5": 0.8012048192771084,
+        "by_market": {
+          "KOSDAQ": {
+            "rows": 383,
+            "positive_rows": 138,
+            "positive_rate": 0.360313315926893,
+            "pr_auc": 0.7791446626193377,
+            "roc_auc": 0.8492753623188406,
+            "precision_at_0_5": 0.6494252873563219,
+            "recall_at_0_5": 0.8188405797101449
+          },
+          "KOSPI": {
+            "rows": 285,
+            "positive_rows": 28,
+            "positive_rate": 0.09824561403508772,
+            "pr_auc": 0.7561342883672394,
+            "roc_auc": 0.9658838243468594,
+            "precision_at_0_5": 0.6666666666666666,
+            "recall_at_0_5": 0.7142857142857143
+          }
+        }
+      }
+    }
+  }
+}
