@@ -1,24 +1,24 @@
-feature_group,feature_name,selection_note
+﻿feature_group,feature_name,selection_note
 context,market,KOSPI/KOSDAQ 모집단 차이를 반영하는 기본 범주형
-context,listed_year,상장 시점을 통해 기업의 시장 이력과 성숙도 반영
+context,listed_year,상장 이력을 통한 기업 연령 및 시장 정착도 proxy
 context,firm_size_group,멘토 피드백의 Size 개념을 반영하는 범주형 규모 변수
 context,industry_macro_category,산업 구조 차이를 반영하는 기본 범주형
 stability_leverage,current_ratio,단기 유동성 대표 변수
-stability_leverage,cash_ratio,현금 및 현금성자산 기반 즉시 유동성 보완 변수
+stability_leverage,cash_ratio,현금성 자산 중심의 보수적 유동성 buffer
 stability_leverage,assets_total,규모(Size)를 직접 반영하는 총자산 수준 변수
 stability_leverage,equity_ratio,자기자본 완충력 대표 변수
 stability_leverage,debt_ratio,자기자본 대비 총부채 수준을 보여주는 부채비율
 stability_leverage,total_borrowings_ratio,총차입금 기반 레버리지 수준
 stability_leverage,capital_impairment_ratio,자본잠식 정도를 보여주는 대표 신호
-profitability_returns,net_margin,순이익 기준 수익성 대표 변수
-profitability_returns,gross_profit,매출총이익 절대수준으로 기초 수익창출력 보완
+profitability_returns,net_margin,순이익 기준 수익성을 보완하는 대표 변수
+profitability_returns,gross_profit,절대 이익창출 규모와 영업기반의 두께를 보여주는 변수
 profitability_returns,interest_coverage_ratio,이자보상배율(ICR) 핵심 변수
 profitability_returns,pretax_roa,세전 수익성의 총자산 대비 효율
 profitability_returns,operating_roa,영업이익 기준 총자산 수익성
 profitability_returns,pretax_roe,세전 수익성의 자기자본 대비 효율
 cashflow_structure,ocf_to_total_liabilities,총부채 대비 영업현금흐름으로 상환여력 반영
-cashflow_structure,accruals_ratio,당기순이익과 영업현금흐름 차이를 통한 이익의 질 반영
-cashflow_structure,depreciation,감가상각비를 통한 비현금 비용 구조 신호 반영
+cashflow_structure,accruals_ratio,발생액 비중을 통해 이익의 질을 보완적으로 반영
+cashflow_structure,depreciation,감가상각비 규모를 통한 자산집약도와 비용 구조 신호
 cashflow_structure,intangible_assets_ratio,무형자산 비중을 통한 자산구조 특성 반영
 cashflow_structure,total_debt_turnover,총부채 대비 매출로 총부채 회전율 반영
 market_shareholder,dividend_payer,배당정책을 통한 기업 성숙도·안정성 신호
@@ -26,5 +26,5 @@ market_shareholder,market_to_book,시장 기대와 장부가치 괴리를 반영
 macro,spec_spread,투자적격-투기경계 구간의 시장 스트레스
 trend_early_warning,short_term_borrowings_share,총차입금 중 단기차입금 비중으로 유동성 압박 구조 반영
 trend_early_warning,total_assets_growth,총자산 확장/축소 속도
-trend_early_warning,net_margin_diff,순이익률 악화 속도
+trend_early_warning,net_margin_diff,순이익률 악화 속도를 통한 조기경보 변수
 trend_early_warning,is_2y_consecutive_ocf_deficit,2년 연속 OCF 적자 여부

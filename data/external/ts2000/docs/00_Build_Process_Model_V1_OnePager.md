@@ -32,12 +32,16 @@
 
 - 장기등급만 사용
 - 단기물/CP/전자단기사채/유동화 계열 제외
-- 해외 평가사 제외
+- 국내 평가사 우선, foreign agency는 국내 평가사가 없을 때만 backfill
 - 평가일은 결측 보정 후 `eval_year` 산출
 - `matched fiscal_year = eval_year - 1`
+- `listed_year`가 있는 기업은 `fiscal_year < listed_year`인 target row를 제외
 - 같은 `stock_code + eval_year` 안에서는:
   - BIG3 평가가 있으면 BIG3 중 가장 낮은 등급 선택
   - 없으면 기타 국내 평가사 중 가장 낮은 등급 선택
+  - 국내 평가사가 없으면 foreign agency를 backfill로 사용
+    - `기업신용등급/ICR/회사` 성격 우선
+    - 없으면 plain 회사채 계열 중 가장 낮은 등급 선택
 - 최종 이진 타겟:
   - `BBB-` 이상 = `0`
   - `BB+` 이하 = `1`

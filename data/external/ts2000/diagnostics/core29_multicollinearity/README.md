@@ -15,32 +15,32 @@
 
 ## Quick counts
 
-- High-correlation pairs (`|r| >= 0.70`): 3
+- High-correlation pairs (`|r| >= 0.70`): 5
 - Severe VIF variables (`>= 10`): 0
-- Caution VIF variables (`5 ~ <10`): 1
+- Caution VIF variables (`5 ~ <10`): 3
 
 ## Top 10 absolute correlations
 
+- `gross_profit` vs `depreciation`: 0.903
+- `assets_total` vs `depreciation`: 0.843
 - `current_ratio` vs `cash_ratio`: 0.835
-- `pretax_roa` vs `operating_roa`: 0.813
-- `gross_profit` vs `depreciation`: 0.723
-- `assets_total` vs `gross_profit`: 0.685
-- `assets_total` vs `depreciation`: 0.676
-- `equity_ratio` vs `total_borrowings_ratio`: -0.667
-- `pretax_roa` vs `accruals_ratio`: 0.594
-- `equity_ratio` vs `total_debt_turnover`: 0.586
-- `operating_roa` vs `ocf_to_total_liabilities`: 0.524
-- `net_margin` vs `pretax_roa`: 0.523
+- `assets_total` vs `gross_profit`: 0.814
+- `pretax_roa` vs `operating_roa`: 0.814
+- `equity_ratio` vs `total_borrowings_ratio`: -0.669
+- `pretax_roa` vs `accruals_ratio`: 0.592
+- `equity_ratio` vs `total_debt_turnover`: 0.587
+- `operating_roa` vs `ocf_to_total_liabilities`: 0.525
+- `net_margin` vs `pretax_roa`: 0.522
 
 ## Top 10 VIF
 
-- `pretax_roa`: VIF 7.991 (caution)
-- `current_ratio`: VIF 4.751 (ok)
-- `operating_roa`: VIF 3.883 (ok)
-- `cash_ratio`: VIF 3.734 (ok)
-- `accruals_ratio`: VIF 3.423 (ok)
-- `ocf_to_total_liabilities`: VIF 2.789 (ok)
-- `gross_profit`: VIF 2.696 (ok)
-- `equity_ratio`: VIF 2.651 (ok)
-- `depreciation`: VIF 2.597 (ok)
-- `assets_total`: VIF 2.533 (ok)
+- `pretax_roa`: VIF 7.951 (caution)
+- `depreciation`: VIF 6.855 (caution)
+- `gross_profit`: VIF 6.093 (caution)
+- `current_ratio`: VIF 4.747 (ok)
+- `assets_total`: VIF 4.396 (ok)
+- `operating_roa`: VIF 3.888 (ok)
+- `cash_ratio`: VIF 3.732 (ok)
+- `accruals_ratio`: VIF 3.389 (ok)
+- `ocf_to_total_liabilities`: VIF 2.802 (ok)
+- `equity_ratio`: VIF 2.659 (ok)
