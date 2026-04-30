@@ -6,7 +6,7 @@ import json
 from typing import Any
 
 import pandas as pd
-import requests
+import requests  # type: ignore[import-untyped]
 
 OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses"
 

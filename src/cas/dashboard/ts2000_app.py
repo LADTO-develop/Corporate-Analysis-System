@@ -6,6 +6,7 @@ import os
 import re
 from html import escape
 from pathlib import Path
+from typing import cast
 
 import altair as alt
 import pandas as pd
@@ -131,7 +132,7 @@ def to_industry_label(value: object) -> str:
 def to_prediction_label(value: object) -> str:
     """Convert a numeric prediction label into a Korean label."""
     try:
-        return PREDICTION_LABELS.get(int(value), str(value))
+        return PREDICTION_LABELS.get(int(float(str(value))), str(value))
     except (TypeError, ValueError):
         return str(value)
 
@@ -298,7 +299,7 @@ def format_percent(value: object) -> str:
     if pd.isna(value):
         return "-"
     try:
-        return f"{float(value) * 100:.2f}%"
+        return f"{float(str(value)) * 100:.2f}%"
     except (TypeError, ValueError):
         return str(value)
 
@@ -347,7 +348,7 @@ def format_value_with_unit(value: object, unit: object, feature: str | None = No
 
     unit_text = str(unit) if pd.notna(unit) else ""
     try:
-        number = float(value)
+        number = float(str(value))
     except (TypeError, ValueError):
         return str(value)
 
@@ -378,7 +379,7 @@ def format_delta_with_unit(value: object, unit: object) -> str:
 
     unit_text = str(unit) if pd.notna(unit) else ""
     try:
-        number = float(value)
+        number = float(str(value))
     except (TypeError, ValueError):
         return str(value)
 
@@ -405,7 +406,7 @@ def format_percentile_label(value: object) -> str:
     if pd.isna(value):
         return "-"
     try:
-        return f"{float(value):.2f}백분위"
+        return f"{float(str(value)):.2f}백분위"
     except (TypeError, ValueError):
         return str(value)
 
@@ -726,7 +727,7 @@ def render_badge_hint_card(
 
 def parse_llm_report_sections(text: str) -> dict[str, list[str]]:
     """Parse bracketed report sections from the LLM output."""
-    sections = {
+    sections: dict[str, list[str]] = {
         "한줄 판단": [],
         "핵심 위험 요인": [],
         "완화 요인": [],
@@ -1831,7 +1832,7 @@ def build_probability_chart(probability: float, threshold: float) -> alt.Chart:
             {"label": "판정 기준선", "value": threshold, "kind": "threshold"},
         ]
     )
-    return (
+    chart = (
         alt.Chart(frame)
         .mark_bar(cornerRadiusTopLeft=4, cornerRadiusTopRight=4)
         .encode(
@@ -1852,6 +1853,7 @@ def build_probability_chart(probability: float, threshold: float) -> alt.Chart:
         )
         .properties(height=260)
     )
+    return cast(alt.Chart, chart)
 
 
 def approximate_percentile(series: pd.Series, new_value: float) -> float | None:
@@ -2080,15 +2082,25 @@ def render_overview_tab(
             "현재 리포지토리 패키지에는 기업별 예측확률 파일이 포함되어 있지 않습니다. "
             "아래에는 공식 Core29 XGBoost의 전체 test 성능과 선택 기업의 핵심 지표를 함께 표시합니다."
         )
+        raw_test_overall_models = model_summary.get("test_overall_models", [])
+        test_overall_models = (
+            raw_test_overall_models if isinstance(raw_test_overall_models, list) else []
+        )
+        selected_model_name = model_summary.get("selected_model")
         xgboost_rows = [
             row
-            for row in model_summary["test_overall_models"]
-            if row["model"] == model_summary["selected_model"]
+            for row in test_overall_models
+            if isinstance(row, dict) and row.get("model") == selected_model_name
         ]
         selected_model = xgboost_rows[0] if xgboost_rows else None
-        threshold_rows = model_summary["xgboost_thresholds"]
+        raw_threshold_rows = model_summary.get("xgboost_thresholds", [])
+        threshold_rows = raw_threshold_rows if isinstance(raw_threshold_rows, list) else []
         default_threshold = next(
-            (row for row in threshold_rows if row["threshold_type"] == "default_0_5"),
+            (
+                row
+                for row in threshold_rows
+                if isinstance(row, dict) and row.get("threshold_type") == "default_0_5"
+            ),
             None,
         )
         c1, c2, c3, c4 = st.columns(4)
@@ -2734,7 +2746,7 @@ def render_peer_tab(
     peer_slice["산업 내 위치"] = peer_slice["industry_percentile"].map(format_percentile_label)
     peer_slice["시장 내 위치"] = peer_slice["market_percentile"].map(format_percentile_label)
 
-    compare_features = st.multiselect(
+    compare_features: list[str] = st.multiselect(
         "비교할 변수 선택",
         options=peer_slice["feature"].tolist(),
         format_func=lambda value: display_name(value, feature_map),
