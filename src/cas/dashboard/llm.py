@@ -156,7 +156,9 @@ def generate_openai_explanation(
     """Generate a Korean explanation using the OpenAI Responses API."""
     clean_api_key = _normalize_api_key(api_key)
     clean_model = _normalize_model_name(model)
-    format_instruction = OUTPUT_FORMAT_INSTRUCTIONS.get(output_format, OUTPUT_FORMAT_INSTRUCTIONS["memo"])
+    format_instruction = OUTPUT_FORMAT_INSTRUCTIONS.get(
+        output_format, OUTPUT_FORMAT_INSTRUCTIONS["memo"]
+    )
 
     if not clean_api_key:
         raise ValueError("API 키를 다시 입력해 주세요.")

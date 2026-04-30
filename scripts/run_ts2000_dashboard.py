@@ -18,9 +18,7 @@ def main() -> None:
         )
         raise SystemExit(message) from error
 
-    app_path = (
-        Path(__file__).resolve().parents[1] / "src" / "cas" / "dashboard" / "ts2000_app.py"
-    )
+    app_path = Path(__file__).resolve().parents[1] / "src" / "cas" / "dashboard" / "ts2000_app.py"
     sys.argv = ["streamlit", "run", str(app_path)]
     sys.exit(stcli.main())
 

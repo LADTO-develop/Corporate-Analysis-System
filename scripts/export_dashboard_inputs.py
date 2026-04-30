@@ -102,8 +102,12 @@ def build_company_universe(
     feature_columns: list[str],
     target_column: str,
 ) -> pd.DataFrame:
-    keep_columns = list(dict.fromkeys(id_columns + time_columns + [target_column] + feature_columns))
-    universe = dataset.loc[:, [column for column in keep_columns if column in dataset.columns]].copy()
+    keep_columns = list(
+        dict.fromkeys(id_columns + time_columns + [target_column] + feature_columns)
+    )
+    universe = dataset.loc[
+        :, [column for column in keep_columns if column in dataset.columns]
+    ].copy()
     return universe.sort_values(id_columns + time_columns).reset_index(drop=True)
 
 
@@ -123,14 +127,20 @@ def build_peer_percentiles(
         chunk["feature"] = feature
         chunk["value"] = values
         chunk["overall_percentile"] = values.rank(method="average", pct=True) * 100.0
-        chunk["market_percentile"] = dataset.groupby("market")[feature].rank(
-            method="average",
-            pct=True,
-        ) * 100.0
-        chunk["industry_percentile"] = dataset.groupby("industry_macro_category")[feature].rank(
-            method="average",
-            pct=True,
-        ) * 100.0
+        chunk["market_percentile"] = (
+            dataset.groupby("market")[feature].rank(
+                method="average",
+                pct=True,
+            )
+            * 100.0
+        )
+        chunk["industry_percentile"] = (
+            dataset.groupby("industry_macro_category")[feature].rank(
+                method="average",
+                pct=True,
+            )
+            * 100.0
+        )
         chunk["overall_median"] = values.median(skipna=True)
         chunk["market_median"] = dataset.groupby("market")[feature].transform("median")
         chunk["industry_median"] = dataset.groupby("industry_macro_category")[feature].transform(
@@ -139,7 +149,9 @@ def build_peer_percentiles(
         chunks.append(chunk)
 
     peer_percentiles = pd.concat(chunks, ignore_index=True)
-    return peer_percentiles.sort_values(id_columns + time_columns + ["feature"]).reset_index(drop=True)
+    return peer_percentiles.sort_values(id_columns + time_columns + ["feature"]).reset_index(
+        drop=True
+    )
 
 
 def build_feature_dictionary(
@@ -435,8 +447,12 @@ def main() -> None:
         numeric_features=numeric_features,
     )
 
-    company_universe.to_csv(output_dir / "company_universe_core29.csv", index=False, encoding="utf-8-sig")
-    company_latest.to_csv(output_dir / "company_latest_core29.csv", index=False, encoding="utf-8-sig")
+    company_universe.to_csv(
+        output_dir / "company_universe_core29.csv", index=False, encoding="utf-8-sig"
+    )
+    company_latest.to_csv(
+        output_dir / "company_latest_core29.csv", index=False, encoding="utf-8-sig"
+    )
     peer_percentiles.to_csv(
         output_dir / "peer_percentiles_core29.csv",
         index=False,

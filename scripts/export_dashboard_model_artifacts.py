@@ -17,7 +17,9 @@ DEFAULT_OUTPUT_DIR = ROOT / "data" / "outputs" / "dashboard" / "ts2000_core29_mv
 
 DATASET_PATH = TS2000_DIR / "TS2000_Credit_Model_Dataset_Model_V1.csv"
 MANIFEST_PATH = TS2000_DIR / "TS2000_Model_Core29_Manifest.json"
-THRESHOLD_SUMMARY_PATH = TS2000_DIR / "model_results" / "xgboost_threshold_shap" / "threshold_summary.csv"
+THRESHOLD_SUMMARY_PATH = (
+    TS2000_DIR / "model_results" / "xgboost_threshold_shap" / "threshold_summary.csv"
+)
 EXPORT_MANIFEST_PATH = DEFAULT_OUTPUT_DIR / "dashboard_export_manifest.json"
 MODEL_SUMMARY_PATH = DEFAULT_OUTPUT_DIR / "model_summary_core29.json"
 
@@ -102,8 +104,7 @@ def fit_global_imputation_stats(
         for column in numeric_columns
     }
     categorical_stats = {
-        column: safe_mode(train[column], "__missing__")
-        for column in categorical_columns
+        column: safe_mode(train[column], "__missing__") for column in categorical_columns
     }
     return {"numeric": numeric_stats, "categorical": categorical_stats}
 
@@ -152,19 +153,23 @@ def apply_marketwise_imputation(
     for column in numeric_columns:
         numeric_series = pd.to_numeric(result[column], errors="coerce")
         fill_values = market_key.map(
-            lambda key, current_column=column: marketwise_stats["numeric"].get(
+            lambda key, current_column=column: marketwise_stats["numeric"]
+            .get(
                 str(key),
                 {},
-            ).get(current_column, global_stats["numeric"][current_column])
+            )
+            .get(current_column, global_stats["numeric"][current_column])
         )
         result[column] = numeric_series.fillna(fill_values).astype(float)
 
     for column in categorical_columns:
         fill_values = market_key.map(
-            lambda key, current_column=column: marketwise_stats["categorical"].get(
+            lambda key, current_column=column: marketwise_stats["categorical"]
+            .get(
                 str(key),
                 {},
-            ).get(current_column, global_stats["categorical"][current_column])
+            )
+            .get(current_column, global_stats["categorical"][current_column])
         )
         result[column] = result[column].fillna(fill_values)
 

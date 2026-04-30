@@ -140,7 +140,11 @@ def pick_selected_company(artifacts: DashboardArtifacts) -> pd.Series:
     """Render sidebar selectors and return the chosen company snapshot."""
     latest = artifacts.company_latest.copy()
     markets = ["전체", *sorted(latest["market"].dropna().unique().tolist())]
-    selected_market = st.sidebar.selectbox("시장", markets, format_func=lambda value: "전체" if value == "전체" else to_market_label(value))
+    selected_market = st.sidebar.selectbox(
+        "시장",
+        markets,
+        format_func=lambda value: "전체" if value == "전체" else to_market_label(value),
+    )
     if selected_market != "전체":
         latest = latest.loc[latest["market"] == selected_market]
 
@@ -160,10 +164,9 @@ def pick_selected_company(artifacts: DashboardArtifacts) -> pd.Series:
         help="기업명이나 종목코드 일부를 입력하면 선택 목록을 좁힐 수 있습니다.",
     ).strip()
     if search_query:
-        mask = (
-            latest["corp_name"].astype(str).str.contains(search_query, case=False, na=False)
-            | latest["stock_code"].astype(str).str.contains(search_query, case=False, na=False)
-        )
+        mask = latest["corp_name"].astype(str).str.contains(
+            search_query, case=False, na=False
+        ) | latest["stock_code"].astype(str).str.contains(search_query, case=False, na=False)
         latest = latest.loc[mask]
 
     if latest.empty:
@@ -182,7 +185,9 @@ def pick_selected_company(artifacts: DashboardArtifacts) -> pd.Series:
     return options.loc[options["label"] == selected_label].iloc[0]
 
 
-def build_company_feature_map(selected_row: pd.Series, feature_dictionary: pd.DataFrame) -> pd.DataFrame:
+def build_company_feature_map(
+    selected_row: pd.Series, feature_dictionary: pd.DataFrame
+) -> pd.DataFrame:
     """Build a long-form feature value table for the selected company."""
     rows: list[dict[str, object]] = []
     for record in feature_dictionary.to_dict(orient="records"):
@@ -384,7 +389,11 @@ def format_delta_with_unit(value: object, unit: object) -> str:
         return f"{sign}{number:.2f}%p"
     if unit_text == "KRW thousand":
         amount_won = abs(number * 1000)
-        base = format_krw_eok(amount_won) if get_money_display_mode() == "eok_only" else format_krw_human(amount_won)
+        base = (
+            format_krw_eok(amount_won)
+            if get_money_display_mode() == "eok_only"
+            else format_krw_human(amount_won)
+        )
         return f"{sign}{base}" if number != 0 else base
     if unit_text == "year":
         return f"{sign}{round(number)}년"
@@ -431,10 +440,7 @@ def get_feature_direction_label(feature: str) -> str:
 def style_direction_badge(value: object) -> str:
     """Return CSS styles for interpretation direction badges inside tables."""
     text = str(value)
-    base_style = (
-        "font-weight:700;text-align:center;border-radius:999px;"
-        "padding:0.15rem 0.45rem;"
-    )
+    base_style = "font-weight:700;text-align:center;border-radius:999px;padding:0.15rem 0.45rem;"
     if "높을수록" in text or "O가" in text:
         return f"{base_style}background-color:#e8f6ee;color:{COLOR_MITIGATE};"
     if "낮을수록" in text or "아니오가" in text:
@@ -466,7 +472,9 @@ def render_risk_band_badge(risk_band: object) -> str:
     )
 
 
-def render_bold_value_block(container: st.delta_generator.DeltaGenerator, label: str, value: object) -> None:
+def render_bold_value_block(
+    container: st.delta_generator.DeltaGenerator, label: str, value: object
+) -> None:
     """Render a bold label and value inside a consistent overview card."""
     container.markdown(
         (
@@ -585,12 +593,7 @@ def render_bullet_card(
     """Render a summary card with short bullet items."""
     if items:
         bullet_html = "".join(
-            (
-                "<li style='margin:0 0 0.35rem 0;'>"
-                f"{escape(item)}"
-                "</li>"
-            )
-            for item in items
+            (f"<li style='margin:0 0 0.35rem 0;'>{escape(item)}</li>") for item in items
         )
         body_html = (
             "<ul style='margin:0.15rem 0 0 1rem;padding:0;"
@@ -654,11 +657,7 @@ def render_list_card(
 ) -> None:
     """Render a structured list card for short bullet summaries."""
     list_html = "".join(
-        (
-            "<li style='margin-bottom:0.38rem;'>"
-            f"{escape(item)}"
-            "</li>"
-        )
+        (f"<li style='margin-bottom:0.38rem;'>{escape(item)}</li>")
         for item in items
         if str(item).strip()
     )
@@ -808,7 +807,14 @@ def build_exportable_llm_report(
                 "",
                 _markdown_table_from_frame(
                     peer_frame,
-                    ["표시명", "선택 기업", "산업 중앙값", "시장 중앙값", "산업 내 위치", "일반 해석 방향"],
+                    [
+                        "표시명",
+                        "선택 기업",
+                        "산업 중앙값",
+                        "시장 중앙값",
+                        "산업 내 위치",
+                        "일반 해석 방향",
+                    ],
                 ),
             ]
         )
@@ -829,7 +835,9 @@ def build_onepage_llm_report(
     """Build a one-page compact markdown memo."""
     top_local = local_shap.head(3).copy() if not local_shap.empty else pd.DataFrame()
     if not top_local.empty:
-        top_local["표시명"] = top_local["feature"].map(lambda value: display_name(value, feature_map))
+        top_local["표시명"] = top_local["feature"].map(
+            lambda value: display_name(value, feature_map)
+        )
         top_local["실제값"] = top_local.apply(
             lambda row: format_value_with_unit(
                 row["feature_value"],
@@ -840,9 +848,15 @@ def build_onepage_llm_report(
         )
     peer_summary = peer_slice.copy()
     if not peer_summary.empty:
-        peer_summary["distance_from_industry_mid"] = (peer_summary["industry_percentile"] - 50.0).abs()
-        peer_summary = peer_summary.sort_values("distance_from_industry_mid", ascending=False).head(3)
-        peer_summary["표시명"] = peer_summary["feature"].map(lambda value: display_name(value, feature_map))
+        peer_summary["distance_from_industry_mid"] = (
+            peer_summary["industry_percentile"] - 50.0
+        ).abs()
+        peer_summary = peer_summary.sort_values("distance_from_industry_mid", ascending=False).head(
+            3
+        )
+        peer_summary["표시명"] = peer_summary["feature"].map(
+            lambda value: display_name(value, feature_map)
+        )
         peer_summary["산업 대비 차이"] = peer_summary.apply(
             lambda row: format_delta_with_unit(
                 row["value"] - row["industry_median"],
@@ -911,7 +925,9 @@ def build_onepage_llm_report(
             [
                 "",
                 _markdown_table_from_frame(
-                    peer_summary.rename(columns={"표시명": "지표", "산업 대비 차이": "산업 대비 차이"}),
+                    peer_summary.rename(
+                        columns={"표시명": "지표", "산업 대비 차이": "산업 대비 차이"}
+                    ),
                     ["지표", "산업 대비 차이"],
                 ),
             ]
@@ -949,10 +965,14 @@ def _prepare_local_driver_report_frame(
         ),
         axis=1,
     )
-    frame["영향방향"] = frame["shap_value"].map(lambda value: "위험 증가" if float(value) > 0 else "위험 완화")
+    frame["영향방향"] = frame["shap_value"].map(
+        lambda value: "위험 증가" if float(value) > 0 else "위험 완화"
+    )
     frame["SHAP 표시"] = frame["shap_value"].map(lambda value: f"{float(value):.2f}")
     frame["|SHAP| 표시"] = frame["abs_shap"].map(lambda value: f"{float(value):.2f}")
-    frame["일반 해석 방향"] = frame["feature"].map(lambda value: get_feature_direction_label(str(value)))
+    frame["일반 해석 방향"] = frame["feature"].map(
+        lambda value: get_feature_direction_label(str(value))
+    )
     return frame
 
 
@@ -993,7 +1013,9 @@ def _prepare_peer_report_frame(
         axis=1,
     )
     frame["산업 내 위치"] = frame["industry_percentile"].map(format_percentile_label)
-    frame["일반 해석 방향"] = frame["feature"].map(lambda value: get_feature_direction_label(str(value)))
+    frame["일반 해석 방향"] = frame["feature"].map(
+        lambda value: get_feature_direction_label(str(value))
+    )
     return frame
 
 
@@ -1086,10 +1108,20 @@ def build_html_report(
     feature_map: pd.DataFrame,
 ) -> str:
     """Build a print-friendly detailed HTML report."""
-    probability = format_percent(prediction_row.get("prob_speculative")) if prediction_row is not None else "-"
-    predicted_label = to_prediction_label(prediction_row.get("predicted_label")) if prediction_row is not None else "-"
+    probability = (
+        format_percent(prediction_row.get("prob_speculative"))
+        if prediction_row is not None
+        else "-"
+    )
+    predicted_label = (
+        to_prediction_label(prediction_row.get("predicted_label"))
+        if prediction_row is not None
+        else "-"
+    )
     risk_band = str(prediction_row.get("risk_band")) if prediction_row is not None else "-"
-    threshold = format_scalar(prediction_row.get("threshold")) if prediction_row is not None else "-"
+    threshold = (
+        format_scalar(prediction_row.get("threshold")) if prediction_row is not None else "-"
+    )
     headline = " ".join(sections.get("한줄 판단", [])).strip() or "심사 요약이 생성되지 않았습니다."
     opinion = " ".join(sections.get("종합 의견", [])).strip()
     local_frame = _prepare_local_driver_report_frame(local_shap, feature_map, top_n=5)
@@ -1340,15 +1372,15 @@ def build_html_report(
         </div>
       </div>
       <div class="eyebrow">TS2000 CREDIT RISK MEMO</div>
-      <h1>{escape(str(selected_row.get('corp_name')))}</h1>
+      <h1>{escape(str(selected_row.get("corp_name")))}</h1>
       <div class="summary">{escape(headline)}</div>
     </div>
     <div class="meta-grid">
-      <div class="meta-card"><div class="meta-label">종목코드</div><div class="meta-value">{escape(str(selected_row.get('stock_code')))}</div></div>
-      <div class="meta-card"><div class="meta-label">시장</div><div class="meta-value">{escape(to_market_label(selected_row.get('market')))}</div></div>
-      <div class="meta-card"><div class="meta-label">산업</div><div class="meta-value">{escape(to_industry_label(selected_row.get('industry_macro_category')))}</div></div>
-      <div class="meta-card"><div class="meta-label">규모</div><div class="meta-value">{escape(to_size_label(selected_row.get('firm_size_group')))}</div></div>
-      <div class="meta-card"><div class="meta-label">회계연도</div><div class="meta-value">{escape(format_scalar(selected_row.get('fiscal_year')))}</div></div>
+      <div class="meta-card"><div class="meta-label">종목코드</div><div class="meta-value">{escape(str(selected_row.get("stock_code")))}</div></div>
+      <div class="meta-card"><div class="meta-label">시장</div><div class="meta-value">{escape(to_market_label(selected_row.get("market")))}</div></div>
+      <div class="meta-card"><div class="meta-label">산업</div><div class="meta-value">{escape(to_industry_label(selected_row.get("industry_macro_category")))}</div></div>
+      <div class="meta-card"><div class="meta-label">규모</div><div class="meta-value">{escape(to_size_label(selected_row.get("firm_size_group")))}</div></div>
+      <div class="meta-card"><div class="meta-label">회계연도</div><div class="meta-value">{escape(format_scalar(selected_row.get("fiscal_year")))}</div></div>
       <div class="meta-card"><div class="meta-label">사용 모델</div><div class="meta-value">{escape(model)}</div></div>
       <div class="meta-card"><div class="meta-label">출력 형식</div><div class="meta-value">{escape(output_format_label)}</div></div>
       <div class="meta-card"><div class="meta-label">투기등급 확률</div><div class="meta-value">{escape(probability)}</div></div>
@@ -1408,14 +1440,26 @@ def build_onepage_html_report(
     feature_map: pd.DataFrame,
 ) -> str:
     """Build a compact one-page HTML memo."""
-    probability = format_percent(prediction_row.get("prob_speculative")) if prediction_row is not None else "-"
-    predicted_label = to_prediction_label(prediction_row.get("predicted_label")) if prediction_row is not None else "-"
+    probability = (
+        format_percent(prediction_row.get("prob_speculative"))
+        if prediction_row is not None
+        else "-"
+    )
+    predicted_label = (
+        to_prediction_label(prediction_row.get("predicted_label"))
+        if prediction_row is not None
+        else "-"
+    )
     risk_band = str(prediction_row.get("risk_band")) if prediction_row is not None else "-"
-    threshold = format_scalar(prediction_row.get("threshold")) if prediction_row is not None else "-"
+    threshold = (
+        format_scalar(prediction_row.get("threshold")) if prediction_row is not None else "-"
+    )
     headline = " ".join(sections.get("한줄 판단", [])).strip() or "심사 요약이 생성되지 않았습니다."
     top_local = local_shap.head(3).copy() if not local_shap.empty else pd.DataFrame()
     if not top_local.empty:
-        top_local["표시명"] = top_local["feature"].map(lambda value: display_name(value, feature_map))
+        top_local["표시명"] = top_local["feature"].map(
+            lambda value: display_name(value, feature_map)
+        )
         top_local["실제값"] = top_local.apply(
             lambda row: format_value_with_unit(
                 row["feature_value"],
@@ -1426,9 +1470,15 @@ def build_onepage_html_report(
         )
     peer_summary = peer_slice.copy()
     if not peer_summary.empty:
-        peer_summary["distance_from_industry_mid"] = (peer_summary["industry_percentile"] - 50.0).abs()
-        peer_summary = peer_summary.sort_values("distance_from_industry_mid", ascending=False).head(3)
-        peer_summary["표시명"] = peer_summary["feature"].map(lambda value: display_name(value, feature_map))
+        peer_summary["distance_from_industry_mid"] = (
+            peer_summary["industry_percentile"] - 50.0
+        ).abs()
+        peer_summary = peer_summary.sort_values("distance_from_industry_mid", ascending=False).head(
+            3
+        )
+        peer_summary["표시명"] = peer_summary["feature"].map(
+            lambda value: display_name(value, feature_map)
+        )
         peer_summary["산업 대비 차이"] = peer_summary.apply(
             lambda row: format_delta_with_unit(
                 row["value"] - row["industry_median"],
@@ -1437,10 +1487,13 @@ def build_onepage_html_report(
             axis=1,
         )
 
-    peer_html = "".join(
-        f"<li>{escape(str(row['표시명']))}: 산업 대비 {escape(str(row['산업 대비 차이']))}</li>"
-        for row in peer_summary.to_dict(orient="records")
-    ) or "<li>동종업계 비교 데이터가 없습니다.</li>"
+    peer_html = (
+        "".join(
+            f"<li>{escape(str(row['표시명']))}: 산업 대비 {escape(str(row['산업 대비 차이']))}</li>"
+            for row in peer_summary.to_dict(orient="records")
+        )
+        or "<li>동종업계 비교 데이터가 없습니다.</li>"
+    )
     local_table_html = _html_table_from_frame(
         top_local.rename(
             columns={
@@ -1672,16 +1725,16 @@ def build_onepage_html_report(
         </div>
         <div class="doc-chip">{escape(output_format_label)}</div>
       </div>
-      <h1>{escape(str(selected_row.get('corp_name')))} 원페이지 심사 메모</h1>
+      <h1>{escape(str(selected_row.get("corp_name")))} 원페이지 심사 메모</h1>
       <div class="headline">{escape(headline)}</div>
     </div>
     <div class="meta">
-      <div class="meta-card"><div class="meta-label">시장/산업</div><div class="meta-value">{escape(to_market_label(selected_row.get('market')))} / {escape(to_industry_label(selected_row.get('industry_macro_category')))}</div></div>
-      <div class="meta-card"><div class="meta-label">규모/회계연도</div><div class="meta-value">{escape(to_size_label(selected_row.get('firm_size_group')))} / {escape(format_scalar(selected_row.get('fiscal_year')))}</div></div>
+      <div class="meta-card"><div class="meta-label">시장/산업</div><div class="meta-value">{escape(to_market_label(selected_row.get("market")))} / {escape(to_industry_label(selected_row.get("industry_macro_category")))}</div></div>
+      <div class="meta-card"><div class="meta-label">규모/회계연도</div><div class="meta-value">{escape(to_size_label(selected_row.get("firm_size_group")))} / {escape(format_scalar(selected_row.get("fiscal_year")))}</div></div>
       <div class="meta-card"><div class="meta-label">투기등급 확률</div><div class="meta-value">{escape(probability)}</div></div>
       <div class="meta-card"><div class="meta-label">예측 라벨</div><div class="meta-value">{escape(predicted_label)} ({escape(risk_band)})</div></div>
       <div class="meta-card"><div class="meta-label">판정 기준선</div><div class="meta-value">{escape(threshold)}</div></div>
-      <div class="meta-card"><div class="meta-label">종목코드</div><div class="meta-value">{escape(str(selected_row.get('stock_code')))}</div></div>
+      <div class="meta-card"><div class="meta-label">종목코드</div><div class="meta-value">{escape(str(selected_row.get("stock_code")))}</div></div>
       <div class="meta-card"><div class="meta-label">사용 모델</div><div class="meta-value">{escape(model)}</div></div>
       <div class="meta-card"><div class="meta-label">출력 형식</div><div class="meta-value">{escape(output_format_label)}</div></div>
     </div>
@@ -1822,7 +1875,9 @@ def build_llm_payload(
     top_features = feature_map.sort_values("feature").head(0)
     if not local_shap.empty:
         top_shap = local_shap.head(5).copy()
-        top_shap["display_name"] = top_shap["feature"].map(lambda value: display_name(value, feature_map))
+        top_shap["display_name"] = top_shap["feature"].map(
+            lambda value: display_name(value, feature_map)
+        )
         top_shap["feature_value_display"] = top_shap.apply(
             lambda row: format_value_with_unit(
                 row["feature_value"],
@@ -1831,35 +1886,45 @@ def build_llm_payload(
             ),
             axis=1,
         )
-        top_shap["shap_strength_display"] = top_shap["abs_shap"].map(lambda value: f"{float(value):.2f}")
-        top_shap["direction_korean"] = top_shap["direction"].map(
-            {
-                "increase_risk": "위험 증가",
-                "decrease_risk": "위험 완화",
-            }
-        ).fillna("중립")
+        top_shap["shap_strength_display"] = top_shap["abs_shap"].map(
+            lambda value: f"{float(value):.2f}"
+        )
+        top_shap["direction_korean"] = (
+            top_shap["direction"]
+            .map(
+                {
+                    "increase_risk": "위험 증가",
+                    "decrease_risk": "위험 완화",
+                }
+            )
+            .fillna("중립")
+        )
         top_shap["interpretation_direction"] = top_shap["feature"].map(
             lambda value: get_feature_direction_label(str(value))
         )
-        top_shap_records = top_shap.loc[
-            :,
-            [
-                "display_name",
-                "feature",
-                "feature_value_display",
-                "shap_strength_display",
-                "direction_korean",
-                "interpretation_direction",
-            ],
-        ].rename(
-            columns={
-                "display_name": "korean_name",
-                "feature_value_display": "feature_value_display",
-                "shap_strength_display": "shap_strength_display",
-                "direction_korean": "direction",
-                "interpretation_direction": "interpretation_direction",
-            }
-        ).to_dict(orient="records")
+        top_shap_records = (
+            top_shap.loc[
+                :,
+                [
+                    "display_name",
+                    "feature",
+                    "feature_value_display",
+                    "shap_strength_display",
+                    "direction_korean",
+                    "interpretation_direction",
+                ],
+            ]
+            .rename(
+                columns={
+                    "display_name": "korean_name",
+                    "feature_value_display": "feature_value_display",
+                    "shap_strength_display": "shap_strength_display",
+                    "direction_korean": "direction",
+                    "interpretation_direction": "interpretation_direction",
+                }
+            )
+            .to_dict(orient="records")
+        )
         driver_features = top_shap["feature"].tolist()
         top_features = feature_map.loc[feature_map["feature"].isin(driver_features)].copy()
     else:
@@ -1890,7 +1955,9 @@ def build_llm_payload(
         peer_slice = peer_slice.copy()
         peer_slice["distance_from_industry_mid"] = (peer_slice["industry_percentile"] - 50.0).abs()
         peer_slice = peer_slice.sort_values("distance_from_industry_mid", ascending=False).head(5)
-        peer_slice["korean_name"] = peer_slice["feature"].map(lambda value: display_name(value, feature_map))
+        peer_slice["korean_name"] = peer_slice["feature"].map(
+            lambda value: display_name(value, feature_map)
+        )
         peer_slice["value_display"] = peer_slice.apply(
             lambda row: format_value_with_unit(
                 row["value"],
@@ -1915,8 +1982,12 @@ def build_llm_payload(
             ),
             axis=1,
         )
-        peer_slice["industry_percentile_display"] = peer_slice["industry_percentile"].map(format_percentile_label)
-        peer_slice["market_percentile_display"] = peer_slice["market_percentile"].map(format_percentile_label)
+        peer_slice["industry_percentile_display"] = peer_slice["industry_percentile"].map(
+            format_percentile_label
+        )
+        peer_slice["market_percentile_display"] = peer_slice["market_percentile"].map(
+            format_percentile_label
+        )
         peer_slice["industry_delta_display"] = peer_slice.apply(
             lambda row: format_delta_with_unit(
                 row["value"] - row["industry_median"],
@@ -1946,10 +2017,14 @@ def build_llm_payload(
     if industry_latest_row is not None:
         industry_context = {
             "market": to_market_label(industry_latest_row.get("market")),
-            "industry_macro_category": to_industry_label(industry_latest_row.get("industry_macro_category")),
+            "industry_macro_category": to_industry_label(
+                industry_latest_row.get("industry_macro_category")
+            ),
             "companies_display": f"{format_scalar(industry_latest_row.get('companies'))}개사",
             "positive_rate_display": format_percent(industry_latest_row.get("positive_rate")),
-            "mean_prob_speculative_display": format_percent(industry_latest_row.get("mean_prob_speculative")),
+            "mean_prob_speculative_display": format_percent(
+                industry_latest_row.get("mean_prob_speculative")
+            ),
             "pred_share_tuned_display": format_percent(industry_latest_row.get("pred_share_tuned")),
         }
 
@@ -1967,7 +2042,9 @@ def build_llm_payload(
             "corp_name": selected_row.get("corp_name"),
             "stock_code": selected_row.get("stock_code"),
             "market": to_market_label(selected_row.get("market")),
-            "industry_macro_category": to_industry_label(selected_row.get("industry_macro_category")),
+            "industry_macro_category": to_industry_label(
+                selected_row.get("industry_macro_category")
+            ),
             "firm_size_group": to_size_label(selected_row.get("firm_size_group")),
             "fiscal_year": format_scalar(selected_row.get("fiscal_year")),
             "eval_year": format_scalar(selected_row.get("eval_year")),
@@ -1992,7 +2069,9 @@ def render_overview_tab(
     col1, col2, col3, col4 = st.columns(4)
     render_bold_value_block(col1, "기업명", str(selected_row["corp_name"]))
     render_bold_value_block(col2, "시장", to_market_label(selected_row["market"]))
-    render_bold_value_block(col3, "산업", to_industry_label(selected_row["industry_macro_category"]))
+    render_bold_value_block(
+        col3, "산업", to_industry_label(selected_row["industry_macro_category"])
+    )
     render_bold_value_block(col4, "규모", to_size_label(selected_row["firm_size_group"]))
 
     st.subheader("모델 결과")
@@ -2013,7 +2092,9 @@ def render_overview_tab(
             None,
         )
         c1, c2, c3, c4 = st.columns(4)
-        render_bold_value_block(c1, "공식 PR-AUC", format_scalar(selected_model["pr_auc"] if selected_model else None))
+        render_bold_value_block(
+            c1, "공식 PR-AUC", format_scalar(selected_model["pr_auc"] if selected_model else None)
+        )
         render_bold_value_block(
             c2,
             "공식 Precision@0.5",
@@ -2032,10 +2113,16 @@ def render_overview_tab(
         st.caption("위 수치는 기업별 점수가 아니라 공식 Core29 XGBoost test 전체 성능입니다.")
     else:
         c1, c2, c3, c4 = st.columns(4)
-        render_bold_value_block(c1, "투기등급 확률", format_percent(prediction_row.get("prob_speculative")))
-        render_bold_value_block(c2, "예측 라벨", to_prediction_label(prediction_row.get("predicted_label")))
+        render_bold_value_block(
+            c1, "투기등급 확률", format_percent(prediction_row.get("prob_speculative"))
+        )
+        render_bold_value_block(
+            c2, "예측 라벨", to_prediction_label(prediction_row.get("predicted_label"))
+        )
         render_bold_value_block(c3, "판정 기준선", format_scalar(prediction_row.get("threshold")))
-        render_badge_value_block(c4, "위험 밴드", render_risk_band_badge(prediction_row.get("risk_band")))
+        render_badge_value_block(
+            c4, "위험 밴드", render_risk_band_badge(prediction_row.get("risk_band"))
+        )
         st.caption(
             "기업별 점수는 대시보드 산출물 export 단계에서 공식 Core29 XGBoost 학습 레시피를 "
             "재현해 생성한 값입니다."
@@ -2094,7 +2181,9 @@ def render_overview_tab(
         lambda row: format_value_with_unit(row["value"], row["unit"], str(row["feature"])),
         axis=1,
     )
-    overview_frame["일반 해석 방향"] = overview_frame["feature"].map(lambda value: get_feature_direction_label(str(value)))
+    overview_frame["일반 해석 방향"] = overview_frame["feature"].map(
+        lambda value: get_feature_direction_label(str(value))
+    )
     overview_frame = overview_frame.sort_values("korean_name")
     metric_cards = st.columns(3)
     for index, row in enumerate(overview_frame.to_dict(orient="records")):
@@ -2108,21 +2197,34 @@ def render_overview_tab(
 
     if artifacts.peer_percentiles is not None:
         peer_slice = artifacts.peer_percentiles.loc[
-            (artifacts.peer_percentiles["stock_code"].astype(str) == str(selected_row["stock_code"]))
+            (
+                artifacts.peer_percentiles["stock_code"].astype(str)
+                == str(selected_row["stock_code"])
+            )
             & (artifacts.peer_percentiles["fiscal_year"] == selected_row["fiscal_year"])
             & (artifacts.peer_percentiles["feature"].isin(overview_features))
         ].copy()
         if not peer_slice.empty:
-            peer_slice["표시명"] = peer_slice["feature"].map(lambda value: display_name(value, feature_map))
+            peer_slice["표시명"] = peer_slice["feature"].map(
+                lambda value: display_name(value, feature_map)
+            )
             peer_slice["실제값_표시"] = peer_slice.apply(
-                lambda row: format_value_with_unit(row["value"], get_feature_unit(str(row["feature"]), feature_map), str(row["feature"])),
+                lambda row: format_value_with_unit(
+                    row["value"],
+                    get_feature_unit(str(row["feature"]), feature_map),
+                    str(row["feature"]),
+                ),
                 axis=1,
             )
             percentile_chart = (
                 alt.Chart(peer_slice)
                 .mark_bar(cornerRadiusTopLeft=4, cornerRadiusTopRight=4)
                 .encode(
-                    x=alt.X("industry_percentile:Q", title="산업 내 백분위", scale=alt.Scale(domain=[0, 100])),
+                    x=alt.X(
+                        "industry_percentile:Q",
+                        title="산업 내 백분위",
+                        scale=alt.Scale(domain=[0, 100]),
+                    ),
                     y=alt.Y("표시명:N", sort="-x", title=""),
                     color=alt.value(COLOR_NEUTRAL),
                     tooltip=[
@@ -2166,9 +2268,19 @@ def render_llm_panel(
         "memo": "가장 균형 잡힌 기본 심사 메모 형식입니다.",
         "detailed": "숫자와 비교 맥락을 조금 더 살린 상세 보고서형입니다.",
     }.get(selected_output_format, "선택한 형식에 맞춰 요약합니다.")
-    render_text_card(intro_col1, "출력 형식", f"현재 선택한 형식은 {output_format_label}입니다. {format_description}")
-    render_text_card(intro_col2, "입력 근거", "예측확률, 핵심 지표, SHAP, 동종업계 비교 결과를 함께 참고합니다.")
-    render_text_card(intro_col3, "모델 기준", f"현재 선택 모델은 {model}이며, API 키가 입력된 경우에만 호출합니다.")
+    render_text_card(
+        intro_col1,
+        "출력 형식",
+        f"현재 선택한 형식은 {output_format_label}입니다. {format_description}",
+    )
+    render_text_card(
+        intro_col2, "입력 근거", "예측확률, 핵심 지표, SHAP, 동종업계 비교 결과를 함께 참고합니다."
+    )
+    render_text_card(
+        intro_col3,
+        "모델 기준",
+        f"현재 선택 모델은 {model}이며, API 키가 입력된 경우에만 호출합니다.",
+    )
     if not api_key.strip():
         st.info("사이드바의 `AI 요약 설정`에서 OpenAI API 키를 입력하면 요약을 생성할 수 있습니다.")
 
@@ -2209,8 +2321,12 @@ def render_llm_panel(
         mitigate_badge_items: list[tuple[str, str]] = []
         if not local_shap.empty:
             shap_view = local_shap.copy().sort_values("abs_shap", ascending=False)
-            top_risk_features = shap_view.loc[shap_view["shap_value"] > 0, "feature"].head(3).tolist()
-            top_mitigate_features = shap_view.loc[shap_view["shap_value"] < 0, "feature"].head(3).tolist()
+            top_risk_features = (
+                shap_view.loc[shap_view["shap_value"] > 0, "feature"].head(3).tolist()
+            )
+            top_mitigate_features = (
+                shap_view.loc[shap_view["shap_value"] < 0, "feature"].head(3).tolist()
+            )
             risk_badge_items = [
                 (display_name(feature, feature_map), get_feature_direction_label(str(feature)))
                 for feature in top_risk_features
@@ -2367,16 +2483,26 @@ def render_drivers_tab(
     """Render the drivers tab."""
     st.subheader("핵심 설명 변수")
     intro_col1, intro_col2, intro_col3 = st.columns(3)
-    render_text_card(intro_col1, "분석 기준", "모델이 이 기업을 위험하게 또는 안정적으로 본 핵심 변수를 설명합니다.")
-    render_text_card(intro_col2, "위험 증가", "SHAP 값이 양수이면 투기등급 확률을 높이는 방향으로 작용합니다.")
-    render_text_card(intro_col3, "위험 완화", "SHAP 값이 음수이면 위험을 낮추는 방향으로 작용합니다.")
+    render_text_card(
+        intro_col1,
+        "분석 기준",
+        "모델이 이 기업을 위험하게 또는 안정적으로 본 핵심 변수를 설명합니다.",
+    )
+    render_text_card(
+        intro_col2, "위험 증가", "SHAP 값이 양수이면 투기등급 확률을 높이는 방향으로 작용합니다."
+    )
+    render_text_card(
+        intro_col3, "위험 완화", "SHAP 값이 음수이면 위험을 낮추는 방향으로 작용합니다."
+    )
     if artifacts.local_shap is not None:
         matched = resolve_company_local_shap(selected_row, artifacts.local_shap)
         if not matched.empty:
             st.success("기업별 local SHAP가 연결되어 있습니다.")
             local_view = matched.sort_values("abs_shap", ascending=False).head(10)
             feature_map = build_company_feature_map(selected_row, artifacts.feature_dictionary)
-            local_view["표시명"] = local_view["feature"].map(lambda value: display_name(value, feature_map))
+            local_view["표시명"] = local_view["feature"].map(
+                lambda value: display_name(value, feature_map)
+            )
             local_view["영향방향"] = local_view["shap_value"].map(
                 lambda value: "위험 증가" if value > 0 else "위험 완화"
             )
@@ -2398,14 +2524,18 @@ def render_drivers_tab(
                 summary_col1,
                 "가장 큰 위험 요인",
                 top_risk.iloc[0]["표시명"] if not top_risk.empty else "없음",
-                top_risk.iloc[0]["실제값"] if not top_risk.empty else "위험 증가 요인이 뚜렷하지 않습니다.",
+                top_risk.iloc[0]["실제값"]
+                if not top_risk.empty
+                else "위험 증가 요인이 뚜렷하지 않습니다.",
                 COLOR_RISK,
             )
             render_accent_summary_card(
                 summary_col2,
                 "가장 큰 완화 요인",
                 top_mitigate.iloc[0]["표시명"] if not top_mitigate.empty else "없음",
-                top_mitigate.iloc[0]["실제값"] if not top_mitigate.empty else "완화 요인이 뚜렷하지 않습니다.",
+                top_mitigate.iloc[0]["실제값"]
+                if not top_mitigate.empty
+                else "완화 요인이 뚜렷하지 않습니다.",
                 COLOR_MITIGATE,
             )
             render_accent_summary_card(
@@ -2420,7 +2550,9 @@ def render_drivers_tab(
                 .mark_bar(cornerRadiusTopLeft=4, cornerRadiusTopRight=4)
                 .encode(
                     x=alt.X("shap_value:Q", title="SHAP 값"),
-                    y=alt.Y("표시명:N", sort=alt.SortField("abs_shap", order="descending"), title=""),
+                    y=alt.Y(
+                        "표시명:N", sort=alt.SortField("abs_shap", order="descending"), title=""
+                    ),
                     color=alt.Color(
                         "영향방향:N",
                         scale=alt.Scale(
@@ -2440,7 +2572,15 @@ def render_drivers_tab(
             st.altair_chart(chart, use_container_width=True)
             local_table = local_view.loc[
                 :,
-                ["rank", "표시명", "실제값", "일반 해석 방향", "shap_value", "abs_shap", "영향방향"],
+                [
+                    "rank",
+                    "표시명",
+                    "실제값",
+                    "일반 해석 방향",
+                    "shap_value",
+                    "abs_shap",
+                    "영향방향",
+                ],
             ].copy()
             local_table = local_table.rename(
                 columns={
@@ -2468,7 +2608,9 @@ def render_drivers_tab(
         on="feature",
     )
     top_features = merged.sort_values("rank").head(10).copy()
-    top_features["표시명"] = top_features["feature"].map(lambda value: display_name(value, feature_map))
+    top_features["표시명"] = top_features["feature"].map(
+        lambda value: display_name(value, feature_map)
+    )
     top_features["실제값"] = top_features.apply(
         lambda row: format_value_with_unit(row["value"], row.get("unit", ""), str(row["feature"])),
         axis=1,
@@ -2559,8 +2701,12 @@ def render_peer_tab(
     peer_slice["industry_gap"] = peer_slice["value"] - peer_slice["industry_median"]
     peer_slice["market_gap"] = peer_slice["value"] - peer_slice["market_median"]
     peer_slice["표시명"] = peer_slice["feature"].map(lambda value: display_name(value, feature_map))
-    peer_slice["unit"] = peer_slice["feature"].map(lambda value: get_feature_unit(str(value), feature_map))
-    peer_slice["일반 해석 방향"] = peer_slice["feature"].map(lambda value: get_feature_direction_label(str(value)))
+    peer_slice["unit"] = peer_slice["feature"].map(
+        lambda value: get_feature_unit(str(value), feature_map)
+    )
+    peer_slice["일반 해석 방향"] = peer_slice["feature"].map(
+        lambda value: get_feature_direction_label(str(value))
+    )
     peer_slice["선택 기업"] = peer_slice.apply(
         lambda row: format_value_with_unit(
             row["value"],
@@ -2618,7 +2764,9 @@ def render_peer_tab(
         industry_gap = float(row["industry_gap"])
         gap_text = format_delta_with_unit(abs(industry_gap), str(row["unit"]))
         percentile_text = format_percentile_label(row["industry_percentile"])
-        shap_label = "위험을 높이는 쪽" if row["direction"] == "increase_risk" else "위험을 낮추는 쪽"
+        shap_label = (
+            "위험을 높이는 쪽" if row["direction"] == "increase_risk" else "위험을 낮추는 쪽"
+        )
         if industry_gap > 0:
             level_text = f"산업 중앙값보다 {gap_text} 높은 수준이며"
         elif industry_gap < 0:
@@ -2637,35 +2785,25 @@ def render_peer_tab(
     if not table.empty:
         summary_frame = table.copy()
         summary_frame["industry_distance"] = (summary_frame["industry_percentile"] - 50.0).abs()
-        summary_frame["summary_score"] = summary_frame["industry_distance"] * summary_frame["abs_shap"].fillna(0)
+        summary_frame["summary_score"] = summary_frame["industry_distance"] * summary_frame[
+            "abs_shap"
+        ].fillna(0)
 
         vulnerable = summary_frame.loc[summary_frame["direction"] == "increase_risk"].copy()
         vulnerable = vulnerable.sort_values(
             ["summary_score", "abs_shap", "industry_distance"],
             ascending=[False, False, False],
         ).head(3)
-        vulnerability_lines = [
-            build_peer_summary_line(row)
-            for _, row in vulnerable.iterrows()
-        ]
-        vulnerability_memo_lines = [
-            build_peer_memo_line(row)
-            for _, row in vulnerable.iterrows()
-        ]
+        vulnerability_lines = [build_peer_summary_line(row) for _, row in vulnerable.iterrows()]
+        vulnerability_memo_lines = [build_peer_memo_line(row) for _, row in vulnerable.iterrows()]
 
         strong = summary_frame.loc[summary_frame["direction"] == "decrease_risk"].copy()
         strong = strong.sort_values(
             ["summary_score", "abs_shap", "industry_distance"],
             ascending=[False, False, False],
         ).head(3)
-        strength_lines = [
-            build_peer_summary_line(row)
-            for _, row in strong.iterrows()
-        ]
-        strength_memo_lines = [
-            build_peer_memo_line(row)
-            for _, row in strong.iterrows()
-        ]
+        strength_lines = [build_peer_summary_line(row) for _, row in strong.iterrows()]
+        strength_memo_lines = [build_peer_memo_line(row) for _, row in strong.iterrows()]
 
     summary_col1, summary_col2, summary_col3 = st.columns(3)
     render_bullet_card(
@@ -2708,24 +2846,65 @@ def render_peer_tab(
     money_only_view = bool(table_units) and table_units == {"KRW thousand"}
     chart_rows: list[dict[str, object]] = []
     for row in table.to_dict(orient="records"):
-        label = str(row["korean_name"]) if pd.notna(row["korean_name"]) and str(row["korean_name"]).strip() else str(row["feature"])
+        label = (
+            str(row["korean_name"])
+            if pd.notna(row["korean_name"]) and str(row["korean_name"]).strip()
+            else str(row["feature"])
+        )
         unit = str(row["unit"])
-        company_value = float(row["value"]) * 1000 / 100_000_000 if money_only_view and pd.notna(row["value"]) else row["value"]
-        industry_value = float(row["industry_median"]) * 1000 / 100_000_000 if money_only_view and pd.notna(row["industry_median"]) else row["industry_median"]
-        market_value = float(row["market_median"]) * 1000 / 100_000_000 if money_only_view and pd.notna(row["market_median"]) else row["market_median"]
+        company_value = (
+            float(row["value"]) * 1000 / 100_000_000
+            if money_only_view and pd.notna(row["value"])
+            else row["value"]
+        )
+        industry_value = (
+            float(row["industry_median"]) * 1000 / 100_000_000
+            if money_only_view and pd.notna(row["industry_median"])
+            else row["industry_median"]
+        )
+        market_value = (
+            float(row["market_median"]) * 1000 / 100_000_000
+            if money_only_view and pd.notna(row["market_median"])
+            else row["market_median"]
+        )
         chart_rows.extend(
             [
-                {"구분": label, "기준": "선택 기업", "값": company_value, "값_표시": format_value_with_unit(row["value"], unit, str(row["feature"]))},
-                {"구분": label, "기준": "동일 산업 중앙값", "값": industry_value, "값_표시": format_value_with_unit(row["industry_median"], unit, str(row["feature"]))},
-                {"구분": label, "기준": "전체 시장 중앙값", "값": market_value, "값_표시": format_value_with_unit(row["market_median"], unit, str(row["feature"]))},
+                {
+                    "구분": label,
+                    "기준": "선택 기업",
+                    "값": company_value,
+                    "값_표시": format_value_with_unit(row["value"], unit, str(row["feature"])),
+                },
+                {
+                    "구분": label,
+                    "기준": "동일 산업 중앙값",
+                    "값": industry_value,
+                    "값_표시": format_value_with_unit(
+                        row["industry_median"], unit, str(row["feature"])
+                    ),
+                },
+                {
+                    "구분": label,
+                    "기준": "전체 시장 중앙값",
+                    "값": market_value,
+                    "값_표시": format_value_with_unit(
+                        row["market_median"], unit, str(row["feature"])
+                    ),
+                },
             ]
         )
     value_axis_title = "값 (억 원)" if money_only_view else "값"
     st.markdown("**절대값 비교**")
     legend_col1, legend_col2, legend_col3 = st.columns(3)
-    render_legend_card(legend_col1, "선택 기업", "현재 선택한 기업의 실제 지표값입니다.", COLOR_COMPANY)
-    render_legend_card(legend_col2, "동일 산업 중앙값", "같은 시장·산업 기업들의 중앙값입니다.", COLOR_INDUSTRY)
-    render_legend_card(legend_col3, "전체 시장 중앙값", "같은 시장 전체 기업들의 중앙값입니다.", COLOR_MARKET)
+    render_legend_card(
+        legend_col1, "선택 기업", "현재 선택한 기업의 실제 지표값입니다.", COLOR_COMPANY
+    )
+    render_legend_card(
+        legend_col2, "동일 산업 중앙값", "같은 시장·산업 기업들의 중앙값입니다.", COLOR_INDUSTRY
+    )
+    render_legend_card(
+        legend_col3, "전체 시장 중앙값", "같은 시장 전체 기업들의 중앙값입니다.", COLOR_MARKET
+    )
     if len(table_units) <= 1:
         compare_chart = (
             alt.Chart(pd.DataFrame(chart_rows))
@@ -2754,8 +2933,16 @@ def render_peer_tab(
             row_chart_data = pd.DataFrame(
                 [
                     {"기준": "선택 기업", "값": row["value"], "값_표시": row["선택 기업"]},
-                    {"기준": "동일 산업 중앙값", "값": row["industry_median"], "값_표시": row["산업 중앙값"]},
-                    {"기준": "전체 시장 중앙값", "값": row["market_median"], "값_표시": row["시장 중앙값"]},
+                    {
+                        "기준": "동일 산업 중앙값",
+                        "값": row["industry_median"],
+                        "값_표시": row["산업 중앙값"],
+                    },
+                    {
+                        "기준": "전체 시장 중앙값",
+                        "값": row["market_median"],
+                        "값_표시": row["시장 중앙값"],
+                    },
                 ]
             )
             if str(row["unit"]) == "KRW thousand":
@@ -2809,12 +2996,30 @@ def render_peer_tab(
     for row in table.to_dict(orient="records"):
         label = str(row["표시명"])
         unit = str(row["unit"])
-        industry_gap_value = float(row["industry_gap"]) * 1000 / 100_000_000 if money_only_view and pd.notna(row["industry_gap"]) else row["industry_gap"]
-        market_gap_value = float(row["market_gap"]) * 1000 / 100_000_000 if money_only_view and pd.notna(row["market_gap"]) else row["market_gap"]
+        industry_gap_value = (
+            float(row["industry_gap"]) * 1000 / 100_000_000
+            if money_only_view and pd.notna(row["industry_gap"])
+            else row["industry_gap"]
+        )
+        market_gap_value = (
+            float(row["market_gap"]) * 1000 / 100_000_000
+            if money_only_view and pd.notna(row["market_gap"])
+            else row["market_gap"]
+        )
         gap_rows.extend(
             [
-                {"구분": label, "비교": "산업 대비 차이", "값": industry_gap_value, "값_표시": format_delta_with_unit(row["industry_gap"], unit)},
-                {"구분": label, "비교": "시장 대비 차이", "값": market_gap_value, "값_표시": format_delta_with_unit(row["market_gap"], unit)},
+                {
+                    "구분": label,
+                    "비교": "산업 대비 차이",
+                    "값": industry_gap_value,
+                    "값_표시": format_delta_with_unit(row["industry_gap"], unit),
+                },
+                {
+                    "구분": label,
+                    "비교": "시장 대비 차이",
+                    "값": market_gap_value,
+                    "값_표시": format_delta_with_unit(row["market_gap"], unit),
+                },
             ]
         )
         percentile_rows.extend(
@@ -2824,10 +3029,17 @@ def render_peer_tab(
             ]
         )
 
-    zero_rule = alt.Chart(pd.DataFrame({"x": [0]})).mark_rule(color=COLOR_MUTED, strokeDash=[4, 4]).encode(x="x:Q")
+    zero_rule = (
+        alt.Chart(pd.DataFrame({"x": [0]}))
+        .mark_rule(color=COLOR_MUTED, strokeDash=[4, 4])
+        .encode(x="x:Q")
+    )
     gap_base = alt.Chart(pd.DataFrame(gap_rows))
     gap_bars = gap_base.mark_bar(cornerRadiusTopLeft=4, cornerRadiusTopRight=4).encode(
-        x=alt.X("값:Q", title="선택 기업 - 비교 기준 (억 원)" if money_only_view else "선택 기업 - 비교 기준"),
+        x=alt.X(
+            "값:Q",
+            title="선택 기업 - 비교 기준 (억 원)" if money_only_view else "선택 기업 - 비교 기준",
+        ),
         y=alt.Y("구분:N", title="", sort=table["표시명"].tolist()),
         color=alt.Color(
             "비교:N",
@@ -2856,7 +3068,11 @@ def render_peer_tab(
         ),
         tooltip=["구분:N", "기준:N", alt.Tooltip("백분위:Q", format=".2f")],
     )
-    percentile_mid_rule = alt.Chart(pd.DataFrame({"x": [50]})).mark_rule(color=COLOR_MUTED, strokeDash=[4, 4]).encode(x="x:Q")
+    percentile_mid_rule = (
+        alt.Chart(pd.DataFrame({"x": [50]}))
+        .mark_rule(color=COLOR_MUTED, strokeDash=[4, 4])
+        .encode(x="x:Q")
+    )
     percentile_chart = alt.layer(percentile_mid_rule, percentile_points).properties(height=340)
 
     col_gap, col_percentile = st.columns(2)
@@ -2896,7 +3112,9 @@ def render_peer_tab(
         use_container_width=True,
         hide_index=True,
     )
-    st.caption("`일반 해석 방향`은 재무 일반론 기준의 안내이며, 실제 평가는 산업 특성과 기업 상황에 따라 달라질 수 있습니다.")
+    st.caption(
+        "`일반 해석 방향`은 재무 일반론 기준의 안내이며, 실제 평가는 산업 특성과 기업 상황에 따라 달라질 수 있습니다."
+    )
 
 
 def render_industry_tab(
@@ -2909,9 +3127,19 @@ def render_industry_tab(
     st.subheader("산업별 집계")
     st.caption("선택한 기업이 속한 시장/산업을 기준으로 최신 스냅샷과 연도별 추이를 보여줍니다.")
     intro_col1, intro_col2, intro_col3 = st.columns(3)
-    render_text_card(intro_col1, "집계 기준", "선택 기업과 같은 시장·산업에 속한 기업들을 기준으로 집계합니다.")
-    render_text_card(intro_col2, "최신 스냅샷", "기업별 가장 최근 연도 1행만 남겨 현재 시점 산업 분위기를 보여줍니다.")
-    render_text_card(intro_col3, "연도별 추이", "연도별 평균 위험확률과 실제 투기등급 비율, 그리고 조정 기준선 적용 시 고위험 판정 비중을 함께 확인합니다.")
+    render_text_card(
+        intro_col1, "집계 기준", "선택 기업과 같은 시장·산업에 속한 기업들을 기준으로 집계합니다."
+    )
+    render_text_card(
+        intro_col2,
+        "최신 스냅샷",
+        "기업별 가장 최근 연도 1행만 남겨 현재 시점 산업 분위기를 보여줍니다.",
+    )
+    render_text_card(
+        intro_col3,
+        "연도별 추이",
+        "연도별 평균 위험확률과 실제 투기등급 비율, 그리고 조정 기준선 적용 시 고위험 판정 비중을 함께 확인합니다.",
+    )
 
     if artifacts.industry_latest_summary is None or artifacts.industry_year_summary is None:
         st.info("산업 집계 파일이 아직 연결되지 않았습니다.")
@@ -2955,7 +3183,10 @@ def render_industry_tab(
     render_accent_summary_card(
         summary_col3,
         "산업 기준 주요 변수",
-        display_name(str(shap_summary.iloc[0]["feature"]), build_company_feature_map(selected_row, artifacts.feature_dictionary))
+        display_name(
+            str(shap_summary.iloc[0]["feature"]),
+            build_company_feature_map(selected_row, artifacts.feature_dictionary),
+        )
         if shap_summary is not None and not shap_summary.empty
         else "없음",
         "test 구간 산업 SHAP 기준으로 가장 먼저 확인되는 설명 변수입니다.",
@@ -2964,12 +3195,22 @@ def render_industry_tab(
 
     c1, c2, c3, c4 = st.columns(4)
     render_bold_value_block(c1, "산업 기업 수", format_scalar(latest_row.get("companies")))
-    render_bold_value_block(c2, "산업 평균 확률", format_percent(latest_row.get("mean_prob_speculative")))
-    render_bold_value_block(c3, "산업 중앙 확률", format_percent(latest_row.get("median_prob_speculative")))
-    render_bold_value_block(c4, tuned_share_label, format_percent(latest_row.get("pred_share_tuned")))
+    render_bold_value_block(
+        c2, "산업 평균 확률", format_percent(latest_row.get("mean_prob_speculative"))
+    )
+    render_bold_value_block(
+        c3, "산업 중앙 확률", format_percent(latest_row.get("median_prob_speculative"))
+    )
+    render_bold_value_block(
+        c4, tuned_share_label, format_percent(latest_row.get("pred_share_tuned"))
+    )
 
-    st.caption(f"{to_market_label(market)} / {to_industry_label(industry)} 기준 최신 기업 스냅샷 집계입니다.")
-    st.info("여기서 말하는 '조정 기준선'은 기본 0.5 대신, 검증 구간에서 precision과 recall 균형을 고려해 정한 판정 기준선을 뜻합니다.")
+    st.caption(
+        f"{to_market_label(market)} / {to_industry_label(industry)} 기준 최신 기업 스냅샷 집계입니다."
+    )
+    st.info(
+        "여기서 말하는 '조정 기준선'은 기본 0.5 대신, 검증 구간에서 precision과 recall 균형을 고려해 정한 판정 기준선을 뜻합니다."
+    )
 
     year_summary = artifacts.industry_year_summary.loc[
         (artifacts.industry_year_summary["market"] == market)
@@ -3067,7 +3308,9 @@ def render_industry_tab(
             .mark_bar(cornerRadiusTopLeft=4, cornerRadiusTopRight=4, color=COLOR_NEUTRAL)
             .encode(
                 x=alt.X("mean_abs_shap:Q", title="평균 |SHAP|"),
-                y=alt.Y("표시명:N", sort=alt.SortField("mean_abs_shap", order="descending"), title=""),
+                y=alt.Y(
+                    "표시명:N", sort=alt.SortField("mean_abs_shap", order="descending"), title=""
+                ),
                 tooltip=[
                     alt.Tooltip("표시명:N", title="변수"),
                     alt.Tooltip("mean_abs_shap:Q", title="평균 |SHAP|", format=".2f"),
@@ -3076,7 +3319,10 @@ def render_industry_tab(
             .properties(height=320)
         )
         st.altair_chart(chart, use_container_width=True)
-        top_shap_view = top_shap.loc[:, ["rank_within_group", "표시명", "일반 해석 방향", "mean_abs_shap", "mean_signed_shap"]].rename(
+        top_shap_view = top_shap.loc[
+            :,
+            ["rank_within_group", "표시명", "일반 해석 방향", "mean_abs_shap", "mean_signed_shap"],
+        ].rename(
             columns={
                 "rank_within_group": "순위",
                 "표시명": "지표",
@@ -3104,12 +3350,26 @@ def render_scenario_tab(
         "mild_stress": "완만한 스트레스",
         "severe_stress": "강한 스트레스",
     }
-    selected_preset = st.selectbox("프리셋", presets, format_func=lambda value: preset_label_map.get(value, value))
+    selected_preset = st.selectbox(
+        "프리셋", presets, format_func=lambda value: preset_label_map.get(value, value)
+    )
     preset_changes = artifacts.scenario_presets[selected_preset]
     intro_col1, intro_col2, intro_col3 = st.columns(3)
-    render_text_card(intro_col1, "선택한 시나리오", f"현재 선택한 시나리오는 {preset_label_map.get(selected_preset, selected_preset)}입니다.")
-    render_text_card(intro_col2, "시나리오 적용 방식", "핵심 지표 값을 가정적으로 바꿔 보고, 상대적 위치가 어떻게 달라지는지 확인합니다.")
-    render_text_card(intro_col3, "해석 시 유의점", "현재는 예측확률을 다시 계산하는 단계가 아니라, 지표 수준 변화와 백분위 이동을 중심으로 보여줍니다.")
+    render_text_card(
+        intro_col1,
+        "선택한 시나리오",
+        f"현재 선택한 시나리오는 {preset_label_map.get(selected_preset, selected_preset)}입니다.",
+    )
+    render_text_card(
+        intro_col2,
+        "시나리오 적용 방식",
+        "핵심 지표 값을 가정적으로 바꿔 보고, 상대적 위치가 어떻게 달라지는지 확인합니다.",
+    )
+    render_text_card(
+        intro_col3,
+        "해석 시 유의점",
+        "현재는 예측확률을 다시 계산하는 단계가 아니라, 지표 수준 변화와 백분위 이동을 중심으로 보여줍니다.",
+    )
 
     scenario_features = [
         "spec_spread",
@@ -3121,7 +3381,9 @@ def render_scenario_tab(
     rows: list[dict[str, object]] = []
     for feature in scenario_features:
         baseline_value = selected_row.get(feature)
-        default_delta = float(preset_changes.get(feature, 0.0)) if isinstance(preset_changes, dict) else 0.0
+        default_delta = (
+            float(preset_changes.get(feature, 0.0)) if isinstance(preset_changes, dict) else 0.0
+        )
         feature_map = build_company_feature_map(selected_row, artifacts.feature_dictionary)
         label = display_name(feature, feature_map)
         unit = get_feature_unit(feature, feature_map)
@@ -3133,8 +3395,16 @@ def render_scenario_tab(
             step=0.01,
         )
         scenario_value = None if pd.isna(baseline_value) else float(baseline_value) + delta
-        distribution = artifacts.company_universe.loc[:, feature] if feature in artifacts.company_universe else pd.Series(dtype=float)
-        scenario_percentile = approximate_percentile(distribution, scenario_value) if scenario_value is not None else None
+        distribution = (
+            artifacts.company_universe.loc[:, feature]
+            if feature in artifacts.company_universe
+            else pd.Series(dtype=float)
+        )
+        scenario_percentile = (
+            approximate_percentile(distribution, scenario_value)
+            if scenario_value is not None
+            else None
+        )
         rows.append(
             {
                 "변수": label,
@@ -3154,11 +3424,19 @@ def render_scenario_tab(
         axis=1,
     )
     scenario_frame["시나리오 조정값_표시"] = scenario_frame.apply(
-        lambda row: format_value_with_unit(row["시나리오 조정값"], row["unit"], str(row["feature"])),
+        lambda row: format_value_with_unit(
+            row["시나리오 조정값"], row["unit"], str(row["feature"])
+        ),
         axis=1,
     )
-    scenario_frame["시나리오 적용 후 위치"] = scenario_frame["시나리오 적용 후 대략적 백분위"].map(format_percentile_label)
-    strongest_change = scenario_frame.loc[scenario_frame["변화량"].abs().idxmax()] if not scenario_frame.empty else None
+    scenario_frame["시나리오 적용 후 위치"] = scenario_frame["시나리오 적용 후 대략적 백분위"].map(
+        format_percentile_label
+    )
+    strongest_change = (
+        scenario_frame.loc[scenario_frame["변화량"].abs().idxmax()]
+        if not scenario_frame.empty
+        else None
+    )
     summary_col1, summary_col2, summary_col3 = st.columns(3)
     render_accent_summary_card(
         summary_col1,
@@ -3171,7 +3449,9 @@ def render_scenario_tab(
         summary_col2,
         "시나리오에서 가장 많이 바뀐 지표",
         str(strongest_change["변수"]) if strongest_change is not None else "없음",
-        format_delta_with_unit(strongest_change["변화량"], strongest_change["unit"]) if strongest_change is not None else "-",
+        format_delta_with_unit(strongest_change["변화량"], strongest_change["unit"])
+        if strongest_change is not None
+        else "-",
         COLOR_RISK,
     )
     render_accent_summary_card(
@@ -3188,12 +3468,30 @@ def render_scenario_tab(
         chart_rows: list[dict[str, object]] = []
         money_view = str(unit_value) == "KRW thousand"
         for row in unit_frame.to_dict(orient="records"):
-            current_value = float(row["현재값"]) * 1000 / 100_000_000 if money_view and pd.notna(row["현재값"]) else row["현재값"]
-            scenario_value = float(row["시나리오 조정값"]) * 1000 / 100_000_000 if money_view and pd.notna(row["시나리오 조정값"]) else row["시나리오 조정값"]
+            current_value = (
+                float(row["현재값"]) * 1000 / 100_000_000
+                if money_view and pd.notna(row["현재값"])
+                else row["현재값"]
+            )
+            scenario_value = (
+                float(row["시나리오 조정값"]) * 1000 / 100_000_000
+                if money_view and pd.notna(row["시나리오 조정값"])
+                else row["시나리오 조정값"]
+            )
             chart_rows.extend(
                 [
-                    {"변수": row["변수"], "구분": "현재값", "값": current_value, "값_표시": row["현재값_표시"]},
-                    {"변수": row["변수"], "구분": "시나리오 조정값", "값": scenario_value, "값_표시": row["시나리오 조정값_표시"]},
+                    {
+                        "변수": row["변수"],
+                        "구분": "현재값",
+                        "값": current_value,
+                        "값_표시": row["현재값_표시"],
+                    },
+                    {
+                        "변수": row["변수"],
+                        "구분": "시나리오 조정값",
+                        "값": scenario_value,
+                        "값_표시": row["시나리오 조정값_표시"],
+                    },
                 ]
             )
         scenario_chart = (
@@ -3204,7 +3502,9 @@ def render_scenario_tab(
                 y=alt.Y("변수:N", title=""),
                 color=alt.Color(
                     "구분:N",
-                    scale=alt.Scale(domain=["현재값", "시나리오 조정값"], range=[COLOR_MUTED, COLOR_RISK]),
+                    scale=alt.Scale(
+                        domain=["현재값", "시나리오 조정값"], range=[COLOR_MUTED, COLOR_RISK]
+                    ),
                 ),
                 xOffset="구분:N",
                 tooltip=["변수:N", "구분:N", alt.Tooltip("값_표시:N", title="값")],
@@ -3214,7 +3514,14 @@ def render_scenario_tab(
         st.altair_chart(scenario_chart, use_container_width=True)
     scenario_table = scenario_frame.loc[
         :,
-        ["변수", "현재값_표시", "변화량", "시나리오 조정값_표시", "일반 해석 방향", "시나리오 적용 후 위치"],
+        [
+            "변수",
+            "현재값_표시",
+            "변화량",
+            "시나리오 조정값_표시",
+            "일반 해석 방향",
+            "시나리오 적용 후 위치",
+        ],
     ].rename(
         columns={
             "현재값_표시": "현재값",
@@ -3324,14 +3631,18 @@ def main() -> None:
     feature_map = build_company_feature_map(selected_row, artifacts.feature_dictionary)
     local_shap = resolve_company_local_shap(selected_row, artifacts.local_shap)
     peer_slice = resolve_company_peer_slice(selected_row, artifacts.peer_percentiles)
-    industry_latest_row = resolve_industry_latest_row(selected_row, artifacts.industry_latest_summary)
+    industry_latest_row = resolve_industry_latest_row(
+        selected_row, artifacts.industry_latest_summary
+    )
 
     overview_tab, report_tab, drivers_tab, peers_tab, industry_tab, scenario_tab = st.tabs(
         ["개요", "AI 심사 요약", "주요 요인", "동종업계 비교", "산업 집계", "시나리오"]
     )
 
     with overview_tab:
-        render_overview_tab(selected_row, prediction_row, artifacts.model_summary, feature_map, artifacts)
+        render_overview_tab(
+            selected_row, prediction_row, artifacts.model_summary, feature_map, artifacts
+        )
     with report_tab:
         render_llm_panel(
             selected_row=selected_row,
