@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import re
+from collections.abc import Callable
 from html import escape
 from pathlib import Path
 from typing import cast
@@ -107,11 +108,15 @@ FEATURE_DIRECTION_LABELS = {
 }
 
 
-@st.cache_data(show_spinner=False)
-def cached_load_dashboard_artifacts(artifact_dir: str | None = None) -> DashboardArtifacts:
+def _load_dashboard_artifacts_cached(artifact_dir: str | None = None) -> DashboardArtifacts:
     """Cache dashboard artifact loading for Streamlit."""
     path = Path(artifact_dir) if artifact_dir else None
     return load_dashboard_artifacts(path)
+
+
+cached_load_dashboard_artifacts: Callable[[str | None], DashboardArtifacts] = st.cache_data(
+    show_spinner=False
+)(_load_dashboard_artifacts_cached)
 
 
 def to_market_label(value: object) -> str:
