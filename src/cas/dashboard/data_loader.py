@@ -1,4 +1,4 @@
-"""Load TS2000 dashboard artifacts for the Streamlit MVP."""
+"""Load dashboard artifacts for the Streamlit MVP."""
 
 from __future__ import annotations
 
@@ -10,7 +10,8 @@ import pandas as pd
 from cas.utils.io import read_json
 
 ROOT = Path(__file__).resolve().parents[3]
-DEFAULT_ARTIFACT_DIR = ROOT / "data" / "outputs" / "dashboard" / "ts2000_core29_mvp"
+FEATURE43_ARTIFACT_DIR = ROOT / "data" / "outputs" / "dashboard" / "feature_43_mvp"
+DEFAULT_ARTIFACT_DIR = FEATURE43_ARTIFACT_DIR
 
 
 @dataclass(slots=True)
@@ -45,28 +46,28 @@ def load_dashboard_artifacts(artifact_dir: Path | None = None) -> DashboardArtif
     """Load dashboard artifacts from disk."""
     base_dir = artifact_dir or DEFAULT_ARTIFACT_DIR
 
-    company_universe = pd.read_csv(base_dir / "company_universe_core29.csv", encoding="utf-8-sig")
-    company_latest = pd.read_csv(base_dir / "company_latest_core29.csv", encoding="utf-8-sig")
-    peer_percentiles = pd.read_csv(base_dir / "peer_percentiles_core29.csv", encoding="utf-8-sig")
+    company_universe = pd.read_csv(base_dir / "company_universe.csv", encoding="utf-8-sig")
+    company_latest = pd.read_csv(base_dir / "company_latest.csv", encoding="utf-8-sig")
+    peer_percentiles = pd.read_csv(base_dir / "peer_percentiles.csv", encoding="utf-8-sig")
     feature_dictionary = pd.read_csv(
-        base_dir / "feature_dictionary_core29.csv",
+        base_dir / "feature_dictionary.csv",
         encoding="utf-8-sig",
     )
     global_shap_reference = pd.read_csv(
-        base_dir / "global_shap_reference_core29.csv",
+        base_dir / "global_shap_reference.csv",
         encoding="utf-8-sig",
     )
 
-    scenario_presets = read_json(base_dir / "scenario_presets_core29.json")
-    llm_payload_template = read_json(base_dir / "llm_payload_template_core29.json")
-    model_summary = read_json(base_dir / "model_summary_core29.json")
+    scenario_presets = read_json(base_dir / "scenario_presets.json")
+    llm_payload_template = read_json(base_dir / "llm_payload_template.json")
+    model_summary = read_json(base_dir / "model_summary.json")
     export_manifest = read_json(base_dir / "dashboard_export_manifest.json")
 
-    prediction_scores = _read_optional_csv(base_dir / "prediction_scores_core29.csv")
-    local_shap = _read_optional_csv(base_dir / "local_shap_core29.csv")
-    industry_year_summary = _read_optional_csv(base_dir / "industry_year_summary_core29.csv")
-    industry_latest_summary = _read_optional_csv(base_dir / "industry_latest_summary_core29.csv")
-    industry_shap_summary = _read_optional_csv(base_dir / "industry_shap_summary_core29.csv")
+    prediction_scores = _read_optional_csv(base_dir / "prediction_scores.csv")
+    local_shap = _read_optional_csv(base_dir / "local_shap.csv")
+    industry_year_summary = _read_optional_csv(base_dir / "industry_year_summary.csv")
+    industry_latest_summary = _read_optional_csv(base_dir / "industry_latest_summary.csv")
+    industry_shap_summary = _read_optional_csv(base_dir / "industry_shap_summary.csv")
 
     return DashboardArtifacts(
         artifact_dir=base_dir,

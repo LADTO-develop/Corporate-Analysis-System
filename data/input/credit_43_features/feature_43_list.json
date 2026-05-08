@@ -1,5 +1,5 @@
 {
-  "source": "C:\\Bootcamp\\project\\risklens_project\\CSV\\TS2000_Credit_Model_Dataset_Model_V1.csv",
+  "source": "legacy_credit_model_dataset.csv",
   "target": "is_speculative",
   "split_rule": "train fiscal_year <= 2021, valid fiscal_year == 2022, test fiscal_year >= 2023",
   "design_note": "Based on selected29, with added cash-flow coverage and distress flags; removed broad absolute-level and low-gain macro variables from Best Hybrid v1.",

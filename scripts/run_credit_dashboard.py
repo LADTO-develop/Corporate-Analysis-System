@@ -1,4 +1,4 @@
-"""Convenience launcher for the TS2000 Streamlit dashboard."""
+"""Convenience launcher for the credit risk Streamlit dashboard."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from pathlib import Path
 
 
 def main() -> None:
-    """Run the TS2000 dashboard with Streamlit if available."""
+    """Run the credit risk dashboard with Streamlit if available."""
     try:
         from streamlit.web import cli as stcli
     except ImportError as error:
@@ -18,7 +18,7 @@ def main() -> None:
         )
         raise SystemExit(message) from error
 
-    app_path = Path(__file__).resolve().parents[1] / "src" / "cas" / "dashboard" / "ts2000_app.py"
+    app_path = Path(__file__).resolve().parents[1] / "src" / "cas" / "dashboard" / "credit_app.py"
     sys.argv = ["streamlit", "run", str(app_path)]
     sys.exit(stcli.main())
 
