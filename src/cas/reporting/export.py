@@ -1,4 +1,4 @@
-"""Render a final report from ``AgentState``."""
+"""Render a final markdown report from the strict dashboard response."""
 
 from __future__ import annotations
 
@@ -10,100 +10,86 @@ from cas.reporting.audit_trail import to_markdown as audit_to_md
 
 
 def render_report(state: AgentState | dict[str, Any]) -> dict[str, Any]:
-    """Build a structured report from the final agent state."""
+    """Build a markdown companion for the validated response JSON."""
     s = dict(state)
-    company_id = s.get("company_id", "?")
-    company_name = s.get("company_name", company_id)
-    market = s.get("market", "?")
-    analysis_year = s.get("analysis_year", "?")
-    recommendation = s.get("final_recommendation", "review")
-    confidence = float(s.get("final_confidence", 0.0) or 0.0)
-    overall_score = float(s.get("overall_score", 0.0) or 0.0)
-    insufficient = bool(s.get("insufficient_data", False))
-
-    base_assessments = s.get("base_assessments") or {}
-    market_overlay = s.get("market_overlay") or {}
-    qualitative_overlay = s.get("news_overlay") or {}
-    reviews = s.get("committee_reviews") or []
+    response = dict(s.get("response_json") or _fallback_response(s))
+    company = dict(response.get("company_overview") or {})
+    model_result = dict(response.get("model_result") or {})
+    news = dict(response.get("news_analysis") or {})
+    agent_summary = dict(response.get("agent_summary") or {})
     audit = s.get("audit") or []
+    schema_errors = [str(error) for error in s.get("json_schema_errors", [])]
 
     md_lines = [
-        f"# Corporate Review: {company_name}",
+        f"# Corporate Review: {company.get('company_name', s.get('company_id', '?'))}",
         "",
-        f"- **Company ID**: `{company_id}`",
-        f"- **Market**: {market}",
-        f"- **Analysis Year**: {analysis_year}",
+        f"- **Company ID**: `{company.get('company_id', s.get('company_id', '?'))}`",
+        f"- **Market**: {company.get('market', '?')}",
+        f"- **Analysis Year**: {company.get('analysis_year', '?')}",
         (
             f"- **Generated At**: "
             f"{datetime.now(UTC).isoformat(timespec='seconds').replace('+00:00', 'Z')}"
         ),
         "",
+        "## Dashboard JSON",
+        "",
+        f"- **Recommendation**: `{agent_summary.get('final_recommendation', 'review')}`",
+        f"- **Confidence**: {float(agent_summary.get('final_confidence', 0.0) or 0.0):.3f}",
+        f"- **Risk Band**: `{model_result.get('risk_band', 'insufficient_data')}`",
+        (
+            f"- **Speculative Probability**: "
+            f"{float(model_result.get('probability_speculative', 0.0) or 0.0):.3f}"
+        ),
+        "",
+        "## Model Result",
+        "",
+        f"- **Model**: {model_result.get('model_name', 'n/a')} "
+        f"({model_result.get('model_version', 'n/a')})",
+        f"- **Prediction Label**: `{model_result.get('prediction_label', 'unknown')}`",
+        f"- **Rule Label**: `{model_result.get('rule_label', 'unknown')}`",
+        "",
+        "### Top Drivers",
+        "",
     ]
 
-    if insufficient:
-        md_lines += [
-            "## Analysis Deferred",
-            "",
-            "The profile is missing required inputs, so a full recommendation was not produced.",
-            "",
-        ]
+    drivers = model_result.get("top_drivers", []) or []
+    if drivers:
+        for driver in drivers:
+            md_lines.append(f"- `{driver.get('name', '')}`: {float(driver.get('value', 0.0)):.3f}")
     else:
-        md_lines += [
-            "## Final Recommendation",
-            "",
-            f"- **Recommendation**: `{recommendation}`",
-            f"- **Confidence**: {confidence:.3f}",
-            f"- **Overall Score**: {overall_score:.3f}",
-            "",
-            "## Base Assessments",
-            "",
-        ]
-        for name, assessment in base_assessments.items():
-            score = (
-                assessment.get("score")
-                if isinstance(assessment, dict)
-                else getattr(assessment, "score", None)
-            )
-            summary = (
-                assessment.get("summary")
-                if isinstance(assessment, dict)
-                else getattr(assessment, "summary", "")
-            )
-            md_lines.append(
-                f"- `{name}`: {score:.3f} - {summary}" if score is not None else f"- `{name}`: n/a"
-            )
+        md_lines.append("_(No model drivers)_")
+    md_lines += [
+        "",
+        "## News Analysis",
+        "",
+        f"- **Status**: `{news.get('status', 'not_implemented')}`",
+        f"- **Summary**: {news.get('summary', '')}",
+        "",
+    ]
+
+    md_lines += [
+        "## Agent Summary",
+        "",
+        str(agent_summary.get("synthesis", "")),
+        "",
+    ]
+    agents = dict(agent_summary.get("agents") or {})
+    if agents:
+        md_lines += ["| Agent | Confidence | Summary |", "|---|---:|---|"]
+        for role, payload in agents.items():
+            payload_dict = dict(payload)
+            summary = str(payload_dict.get("summary", "")).replace("|", r"\|")
+            confidence = float(payload_dict.get("confidence", 0.0) or 0.0)
+            md_lines.append(f"| `{role}` | {confidence:.3f} | {summary} |")
         md_lines.append("")
 
+    if schema_errors:
         md_lines += [
-            "## Context Adjustments",
+            "## Schema Errors",
             "",
-            (
-                f"- **Market**: "
-                f"{market_overlay.get('adjustment', 0.0):+.3f} - "
-                f"{market_overlay.get('rationale', '')}"
-            ),
-            (
-                f"- **Qualitative**: "
-                f"{qualitative_overlay.get('adjustment', 0.0):+.3f} - "
-                f"{qualitative_overlay.get('rationale', '')}"
-            ),
-            "",
-            "## Committee Reviews",
+            *[f"- {error}" for error in schema_errors],
             "",
         ]
-        if not reviews:
-            md_lines.append("_(No committee reviews)_")
-        else:
-            md_lines.append("| Perspective | Recommendation | Confidence | Rationale |")
-            md_lines.append("|---|---|---|---|")
-            for review in reviews:
-                review_dict = review if isinstance(review, dict) else review.model_dump()
-                md_lines.append(
-                    f"| {review_dict.get('perspective', '')} | "
-                    f"`{review_dict.get('recommendation', '')}` | {float(review_dict.get('confidence', 0.0)):.3f} | "
-                    f"{str(review_dict.get('rationale', '')).replace('|', chr(92) + '|')} |"
-                )
-        md_lines.append("")
 
     md_lines += [
         "## Audit Trail",
@@ -114,24 +100,36 @@ def render_report(state: AgentState | dict[str, Any]) -> dict[str, Any]:
         "_This report is a decision-support artifact, not an automatic investment decision._",
     ]
 
+    return {**response, "markdown": "\n".join(md_lines)}
+
+
+def _fallback_response(state: dict[str, Any]) -> dict[str, Any]:
+    company_id = str(state.get("company_id", "unknown"))
     return {
-        "company_id": company_id,
-        "company_name": company_name,
-        "market": market,
-        "analysis_year": analysis_year,
-        "final_recommendation": recommendation,
-        "final_confidence": confidence,
-        "overall_score": overall_score,
-        "insufficient_data": insufficient,
-        "base_assessments": {
-            key: (value if isinstance(value, dict) else value.model_dump())
-            for key, value in base_assessments.items()
+        "company_overview": {
+            "company_id": company_id,
+            "company_name": str(state.get("company_name", company_id)),
+            "market": str(state.get("market", "UNKNOWN")),
+            "analysis_year": int(state.get("analysis_year", 0) or 0),
+            "summary": "",
         },
-        "market_overlay": market_overlay,
-        "news_overlay": qualitative_overlay,
-        "committee_reviews": [
-            (review if isinstance(review, dict) else review.model_dump()) for review in reviews
-        ],
-        "audit": [(entry if isinstance(entry, dict) else entry.model_dump()) for entry in audit],
-        "markdown": "\n".join(md_lines),
+        "model_result": {
+            "model_name": "xgboost_realtime",
+            "model_version": "unavailable",
+            "prediction_label": "unknown",
+            "risk_band": "insufficient_data",
+            "probability_speculative": 0.0,
+            "top_drivers": [],
+            "rule_label": "insufficient_data",
+        },
+        "news_analysis": {
+            "status": "not_implemented",
+            "summary": "No response JSON was generated.",
+        },
+        "agent_summary": {
+            "final_recommendation": str(state.get("final_recommendation", "review")),
+            "final_confidence": float(state.get("final_confidence", 0.0) or 0.0),
+            "synthesis": "No agent summary was generated.",
+            "agents": {},
+        },
     }

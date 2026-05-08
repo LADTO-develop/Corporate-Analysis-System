@@ -1,105 +1,153 @@
-"""Run deterministic multi-perspective review and produce a recommendation."""
+"""Run role-fixed Agno-style agents and synthesize the service response."""
 
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, cast
 
 from cas.agents.state import (
+    AgentOutput,
     AgentState,
     AuditEntry,
     CommitteeReview,
     Recommendation,
 )
-from cas.utils.io import read_yaml
 
 
 def run(state: AgentState) -> dict[str, Any]:
-    """Run the committee, aggregate reviews, and set the final recommendation."""
-    cfg = read_yaml("configs/agent/committee.yaml")
-    features = dict(state.get("normalized_features") or {})
-    features["qualitative_adjustment"] = float(
-        (state.get("news_overlay") or {}).get("adjustment", 0.0)
+    """Run deterministic role agents over model, news, and rule-engine outputs."""
+    xgb = dict(state.get("xgboost_result") or {})
+    rule = dict(state.get("rule_result") or {})
+
+    recommendation = cast(
+        Recommendation,
+        rule.get("recommendation") or state.get("final_recommendation") or "review",
     )
-    overall_score = float(state.get("overall_score", 0.0))
-
-    reviews: list[CommitteeReview] = []
-    for spec in cfg["perspectives"]:
-        perspective = str(spec["kind"])
-        focus_metrics = list(spec.get("focus_metrics", []))
-        focus_score = _mean([float(features.get(metric, 0.5)) for metric in focus_metrics])
-        blended_score = round((overall_score * 0.6) + (focus_score * 0.4), 4)
-        recommendation = _recommendation_from_score(
-            blended_score,
-            cfg["aggregation"]["recommendation_thresholds"],
+    confidence = round(float(rule.get("confidence", state.get("final_confidence", 0.0)) or 0.0), 4)
+    agents = [
+        _news_summary_agent(),
+        _model_interpretation_agent(xgb),
+        _risk_review_agent(rule),
+        _synthesis_format_agent(rule, recommendation, confidence),
+    ]
+    reviews = [
+        CommitteeReview(
+            perspective=agent.role,
+            recommendation=recommendation,
+            confidence=agent.confidence,
+            rationale=agent.summary,
         )
-        reviews.append(
-            CommitteeReview(
-                perspective=perspective,
-                recommendation=recommendation,
-                confidence=round(abs(blended_score - 0.5) * 2, 4),
-                rationale=_build_rationale(
-                    perspective,
-                    focus_metrics,
-                    features,
-                    blended_score,
-                ),
-            )
-        )
+        for agent in agents
+    ]
+    agent_summary = {
+        "final_recommendation": recommendation,
+        "final_confidence": confidence,
+        "synthesis": agents[-1].summary,
+        "agents": {
+            agent.role: {
+                "summary": agent.summary,
+                "findings": agent.findings,
+                "confidence": agent.confidence,
+            }
+            for agent in agents
+        },
+    }
 
-    recommendation, confidence = _aggregate(reviews, cfg)
     audit = AuditEntry(
-        node="committee",
+        node="agno_agents",
         timestamp=_now(),
         summary=(
-            f"Committee recommendation={recommendation} "
-            f"(confidence={confidence:.3f}) from {len(reviews)} reviews"
+            "Agno role-fixed agents completed: "
+            f"{', '.join(agent.role for agent in agents)}"
         ),
-        metrics={"final_confidence": confidence, "n_reviews": float(len(reviews))},
+        metrics={"n_agents": float(len(agents)), "final_confidence": confidence},
     )
     return {
+        "agent_outputs": agents,
         "committee_reviews": reviews,
+        "agent_summary": agent_summary,
         "final_recommendation": recommendation,
         "final_confidence": confidence,
         "audit": [audit],
     }
 
 
-def _aggregate(
-    reviews: list[CommitteeReview],
-    cfg: dict[str, Any],
-) -> tuple[Recommendation, float]:
-    if not reviews:
-        return "review", 0.0
+def _news_summary_agent() -> AgentOutput:
+    summary = "News/crawling analysis is reserved for a future integration."
+    return AgentOutput(
+        role="news_summary",
+        summary=summary,
+        findings=["No crawling implementation is active in this node."],
+        confidence=0.0,
+    )
 
-    perspectives = cfg["perspectives"]
-    aggregation = cfg["aggregation"]
-    weights = {str(spec["kind"]): float(spec.get("weight", 0.25)) for spec in perspectives}
-    scores: dict[Recommendation, float] = {
-        "priority": 0.0,
-        "watch": 0.0,
-        "review": 0.0,
-        "defer": 0.0,
-    }
-    total_weight = 0.0
-    for review in reviews:
-        weight = weights.get(review.perspective, 0.25) * review.confidence
-        scores[review.recommendation] += weight
-        total_weight += weight
 
-    if total_weight > 0:
-        for key in scores:
-            scores[key] /= total_weight
+def _model_interpretation_agent(xgb: dict[str, Any]) -> AgentOutput:
+    probability = float(xgb.get("probability_speculative", 0.0) or 0.0)
+    drivers = [f"{name}={value:.3f}" for name, value in _driver_pairs(xgb)]
+    summary = (
+        f"Model registry result is {xgb.get('prediction_label', 'unknown')} "
+        f"with speculative probability={probability:.3f}."
+    )
+    return AgentOutput(
+        role="model_interpretation",
+        summary=summary,
+        findings=drivers or ["No model drivers were available."],
+        confidence=0.8 if xgb else 0.4,
+    )
 
-    ordered = sorted(scores.items(), key=lambda item: item[1], reverse=True)
-    best, best_score = ordered[0]
-    runner_up_score = ordered[1][1] if len(ordered) > 1 else 0.0
-    confidence_gap = float(aggregation["confidence_gap"])
-    confidence = max(0.0, min(1.0, best_score - runner_up_score + confidence_gap))
-    return best, round(confidence, 4)
+
+def _risk_review_agent(rule: dict[str, Any]) -> AgentOutput:
+    reasons = [str(reason) for reason in rule.get("reasons", [])]
+    flags = [str(flag) for flag in rule.get("blocking_flags", [])]
+    risk_band = str(rule.get("risk_band", "insufficient_data"))
+    summary = f"Rule engine assigned risk_band={risk_band} with {len(flags)} blocking flag(s)."
+    return AgentOutput(
+        role="risk_review",
+        summary=summary,
+        findings=[*reasons[:3], *(f"flag:{flag}" for flag in flags[:2])]
+        or ["No rule-engine reasons were available."],
+        confidence=float(rule.get("confidence", 0.5) or 0.5),
+    )
+
+
+def _synthesis_format_agent(
+    rule: dict[str, Any],
+    recommendation: Recommendation,
+    confidence: float,
+) -> AgentOutput:
+    label = str(rule.get("label", "unclassified"))
+    summary = (
+        f"Final service response is recommendation={recommendation}, "
+        f"confidence={confidence:.3f}, label={label}."
+    )
+    return AgentOutput(
+        role="synthesis_format",
+        summary=summary,
+        findings=[
+            "Response will be emitted through the strict dashboard JSON schema.",
+            "Model result and explanatory agent text remain separated.",
+        ],
+        confidence=max(0.5, confidence),
+    )
+
+
+def _driver_pairs(xgb: dict[str, Any]) -> list[tuple[str, float]]:
+    pairs: list[tuple[str, float]] = []
+    for item in xgb.get("top_drivers", []) or []:
+        if isinstance(item, dict):
+            name = str(item.get("name", item.get("feature", "")))
+            value = float(item.get("value", item.get("score", 0.0)) or 0.0)
+        else:
+            name = str(item[0])
+            value = float(item[1])
+        if name:
+            pairs.append((name, value))
+    return pairs
 
 
 def _recommendation_from_score(score: float, thresholds: dict[str, float]) -> Recommendation:
+    """Map a numeric suitability score to the legacy recommendation buckets."""
     if score >= float(thresholds["priority"]):
         return "priority"
     if score >= float(thresholds["watch"]):
@@ -107,22 +155,6 @@ def _recommendation_from_score(score: float, thresholds: dict[str, float]) -> Re
     if score >= float(thresholds["review"]):
         return "review"
     return "defer"
-
-
-def _build_rationale(
-    perspective: str,
-    focus_metrics: list[str],
-    features: dict[str, float],
-    blended_score: float,
-) -> str:
-    preview = ", ".join(f"{metric}={features.get(metric, 0.5):.2f}" for metric in focus_metrics[:3])
-    return f"{perspective} lens reviewed {preview}; blended score={blended_score:.2f}."
-
-
-def _mean(values: list[float]) -> float:
-    if not values:
-        return 0.5
-    return round(sum(values) / len(values), 4)
 
 
 def _now() -> str:

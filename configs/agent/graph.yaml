@@ -4,39 +4,43 @@ nodes:
   - name: "data"
     module: "cas.agents.nodes.data_node"
     fn: "run"
-  - name: "feature"
+  - name: "feature_store"
     module: "cas.agents.nodes.feature_node"
     fn: "run"
-  - name: "base_prediction"
-    module: "cas.agents.nodes.base_prediction_node"
-    fn: "run"
-  - name: "market_context"
-    module: "cas.agents.nodes.macro_overlay_node"
-    fn: "run"
-  - name: "qualitative_context"
+  - name: "news_cache"
     module: "cas.agents.nodes.news_overlay_node"
     fn: "run"
-  - name: "committee"
+  - name: "xgboost_inference"
+    module: "cas.agents.nodes.base_prediction_node"
+    fn: "run"
+  - name: "rule_engine"
+    module: "cas.agents.nodes.rule_engine_node"
+    fn: "run"
+  - name: "agno_agents"
     module: "cas.agents.nodes.committee_node"
+    fn: "run"
+  - name: "json_schema"
+    module: "cas.agents.nodes.schema_node"
     fn: "run"
   - name: "report"
     module: "cas.agents.nodes.report_node"
     fn: "run"
 
 edges:
-  - [data, feature]
-  - [feature, base_prediction]
-  - [base_prediction, market_context]
-  - [market_context, qualitative_context]
-  - [qualitative_context, committee]
-  - [committee, report]
+  - [data, feature_store]
+  - [feature_store, news_cache]
+  - [news_cache, xgboost_inference]
+  - [xgboost_inference, rule_engine]
+  - [rule_engine, agno_agents]
+  - [agno_agents, json_schema]
+  - [json_schema, report]
 
 conditional_edges:
   data:
     condition_fn: "cas.agents.nodes.data_node:has_enough_data"
     mapping:
-      "enough": "feature"
-      "insufficient": "report"
+      "enough": "feature_store"
+      "insufficient": "json_schema"
 
 checkpointer:
   kind: "memory"

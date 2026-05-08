@@ -8,13 +8,20 @@ from pydantic import BaseModel, Field
 from typing_extensions import TypedDict
 
 Recommendation = Literal["priority", "watch", "review", "defer"]
+RiskBand = Literal["stable", "watch", "high_risk", "insufficient_data"]
 NodeName = Literal[
     "data",
     "feature",
+    "feature_store",
     "base_prediction",
+    "xgboost_inference",
     "market_overlay",
     "news_overlay",
+    "news_cache",
+    "rule_engine",
     "committee",
+    "agno_agents",
+    "json_schema",
     "report",
 ]
 
@@ -47,6 +54,29 @@ class OverlayAssessment(BaseModel):
     signals: dict[str, Any] = Field(default_factory=dict)
 
 
+class ModelResult(BaseModel):
+    """Realtime model inference result loaded from the model registry."""
+
+    model_name: str
+    model_version: str
+    probability_speculative: float = Field(ge=0.0, le=1.0)
+    prediction_label: str
+    risk_band: RiskBand
+    threshold: float
+    top_drivers: list[tuple[str, float]] = Field(default_factory=list)
+
+
+class RuleResult(BaseModel):
+    """Rule-engine decision layered on top of model inference."""
+
+    risk_band: RiskBand
+    label: str
+    recommendation: Recommendation
+    confidence: float = Field(ge=0.0, le=1.0)
+    reasons: list[str] = Field(default_factory=list)
+    blocking_flags: list[str] = Field(default_factory=list)
+
+
 class CommitteeReview(BaseModel):
     """One committee perspective reviewing the current candidate."""
 
@@ -54,6 +84,15 @@ class CommitteeReview(BaseModel):
     recommendation: Recommendation
     confidence: float = Field(ge=0.0, le=1.0)
     rationale: str = ""
+
+
+class AgentOutput(BaseModel):
+    """One role-fixed agent output in the Agno-style committee."""
+
+    role: Literal["news_summary", "model_interpretation", "risk_review", "synthesis_format"]
+    summary: str
+    findings: list[str] = Field(default_factory=list)
+    confidence: float = Field(ge=0.0, le=1.0)
 
 
 def append_audit(
@@ -67,6 +106,13 @@ def append_opinions(
     current: list[CommitteeReview] | None, new: list[CommitteeReview] | None
 ) -> list[CommitteeReview]:
     """Append-only reducer for committee reviews."""
+    return [*(current or []), *(new or [])]
+
+
+def append_agent_outputs(
+    current: list[AgentOutput] | None, new: list[AgentOutput] | None
+) -> list[AgentOutput]:
+    """Append-only reducer for role-fixed agent outputs."""
     return [*(current or []), *(new or [])]
 
 
@@ -88,15 +134,26 @@ class AgentState(TypedDict, total=False):
     company_profile: dict[str, Any]
     raw_financials: dict[str, Any]
     normalized_features: dict[str, float]
+    processed_company: dict[str, Any]
+    processed_company_list_ref: str
+    feature_store_snapshot: dict[str, Any]
+    news_cache_snapshot: dict[str, Any]
+    model_registry_ref: dict[str, Any]
 
     base_assessments: Annotated[dict[str, BaseAssessment], merge_dict]
     market_overlay: OverlayAssessment
     news_overlay: OverlayAssessment
     overall_score: float
+    xgboost_result: ModelResult
+    rule_result: RuleResult
 
     committee_reviews: Annotated[list[CommitteeReview], append_opinions]
+    agent_outputs: Annotated[list[AgentOutput], append_agent_outputs]
+    agent_summary: dict[str, Any]
     final_recommendation: Recommendation
     final_confidence: float
+    response_json: dict[str, Any]
+    json_schema_errors: list[str]
 
     audit: Annotated[list[AuditEntry], append_audit]
     artifacts: Annotated[dict[str, str], merge_dict]
@@ -104,13 +161,18 @@ class AgentState(TypedDict, total=False):
 
 
 __all__ = [
+    "AgentOutput",
     "AgentState",
     "AuditEntry",
     "BaseAssessment",
     "CommitteeReview",
+    "ModelResult",
     "NodeName",
     "OverlayAssessment",
     "Recommendation",
+    "RiskBand",
+    "RuleResult",
+    "append_agent_outputs",
     "append_audit",
     "append_opinions",
     "merge_dict",

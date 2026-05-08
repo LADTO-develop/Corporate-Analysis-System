@@ -1,4 +1,4 @@
-"""Normalize raw profile inputs into reusable feature scores."""
+"""Load the selected company's feature-store snapshot."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from cas.utils.io import read_yaml
 
 
 def run(state: AgentState) -> dict[str, Any]:
-    """Compute normalized feature scores for downstream lenses."""
+    """Compute a local feature-store snapshot for downstream realtime inference."""
     cfg = read_yaml("configs/runtime/analysis.yaml")
     financials = state.get("raw_financials") or {}
     profile = state.get("company_profile") or {}
@@ -19,7 +19,7 @@ def run(state: AgentState) -> dict[str, Any]:
 
     if not financials:
         audit = AuditEntry(
-            node="feature",
+            node="feature_store",
             timestamp=_now(),
             summary="No financial inputs in state; skipping feature computation.",
         )
@@ -60,12 +60,28 @@ def run(state: AgentState) -> dict[str, Any]:
     }
 
     audit = AuditEntry(
-        node="feature",
+        node="feature_store",
         timestamp=_now(),
-        summary=f"Computed {len(features)} normalized features",
+        summary=f"Loaded feature-store snapshot with {len(features)} normalized features",
         metrics={"n_features": float(len(features))},
     )
-    return {"normalized_features": features, "audit": [audit]}
+    model_registry = cfg.get("model_registry", {})
+    return {
+        "normalized_features": features,
+        "feature_store_snapshot": {
+            "store_name": "local_feature_store",
+            "company_id": state.get("company_id"),
+            "analysis_year": state.get("analysis_year", 0),
+            "features": features,
+            "source": state.get("processed_company_list_ref", "data/input/companies"),
+        },
+        "model_registry_ref": {
+            "registry_name": model_registry.get("registry_name", "local_model_registry"),
+            "active_model": model_registry.get("active_model", "xgboost_realtime"),
+            "model_version": model_registry.get("model_version", "local-deterministic"),
+        },
+        "audit": [audit],
+    }
 
 
 def _score(value: Any, spec: dict[str, Any]) -> float:

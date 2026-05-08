@@ -132,9 +132,9 @@ class _FallbackGraph:
 def _merge_state(current: AgentState, updates: dict[str, Any]) -> AgentState:
     merged = dict(current)
     for key, value in updates.items():
-        if key in {"audit", "committee_reviews"}:
+        if key in {"audit", "committee_reviews", "agent_outputs"}:
             merged[key] = [*(merged.get(key) or []), *(value or [])]
-        elif key in {"base_assessments", "artifacts"}:
+        elif key in {"base_assessments", "artifacts", "agent_summary"}:
             existing = dict(merged.get(key) or {})
             existing.update(value or {})
             merged[key] = existing
@@ -160,6 +160,8 @@ def run_once(
         "analysis_year": analysis_year or 0,
         "base_assessments": {},
         "committee_reviews": [],
+        "agent_outputs": [],
+        "agent_summary": {},
         "audit": [],
         "artifacts": {},
         "insufficient_data": False,

@@ -56,4 +56,13 @@ class TestGraphBuild:
         state = run_once(company_id="sample-company")
         assert state["company_name"] == "Sample Components"
         assert state["final_recommendation"] in {"priority", "watch", "review", "defer"}
+        assert state["response_json"].keys() == {
+            "company_overview",
+            "model_result",
+            "news_analysis",
+            "agent_summary",
+        }
+        assert state["json_schema_errors"] == []
+        assert state["response_json"]["model_result"]["model_name"] == "xgboost_realtime"
+        assert "news_summary" in state["response_json"]["agent_summary"]["agents"]
         assert "report_md" in state["artifacts"]

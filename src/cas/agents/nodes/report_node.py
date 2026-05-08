@@ -18,10 +18,11 @@ def run(state: AgentState) -> dict[str, Any]:
     ensure_dir(report_dir)
 
     payload = render_report(state)
+    response_json = state.get("response_json") or payload
     json_path = report_dir / "latest.json"
     md_path = report_dir / "latest.md"
 
-    write_json(payload, json_path)
+    write_json(response_json, json_path)
     md_path.write_text(payload["markdown"], encoding="utf-8")
 
     audit = AuditEntry(
