@@ -1,0 +1,4 @@
+﻿split,rows,positive_count,negative_count,positive_rate,fiscal_year_min,fiscal_year_max,raw_selected_feature_count,model_feature_count,missing_cells,missing_rate
+train,3822,873,2949,0.22841444270015698,2014,2021,34,43,11974,0.07285848149635525
+valid,676,176,500,0.2603550295857988,2022,2022,34,43,1920,0.06605201596257053
+test,668,166,502,0.24850299401197604,2023,2024,34,43,1869,0.0650675393399248

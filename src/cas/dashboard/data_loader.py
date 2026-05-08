@@ -1,4 +1,4 @@
-"""Load TS2000 dashboard artifacts for the Streamlit MVP."""
+"""Load dashboard artifacts for the Streamlit MVP."""
 
 from __future__ import annotations
 
@@ -10,8 +10,8 @@ import pandas as pd
 from cas.utils.io import read_json
 
 ROOT = Path(__file__).resolve().parents[3]
-TEAM43_ARTIFACT_DIR = ROOT / "data" / "outputs" / "dashboard" / "ts2000_43_model_ready_mvp"
-DEFAULT_ARTIFACT_DIR = TEAM43_ARTIFACT_DIR
+FEATURE43_ARTIFACT_DIR = ROOT / "data" / "outputs" / "dashboard" / "feature_43_mvp"
+DEFAULT_ARTIFACT_DIR = FEATURE43_ARTIFACT_DIR
 
 
 @dataclass(slots=True)
