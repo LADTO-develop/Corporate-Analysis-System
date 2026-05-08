@@ -1,0 +1,346 @@
+{
+  "source": "C:\\Bootcamp\\project\\risklens_project\\CSV\\TS2000_Credit_Model_Dataset_Model_V1.csv",
+  "target": "is_speculative",
+  "split_rule": "train fiscal_year <= 2021, valid fiscal_year == 2022, test fiscal_year >= 2023",
+  "design_note": "Based on selected29, with added cash-flow coverage and distress flags; removed broad absolute-level and low-gain macro variables from Best Hybrid v1.",
+  "raw_selected_feature_count": 34,
+  "model_feature_count_after_one_hot": 43,
+  "categorical_one_hot_columns": [
+    "market",
+    "firm_size_group",
+    "industry_macro_category"
+  ],
+  "selected_source_features": [
+    "market",
+    "listed_year",
+    "firm_size_group",
+    "industry_macro_category",
+    "current_ratio",
+    "cash_ratio",
+    "assets_total",
+    "equity_ratio",
+    "debt_ratio",
+    "total_borrowings_ratio",
+    "capital_impairment_ratio",
+    "net_margin",
+    "gross_profit",
+    "interest_coverage_ratio",
+    "pretax_roa",
+    "operating_roa",
+    "pretax_roe",
+    "ocf_to_total_liabilities",
+    "ocf_to_total_borrowings",
+    "ocf_to_sales",
+    "cashflow_coverage_ratio",
+    "accruals_ratio",
+    "depreciation",
+    "intangible_assets_ratio",
+    "total_debt_turnover",
+    "dividend_payer",
+    "market_to_book",
+    "spec_spread",
+    "short_term_borrowings_share",
+    "total_assets_growth",
+    "net_margin_diff",
+    "is_2y_consecutive_ocf_deficit",
+    "icr_under_1",
+    "is_2y_consecutive_operating_loss"
+  ],
+  "model_features": [
+    "listed_year",
+    "current_ratio",
+    "cash_ratio",
+    "assets_total",
+    "equity_ratio",
+    "debt_ratio",
+    "total_borrowings_ratio",
+    "capital_impairment_ratio",
+    "net_margin",
+    "gross_profit",
+    "interest_coverage_ratio",
+    "pretax_roa",
+    "operating_roa",
+    "pretax_roe",
+    "ocf_to_total_liabilities",
+    "ocf_to_total_borrowings",
+    "ocf_to_sales",
+    "cashflow_coverage_ratio",
+    "accruals_ratio",
+    "depreciation",
+    "intangible_assets_ratio",
+    "total_debt_turnover",
+    "dividend_payer",
+    "market_to_book",
+    "spec_spread",
+    "short_term_borrowings_share",
+    "total_assets_growth",
+    "net_margin_diff",
+    "is_2y_consecutive_ocf_deficit",
+    "icr_under_1",
+    "is_2y_consecutive_operating_loss",
+    "market_KOSDAQ",
+    "market_KOSPI",
+    "firm_size_group_large",
+    "firm_size_group_mid_sized",
+    "firm_size_group_other",
+    "firm_size_group_small_and_medium",
+    "industry_macro_category_construction",
+    "industry_macro_category_it_services",
+    "industry_macro_category_manufacturing",
+    "industry_macro_category_other",
+    "industry_macro_category_transport_storage",
+    "industry_macro_category_wholesale_retail"
+  ],
+  "feature_metadata": [
+    {
+      "feature_group": "context",
+      "source_feature": "market",
+      "model_features": [
+        "market_to_book",
+        "market_KOSDAQ",
+        "market_KOSPI"
+      ]
+    },
+    {
+      "feature_group": "context",
+      "source_feature": "listed_year",
+      "model_features": [
+        "listed_year"
+      ]
+    },
+    {
+      "feature_group": "context",
+      "source_feature": "firm_size_group",
+      "model_features": [
+        "firm_size_group_large",
+        "firm_size_group_mid_sized",
+        "firm_size_group_other",
+        "firm_size_group_small_and_medium"
+      ]
+    },
+    {
+      "feature_group": "context",
+      "source_feature": "industry_macro_category",
+      "model_features": [
+        "industry_macro_category_construction",
+        "industry_macro_category_it_services",
+        "industry_macro_category_manufacturing",
+        "industry_macro_category_other",
+        "industry_macro_category_transport_storage",
+        "industry_macro_category_wholesale_retail"
+      ]
+    },
+    {
+      "feature_group": "stability_leverage",
+      "source_feature": "current_ratio",
+      "model_features": [
+        "current_ratio"
+      ]
+    },
+    {
+      "feature_group": "stability_leverage",
+      "source_feature": "cash_ratio",
+      "model_features": [
+        "cash_ratio"
+      ]
+    },
+    {
+      "feature_group": "stability_leverage",
+      "source_feature": "assets_total",
+      "model_features": [
+        "assets_total"
+      ]
+    },
+    {
+      "feature_group": "stability_leverage",
+      "source_feature": "equity_ratio",
+      "model_features": [
+        "equity_ratio"
+      ]
+    },
+    {
+      "feature_group": "stability_leverage",
+      "source_feature": "debt_ratio",
+      "model_features": [
+        "debt_ratio"
+      ]
+    },
+    {
+      "feature_group": "stability_leverage",
+      "source_feature": "total_borrowings_ratio",
+      "model_features": [
+        "total_borrowings_ratio"
+      ]
+    },
+    {
+      "feature_group": "stability_leverage",
+      "source_feature": "capital_impairment_ratio",
+      "model_features": [
+        "capital_impairment_ratio"
+      ]
+    },
+    {
+      "feature_group": "profitability_returns",
+      "source_feature": "net_margin",
+      "model_features": [
+        "net_margin",
+        "net_margin_diff"
+      ]
+    },
+    {
+      "feature_group": "profitability_returns",
+      "source_feature": "gross_profit",
+      "model_features": [
+        "gross_profit"
+      ]
+    },
+    {
+      "feature_group": "profitability_returns",
+      "source_feature": "interest_coverage_ratio",
+      "model_features": [
+        "interest_coverage_ratio"
+      ]
+    },
+    {
+      "feature_group": "profitability_returns",
+      "source_feature": "pretax_roa",
+      "model_features": [
+        "pretax_roa"
+      ]
+    },
+    {
+      "feature_group": "profitability_returns",
+      "source_feature": "operating_roa",
+      "model_features": [
+        "operating_roa"
+      ]
+    },
+    {
+      "feature_group": "profitability_returns",
+      "source_feature": "pretax_roe",
+      "model_features": [
+        "pretax_roe"
+      ]
+    },
+    {
+      "feature_group": "cashflow_structure",
+      "source_feature": "ocf_to_total_liabilities",
+      "model_features": [
+        "ocf_to_total_liabilities"
+      ]
+    },
+    {
+      "feature_group": "cashflow_structure",
+      "source_feature": "ocf_to_total_borrowings",
+      "model_features": [
+        "ocf_to_total_borrowings"
+      ]
+    },
+    {
+      "feature_group": "cashflow_structure",
+      "source_feature": "ocf_to_sales",
+      "model_features": [
+        "ocf_to_sales"
+      ]
+    },
+    {
+      "feature_group": "cashflow_structure",
+      "source_feature": "cashflow_coverage_ratio",
+      "model_features": [
+        "cashflow_coverage_ratio"
+      ]
+    },
+    {
+      "feature_group": "cashflow_structure",
+      "source_feature": "accruals_ratio",
+      "model_features": [
+        "accruals_ratio"
+      ]
+    },
+    {
+      "feature_group": "cashflow_structure",
+      "source_feature": "depreciation",
+      "model_features": [
+        "depreciation"
+      ]
+    },
+    {
+      "feature_group": "cashflow_structure",
+      "source_feature": "intangible_assets_ratio",
+      "model_features": [
+        "intangible_assets_ratio"
+      ]
+    },
+    {
+      "feature_group": "cashflow_structure",
+      "source_feature": "total_debt_turnover",
+      "model_features": [
+        "total_debt_turnover"
+      ]
+    },
+    {
+      "feature_group": "market_shareholder",
+      "source_feature": "dividend_payer",
+      "model_features": [
+        "dividend_payer"
+      ]
+    },
+    {
+      "feature_group": "market_shareholder",
+      "source_feature": "market_to_book",
+      "model_features": [
+        "market_to_book"
+      ]
+    },
+    {
+      "feature_group": "macro",
+      "source_feature": "spec_spread",
+      "model_features": [
+        "spec_spread"
+      ]
+    },
+    {
+      "feature_group": "trend_early_warning",
+      "source_feature": "short_term_borrowings_share",
+      "model_features": [
+        "short_term_borrowings_share"
+      ]
+    },
+    {
+      "feature_group": "trend_early_warning",
+      "source_feature": "total_assets_growth",
+      "model_features": [
+        "total_assets_growth"
+      ]
+    },
+    {
+      "feature_group": "trend_early_warning",
+      "source_feature": "net_margin_diff",
+      "model_features": [
+        "net_margin_diff"
+      ]
+    },
+    {
+      "feature_group": "trend_early_warning",
+      "source_feature": "is_2y_consecutive_ocf_deficit",
+      "model_features": [
+        "is_2y_consecutive_ocf_deficit"
+      ]
+    },
+    {
+      "feature_group": "trend_early_warning",
+      "source_feature": "icr_under_1",
+      "model_features": [
+        "icr_under_1"
+      ]
+    },
+    {
+      "feature_group": "trend_early_warning",
+      "source_feature": "is_2y_consecutive_operating_loss",
+      "model_features": [
+        "is_2y_consecutive_operating_loss"
+      ]
+    }
+  ],
+  "blocking_missing_columns": []
+}
