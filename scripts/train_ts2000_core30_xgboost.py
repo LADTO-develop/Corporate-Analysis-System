@@ -15,8 +15,12 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SRC_ROOT = PROJECT_ROOT / "src"
 OUTPUTS_ROOT = PROJECT_ROOT.parent / "03_Outputs"
 
-DATASET_PATH = PROJECT_ROOT / "data" / "external" / "ts2000" / "TS2000_Credit_Model_Dataset_Model_V1.csv"
-CORE30_MANIFEST_PATH = PROJECT_ROOT / "data" / "external" / "ts2000" / "TS2000_Model_Core30_Manifest.json"
+DATASET_PATH = (
+    PROJECT_ROOT / "data" / "external" / "ts2000" / "TS2000_Credit_Model_Dataset_Model_V1.csv"
+)
+CORE30_MANIFEST_PATH = (
+    PROJECT_ROOT / "data" / "external" / "ts2000" / "TS2000_Model_Core30_Manifest.json"
+)
 DEFAULT_OUTPUT_DIR = OUTPUTS_ROOT / "modeling" / "core30_xgboost"
 
 
@@ -119,10 +123,20 @@ def load_project_helpers() -> tuple[
     from cas.utils.logging import configure_logging, get_logger
     from cas.utils.seeds import set_seeds
 
-    return ensure_dir, read_json, write_json, configure_logging, get_logger, export_global, set_seeds
+    return (
+        ensure_dir,
+        read_json,
+        write_json,
+        configure_logging,
+        get_logger,
+        export_global,
+        set_seeds,
+    )
 
 
-def load_ml_dependencies() -> tuple[Any, Any, Any, Any, MetricFn, MetricFn, MetricFn, MetricFn, Any]:
+def load_ml_dependencies() -> tuple[
+    Any, Any, Any, Any, MetricFn, MetricFn, MetricFn, MetricFn, Any
+]:
     """Import sklearn/xgboost lazily with a friendly error if missing."""
     try:
         from sklearn.compose import ColumnTransformer
@@ -136,10 +150,7 @@ def load_ml_dependencies() -> tuple[Any, Any, Any, Any, MetricFn, MetricFn, Metr
         from sklearn.preprocessing import OneHotEncoder
         from xgboost import XGBClassifier
     except ModuleNotFoundError as exc:  # pragma: no cover - runtime environment dependent
-        raise SystemExit(
-            "Missing ML dependency. Install with: "
-            'pip install -e ".[dev,ml]"'
-        ) from exc
+        raise SystemExit('Missing ML dependency. Install with: pip install -e ".[dev,ml]"') from exc
 
     return (
         ColumnTransformer,
@@ -175,7 +186,9 @@ def sanitize_feature_name(name: str, categorical_columns: list[str]) -> str:
     return stripped_name
 
 
-def split_oot(df: pd.DataFrame, train_end_year: int, valid_end_year: int) -> dict[str, pd.DataFrame]:
+def split_oot(
+    df: pd.DataFrame, train_end_year: int, valid_end_year: int
+) -> dict[str, pd.DataFrame]:
     """Create out-of-time train/valid/test splits based on fiscal_year."""
     train = df[df["fiscal_year"] <= train_end_year].copy()
     valid = df[(df["fiscal_year"] > train_end_year) & (df["fiscal_year"] <= valid_end_year)].copy()
@@ -208,8 +221,7 @@ def fit_global_imputation_stats(
         for column in numeric_columns
     }
     categorical_stats = {
-        column: safe_mode(train[column], "__missing__")
-        for column in categorical_columns
+        column: safe_mode(train[column], "__missing__") for column in categorical_columns
     }
     return {"numeric": numeric_stats, "categorical": categorical_stats}
 
@@ -254,7 +266,9 @@ def apply_global_imputation(
     """Fill missing values using train-only global stats."""
     result = frame.copy()
     for column in numeric_columns:
-        result[column] = pd.to_numeric(result[column], errors="coerce").fillna(global_stats["numeric"][column])
+        result[column] = pd.to_numeric(result[column], errors="coerce").fillna(
+            global_stats["numeric"][column]
+        )
     for column in categorical_columns:
         result[column] = result[column].fillna(global_stats["categorical"][column])
     return result
@@ -275,17 +289,17 @@ def apply_marketwise_imputation(
     for column in numeric_columns:
         series = pd.to_numeric(result[column], errors="coerce")
         fill_values = market_key.map(
-            lambda key, current_column=column: marketwise_stats["numeric"].get(
-                str(key), {}
-            ).get(current_column, global_stats["numeric"][current_column])
+            lambda key, current_column=column: marketwise_stats["numeric"]
+            .get(str(key), {})
+            .get(current_column, global_stats["numeric"][current_column])
         )
         result[column] = series.fillna(fill_values).astype(float)
 
     for column in categorical_columns:
         fill_values = market_key.map(
-            lambda key, current_column=column: marketwise_stats["categorical"].get(
-                str(key), {}
-            ).get(current_column, global_stats["categorical"][current_column])
+            lambda key, current_column=column: marketwise_stats["categorical"]
+            .get(str(key), {})
+            .get(current_column, global_stats["categorical"][current_column])
         )
         result[column] = result[column].fillna(fill_values)
 
@@ -340,7 +354,9 @@ def evaluate_split(
             "positive_rate": float(sub_true.mean()),
             "pr_auc": safe_metric(average_precision_score, sub_true, sub_scores),
             "roc_auc": safe_metric(roc_auc_score, sub_true, sub_scores),
-            "precision_at_0_5": safe_metric(precision_score, sub_true, sub_scores, threshold=threshold),
+            "precision_at_0_5": safe_metric(
+                precision_score, sub_true, sub_scores, threshold=threshold
+            ),
             "recall_at_0_5": safe_metric(recall_score, sub_true, sub_scores, threshold=threshold),
         }
     return result
@@ -391,9 +407,7 @@ def main() -> None:
 
     manifest = read_json(args.manifest)
     feature_columns = list(
-        manifest.get("feature_columns")
-        or manifest.get("core30_feature_columns")
-        or []
+        manifest.get("feature_columns") or manifest.get("core30_feature_columns") or []
     )
     if not feature_columns:
         raise ValueError(
@@ -561,7 +575,9 @@ def main() -> None:
     valid_predictions = valid[prediction_columns].copy()
     valid_predictions["pred_score"] = valid_scores
     valid_predictions["pred_label_0_5"] = (valid_scores >= 0.5).astype(int)
-    valid_predictions.to_csv(output_dir / "valid_predictions.csv", index=False, encoding="utf-8-sig")
+    valid_predictions.to_csv(
+        output_dir / "valid_predictions.csv", index=False, encoding="utf-8-sig"
+    )
 
     test_predictions = test[prediction_columns].copy()
     test_predictions["pred_score"] = test_scores
@@ -574,8 +590,12 @@ def main() -> None:
         importances=list(model.feature_importances_),
         categorical_columns=categorical_columns,
     )
-    transformed_df.to_csv(output_dir / "feature_importance_transformed.csv", index=False, encoding="utf-8-sig")
-    original_df.to_csv(output_dir / "feature_importance_original.csv", index=False, encoding="utf-8-sig")
+    transformed_df.to_csv(
+        output_dir / "feature_importance_transformed.csv", index=False, encoding="utf-8-sig"
+    )
+    original_df.to_csv(
+        output_dir / "feature_importance_original.csv", index=False, encoding="utf-8-sig"
+    )
     export_global(
         original_df.rename(columns={"feature_name": "feature"}),
         output_dir,

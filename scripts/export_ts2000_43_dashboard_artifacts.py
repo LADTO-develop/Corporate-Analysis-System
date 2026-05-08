@@ -77,9 +77,11 @@ def build_company_universe(master: pd.DataFrame, source_features: list[str]) -> 
         )
     )
     available = [column for column in keep_columns if column in master.columns]
-    return master.loc[:, available].sort_values(
-        ["market", "corp_name", "stock_code", "fiscal_year", "eval_year"]
-    ).reset_index(drop=True)
+    return (
+        master.loc[:, available]
+        .sort_values(["market", "corp_name", "stock_code", "fiscal_year", "eval_year"])
+        .reset_index(drop=True)
+    )
 
 
 def build_company_latest(master: pd.DataFrame, source_features: list[str]) -> pd.DataFrame:
@@ -104,9 +106,11 @@ def build_company_latest(master: pd.DataFrame, source_features: list[str]) -> pd
         )
     )
     available = [column for column in keep_columns if column in latest.columns]
-    return latest.loc[:, available].sort_values(
-        ["market", "corp_name", "stock_code"]
-    ).reset_index(drop=True)
+    return (
+        latest.loc[:, available]
+        .sort_values(["market", "corp_name", "stock_code"])
+        .reset_index(drop=True)
+    )
 
 
 def build_peer_percentiles(master: pd.DataFrame, numeric_features: list[str]) -> pd.DataFrame:
@@ -141,9 +145,11 @@ def build_peer_percentiles(master: pd.DataFrame, numeric_features: list[str]) ->
             "median"
         )
         chunks.append(chunk)
-    return pd.concat(chunks, ignore_index=True).sort_values(
-        ["stock_code", "fiscal_year", "feature"]
-    ).reset_index(drop=True)
+    return (
+        pd.concat(chunks, ignore_index=True)
+        .sort_values(["stock_code", "fiscal_year", "feature"])
+        .reset_index(drop=True)
+    )
 
 
 def build_feature_dictionary(
@@ -151,7 +157,9 @@ def build_feature_dictionary(
     feature_json: dict[str, object],
 ) -> pd.DataFrame:
     metadata_lookup = {
-        str(column["variable_name"]): column for column in metadata_columns if "variable_name" in column
+        str(column["variable_name"]): column
+        for column in metadata_columns
+        if "variable_name" in column
     }
     feature_group_lookup = {
         str(item["source_feature"]): str(item.get("feature_group", "unknown"))
@@ -261,7 +269,9 @@ def build_local_shap(
     *,
     top_k_shap: int,
 ) -> pd.DataFrame:
-    master_keyed = master.set_index(["market", "stock_code", "corp_name", "fiscal_year", "eval_year"])
+    master_keyed = master.set_index(
+        ["market", "stock_code", "corp_name", "fiscal_year", "eval_year"]
+    )
     grouped_indices: dict[str, list[int]] = defaultdict(list)
     for index, feature_name in enumerate(model_feature_names):
         grouped_feature = sanitize_feature_name(feature_name, source_feature_mapping)
@@ -636,11 +646,7 @@ def main() -> None:
     )
 
     scenario_presets = {
-        name: {
-            feature: value
-            for feature, value in preset.items()
-            if feature in source_features
-        }
+        name: {feature: value for feature, value in preset.items() if feature in source_features}
         for name, preset in SCENARIO_PRESETS.items()
     }
     llm_payload_template = build_llm_payload_template(source_features)
@@ -651,13 +657,25 @@ def main() -> None:
     company_universe.to_csv(output_dir / "company_universe.csv", index=False, encoding="utf-8-sig")
     company_latest.to_csv(output_dir / "company_latest.csv", index=False, encoding="utf-8-sig")
     peer_percentiles.to_csv(output_dir / "peer_percentiles.csv", index=False, encoding="utf-8-sig")
-    feature_dictionary.to_csv(output_dir / "feature_dictionary.csv", index=False, encoding="utf-8-sig")
-    global_shap_reference.to_csv(output_dir / "global_shap_reference.csv", index=False, encoding="utf-8-sig")
-    prediction_scores.to_csv(output_dir / "prediction_scores.csv", index=False, encoding="utf-8-sig")
+    feature_dictionary.to_csv(
+        output_dir / "feature_dictionary.csv", index=False, encoding="utf-8-sig"
+    )
+    global_shap_reference.to_csv(
+        output_dir / "global_shap_reference.csv", index=False, encoding="utf-8-sig"
+    )
+    prediction_scores.to_csv(
+        output_dir / "prediction_scores.csv", index=False, encoding="utf-8-sig"
+    )
     local_shap.to_csv(output_dir / "local_shap.csv", index=False, encoding="utf-8-sig")
-    industry_year_summary.to_csv(output_dir / "industry_year_summary.csv", index=False, encoding="utf-8-sig")
-    industry_latest_summary.to_csv(output_dir / "industry_latest_summary.csv", index=False, encoding="utf-8-sig")
-    industry_shap_summary.to_csv(output_dir / "industry_shap_summary.csv", index=False, encoding="utf-8-sig")
+    industry_year_summary.to_csv(
+        output_dir / "industry_year_summary.csv", index=False, encoding="utf-8-sig"
+    )
+    industry_latest_summary.to_csv(
+        output_dir / "industry_latest_summary.csv", index=False, encoding="utf-8-sig"
+    )
+    industry_shap_summary.to_csv(
+        output_dir / "industry_shap_summary.csv", index=False, encoding="utf-8-sig"
+    )
 
     write_json(output_dir / "scenario_presets.json", scenario_presets)
     write_json(output_dir / "llm_payload_template.json", llm_payload_template)
@@ -669,7 +687,9 @@ def main() -> None:
             "dataset_note": (
                 "34개 원천 변수 / 43개 model-ready 변수셋을 대시보드용 형식으로 변환한 결과입니다."
             ),
-            "generated_files": sorted([path.name for path in output_dir.iterdir() if path.is_file()]),
+            "generated_files": sorted(
+                [path.name for path in output_dir.iterdir() if path.is_file()]
+            ),
             "prediction_artifacts_ready": True,
             "prediction_artifacts_note": (
                 "Per-company prediction probabilities, local SHAP, and industry summaries are "

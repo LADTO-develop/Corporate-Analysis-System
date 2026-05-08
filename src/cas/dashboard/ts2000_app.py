@@ -2362,7 +2362,9 @@ def render_llm_panel(
         f"현재는 {output_format_label} 형식으로 보여줍니다. {format_description}",
     )
     render_text_card(
-        intro_col2, "무엇을 참고하나요?", "예측확률, 핵심 지표, SHAP, 동종업계 비교 결과를 함께 참고합니다."
+        intro_col2,
+        "무엇을 참고하나요?",
+        "예측확률, 핵심 지표, SHAP, 동종업계 비교 결과를 함께 참고합니다.",
     )
     render_text_card(
         intro_col3,
@@ -3226,10 +3228,14 @@ def render_industry_tab(
     default_share_label = "기본 기준선(0.5) 적용 시 고위험 판정 비중"
     tuned_share_label = "조정 기준선 적용 시 고위험 판정 비중"
     st.subheader("산업 흐름 보기")
-    st.caption("선택한 기업이 속한 시장과 산업을 기준으로, 현재 수준과 연도별 흐름을 함께 보여줍니다.")
+    st.caption(
+        "선택한 기업이 속한 시장과 산업을 기준으로, 현재 수준과 연도별 흐름을 함께 보여줍니다."
+    )
     intro_col1, intro_col2, intro_col3 = st.columns(3)
     render_text_card(
-        intro_col1, "어떤 기준인가요?", "선택한 기업과 같은 시장·산업에 속한 기업들을 함께 묶어 보여줍니다."
+        intro_col1,
+        "어떤 기준인가요?",
+        "선택한 기업과 같은 시장·산업에 속한 기업들을 함께 묶어 보여줍니다.",
     )
     render_text_card(
         intro_col2,
@@ -3643,8 +3649,8 @@ def render_scenario_tab(
         hide_index=True,
     )
     st.warning(
-            "현재 시나리오 탭은 지표를 바꿔 보았을 때 상대적 위치가 어떻게 달라지는지 보여줍니다. "
-            "기업별 예측확률을 다시 계산하는 기능은 다음 단계에서 추가할 수 있습니다."
+        "현재 시나리오 탭은 지표를 바꿔 보았을 때 상대적 위치가 어떻게 달라지는지 보여줍니다. "
+        "기업별 예측확률을 다시 계산하는 기능은 다음 단계에서 추가할 수 있습니다."
     )
 
 
@@ -3748,12 +3754,8 @@ def main() -> None:
         provider_models = RECOMMENDED_LLM_MODELS.get(llm_provider, RECOMMENDED_LLM_MODELS["openai"])
         model_options = [item[0] for item in provider_models]
         model_labels = {item[0]: item[1] for item in provider_models}
-        default_model = (
-            default_openai_model if llm_provider == "openai" else default_claude_model
-        )
-        default_model_value = (
-            default_model if default_model in model_options else model_options[0]
-        )
+        default_model = default_openai_model if llm_provider == "openai" else default_claude_model
+        default_model_value = default_model if default_model in model_options else model_options[0]
         selected_model = st.selectbox(
             "추천 모델",
             options=model_options,

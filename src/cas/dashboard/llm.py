@@ -199,9 +199,7 @@ def _raise_friendly_http_error(response: requests.Response, provider_label: str)
             f"{provider_label} 모델명을 찾지 못했습니다. 추천 모델을 다시 선택해 주세요."
         )
     if status == 429:
-        raise ValueError(
-            f"{provider_label} 요청이 잠시 많습니다. 잠시 후 다시 시도해 주세요."
-        )
+        raise ValueError(f"{provider_label} 요청이 잠시 많습니다. 잠시 후 다시 시도해 주세요.")
     if 500 <= status < 600:
         raise ValueError(
             f"{provider_label} 서버에서 일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요."
