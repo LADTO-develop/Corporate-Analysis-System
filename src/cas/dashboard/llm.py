@@ -9,6 +9,7 @@ import pandas as pd
 import requests  # type: ignore[import-untyped]
 
 OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses"
+ANTHROPIC_MESSAGES_URL = "https://api.anthropic.com/v1/messages"
 
 LLM_INSTRUCTIONS = """
 너는 한국어 신용위험 분석 보조역할이며, 심사역 메모 초안을 정리하는 역할이다.
@@ -79,6 +80,18 @@ def _extract_response_text(payload: dict[str, Any]) -> str:
     return "\n".join(text_chunks).strip()
 
 
+def _extract_anthropic_text(payload: dict[str, Any]) -> str:
+    """Extract output text from an Anthropic Messages API payload."""
+    content = payload.get("content", [])
+    text_chunks: list[str] = []
+    for item in content:
+        if item.get("type") == "text":
+            text = item.get("text")
+            if text:
+                text_chunks.append(str(text))
+    return "\n".join(text_chunks).strip()
+
+
 def _to_jsonable(value: object) -> object:
     """Recursively convert pandas/numpy-like objects into JSON-safe Python types."""
     if isinstance(value, dict):
@@ -145,6 +158,60 @@ def _validate_header_safe(value: str, field_name: str) -> None:
         ) from error
 
 
+def _build_system_instruction(output_format: str) -> str:
+    """Build the provider-agnostic system instruction block."""
+    format_instruction = OUTPUT_FORMAT_INSTRUCTIONS.get(
+        output_format, OUTPUT_FORMAT_INSTRUCTIONS["memo"]
+    )
+    return f"{LLM_INSTRUCTIONS}\n\n{format_instruction}"
+
+
+def _extract_error_detail(response: requests.Response) -> str:
+    """Extract a short provider error detail when available."""
+    try:
+        payload = response.json()
+    except ValueError:
+        return ""
+
+    if isinstance(payload, dict):
+        error_obj = payload.get("error")
+        if isinstance(error_obj, dict):
+            message = error_obj.get("message") or error_obj.get("type")
+            if message:
+                return str(message)
+        message = payload.get("message")
+        if message:
+            return str(message)
+    return ""
+
+
+def _raise_friendly_http_error(response: requests.Response, provider_label: str) -> None:
+    """Raise a user-friendly error for common provider HTTP failures."""
+    detail = _extract_error_detail(response)
+    status = response.status_code
+
+    if status in {401, 403}:
+        raise ValueError(
+            f"{provider_label} API 키가 올바르지 않거나 현재 모델에 대한 접근 권한이 없습니다."
+        )
+    if status == 404:
+        raise ValueError(
+            f"{provider_label} 모델명을 찾지 못했습니다. 추천 모델을 다시 선택해 주세요."
+        )
+    if status == 429:
+        raise ValueError(
+            f"{provider_label} 요청이 잠시 많습니다. 잠시 후 다시 시도해 주세요."
+        )
+    if 500 <= status < 600:
+        raise ValueError(
+            f"{provider_label} 서버에서 일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요."
+        )
+
+    if detail:
+        raise ValueError(f"{provider_label} 요청이 실패했습니다. {detail}")
+    raise ValueError(f"{provider_label} 요청이 실패했습니다. 상태 코드: {status}")
+
+
 def generate_openai_explanation(
     *,
     api_key: str,
@@ -154,11 +221,10 @@ def generate_openai_explanation(
     timeout: int = 60,
 ) -> str:
     """Generate a Korean explanation using the OpenAI Responses API."""
+    provider_label = "OpenAI"
     clean_api_key = _normalize_api_key(api_key)
     clean_model = _normalize_model_name(model)
-    format_instruction = OUTPUT_FORMAT_INSTRUCTIONS.get(
-        output_format, OUTPUT_FORMAT_INSTRUCTIONS["memo"]
-    )
+    system_instruction = _build_system_instruction(output_format)
 
     if not clean_api_key:
         raise ValueError("API 키를 다시 입력해 주세요.")
@@ -168,25 +234,119 @@ def generate_openai_explanation(
     request_body = json.dumps(
         {
             "model": clean_model,
-            "instructions": f"{LLM_INSTRUCTIONS}\n\n{format_instruction}",
+            "instructions": system_instruction,
             "input": build_llm_input(payload),
         },
         ensure_ascii=False,
     ).encode("utf-8")
 
-    response = requests.post(
-        OPENAI_RESPONSES_URL,
-        headers={
-            "Authorization": f"Bearer {clean_api_key}",
-            "Content-Type": "application/json; charset=utf-8",
-            "Accept": "application/json",
-        },
-        data=request_body,
-        timeout=timeout,
-    )
-    response.raise_for_status()
+    try:
+        response = requests.post(
+            OPENAI_RESPONSES_URL,
+            headers={
+                "Authorization": f"Bearer {clean_api_key}",
+                "Content-Type": "application/json; charset=utf-8",
+                "Accept": "application/json",
+            },
+            data=request_body,
+            timeout=timeout,
+        )
+    except requests.Timeout as error:
+        raise ValueError("응답 시간이 길어지고 있습니다. 잠시 후 다시 시도해 주세요.") from error
+    except requests.RequestException as error:
+        raise ValueError("네트워크 연결을 확인한 뒤 다시 시도해 주세요.") from error
+
+    if not response.ok:
+        _raise_friendly_http_error(response, provider_label)
+
     response_payload = response.json()
     explanation = _extract_response_text(response_payload)
     if explanation:
         return explanation
     raise ValueError("LLM 응답에서 텍스트를 추출하지 못했습니다.")
+
+
+def generate_claude_explanation(
+    *,
+    api_key: str,
+    model: str,
+    payload: dict[str, Any],
+    output_format: str = "memo",
+    timeout: int = 60,
+) -> str:
+    """Generate a Korean explanation using the Anthropic Messages API."""
+    provider_label = "Claude"
+    clean_api_key = _normalize_api_key(api_key)
+    clean_model = _normalize_model_name(model)
+    system_instruction = _build_system_instruction(output_format)
+
+    if not clean_api_key:
+        raise ValueError("API 키를 다시 입력해 주세요.")
+
+    _validate_header_safe(clean_model, "모델명")
+
+    request_body = json.dumps(
+        {
+            "model": clean_model,
+            "max_tokens": 1400,
+            "system": system_instruction,
+            "messages": [{"role": "user", "content": build_llm_input(payload)}],
+        },
+        ensure_ascii=False,
+    ).encode("utf-8")
+
+    try:
+        response = requests.post(
+            ANTHROPIC_MESSAGES_URL,
+            headers={
+                "x-api-key": clean_api_key,
+                "anthropic-version": "2023-06-01",
+                "Content-Type": "application/json; charset=utf-8",
+                "Accept": "application/json",
+            },
+            data=request_body,
+            timeout=timeout,
+        )
+    except requests.Timeout as error:
+        raise ValueError("응답 시간이 길어지고 있습니다. 잠시 후 다시 시도해 주세요.") from error
+    except requests.RequestException as error:
+        raise ValueError("네트워크 연결을 확인한 뒤 다시 시도해 주세요.") from error
+
+    if not response.ok:
+        _raise_friendly_http_error(response, provider_label)
+
+    response_payload = response.json()
+    explanation = _extract_anthropic_text(response_payload)
+    if explanation:
+        return explanation
+    raise ValueError("LLM 응답에서 텍스트를 추출하지 못했습니다.")
+
+
+def generate_llm_explanation(
+    *,
+    provider: str,
+    api_key: str,
+    model: str,
+    payload: dict[str, Any],
+    output_format: str = "memo",
+    timeout: int = 60,
+) -> str:
+    """Generate a Korean explanation using the selected provider."""
+    provider_name = _clean_token(provider).lower()
+    if provider_name == "openai":
+        return generate_openai_explanation(
+            api_key=api_key,
+            model=model,
+            payload=payload,
+            output_format=output_format,
+            timeout=timeout,
+        )
+    if provider_name in {"claude", "anthropic"}:
+        return generate_claude_explanation(
+            api_key=api_key,
+            model=model,
+            payload=payload,
+            output_format=output_format,
+            timeout=timeout,
+        )
+    raise ValueError("지원하지 않는 AI 제공자입니다.")

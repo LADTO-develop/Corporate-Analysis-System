@@ -1,0 +1,15 @@
+{
+  "base": {},
+  "mild_stress": {
+    "spec_spread": 0.5,
+    "cash_ratio": -0.05,
+    "net_margin": -0.01
+  },
+  "severe_stress": {
+    "spec_spread": 1.0,
+    "cash_ratio": -0.1,
+    "net_margin": -0.02,
+    "short_term_borrowings_share": 0.05,
+    "capital_impairment_ratio": 0.05
+  }
+}

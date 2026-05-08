@@ -1,4 +1,4 @@
-"""Streamlit MVP for TS2000 Core29 dashboard exploration."""
+"""Streamlit dashboard for TS2000 teammate 43-feature model exploration."""
 
 from __future__ import annotations
 
@@ -13,8 +13,12 @@ import altair as alt
 import pandas as pd
 import streamlit as st
 
-from cas.dashboard.data_loader import DashboardArtifacts, load_dashboard_artifacts
-from cas.dashboard.llm import generate_openai_explanation
+from cas.dashboard.data_loader import (
+    TEAM43_ARTIFACT_DIR,
+    DashboardArtifacts,
+    load_dashboard_artifacts,
+)
+from cas.dashboard.llm import generate_llm_explanation
 
 MARKET_LABELS = {
     "KOSPI": "코스피",
@@ -42,6 +46,14 @@ PREDICTION_LABELS = {
     1: "투기등급",
 }
 
+PREFERRED_DEFAULT_COMPANIES = [
+    "현대모비스(주)",
+    "삼성물산(주)",
+    "삼성SDI(주)",
+    "(주)카카오",
+    "에스케이이노베이션(주)",
+]
+
 COLOR_RISK = "#c85050"
 COLOR_MITIGATE = "#2f9e5b"
 COLOR_NEUTRAL = "#4f6fad"
@@ -57,12 +69,37 @@ COLOR_CARD_LABEL = "#5c6473"
 COLOR_CARD_VALUE = "#1f2937"
 CARD_SHADOW = "0 4px 14px rgba(15, 23, 42, 0.04)"
 
-RECOMMENDED_LLM_MODELS = [
-    ("gpt-5.5", "gpt-5.5 | 최고급 추론·요약"),
-    ("gpt-5.4-mini", "gpt-5.4-mini | 속도·비용 균형"),
-    ("gpt-4.1", "gpt-4.1 | 안정적인 고성능"),
-    ("gpt-4.1-mini", "gpt-4.1-mini | 빠른 기본 옵션"),
-]
+ARTIFACT_PRESETS = {
+    "team_43": {
+        "label": "기본 결과",
+        "path": TEAM43_ARTIFACT_DIR,
+        "description": "현재 연결된 기본 대시보드 결과를 불러옵니다.",
+    },
+    "custom": {
+        "label": "직접 경로 입력",
+        "path": None,
+        "description": "사용자가 직접 대시보드 아티팩트 폴더 경로를 입력합니다.",
+    },
+}
+
+LLM_PROVIDER_LABELS = {
+    "openai": "OpenAI",
+    "claude": "Claude",
+}
+
+RECOMMENDED_LLM_MODELS = {
+    "openai": [
+        ("gpt-5.5", "gpt-5.5 | 최고급 추론·요약"),
+        ("gpt-5.4-mini", "gpt-5.4-mini | 속도·비용 균형"),
+        ("gpt-4.1", "gpt-4.1 | 안정적인 고성능"),
+        ("gpt-4.1-mini", "gpt-4.1-mini | 빠른 기본 옵션"),
+    ],
+    "claude": [
+        ("claude-sonnet-4-20250514", "claude-sonnet-4-20250514 | 균형형"),
+        ("claude-opus-4-20250514", "claude-opus-4-20250514 | 고급 추론"),
+        ("claude-3-7-sonnet-20250219", "claude-3-7-sonnet-20250219 | 안정형"),
+    ],
+}
 
 LLM_OUTPUT_FORMATS = {
     "brief": "간단 요약",
@@ -187,7 +224,13 @@ def pick_selected_company(artifacts: DashboardArtifacts) -> pd.Series:
         + frame["fiscal_year"].astype(int).astype(str)
     )
     labels = options["label"].tolist()
-    selected_label = st.sidebar.selectbox("기업 선택", labels)
+    default_index = 0
+    for preferred_name in PREFERRED_DEFAULT_COMPANIES:
+        matched = options.index[options["corp_name"].astype(str) == preferred_name].tolist()
+        if matched:
+            default_index = int(options.index.get_loc(matched[0]))
+            break
+    selected_label = st.sidebar.selectbox("기업 선택", labels, index=default_index)
     return options.loc[options["label"] == selected_label].iloc[0]
 
 
@@ -770,7 +813,7 @@ def build_exportable_llm_report(
 ) -> str:
     """Build a copy/export-friendly markdown report."""
     header_lines = [
-        "# TS2000 AI 심사 요약",
+        "# TS2000 AI 심사 메모",
         "",
         f"- 기업명: {selected_row.get('corp_name')}",
         f"- 종목코드: {selected_row.get('stock_code')}",
@@ -1373,7 +1416,7 @@ def build_html_report(
           </div>
         </div>
         <div class="doc-badges">
-          <div class="doc-chip">공식 Core29 기준</div>
+          <div class="doc-chip">현재 데이터 기준</div>
           <div class="doc-chip">{escape(output_format_label)}</div>
         </div>
       </div>
@@ -2080,12 +2123,18 @@ def render_overview_tab(
         col3, "산업", to_industry_label(selected_row["industry_macro_category"])
     )
     render_bold_value_block(col4, "규모", to_size_label(selected_row["firm_size_group"]))
+    st.caption(
+        "현재 선택한 기업의 기본 정보입니다. 시장, 산업, 규모를 먼저 확인한 뒤 아래의 위험 진단 결과를 함께 읽으면 됩니다."
+    )
 
     st.subheader("모델 결과")
+    st.caption(
+        "투기등급 확률은 현재 기업이 투기등급으로 분류될 가능성을 뜻하며, 예측 라벨과 위험 밴드는 판정 기준선을 기준으로 함께 해석하면 됩니다."
+    )
     if prediction_row is None:
         st.info(
             "현재 리포지토리 패키지에는 기업별 예측확률 파일이 포함되어 있지 않습니다. "
-            "아래에는 공식 Core29 XGBoost의 전체 test 성능과 선택 기업의 핵심 지표를 함께 표시합니다."
+            "아래에는 현재 XGBoost 모델의 전체 test 성능과 선택 기업의 핵심 지표를 함께 표시합니다."
         )
         raw_test_overall_models = model_summary.get("test_overall_models", [])
         test_overall_models = (
@@ -2110,24 +2159,26 @@ def render_overview_tab(
         )
         c1, c2, c3, c4 = st.columns(4)
         render_bold_value_block(
-            c1, "공식 PR-AUC", format_scalar(selected_model["pr_auc"] if selected_model else None)
+            c1, "모델 PR-AUC", format_scalar(selected_model["pr_auc"] if selected_model else None)
         )
         render_bold_value_block(
             c2,
-            "공식 Precision@0.5",
+            "모델 Precision@0.5",
             format_scalar(selected_model["precision_at_0_5"] if selected_model else None),
         )
         render_bold_value_block(
             c3,
-            "공식 Recall@0.5",
+            "모델 Recall@0.5",
             format_scalar(selected_model["recall_at_0_5"] if selected_model else None),
         )
         render_bold_value_block(
             c4,
-            "공식 Threshold",
+            "모델 Threshold",
             format_scalar(default_threshold["threshold"] if default_threshold else None),
         )
-        st.caption("위 수치는 기업별 점수가 아니라 공식 Core29 XGBoost test 전체 성능입니다.")
+        st.caption(
+            "위 수치는 선택 기업의 개별 점수가 아니라, 현재 XGBoost 모델의 전체 테스트 성능을 보여줍니다."
+        )
     else:
         c1, c2, c3, c4 = st.columns(4)
         render_bold_value_block(
@@ -2141,8 +2192,8 @@ def render_overview_tab(
             c4, "위험 밴드", render_risk_band_badge(prediction_row.get("risk_band"))
         )
         st.caption(
-            "기업별 점수는 대시보드 산출물 export 단계에서 공식 Core29 XGBoost 학습 레시피를 "
-            "재현해 생성한 값입니다."
+            "기업별 점수는 대시보드 산출물 export 단계에서 현재 XGBoost 학습 레시피를 "
+            "재현하여 생성한 값입니다."
         )
         risk_band = str(prediction_row.get("risk_band"))
         probability_text = format_percent(prediction_row["prob_speculative"])
@@ -2150,20 +2201,20 @@ def render_overview_tab(
         label_text = to_prediction_label(prediction_row.get("predicted_label"))
         if risk_band == "고위험":
             summary_text = (
-                f"현재 투기등급 확률은 {probability_text}이며, tuned 기준선 {threshold_text}를 상회하여 "
-                f"{label_text}으로 분류됩니다. 핵심 위험 요인을 우선 점검하는 것이 필요합니다."
+                f"투기등급 확률은 {probability_text}로, 판정 기준선 {threshold_text}를 웃돕니다. "
+                f"현재 판단은 {label_text}이며, 주요 위험 요인을 우선 점검할 필요가 있습니다."
             )
             summary_color = COLOR_RISK
         elif risk_band == "관찰":
             summary_text = (
-                f"현재 투기등급 확률은 {probability_text}이며, 기준선 {threshold_text} 부근에서 "
-                f"{label_text}으로 판정됩니다. 동종업계 대비 취약 지표를 함께 확인하는 것이 좋습니다."
+                f"투기등급 확률은 {probability_text}로, 판정 기준선 {threshold_text} 부근에 있습니다. "
+                f"현재 판단은 {label_text}이며, 동종업계 대비 취약 지표를 함께 볼 필요가 있습니다."
             )
             summary_color = "#c0841a"
         else:
             summary_text = (
-                f"현재 투기등급 확률은 {probability_text}이며, tuned 기준선 {threshold_text} 대비 "
-                f"안정적인 수준입니다. 다만 주요 수익성과 유동성 지표를 함께 보는 것이 좋습니다."
+                f"투기등급 확률은 {probability_text}로, 판정 기준선 {threshold_text} 대비 안정적인 수준입니다. "
+                f"다만 수익성과 유동성 지표의 변화는 함께 점검할 필요가 있습니다."
             )
             summary_color = COLOR_MITIGATE
         render_summary_banner("한눈에 보기", summary_text, summary_color)
@@ -2175,16 +2226,34 @@ def render_overview_tab(
             )
             st.altair_chart(probability_chart, width="stretch")
         with text_col:
-            st.markdown("**리스크 해석**")
-            st.write(
-                f"- 현재 위험확률은 **{format_percent(prediction_row['prob_speculative'])}** 입니다."
+            st.markdown("**심사 메모**")
+            st.markdown(
+                f"현재 투기등급 확률은 **{format_percent(prediction_row['prob_speculative'])}** 입니다."
             )
-            st.write(
-                f"- tuned 기준선 **{format_scalar(prediction_row['threshold'])}** 대비 "
-                f"판정 결과는 **{format_scalar(prediction_row['risk_band'])}** 구간입니다."
+            st.markdown(
+                f"현재 판단은 **{label_text}**이며, 위험 밴드는 **{risk_band}** 구간입니다."
             )
 
     st.subheader("핵심 지표")
+    st.caption(
+        "현재 기업을 볼 때 먼저 확인하는 핵심 지표입니다. 각 카드에는 현재 값, 지표 설명, 그리고 일반적인 해석 방향이 함께 표시됩니다."
+    )
+    intro_col1, intro_col2, intro_col3 = st.columns(3)
+    render_text_card(
+        intro_col1,
+        "무엇을 보나요?",
+        "유동성, 수익성, 자본건전성, 외부 금융환경처럼 현재 위험 판단에 직접 연결되는 지표를 먼저 보여줍니다.",
+    )
+    render_text_card(
+        intro_col2,
+        "어떻게 읽나요?",
+        "각 카드의 방향 배지는 일반적으로 높을수록 좋은지, 낮을수록 좋은지를 빠르게 이해할 수 있도록 돕습니다.",
+    )
+    render_text_card(
+        intro_col3,
+        "산업 안에서는 어떤가요?",
+        "아래 그래프에서는 같은 산업 안에서 현재 기업이 어느 정도 수준에 있는지도 함께 확인할 수 있습니다.",
+    )
     overview_features = [
         "cash_ratio",
         "interest_coverage_ratio",
@@ -2252,7 +2321,7 @@ def render_overview_tab(
                 )
                 .properties(height=260)
             )
-            st.markdown("**핵심 지표의 산업 내 위치**")
+            st.markdown("**핵심 지표가 산업 안에서 어느 수준인지**")
             st.altair_chart(percentile_chart, width="stretch")
 
 
@@ -2264,13 +2333,15 @@ def render_llm_panel(
     local_shap: pd.DataFrame,
     peer_slice: pd.DataFrame,
     industry_latest_row: pd.Series | None,
+    provider: str,
     api_key: str,
     model: str,
     developer_mode: bool,
 ) -> None:
     """Render an optional LLM explanation section."""
-    st.subheader("AI 심사 요약")
-    st.caption("선택 기업의 점수와 비교 결과를 바탕으로 심사 메모 형태의 한국어 요약을 생성합니다.")
+    provider_label = LLM_PROVIDER_LABELS.get(provider, provider)
+    st.subheader("AI 심사 메모")
+    st.caption("선택 기업의 점수와 비교 결과를 바탕으로, 바로 읽을 수 있는 심사 메모를 생성합니다.")
     intro_col1, intro_col2, intro_col3 = st.columns(3)
     selected_output_format = st.selectbox(
         "출력 형식",
@@ -2287,19 +2358,21 @@ def render_llm_panel(
     }.get(selected_output_format, "선택한 형식에 맞춰 요약합니다.")
     render_text_card(
         intro_col1,
-        "출력 형식",
-        f"현재 선택한 형식은 {output_format_label}입니다. {format_description}",
+        "어떤 형식인가요?",
+        f"현재는 {output_format_label} 형식으로 보여줍니다. {format_description}",
     )
     render_text_card(
-        intro_col2, "입력 근거", "예측확률, 핵심 지표, SHAP, 동종업계 비교 결과를 함께 참고합니다."
+        intro_col2, "무엇을 참고하나요?", "예측확률, 핵심 지표, SHAP, 동종업계 비교 결과를 함께 참고합니다."
     )
     render_text_card(
         intro_col3,
-        "모델 기준",
-        f"현재 선택 모델은 {model}이며, API 키가 입력된 경우에만 호출합니다.",
+        "어떤 모델을 쓰나요?",
+        f"현재 선택 모델은 {provider_label}의 {model}이며, API 키를 입력하면 바로 메모를 생성할 수 있습니다.",
     )
     if not api_key.strip():
-        st.info("사이드바의 `AI 요약 설정`에서 OpenAI API 키를 입력하면 요약을 생성할 수 있습니다.")
+        st.info(
+            f"사이드바의 `AI 메모 설정`에서 {provider_label} API 키를 입력하면 AI 심사 메모를 생성할 수 있습니다."
+        )
 
     payload = build_llm_payload(
         selected_row,
@@ -2310,14 +2383,18 @@ def render_llm_panel(
         industry_latest_row,
     )
 
-    cache_key = f"{selected_row['stock_code']}-{selected_row['fiscal_year']}-{model}-{selected_output_format}"
-    if st.button("AI 요약 생성", type="primary"):
+    cache_key = (
+        f"{selected_row['stock_code']}-{selected_row['fiscal_year']}-"
+        f"{provider}-{model}-{selected_output_format}"
+    )
+    if st.button("AI 심사 메모 생성", type="primary"):
         if not api_key.strip():
-            st.warning("API 키를 입력해야 AI 요약을 생성할 수 있습니다.")
+            st.warning(f"{provider_label} API 키를 입력해야 AI 심사 메모를 생성할 수 있습니다.")
         else:
             try:
                 with st.spinner("AI가 심사 메모를 정리하는 중입니다..."):
-                    explanation = generate_openai_explanation(
+                    explanation = generate_llm_explanation(
+                        provider=provider,
                         api_key=api_key.strip(),
                         model=model.strip(),
                         payload=payload,
@@ -2325,11 +2402,11 @@ def render_llm_panel(
                     )
                 st.session_state[cache_key] = explanation
             except Exception as error:  # pragma: no cover - runtime/network dependent
-                st.error(f"AI 요약 생성 중 오류가 발생했습니다: {error}")
+                st.error(format_llm_error_message(error, provider_label))
 
     cached = st.session_state.get(cache_key)
     if cached:
-        st.success("요약 생성 완료")
+        st.success("AI 심사 메모 생성 완료")
         sections = parse_llm_report_sections(cached)
         headline = " ".join(sections["한줄 판단"]).strip() or cached.splitlines()[0].strip()
         render_summary_banner("AI 한줄 판단", headline, COLOR_NEUTRAL)
@@ -2377,7 +2454,7 @@ def render_llm_panel(
         export_text = build_exportable_llm_report(
             selected_row=selected_row,
             prediction_row=prediction_row,
-            model=model,
+            model=f"{provider_label} · {model}",
             output_format_label=output_format_label,
             report_text=cached,
             local_shap=local_shap,
@@ -2387,7 +2464,7 @@ def render_llm_panel(
         onepage_text = build_onepage_llm_report(
             selected_row=selected_row,
             prediction_row=prediction_row,
-            model=model,
+            model=f"{provider_label} · {model}",
             output_format_label=output_format_label,
             sections=sections,
             local_shap=local_shap,
@@ -2397,7 +2474,7 @@ def render_llm_panel(
         html_report = build_html_report(
             selected_row=selected_row,
             prediction_row=prediction_row,
-            model=model,
+            model=f"{provider_label} · {model}",
             output_format_label=output_format_label,
             sections=sections,
             report_text=cached,
@@ -2408,7 +2485,7 @@ def render_llm_panel(
         onepage_html = build_onepage_html_report(
             selected_row=selected_row,
             prediction_row=prediction_row,
-            model=model,
+            model=f"{provider_label} · {model}",
             output_format_label=output_format_label,
             sections=sections,
             local_shap=local_shap,
@@ -2498,23 +2575,27 @@ def render_drivers_tab(
     artifacts: DashboardArtifacts,
 ) -> None:
     """Render the drivers tab."""
-    st.subheader("핵심 설명 변수")
+    st.subheader("주요 영향 요인")
     intro_col1, intro_col2, intro_col3 = st.columns(3)
     render_text_card(
         intro_col1,
-        "분석 기준",
-        "모델이 이 기업을 위험하게 또는 안정적으로 본 핵심 변수를 설명합니다.",
+        "어떻게 읽나요?",
+        "이 기업을 위험하게 보게 만든 요인과 안정적으로 보게 만든 요인을 함께 보여줍니다.",
     )
     render_text_card(
-        intro_col2, "위험 증가", "SHAP 값이 양수이면 투기등급 확률을 높이는 방향으로 작용합니다."
+        intro_col2,
+        "위험을 높이는 요인",
+        "값이 클수록 이 기업을 더 위험하게 보게 만드는 지표를 뜻합니다.",
     )
     render_text_card(
-        intro_col3, "위험 완화", "SHAP 값이 음수이면 위험을 낮추는 방향으로 작용합니다."
+        intro_col3,
+        "위험을 낮추는 요인",
+        "값이 클수록 위험을 낮추거나 완화하는 쪽으로 작용한 지표를 뜻합니다.",
     )
     if artifacts.local_shap is not None:
         matched = resolve_company_local_shap(selected_row, artifacts.local_shap)
         if not matched.empty:
-            st.success("기업별 local SHAP가 연결되어 있습니다.")
+            st.success("선택 기업 기준 주요 영향 요인을 보여주고 있습니다.")
             local_view = matched.sort_values("abs_shap", ascending=False).head(10)
             feature_map = build_company_feature_map(selected_row, artifacts.feature_dictionary)
             local_view["표시명"] = local_view["feature"].map(
@@ -2615,8 +2696,8 @@ def render_drivers_tab(
             return
 
     st.info(
-        "현재는 global SHAP 기준으로 설명 변수를 보여줍니다. "
-        "기업별 local SHAP 파일이 추가되면 이 탭은 자동으로 해당 기업의 local drivers를 표시합니다."
+        "현재는 전체 모델 기준 주요 영향 요인을 보여주고 있습니다. "
+        "기업별 상세 영향 값이 연결되면 이 탭은 자동으로 해당 기업 기준 결과를 우선 표시합니다."
     )
     feature_map = build_company_feature_map(selected_row, artifacts.feature_dictionary)
     merged = artifacts.global_shap_reference.merge(
@@ -2640,14 +2721,14 @@ def render_drivers_tab(
         summary_col1,
         "가장 중요한 변수",
         top_features.iloc[0]["표시명"] if not top_features.empty else "없음",
-        "기업별 local SHAP가 없어서 global SHAP 기준으로 보여줍니다.",
+        "기업별 상세 영향 값이 없어 전체 모델 기준으로 보여줍니다.",
         COLOR_NEUTRAL,
     )
     render_accent_summary_card(
         summary_col2,
         "상위 설명축",
         str(top_features.iloc[0]["feature_group"]) if not top_features.empty else "없음",
-        "공식 Core29 전체에서 평균적으로 크게 작용하는 변수군입니다.",
+        "현재 전체 데이터에서 평균적으로 크게 작용하는 변수군입니다.",
         COLOR_COMPANY,
     )
     render_accent_summary_card(
@@ -2697,6 +2778,9 @@ def render_peer_tab(
 ) -> None:
     """Render the peer comparison tab."""
     st.subheader("시장/산업 비교")
+    st.caption(
+        "선택한 기업의 주요 지표를 같은 산업과 같은 시장의 기준값과 나란히 비교해 보여줍니다."
+    )
     peer_slice = resolve_company_peer_slice(selected_row, artifacts.peer_percentiles)
     local_shap = resolve_company_local_shap(selected_row, artifacts.local_shap)
 
@@ -3141,21 +3225,21 @@ def render_industry_tab(
     """Render the industry aggregate tab."""
     default_share_label = "기본 기준선(0.5) 적용 시 고위험 판정 비중"
     tuned_share_label = "조정 기준선 적용 시 고위험 판정 비중"
-    st.subheader("산업별 집계")
-    st.caption("선택한 기업이 속한 시장/산업을 기준으로 최신 스냅샷과 연도별 추이를 보여줍니다.")
+    st.subheader("산업 흐름 보기")
+    st.caption("선택한 기업이 속한 시장과 산업을 기준으로, 현재 수준과 연도별 흐름을 함께 보여줍니다.")
     intro_col1, intro_col2, intro_col3 = st.columns(3)
     render_text_card(
-        intro_col1, "집계 기준", "선택 기업과 같은 시장·산업에 속한 기업들을 기준으로 집계합니다."
+        intro_col1, "어떤 기준인가요?", "선택한 기업과 같은 시장·산업에 속한 기업들을 함께 묶어 보여줍니다."
     )
     render_text_card(
         intro_col2,
-        "최신 스냅샷",
-        "기업별 가장 최근 연도 1행만 남겨 현재 시점 산업 분위기를 보여줍니다.",
+        "현재 산업 수준",
+        "각 기업의 가장 최근 연도 자료를 기준으로, 현재 산업 분위기를 보여줍니다.",
     )
     render_text_card(
         intro_col3,
-        "연도별 추이",
-        "연도별 평균 위험확률과 실제 투기등급 비율, 그리고 조정 기준선 적용 시 고위험 판정 비중을 함께 확인합니다.",
+        "시간에 따른 변화",
+        "연도별로 위험 수준이 어떻게 달라졌는지, 실제 투기등급 비율과 함께 확인할 수 있습니다.",
     )
 
     if artifacts.industry_latest_summary is None or artifacts.industry_year_summary is None:
@@ -3185,9 +3269,9 @@ def render_industry_tab(
     summary_col1, summary_col2, summary_col3 = st.columns(3)
     render_accent_summary_card(
         summary_col1,
-        "현재 산업 상태",
+        "현재 산업 위험 수준",
         format_percent(latest_row.get("mean_prob_speculative")),
-        "선택 기업과 같은 시장·산업의 최신 평균 위험확률입니다.",
+        "선택 기업과 같은 시장·산업의 최근 평균 위험 수준입니다.",
         COLOR_RISK,
     )
     render_accent_summary_card(
@@ -3199,34 +3283,34 @@ def render_industry_tab(
     )
     render_accent_summary_card(
         summary_col3,
-        "산업 기준 주요 변수",
+        "산업에서 먼저 보는 지표",
         display_name(
             str(shap_summary.iloc[0]["feature"]),
             build_company_feature_map(selected_row, artifacts.feature_dictionary),
         )
         if shap_summary is not None and not shap_summary.empty
         else "없음",
-        "test 구간 산업 SHAP 기준으로 가장 먼저 확인되는 설명 변수입니다.",
+        "이 산업에서 상대적으로 먼저 확인되는 설명 변수입니다.",
         COLOR_COMPANY,
     )
 
     c1, c2, c3, c4 = st.columns(4)
-    render_bold_value_block(c1, "산업 기업 수", format_scalar(latest_row.get("companies")))
+    render_bold_value_block(c1, "산업 내 기업 수", format_scalar(latest_row.get("companies")))
     render_bold_value_block(
-        c2, "산업 평균 확률", format_percent(latest_row.get("mean_prob_speculative"))
+        c2, "산업 평균 위험확률", format_percent(latest_row.get("mean_prob_speculative"))
     )
     render_bold_value_block(
-        c3, "산업 중앙 확률", format_percent(latest_row.get("median_prob_speculative"))
+        c3, "산업 중앙 위험확률", format_percent(latest_row.get("median_prob_speculative"))
     )
     render_bold_value_block(
         c4, tuned_share_label, format_percent(latest_row.get("pred_share_tuned"))
     )
 
     st.caption(
-        f"{to_market_label(market)} / {to_industry_label(industry)} 기준 최신 기업 스냅샷 집계입니다."
+        f"{to_market_label(market)} / {to_industry_label(industry)} 기준으로 최근 기업 자료를 모아 본 결과입니다."
     )
     st.info(
-        "여기서 말하는 '조정 기준선'은 기본 0.5 대신, 검증 구간에서 precision과 recall 균형을 고려해 정한 판정 기준선을 뜻합니다."
+        "여기서 말하는 '조정 기준선'은 기본 0.5 대신, 모델 성능 균형을 고려해 따로 정한 판정 기준입니다."
     )
 
     year_summary = artifacts.industry_year_summary.loc[
@@ -3234,7 +3318,7 @@ def render_industry_tab(
         & (artifacts.industry_year_summary["industry_macro_category"] == industry)
     ].copy()
     if not year_summary.empty:
-        st.subheader("연도별 산업 추이")
+        st.subheader("연도별 산업 흐름")
         trend_long = year_summary.melt(
             id_vars=["fiscal_year"],
             value_vars=["mean_prob_speculative", "pred_share_tuned", "positive_rate"],
@@ -3243,9 +3327,9 @@ def render_industry_tab(
         )
         trend_long["지표"] = trend_long["지표"].replace(
             {
-                "mean_prob_speculative": "평균 위험확률",
+                "mean_prob_speculative": "산업 평균 위험확률",
                 "pred_share_tuned": tuned_share_label,
-                "positive_rate": "실제 투기등급 비율",
+                "positive_rate": "실제 투기등급 기업 비율",
             }
         )
         trend_chart = (
@@ -3258,7 +3342,7 @@ def render_industry_tab(
                     "지표:N",
                     title="지표",
                     scale=alt.Scale(
-                        domain=["평균 위험확률", tuned_share_label, "실제 투기등급 비율"],
+                        domain=["산업 평균 위험확률", tuned_share_label, "실제 투기등급 기업 비율"],
                         range=[COLOR_RISK, COLOR_NEUTRAL, COLOR_DARK],
                     ),
                 ),
@@ -3284,7 +3368,7 @@ def render_industry_tab(
                 "companies": "기업 수",
                 "positive_rows": "투기등급 기업 수",
                 "positive_rate": "투기등급 비율",
-                "mean_prob_speculative": "평균 위험확률",
+                "mean_prob_speculative": "산업 평균 위험확률",
                 "median_prob_speculative": "중앙 위험확률",
                 "pred_share_0_5": default_share_label,
                 "pred_share_tuned": tuned_share_label,
@@ -3302,7 +3386,7 @@ def render_industry_tab(
                     "기업 수",
                     "투기등급 기업 수",
                     "투기등급 비율",
-                    "평균 위험확률",
+                    "산업 평균 위험확률",
                     "중앙 위험확률",
                     default_share_label,
                     tuned_share_label,
@@ -3360,7 +3444,10 @@ def render_scenario_tab(
     artifacts: DashboardArtifacts,
 ) -> None:
     """Render the scenario tab."""
-    st.subheader("시나리오 분석")
+    st.subheader("가정별 변화 보기")
+    st.caption(
+        "핵심 지표 값을 가정적으로 바꿔 보면서, 현재 기업의 상대적 위치가 어떻게 달라지는지 살펴봅니다."
+    )
     presets = list(artifacts.scenario_presets.keys())
     preset_label_map = {
         "base": "기본",
@@ -3368,24 +3455,24 @@ def render_scenario_tab(
         "severe_stress": "강한 스트레스",
     }
     selected_preset = st.selectbox(
-        "프리셋", presets, format_func=lambda value: preset_label_map.get(value, value)
+        "시나리오 선택", presets, format_func=lambda value: preset_label_map.get(value, value)
     )
     preset_changes = artifacts.scenario_presets[selected_preset]
     intro_col1, intro_col2, intro_col3 = st.columns(3)
     render_text_card(
         intro_col1,
-        "선택한 시나리오",
+        "현재 시나리오",
         f"현재 선택한 시나리오는 {preset_label_map.get(selected_preset, selected_preset)}입니다.",
     )
     render_text_card(
         intro_col2,
-        "시나리오 적용 방식",
-        "핵심 지표 값을 가정적으로 바꿔 보고, 상대적 위치가 어떻게 달라지는지 확인합니다.",
+        "어떻게 보나요?",
+        "핵심 지표 값을 가정적으로 바꿔 보고, 산업이나 시장 안에서 위치가 어떻게 달라지는지 확인합니다.",
     )
     render_text_card(
         intro_col3,
-        "해석 시 유의점",
-        "현재는 예측확률을 다시 계산하는 단계가 아니라, 지표 수준 변화와 백분위 이동을 중심으로 보여줍니다.",
+        "해석할 때 참고할 점",
+        "현재는 예측확률을 다시 계산하는 단계가 아니라, 지표 수준 변화와 상대적 위치 변화를 중심으로 보여줍니다.",
     )
 
     scenario_features = [
@@ -3405,7 +3492,7 @@ def render_scenario_tab(
         label = display_name(feature, feature_map)
         unit = get_feature_unit(feature, feature_map)
         delta = st.slider(
-            f"{label} 변화량",
+            f"{label} 얼마나 바꿔볼까요?",
             min_value=-1.0,
             max_value=1.0,
             value=default_delta,
@@ -3429,7 +3516,7 @@ def render_scenario_tab(
                 "현재값": baseline_value,
                 "변화량": delta,
                 "시나리오 조정값": scenario_value,
-                "시나리오 적용 후 대략적 백분위": scenario_percentile,
+                "시나리오 적용 후 대략적 위치": scenario_percentile,
                 "unit": unit,
                 "일반 해석 방향": get_feature_direction_label(feature),
             }
@@ -3446,7 +3533,7 @@ def render_scenario_tab(
         ),
         axis=1,
     )
-    scenario_frame["시나리오 적용 후 위치"] = scenario_frame["시나리오 적용 후 대략적 백분위"].map(
+    scenario_frame["시나리오 적용 후 위치"] = scenario_frame["시나리오 적용 후 대략적 위치"].map(
         format_percentile_label
     )
     strongest_change = (
@@ -3459,12 +3546,12 @@ def render_scenario_tab(
         summary_col1,
         "현재 시나리오",
         preset_label_map.get(selected_preset, selected_preset),
-        "슬라이더 초기값은 이 프리셋을 기준으로 자동 채워집니다.",
+        "슬라이더 시작값은 이 시나리오를 기준으로 자동 채워집니다.",
         COLOR_NEUTRAL,
     )
     render_accent_summary_card(
         summary_col2,
-        "시나리오에서 가장 많이 바뀐 지표",
+        "가장 크게 바꾼 지표",
         str(strongest_change["변수"]) if strongest_change is not None else "없음",
         format_delta_with_unit(strongest_change["변화량"], strongest_change["unit"])
         if strongest_change is not None
@@ -3473,12 +3560,12 @@ def render_scenario_tab(
     )
     render_accent_summary_card(
         summary_col3,
-        "시나리오 조정 가능 지표 수",
+        "바꿔볼 수 있는 지표 수",
         format_scalar(len(scenario_frame)),
-        "현재 화면에서 직접 조정 가능한 핵심 변수 개수입니다.",
+        "현재 화면에서 직접 움직여 볼 수 있는 핵심 지표 개수입니다.",
         COLOR_COMPANY,
     )
-    st.markdown("**시나리오 적용 전후 비교**")
+    st.markdown("**시나리오 적용 전후 보기**")
     for unit_value, unit_frame in scenario_frame.groupby("unit", dropna=False):
         unit_label = describe_unit(str(unit_value))
         st.markdown(f"**{unit_label}**")
@@ -3499,13 +3586,13 @@ def render_scenario_tab(
                 [
                     {
                         "변수": row["변수"],
-                        "구분": "현재값",
+                        "구분": "현재 수준",
                         "값": current_value,
                         "값_표시": row["현재값_표시"],
                     },
                     {
                         "변수": row["변수"],
-                        "구분": "시나리오 조정값",
+                        "구분": "시나리오 반영값",
                         "값": scenario_value,
                         "값_표시": row["시나리오 조정값_표시"],
                     },
@@ -3520,7 +3607,7 @@ def render_scenario_tab(
                 color=alt.Color(
                     "구분:N",
                     scale=alt.Scale(
-                        domain=["현재값", "시나리오 조정값"], range=[COLOR_MUTED, COLOR_RISK]
+                        domain=["현재 수준", "시나리오 반영값"], range=[COLOR_MUTED, COLOR_RISK]
                     ),
                 ),
                 xOffset="구분:N",
@@ -3556,8 +3643,8 @@ def render_scenario_tab(
         hide_index=True,
     )
     st.warning(
-        "현재 시나리오 탭은 지표를 조정했을 때 상대 위치가 어떻게 달라지는지 보여줍니다. "
-        "기업별 예측확률을 다시 계산하는 기능은 다음 단계에서 추가할 수 있습니다."
+            "현재 시나리오 탭은 지표를 바꿔 보았을 때 상대적 위치가 어떻게 달라지는지 보여줍니다. "
+            "기업별 예측확률을 다시 계산하는 기능은 다음 단계에서 추가할 수 있습니다."
     )
 
 
@@ -3570,13 +3657,24 @@ def render_footer(artifacts: DashboardArtifacts, *, developer_mode: bool) -> Non
             st.json(artifacts.export_manifest)
 
 
+def format_llm_error_message(error: Exception, provider_label: str) -> str:
+    """Convert raw LLM errors into a short, user-friendly message."""
+    message = str(error).strip()
+    if not message:
+        return f"{provider_label} 메모를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요."
+    return (
+        f"{provider_label} 메모를 불러오지 못했습니다. {message}"
+        " 입력한 API 키와 모델명을 다시 확인한 뒤 한 번 더 시도해 주세요."
+    )
+
+
 def main() -> None:
     """Run the TS2000 Streamlit dashboard MVP."""
-    st.set_page_config(page_title="기업 신용위험 인텔리전스 대시보드", layout="wide")
-    st.title("기업 신용위험 인텔리전스 대시보드")
+    st.set_page_config(page_title="기업 신용위험 분석 대시보드", layout="wide")
+    st.title("기업 신용위험 분석 대시보드")
     st.caption(
-        "기업별 위험 진단, 동종업계 비교, 산업 집계, AI 심사 메모를 한 화면에서 확인하는 설명형 대시보드입니다. "
-        "앞으로 뉴스 리포트와 에이전트 협의 결과까지 함께 연결할 수 있도록 확장할 예정입니다."
+        "기업별 위험 진단, 동종업계 비교, 산업 집계, AI 심사 메모를 한 화면에서 확인할 수 있는 대시보드입니다. "
+        "앞으로 뉴스 리포트와 에이전트 협의 결과까지 함께 반영할 수 있도록 확장할 예정입니다."
     )
     st.markdown(
         """
@@ -3592,11 +3690,9 @@ def main() -> None:
         unsafe_allow_html=True,
     )
 
-    artifact_dir_input = st.sidebar.text_input(
-        "아티팩트 경로",
-        value="",
-        help="비워두면 기본 경로(data/outputs/dashboard/ts2000_core29_mvp)를 사용합니다.",
-    )
+    preset_info = ARTIFACT_PRESETS["team_43"]
+    artifact_dir_input = str(cast(Path, preset_info["path"]))
+
     st.sidebar.selectbox(
         "금액 표시 방식",
         options=list(MONEY_DISPLAY_MODES.keys()),
@@ -3605,22 +3701,58 @@ def main() -> None:
         key="money_display_mode",
         help="상세 표기(억·만·원)와 단순 표기(억 원) 중 원하는 방식을 선택합니다.",
     )
-    developer_mode = st.sidebar.checkbox(
-        "개발자 모드",
-        value=False,
-        help="개발/디버깅용 메타정보와 payload를 표시합니다.",
-    )
-    default_api_key = os.environ.get("OPENAI_API_KEY", "")
-    default_model = os.environ.get("OPENAI_MODEL", "gpt-5.5")
-    model_options = [item[0] for item in RECOMMENDED_LLM_MODELS]
-    model_labels = {item[0]: item[1] for item in RECOMMENDED_LLM_MODELS}
-    default_model_value = default_model if default_model in model_options else model_options[0]
-    with st.sidebar.expander("AI 요약 설정", expanded=False):
-        api_key = st.text_input(
+    with st.sidebar.expander("고급 설정", expanded=False):
+        developer_mode = st.checkbox(
+            "개발자 모드",
+            value=False,
+            help="개발/디버깅용 메타정보와 payload를 표시합니다.",
+        )
+        if developer_mode:
+            custom_artifact = st.text_input(
+                "대시보드 데이터 경로",
+                value=artifact_dir_input,
+                help="기본값 대신 다른 대시보드 아티팩트 폴더를 열고 싶을 때만 사용합니다.",
+            ).strip()
+            if custom_artifact:
+                artifact_dir_input = custom_artifact
+            st.caption("기본값은 현재 연결된 TS2000 결과 폴더입니다.")
+        else:
+            st.caption("일반 사용 시에는 기본 설정 그대로 사용하면 됩니다.")
+    default_provider = os.environ.get("LLM_PROVIDER", "openai").strip().lower()
+    if default_provider not in LLM_PROVIDER_LABELS:
+        default_provider = "openai"
+    default_openai_api_key = os.environ.get("OPENAI_API_KEY", "")
+    default_claude_api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    default_openai_model = os.environ.get("OPENAI_MODEL", "gpt-5.5")
+    default_claude_model = os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-4-20250514")
+    with st.sidebar.expander("AI 메모 설정", expanded=False):
+        llm_provider = st.selectbox(
+            "AI 제공자",
+            options=list(LLM_PROVIDER_LABELS.keys()),
+            index=list(LLM_PROVIDER_LABELS.keys()).index(default_provider),
+            format_func=lambda value: LLM_PROVIDER_LABELS.get(value, value),
+            help="OpenAI와 Claude 중 사용할 제공자를 선택합니다.",
+        )
+        openai_api_key = st.text_input(
             "OpenAI API 키",
-            value=default_api_key,
+            value=default_openai_api_key,
             type="password",
             help="로컬 실행 시에만 사용되며 코드나 파일에는 저장하지 않습니다.",
+        )
+        claude_api_key = st.text_input(
+            "Claude API 키",
+            value=default_claude_api_key,
+            type="password",
+            help="Claude 메모 생성에 사용할 키입니다. 로컬 실행 시에만 사용됩니다.",
+        )
+        provider_models = RECOMMENDED_LLM_MODELS.get(llm_provider, RECOMMENDED_LLM_MODELS["openai"])
+        model_options = [item[0] for item in provider_models]
+        model_labels = {item[0]: item[1] for item in provider_models}
+        default_model = (
+            default_openai_model if llm_provider == "openai" else default_claude_model
+        )
+        default_model_value = (
+            default_model if default_model in model_options else model_options[0]
         )
         selected_model = st.selectbox(
             "추천 모델",
@@ -3634,8 +3766,9 @@ def main() -> None:
             placeholder=selected_model if default_model in model_options else default_model,
             help="필요할 때만 영문 모델 ID를 직접 입력합니다. 비워두면 위 추천 모델을 사용합니다.",
         )
+        llm_api_key = openai_api_key if llm_provider == "openai" else claude_api_key
         llm_model = custom_model.strip() or selected_model
-        st.caption("API 키는 세션 중 메모리에서만 사용하며 파일에는 저장하지 않습니다.")
+        st.caption("입력한 API 키는 세션 중 메모리에서만 사용하며 파일에는 저장하지 않습니다.")
 
     try:
         artifacts = cached_load_dashboard_artifacts(artifact_dir_input or None)
@@ -3652,8 +3785,15 @@ def main() -> None:
         selected_row, artifacts.industry_latest_summary
     )
 
-    overview_tab, report_tab, drivers_tab, peers_tab, industry_tab, scenario_tab = st.tabs(
-        ["개요", "AI 심사 요약", "주요 요인", "동종업계 비교", "산업 집계", "시나리오"]
+    overview_tab, drivers_tab, peers_tab, industry_tab, scenario_tab, report_tab = st.tabs(
+        [
+            "개요",
+            "주요 영향 요인",
+            "시장/산업 비교",
+            "산업 흐름 보기",
+            "가정별 변화 보기",
+            "AI 심사 메모",
+        ]
     )
 
     with overview_tab:
@@ -3668,7 +3808,8 @@ def main() -> None:
             local_shap=local_shap,
             peer_slice=peer_slice,
             industry_latest_row=industry_latest_row,
-            api_key=api_key,
+            provider=llm_provider,
+            api_key=llm_api_key,
             model=llm_model,
             developer_mode=developer_mode,
         )
