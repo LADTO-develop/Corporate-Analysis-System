@@ -2173,7 +2173,7 @@ def render_overview_tab(
                 float(prediction_row["prob_speculative"]),
                 float(prediction_row["threshold"]),
             )
-            st.altair_chart(probability_chart, use_container_width=True)
+            st.altair_chart(probability_chart, width="stretch")
         with text_col:
             st.markdown("**리스크 해석**")
             st.write(
@@ -2253,7 +2253,7 @@ def render_overview_tab(
                 .properties(height=260)
             )
             st.markdown("**핵심 지표의 산업 내 위치**")
-            st.altair_chart(percentile_chart, use_container_width=True)
+            st.altair_chart(percentile_chart, width="stretch")
 
 
 def render_llm_panel(
@@ -2422,7 +2422,7 @@ def render_llm_panel(
                 data=html_report,
                 file_name=f"ts2000_credit_report_{selected_row['stock_code']}_{selected_row['fiscal_year']}.html",
                 mime="text/html",
-                use_container_width=True,
+                width="stretch",
             )
         with html_col2:
             st.download_button(
@@ -2430,7 +2430,7 @@ def render_llm_panel(
                 data=onepage_html,
                 file_name=f"ts2000_credit_onepage_{selected_row['stock_code']}_{selected_row['fiscal_year']}.html",
                 mime="text/html",
-                use_container_width=True,
+                width="stretch",
             )
         utility_col1, utility_col2 = st.columns([1, 1])
         with utility_col1:
@@ -2439,7 +2439,7 @@ def render_llm_panel(
                 data=export_text,
                 file_name=f"ts2000_credit_report_{selected_row['stock_code']}_{selected_row['fiscal_year']}.md",
                 mime="text/markdown",
-                use_container_width=True,
+                width="stretch",
             )
         with utility_col2:
             st.download_button(
@@ -2447,7 +2447,7 @@ def render_llm_panel(
                 data=onepage_text,
                 file_name=f"ts2000_credit_onepage_{selected_row['stock_code']}_{selected_row['fiscal_year']}.md",
                 mime="text/markdown",
-                use_container_width=True,
+                width="stretch",
             )
         preview_tab1, preview_tab2, preview_tab3, preview_tab4 = st.tabs(
             ["보고서형 HTML", "원페이지 HTML", "보고서형 미리보기", "원페이지 미리보기"]
@@ -2586,7 +2586,7 @@ def render_drivers_tab(
                 )
                 .properties(height=360)
             )
-            st.altair_chart(chart, use_container_width=True)
+            st.altair_chart(chart, width="stretch")
             local_table = local_view.loc[
                 :,
                 [
@@ -2607,11 +2607,11 @@ def render_drivers_tab(
                 }
             )
             styled_local = (
-                local_table.style.applymap(style_direction_badge, subset=["일반 해석 방향"])
+                local_table.style.map(style_direction_badge, subset=["일반 해석 방향"])
                 .set_properties(subset=["일반 해석 방향"], **{"text-align": "center"})
                 .hide(axis="index")
             )
-            st.dataframe(styled_local, use_container_width=True, hide_index=True)
+            st.dataframe(styled_local, width="stretch", hide_index=True)
             return
 
     st.info(
@@ -2671,7 +2671,7 @@ def render_drivers_tab(
         )
         .properties(height=360)
     )
-    st.altair_chart(chart, use_container_width=True)
+    st.altair_chart(chart, width="stretch")
     global_table = top_features.loc[
         :,
         ["rank", "표시명", "feature_group", "일반 해석 방향", "mean_abs_shap", "실제값"],
@@ -2684,11 +2684,11 @@ def render_drivers_tab(
         }
     )
     styled_global = (
-        global_table.style.applymap(style_direction_badge, subset=["일반 해석 방향"])
+        global_table.style.map(style_direction_badge, subset=["일반 해석 방향"])
         .set_properties(subset=["일반 해석 방향"], **{"text-align": "center"})
         .hide(axis="index")
     )
-    st.dataframe(styled_global, use_container_width=True, hide_index=True)
+    st.dataframe(styled_global, width="stretch", hide_index=True)
 
 
 def render_peer_tab(
@@ -2942,7 +2942,7 @@ def render_peer_tab(
             )
             .properties(height=360)
         )
-        st.altair_chart(compare_chart, use_container_width=True)
+        st.altair_chart(compare_chart, width="stretch")
     else:
         st.caption("선택한 변수의 단위가 섞여 있어 변수별 비교 카드로 나누어 표시합니다.")
         detail_cols = st.columns(2)
@@ -2991,7 +2991,7 @@ def render_peer_tab(
                     )
                     .properties(height=150)
                 )
-                st.altair_chart(mini_chart, use_container_width=True)
+                st.altair_chart(mini_chart, width="stretch")
 
     table["산업 대비 차이"] = table.apply(
         lambda row: format_delta_with_unit(
@@ -3096,13 +3096,13 @@ def render_peer_tab(
     with col_gap:
         st.markdown("**비교 기준 대비 차이**")
         if len(table_units) <= 1:
-            st.altair_chart(gap_chart, use_container_width=True)
+            st.altair_chart(gap_chart, width="stretch")
         else:
             st.caption("단위가 섞여 있어 차이는 표에서 변수별로 읽는 것이 더 적절합니다.")
         st.caption("0보다 크면 선택 기업 값이 비교 기준보다 높고, 0보다 작으면 낮습니다.")
     with col_percentile:
         st.markdown("**산업/시장 내 백분위 위치**")
-        st.altair_chart(percentile_chart, use_container_width=True)
+        st.altair_chart(percentile_chart, width="stretch")
         st.caption("50백분위 점선을 기준으로, 오른쪽일수록 상대적으로 높은 수준입니다.")
 
     table_view = table.loc[
@@ -3120,13 +3120,13 @@ def render_peer_tab(
         ],
     ].copy()
     styled_table = (
-        table_view.style.applymap(style_direction_badge, subset=["일반 해석 방향"])
+        table_view.style.map(style_direction_badge, subset=["일반 해석 방향"])
         .set_properties(subset=["일반 해석 방향"], **{"text-align": "center"})
         .hide(axis="index")
     )
     st.dataframe(
         styled_table,
-        use_container_width=True,
+        width="stretch",
         hide_index=True,
     )
     st.caption(
@@ -3266,7 +3266,7 @@ def render_industry_tab(
             )
             .properties(height=320)
         )
-        st.altair_chart(trend_chart, use_container_width=True)
+        st.altair_chart(trend_chart, width="stretch")
         year_summary_view = year_summary.copy()
         for column in [
             "positive_rate",
@@ -3308,7 +3308,7 @@ def render_industry_tab(
                     tuned_share_label,
                 ],
             ],
-            use_container_width=True,
+            width="stretch",
             hide_index=True,
         )
 
@@ -3335,7 +3335,7 @@ def render_industry_tab(
             )
             .properties(height=320)
         )
-        st.altair_chart(chart, use_container_width=True)
+        st.altair_chart(chart, width="stretch")
         top_shap_view = top_shap.loc[
             :,
             ["rank_within_group", "표시명", "일반 해석 방향", "mean_abs_shap", "mean_signed_shap"],
@@ -3348,11 +3348,11 @@ def render_industry_tab(
             }
         )
         styled_industry = (
-            top_shap_view.style.applymap(style_direction_badge, subset=["일반 해석 방향"])
+            top_shap_view.style.map(style_direction_badge, subset=["일반 해석 방향"])
             .set_properties(subset=["일반 해석 방향"], **{"text-align": "center"})
             .hide(axis="index")
         )
-        st.dataframe(styled_industry, use_container_width=True, hide_index=True)
+        st.dataframe(styled_industry, width="stretch", hide_index=True)
 
 
 def render_scenario_tab(
@@ -3528,7 +3528,7 @@ def render_scenario_tab(
             )
             .properties(height=max(160, len(unit_frame) * 56))
         )
-        st.altair_chart(scenario_chart, use_container_width=True)
+        st.altair_chart(scenario_chart, width="stretch")
     scenario_table = scenario_frame.loc[
         :,
         [
@@ -3546,13 +3546,13 @@ def render_scenario_tab(
         }
     )
     styled_scenario = (
-        scenario_table.style.applymap(style_direction_badge, subset=["일반 해석 방향"])
+        scenario_table.style.map(style_direction_badge, subset=["일반 해석 방향"])
         .set_properties(subset=["일반 해석 방향"], **{"text-align": "center"})
         .hide(axis="index")
     )
     st.dataframe(
         styled_scenario,
-        use_container_width=True,
+        width="stretch",
         hide_index=True,
     )
     st.warning(
