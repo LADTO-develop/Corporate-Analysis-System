@@ -1,0 +1,35 @@
+﻿feature,feature_group,korean_name,description,formula_or_logic,unit,source,note
+accruals_ratio,cashflow_structure,발생액 비율,총자산 대비 순이익과 영업현금흐름의 차이 (이익품질 지표),(net_income - ocf) / assets_total,ratio,Derived from IS + CF + BS,양수면 현금흐름 대비 회계이익 과다 — 이익 과장 신호
+cashflow_coverage_ratio,cashflow_structure,현금흐름 커버리지,이자비용 대비 영업현금흐름 배수,ocf / interest_expense,ratio,Derived from CF + IS,"이자비용 0이면 1,000,000으로 capped"
+depreciation,cashflow_structure,감가상각비,감가상각비,원천값,KRW thousand,CF,
+intangible_assets_ratio,cashflow_structure,무형자산 비중,총자산 대비 무형자산 비율,intangible_assets / assets_total,ratio,Derived from BS,
+ocf_to_sales,cashflow_structure,OCF/매출액,매출액 대비 영업현금흐름 비율,ocf / revenue,ratio,Derived from CF + IS,
+ocf_to_total_borrowings,cashflow_structure,OCF/총차입금,총차입금 대비 영업현금흐름 비율,ocf / total_borrowings,ratio,Derived from CF + BS,
+ocf_to_total_liabilities,cashflow_structure,OCF/부채총계,총부채 대비 영업현금흐름 비율,ocf / liabilities_total,ratio,Derived from CF + BS,
+total_debt_turnover,cashflow_structure,총부채회전율,총부채 대비 매출액 비율,revenue / liabilities_total,ratio,Derived from IS + BS,
+firm_size_group,context,기업규모 그룹,모델링용 기업규모 그룹,대기업/중견기업/중소기업/기타 그룹화,category,Derived from Profile,
+industry_macro_category,context,산업 대분류,모델링용 산업 대분류,제조업/건설업/도소매업/IT·서비스업/운수·창고업/기타,category,Derived from Profile,
+listed_year,context,상장연도,상장일에서 추출한 연도,상장일의 연도,year,Profile,
+market,context,시장구분,상장시장 구분,KOSPI 또는 KOSDAQ,category,Target selected / TS2000 merge key,시장 더미 변수로 활용 가능
+spec_spread,macro,투기경계 스프레드,회사채 BBB-와 AA- 간 스프레드,corp_bbb_3y - corp_aa_3y,%p,ECOS_Macro_Processed.csv,
+dividend_payer,market_shareholder,배당금 지급 여부,해당 회계연도에 현금배당을 지급했는지 여부,"종목코드-회계년도 그룹 내 배당금지급(-) 값이 0이 아니면 1, 아니면 0",0/1,KOSPI_market_and_div.csv / KOSDAQ_market_and_div.csv,기존 공식 변수셋에서도 중요하게 보던 배당 관련 안정성 지표
+market_to_book,market_shareholder,Market-to-Book,시가총액 대비 장부가치 비율,market_cap / (equity_total * 1000),ratio,KOSPI_market_and_div.csv / KOSDAQ_market_and_div.csv + BS,자본총계가 천원 단위이므로 1000을 곱해 계산. 기존 공식 변수셋에서도 사용된 규모 지표
+gross_profit,profitability_returns,매출총이익,매출총이익(손실),원천값,KRW thousand,IS,
+interest_coverage_ratio,profitability_returns,이자보상배율,영업이익 대비 이자비용 배수,operating_income / interest_expense,ratio,Derived from IS,"이자비용 0이면 1,000,000으로 capped"
+net_margin,profitability_returns,순이익률,매출액 대비 당기순이익 비율,net_income / revenue,ratio,Derived from IS,기존 공식 변수셋에서도 핵심으로 보던 수익성 변수
+operating_roa,profitability_returns,총자산영업이익률,총자산 대비 영업이익 비율,operating_income / assets_total,ratio,Derived from IS + BS,
+pretax_roa,profitability_returns,세전계속사업이익 기준 ROA,총자산 대비 세전이익 비율,pretax_income / assets_total,ratio,Derived from IS + BS,
+pretax_roe,profitability_returns,세전계속사업이익 기준 ROE,자기자본 대비 세전이익 비율,pretax_income / equity_total,ratio,Derived from IS + BS,
+assets_total,stability_leverage,자산총계,총자산,원천값,KRW thousand,BS,
+capital_impairment_ratio,stability_leverage,자본잠식률,자본금 대비 자본잠식 정도,(capital_stock - equity_total) / capital_stock,ratio,Derived from BS,양수일수록 자본잠식 신호 가능
+cash_ratio,stability_leverage,현금비율,유동부채 대비 현금및현금성자산 비율,cash_and_equivalents / current_liabilities,ratio,Derived from BS,
+current_ratio,stability_leverage,유동비율,유동자산 대비 유동부채 비율,current_assets / current_liabilities,ratio,Derived from BS,
+debt_ratio,stability_leverage,부채비율,자기자본 대비 총부채 비율,liabilities_total / equity_total,ratio,Derived from BS,총부채 레버리지 관점 보완 변수
+equity_ratio,stability_leverage,자기자본비율,총자산 대비 자기자본 비율,equity_total / assets_total,ratio,Derived from BS,
+total_borrowings_ratio,stability_leverage,총차입금비율,총자산 대비 총차입금 비율,total_borrowings / assets_total,ratio,Derived from BS,
+icr_under_1,trend_early_warning,ICR 1 미만 여부,이자보상배율이 1 미만인지 여부 (영업이익으로 이자도 못 내는 상태),interest_coverage_ratio < 1 이면 1,0/1,Derived from interest_coverage_ratio,
+is_2y_consecutive_ocf_deficit,trend_early_warning,2년 연속 OCF 적자 여부,당기와 전기 모두 영업현금흐름이 음수인지 여부,ocf_t < 0 and ocf_t-1 < 0,0/1,Derived from CF history,지속적 현금흐름 악화 신호
+is_2y_consecutive_operating_loss,trend_early_warning,2년 연속 영업적자 여부,당기와 전기 모두 영업이익이 음수인지 여부,operating_income_t < 0 and operating_income_t-1 < 0,0/1,Derived from IS history,지속적 수익성 악화 신호
+net_margin_diff,trend_early_warning,순이익률 변화,전년 대비 순이익률 변화폭,net_margin_t - net_margin_t-1,ratio,Derived from net_margin history,
+short_term_borrowings_share,trend_early_warning,단기차입금 비중,총차입금 중 단기차입금 비중,short_term_borrowings / total_borrowings,ratio,Derived from BS,기존 공식 변수셋에서 중요하게 보던 단기 유동성 압박 구조 변수
+total_assets_growth,trend_early_warning,총자산증가율,전년 대비 총자산 증가율,(assets_total_t - assets_total_t-1) / assets_total_t-1,ratio,Derived from BS history,자산 축소/급팽창은 구조조정·무리한 확장 신호

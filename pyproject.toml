@@ -43,6 +43,10 @@ viz = [
     "matplotlib>=3.9.0,<3.11",
     "plotly>=5.22.0,<6.0.0",
 ]
+ml = [
+    "scikit-learn>=1.5.0,<1.8.0",
+    "xgboost>=2.1.0,<3.0.0",
+]
 
 [project.urls]
 Repository = "https://github.com/LADTO-develop/Corporate-Analysis-System"
@@ -62,7 +66,7 @@ src = ["src", "tests", "scripts"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "N", "UP", "B", "SIM", "RUF", "ANN", "D"]
-ignore = ["D100", "D104", "D107", "ANN101", "ANN102", "E501"]
+ignore = ["D100", "D104", "D107", "E501"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"

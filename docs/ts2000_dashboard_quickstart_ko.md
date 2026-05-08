@@ -1,7 +1,7 @@
 # TS2000 대시보드 실행 안내
 
 ## 개요
-이 대시보드는 TS2000 공식 데이터셋과 Core29 모델 결과를 바탕으로 기업별 신용위험을 설명형으로 보여주는 Streamlit 앱입니다.
+이 대시보드는 `ts2000_43_model_ready` 데이터셋과 XGBoost 결과를 바탕으로 기업별 신용위험을 설명형으로 보여주는 Streamlit 앱입니다.
 
 현재 포함된 주요 기능은 다음과 같습니다.
 - 기업별 위험확률, 예측 라벨, 위험 밴드 확인
@@ -14,7 +14,7 @@
 
 ## 중요한 점
 - 이 대시보드는 **GitHub에 푸시했다고 해서 자동으로 웹 링크가 생기지 않습니다.**
-- 팀원이 이 저장소를 `pull` 받은 뒤 **자기 로컬 환경에서 실행하면**, 자기 브라우저에서 대시보드를 바로 볼 수 있습니다.
+- 사용자가 이 저장소를 `pull` 받은 뒤 **자기 로컬 환경에서 실행하면**, 자기 브라우저에서 대시보드를 바로 볼 수 있습니다.
 - 즉, 현재는 **각자 로컬에서 실행하는 방식**입니다.
 
 ## 실행 방법
@@ -27,13 +27,7 @@ cd "/Users/inji/Documents/금융 데이터 분서�
 대시보드 입력 파일 생성:
 
 ```bash
-/opt/anaconda3/envs/aura/bin/python scripts/export_dashboard_inputs.py
-```
-
-모델 산출물 생성:
-
-```bash
-MPLCONFIGDIR='/private/var/folders/6f/82r7vcrd38s90qbm76tw7ml40000gn/T/mpltmp' /opt/anaconda3/envs/aura/bin/python scripts/export_dashboard_model_artifacts.py
+/opt/anaconda3/envs/aura/bin/python scripts/export_ts2000_43_dashboard_artifacts.py
 ```
 
 대시보드 실행:
@@ -49,8 +43,7 @@ MPLCONFIGDIR='/private/var/folders/6f/82r7vcrd38s90qbm76tw7ml40000gn/T/mpltmp' /
 ## 주요 파일 위치
 
 ### 실행 스크립트
-- `scripts/export_dashboard_inputs.py`
-- `scripts/export_dashboard_model_artifacts.py`
+- `scripts/export_ts2000_43_dashboard_artifacts.py`
 - `scripts/run_ts2000_dashboard.py`
 
 ### 대시보드 코드
@@ -59,10 +52,10 @@ MPLCONFIGDIR='/private/var/folders/6f/82r7vcrd38s90qbm76tw7ml40000gn/T/mpltmp' /
 - `src/cas/dashboard/ts2000_app.py`
 
 ### 입력 데이터
-- `data/external/ts2000`
+- `data/input/ts2000_43_model_ready`
 
 ### 대시보드 산출물
-- `data/outputs/dashboard/ts2000_core29_mvp`
+- `data/outputs/dashboard/ts2000_43_model_ready_mvp`
 
 ## 대시보드 구성
 - `개요`
@@ -100,8 +93,6 @@ MPLCONFIGDIR='/private/var/folders/6f/82r7vcrd38s90qbm76tw7ml40000gn/T/mpltmp' /
 
 ## 추천 사용 순서
 1. 저장소 `pull`
-2. `export_dashboard_inputs.py` 실행
-3. `export_dashboard_model_artifacts.py` 실행
-4. `run_ts2000_dashboard.py` 실행
-5. 브라우저에서 로컬 주소 접속
-
+2. `export_ts2000_43_dashboard_artifacts.py` 실행
+3. `run_ts2000_dashboard.py` 실행
+4. 브라우저에서 로컬 주소 접속
