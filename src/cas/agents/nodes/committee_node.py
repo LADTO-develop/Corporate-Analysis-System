@@ -56,10 +56,7 @@ def run(state: AgentState) -> dict[str, Any]:
     audit = AuditEntry(
         node="agno_agents",
         timestamp=_now(),
-        summary=(
-            "Agno role-fixed agents completed: "
-            f"{', '.join(agent.role for agent in agents)}"
-        ),
+        summary=(f"Agno role-fixed agents completed: {', '.join(agent.role for agent in agents)}"),
         metrics={"n_agents": float(len(agents)), "final_confidence": confidence},
     )
     return {

@@ -78,7 +78,9 @@ def _build_response_payload(state: AgentState) -> dict[str, Any]:
             ),
             "synthesis": str(
                 agent_summary.get("synthesis")
-                or ("Analysis deferred because required inputs are missing." if insufficient else "")
+                or (
+                    "Analysis deferred because required inputs are missing." if insufficient else ""
+                )
             ),
             "agents": _agent_payloads(agent_summary),
         },
