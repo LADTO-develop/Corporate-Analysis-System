@@ -1,6 +1,6 @@
 {
   "dataset_name": "ts2000_43_model_ready",
-  "dataset_note": "팀원이 제공한 34개 원천 변수 / 43개 model-ready 변수셋을 대시보드용 형식으로 변환한 결과입니다.",
+  "dataset_note": "34개 원천 변수 / 43개 model-ready 변수셋을 대시보드용 형식으로 변환한 결과입니다.",
   "generated_files": [
     "README.md",
     "company_latest.csv",
@@ -19,5 +19,5 @@
     "scenario_presets.json"
   ],
   "prediction_artifacts_ready": true,
-  "prediction_artifacts_note": "Per-company prediction probabilities, local SHAP, and industry summaries are generated from the team ts2000_43 split."
+  "prediction_artifacts_note": "Per-company prediction probabilities, local SHAP, and industry summaries are generated from the ts2000_43 split."
 }

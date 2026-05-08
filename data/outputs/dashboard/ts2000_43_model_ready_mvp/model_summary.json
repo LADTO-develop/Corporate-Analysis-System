@@ -36,7 +36,7 @@
     }
   ],
   "prediction_artifacts_ready": true,
-  "prediction_artifacts_note": "Per-company prediction probabilities, local SHAP, and industry summaries are exported from the team ts2000_43 model-ready split.",
+  "prediction_artifacts_note": "Per-company prediction probabilities, local SHAP, and industry summaries are exported from the ts2000_43 model-ready split.",
   "split_summary": {
     "train": {
       "rows": 3822,

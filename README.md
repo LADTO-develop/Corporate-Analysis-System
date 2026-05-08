@@ -53,7 +53,7 @@ LangGraph는 모델이 아닌 오케스트레이션 레이어입니다. 데이�
 | 분석 범위 | KOSPI·KOSDAQ 상장기업 |
 | 기간 | 2014 ~ 2024 (패널 데이터) |
 | 관측치 | 프로젝트 진행 단계에 따라 달라질 수 있으며, 현재 대시보드 기본 입력은 `ts2000_43_model_ready` 기준입니다. |
-| 변수 수 | 현재 대시보드 기본 입력은 팀원 정리본 `ts2000_43_model_ready` 기준 34개 원천 변수(원핫 후 43개 입력)입니다. |
+| 변수 수 | 현재 대시보드 기본 입력은 `ts2000_43_model_ready` 기준 34개 원천 변수(원핫 후 43개 입력)입니다. |
 | 타깃 | `is_speculative` — `0 = 투자적격(AAA~BBB-)`, `1 = 투기등급(BB+ 이하)` |
 | 결합 키 | `stock_code + fiscal_year` |
 | 시점 정렬 | `fiscal_year = t` 재무정보 ↔ `eval_year = t+1` 신용등급 |
@@ -112,7 +112,7 @@ LangGraph는 모델이 아닌 오케스트레이션 레이어입니다. 데이�
 │   ├── interim/                  # 전처리 중간 산출물
 │   ├── input/
 │   │   ├── companies/            # 샘플/커스텀 기업 입력 YAML
-│   │   └── ts2000_43_model_ready/# 팀원 제공 TS2000 model-ready 입력셋
+│   │   └── ts2000_43_model_ready/# TS2000 model-ready 입력셋
 │   └── outputs/
 │       ├── dashboard/            # 대시보드용 가공 산출물
 │       └── reports/              # 기업별 리포트 (.md, .json)

@@ -1,6 +1,6 @@
 # TS2000 43-Feature Dashboard Artifacts
 
-이 폴더는 팀원이 제공한 `ts2000_43_model_ready` 입력 파일을
+이 폴더는 `ts2000_43_model_ready` 입력 파일을
 대시보드가 바로 읽을 수 있는 형식으로 변환한 결과입니다.
 
 핵심 파일:

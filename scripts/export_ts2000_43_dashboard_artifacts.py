@@ -11,7 +11,7 @@ import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[1]
 INPUT_DIR = ROOT / "data" / "input" / "ts2000_43_model_ready"
-METADATA_PATH = INPUT_DIR / "team_43_column_dictionary_metadata.json"
+METADATA_PATH = INPUT_DIR / "ts2000_43_column_dictionary_metadata.json"
 OUTPUT_DIR = ROOT / "data" / "outputs" / "dashboard" / "ts2000_43_model_ready_mvp"
 
 SCENARIO_PRESETS: dict[str, dict[str, float]] = {
@@ -33,7 +33,7 @@ SCENARIO_PRESETS: dict[str, dict[str, float]] = {
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Export team TS2000 43-feature model artifacts for the dashboard."
+        description="Export TS2000 43-feature model artifacts for the dashboard."
     )
     parser.add_argument("--input-dir", type=Path, default=INPUT_DIR)
     parser.add_argument("--metadata-path", type=Path, default=METADATA_PATH)
@@ -452,7 +452,7 @@ def build_model_summary(
         "prediction_artifacts_ready": True,
         "prediction_artifacts_note": (
             "Per-company prediction probabilities, local SHAP, and industry summaries are "
-            "exported from the team ts2000_43 model-ready split."
+            "exported from the ts2000_43 model-ready split."
         ),
         "split_summary": {
             "train": {"rows": len(train_y), "positive_rate": float(train_y.mean())},
@@ -500,7 +500,7 @@ def build_llm_payload_template(source_features: list[str]) -> dict[str, object]:
 def write_readme(output_dir: Path) -> None:
     content = """# TS2000 43-Feature Dashboard Artifacts
 
-이 폴더는 팀원이 제공한 `ts2000_43_model_ready` 입력 파일을
+이 폴더는 `ts2000_43_model_ready` 입력 파일을
 대시보드가 바로 읽을 수 있는 형식으로 변환한 결과입니다.
 
 핵심 파일:
@@ -667,13 +667,13 @@ def main() -> None:
         {
             "dataset_name": "ts2000_43_model_ready",
             "dataset_note": (
-                "팀원이 제공한 34개 원천 변수 / 43개 model-ready 변수셋을 대시보드용 형식으로 변환한 결과입니다."
+                "34개 원천 변수 / 43개 model-ready 변수셋을 대시보드용 형식으로 변환한 결과입니다."
             ),
             "generated_files": sorted([path.name for path in output_dir.iterdir() if path.is_file()]),
             "prediction_artifacts_ready": True,
             "prediction_artifacts_note": (
                 "Per-company prediction probabilities, local SHAP, and industry summaries are "
-                "generated from the team ts2000_43 split."
+                "generated from the ts2000_43 split."
             ),
         },
     )
