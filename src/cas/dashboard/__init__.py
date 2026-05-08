@@ -1,1 +1,1 @@
-"""Dashboard helpers for TS2000 model outputs."""
+"""Dashboard helpers for credit risk model outputs."""

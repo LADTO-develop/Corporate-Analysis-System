@@ -1,4 +1,4 @@
-"""Streamlit dashboard for TS2000 teammate 43-feature model exploration."""
+"""Streamlit dashboard for 43-feature credit risk model exploration."""
 
 from __future__ import annotations
 
@@ -813,7 +813,7 @@ def build_exportable_llm_report(
 ) -> str:
     """Build a copy/export-friendly markdown report."""
     header_lines = [
-        "# TS2000 AI 심사 메모",
+        "# AI 심사 메모",
         "",
         f"- 기업명: {selected_row.get('corp_name')}",
         f"- 종목코드: {selected_row.get('stock_code')}",
@@ -915,7 +915,7 @@ def build_onepage_llm_report(
         )
 
     lines = [
-        "# TS2000 원페이지 심사 메모",
+        "# 원페이지 심사 메모",
         "",
         "## 기업 개요",
         f"- 기업명: {selected_row.get('corp_name')}",
@@ -1191,7 +1191,7 @@ def build_html_report(
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>TS2000 AI 심사 보고서</title>
+  <title>AI 심사 보고서</title>
   <style>
     @page {{
       size: A4;
@@ -1409,9 +1409,9 @@ def build_html_report(
     <div class="header">
       <div class="header-top">
         <div class="brand">
-          <div class="brand-mark">TS2000</div>
+          <div class="brand-mark">CAS</div>
           <div class="brand-copy">
-            <div class="brand-title">TS2000 기업 신용위험 분석 보고서</div>
+            <div class="brand-title">기업 신용위험 분석 보고서</div>
             <div class="brand-subtitle">Corporate Analysis System 기반 AI 심사 메모 정리본입니다.</div>
           </div>
         </div>
@@ -1420,7 +1420,7 @@ def build_html_report(
           <div class="doc-chip">{escape(output_format_label)}</div>
         </div>
       </div>
-      <div class="eyebrow">TS2000 CREDIT RISK MEMO</div>
+      <div class="eyebrow">CREDIT RISK MEMO</div>
       <h1>{escape(str(selected_row.get("corp_name")))}</h1>
       <div class="summary">{escape(headline)}</div>
     </div>
@@ -1570,7 +1570,7 @@ def build_onepage_html_report(
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>TS2000 원페이지 심사 메모</title>
+  <title>원페이지 심사 메모</title>
   <style>
     @page {{
       size: A4;
@@ -1766,9 +1766,9 @@ def build_onepage_html_report(
     <div class="header">
       <div class="header-top">
         <div class="brand">
-          <div class="brand-mark">TS2000</div>
+          <div class="brand-mark">CAS</div>
           <div class="brand-copy">
-            <div class="brand-title">TS2000 원페이지 심사 메모</div>
+            <div class="brand-title">원페이지 심사 메모</div>
             <div class="brand-subtitle">핵심 판단과 주요 근거를 한 장으로 정리한 버전입니다.</div>
           </div>
         </div>
@@ -3675,7 +3675,7 @@ def format_llm_error_message(error: Exception, provider_label: str) -> str:
 
 
 def main() -> None:
-    """Run the TS2000 Streamlit dashboard MVP."""
+    """Run the credit risk Streamlit dashboard MVP."""
     st.set_page_config(page_title="기업 신용위험 분석 대시보드", layout="wide")
     st.title("기업 신용위험 분석 대시보드")
     st.caption(
@@ -3721,7 +3721,7 @@ def main() -> None:
             ).strip()
             if custom_artifact:
                 artifact_dir_input = custom_artifact
-            st.caption("기본값은 현재 연결된 TS2000 결과 폴더입니다.")
+            st.caption("기본값은 현재 연결된 결과 폴더입니다.")
         else:
             st.caption("일반 사용 시에는 기본 설정 그대로 사용하면 됩니다.")
     default_provider = os.environ.get("LLM_PROVIDER", "openai").strip().lower()

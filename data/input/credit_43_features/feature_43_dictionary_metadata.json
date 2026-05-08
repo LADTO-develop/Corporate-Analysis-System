@@ -1,6 +1,6 @@
 {
   "dataset_name": "credit_43_features",
-  "source": "subset_from_official_ts2000_column_dictionary_metadata",
+  "source": "subset_from_official_credit_column_dictionary_metadata",
   "selected_source_features": [
     "market",
     "listed_year",
@@ -44,7 +44,7 @@
       "usage_role": "feature_x",
       "korean_name": "시장구분",
       "description": "상장시장 구분",
-      "source": "Target selected / TS2000 merge key",
+      "source": "Target selected / credit merge key",
       "formula_or_logic": "KOSPI 또는 KOSDAQ",
       "unit": "category",
       "note": "시장 더미 변수로 활용 가능",

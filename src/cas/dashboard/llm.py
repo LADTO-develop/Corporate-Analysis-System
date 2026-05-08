@@ -1,4 +1,4 @@
-"""LLM helpers for TS2000 dashboard explanations."""
+"""LLM helpers for dashboard explanations."""
 
 from __future__ import annotations
 
