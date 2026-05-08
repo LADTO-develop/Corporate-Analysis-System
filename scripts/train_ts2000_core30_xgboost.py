@@ -275,17 +275,17 @@ def apply_marketwise_imputation(
     for column in numeric_columns:
         series = pd.to_numeric(result[column], errors="coerce")
         fill_values = market_key.map(
-            lambda key: marketwise_stats["numeric"].get(
+            lambda key, current_column=column: marketwise_stats["numeric"].get(
                 str(key), {}
-            ).get(column, global_stats["numeric"][column])
+            ).get(current_column, global_stats["numeric"][current_column])
         )
         result[column] = series.fillna(fill_values).astype(float)
 
     for column in categorical_columns:
         fill_values = market_key.map(
-            lambda key: marketwise_stats["categorical"].get(
+            lambda key, current_column=column: marketwise_stats["categorical"].get(
                 str(key), {}
-            ).get(column, global_stats["categorical"][column])
+            ).get(current_column, global_stats["categorical"][current_column])
         )
         result[column] = result[column].fillna(fill_values)
 
