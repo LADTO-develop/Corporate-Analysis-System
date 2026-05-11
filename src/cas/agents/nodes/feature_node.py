@@ -16,6 +16,8 @@ def run(state: AgentState) -> dict[str, Any]:
     """Compute a local feature-store snapshot for downstream realtime inference."""
     source_row = dict(state.get("source_feature_row") or {})
     if source_row:
+        # 현재 프로젝트의 주 흐름은 정형화된 43변수 입력셋을 그대로 쓰는 것이다.
+        # 이 경우 feature node는 재계산보다 "모델 입력 벡터 구성"에 집중한다.
         return _run_dataset_backed_feature_store(state, source_row)
 
     cfg = read_yaml("configs/runtime/analysis.yaml")

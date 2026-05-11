@@ -80,6 +80,8 @@ def run(state: AgentState) -> dict[str, Any]:
         4,
     )
 
+    # 지금은 FinancialModelAgent만 실제 정량 해석을 수행하고,
+    # 나머지 에이전트는 후속 구현을 위한 Stage 2 골격을 유지한다.
     agents = [
         _financial_model_agent(state, xgb),
         _debt_liquidity_agent(state),
@@ -129,6 +131,8 @@ def run(state: AgentState) -> dict[str, Any]:
 def _financial_model_agent(state: AgentState, xgb: dict[str, Any]) -> AgentOutput:
     source_row = dict(state.get("source_feature_row") or {})
     peer_rows = list(state.get("peer_comparison_rows") or [])
+    # feature별 peer row를 미리 맵으로 만들어 두면, SHAP 상위 변수 설명에
+    # 산업/시장 중앙값과 백분위를 바로 붙일 수 있다.
     peer_by_feature = {
         str(row.get("feature")): row for row in peer_rows if isinstance(row.get("feature"), str)
     }
@@ -298,6 +302,8 @@ def _describe_top_drivers(
                 "feature": feature_name,
                 "shap_value": shap_value,
                 "direction": direction,
+                # Stage 2의 첫 에이전트는 "모델이 왜 그렇게 봤는지"를 설명하는 역할이므로,
+                # 값 자체와 peer context를 한 문장으로 합쳐 findings에 넘긴다.
                 "detail": _feature_point_text(
                     feature_name=feature_name,
                     feature_key=name,

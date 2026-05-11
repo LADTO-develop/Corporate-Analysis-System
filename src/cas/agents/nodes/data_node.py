@@ -37,6 +37,8 @@ def run(state: AgentState) -> dict[str, Any]:
     logger.info("data_node_run", company_id=company_id, path=str(profile_path))
 
     if not profile_path.exists():
+        # Stage 1/2의 기본 입력은 feature master다. YAML 회사 프로필이 없으면
+        # 학습·추론용 정형 입력셋에서 가장 가까운 company-year row를 찾아 계속 진행한다.
         dataset_row = _resolve_feature_row(
             company_id=company_id,
             analysis_year=int(state.get("analysis_year") or 0),
@@ -144,6 +146,8 @@ def _resolve_feature_row(company_id: str, analysis_year: int) -> dict[str, Any] 
         return None
 
     if analysis_year > 0:
+        # analysis_year는 보통 eval_year 기준 요청이므로 먼저 eval_year를 맞춰 보고,
+        # 없을 때만 fiscal_year fallback을 허용한다.
         eval_matches = matches.loc[matches["eval_year"] == analysis_year]
         if not eval_matches.empty:
             matches = eval_matches
@@ -165,6 +169,8 @@ def _dataset_backed_payload(dataset_row: dict[str, Any]) -> dict[str, Any]:
     size_group = str(dataset_row.get("firm_size_group") or "unknown")
     industry = str(dataset_row.get("industry_macro_category") or "unknown")
     source_path = str(dataset_row.get("__source_path") or _FEATURE_MASTER_PATH)
+    # 대시보드에서 미리 계산한 peer percentile 결과를 같이 실어 두면,
+    # Stage 2 에이전트가 산업/시장 비교 문장을 별도 재계산 없이 바로 만들 수 있다.
     peer_rows = _resolve_peer_rows(stock_code=stock_code, fiscal_year=fiscal_year)
 
     summary = (

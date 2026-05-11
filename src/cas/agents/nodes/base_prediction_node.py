@@ -37,6 +37,7 @@ def run(state: AgentState) -> dict[str, Any]:
     )
 
     try:
+        # CI/로컬 모두 같은 Stage 1 결과를 쓰도록 repo에 추적되는 model artifact를 우선 로드한다.
         bundle = _load_model_bundle()
     except Exception as error:
         if not _is_missing_model_artifact_error(error):
@@ -76,6 +77,7 @@ def run(state: AgentState) -> dict[str, Any]:
         threshold=threshold,
         top_drivers=top_drivers,
     )
+    # model_view는 이후 에이전트들이 "해석만" 하도록 남겨 두는 원본 정량 판단이다.
     model_view = {
         "probability_speculative": probability_speculative,
         "prediction_label": prediction_label,
@@ -146,6 +148,7 @@ def _run_fallback_prediction(
         watch_threshold=watch_threshold,
         high_risk_threshold=high_risk_threshold,
     )
+    # artifact가 없거나 최소 기능만 필요한 환경에서도 파이프라인 전체는 끝까지 돌도록 둔다.
     top_drivers = _top_risk_drivers_from_scores(normalized_features)
     xgboost_result = ModelResult(
         model_name=str(model_registry.get("active_model", "xgboost_realtime")),
