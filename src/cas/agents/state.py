@@ -133,7 +133,9 @@ class AgentState(TypedDict, total=False):
 
     company_profile: dict[str, Any]
     raw_financials: dict[str, Any]
+    source_feature_row: dict[str, Any]
     normalized_features: dict[str, float]
+    model_features: dict[str, float]
     processed_company: dict[str, Any]
     processed_company_list_ref: str
     feature_store_snapshot: dict[str, Any]
@@ -144,6 +146,7 @@ class AgentState(TypedDict, total=False):
     market_overlay: OverlayAssessment
     news_overlay: OverlayAssessment
     overall_score: float
+    model_view: dict[str, Any]
     xgboost_result: ModelResult
     rule_result: RuleResult
 
