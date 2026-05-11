@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import pickle
 from collections import defaultdict
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -17,7 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 INPUT_DIR = ROOT / "data" / "input" / "credit_43_features"
 METADATA_PATH = INPUT_DIR / "feature_43_dictionary_metadata.json"
 OUTPUT_DIR = ROOT / "data" / "outputs" / "dashboard" / "feature_43_mvp"
-MODEL_OUTPUT_DIR = ROOT / "data" / "outputs" / "modeling" / "feature_43_xgboost"
+MODEL_OUTPUT_DIR = ROOT / "data" / "external" / "model_artifacts" / "feature_43_xgboost"
 
 SCENARIO_PRESETS: dict[str, dict[str, float]] = {
     "base": {},
@@ -524,20 +523,6 @@ def save_model_artifacts(
 ) -> None:
     model_output_dir.mkdir(parents=True, exist_ok=True)
 
-    model_bundle = {
-        "dataset_name": "credit_43_features",
-        "model_type": "xgboost_classifier",
-        "feature_columns": model_features,
-        "source_features": source_features,
-        "fill_values": {str(key): float(value) for key, value in fill_values.to_dict().items()},
-        "threshold_default": 0.5,
-        "threshold_tuned": tuned_threshold,
-        "model": model,
-    }
-
-    with (model_output_dir / "xgboost_model.pkl").open("wb") as file:
-        pickle.dump(model_bundle, file, protocol=pickle.HIGHEST_PROTOCOL)
-
     model.get_booster().save_model(model_output_dir / "xgboost_model.json")
 
     write_json(
@@ -547,12 +532,13 @@ def save_model_artifacts(
             "model_type": "xgboost_classifier",
             "feature_count": len(model_features),
             "feature_columns": model_features,
+            "source_features": source_features,
+            "fill_values": {str(key): float(value) for key, value in fill_values.to_dict().items()},
             "threshold_default": 0.5,
             "threshold_tuned": tuned_threshold,
             "best_iteration": getattr(model, "best_iteration", None),
             "best_score": getattr(model, "best_score", None),
             "saved_files": [
-                "xgboost_model.pkl",
                 "xgboost_model.json",
                 "model_artifact_metadata.json",
             ],
@@ -564,12 +550,14 @@ def write_model_readme(model_output_dir: Path) -> None:
     content = """# 43-Feature XGBoost Model Artifacts
 
 이 폴더는 `credit_43_features` 데이터를 기준으로 다시 학습한
-XGBoost 모델 파일을 저장한 결과입니다.
+XGBoost 모델 artifact를 저장한 결과입니다.
 
 구성:
-- `xgboost_model.pkl`: 파이썬에서 바로 불러오기 쉬운 모델 번들
 - `xgboost_model.json`: XGBoost 원본 모델 파일
 - `model_artifact_metadata.json`: 사용 변수, 결측 대치값, 기준선 등 메타데이터
+
+이 폴더는 Git에 포함되는 기준 모델 artifact 위치이며,
+Stage 1 모델 추론은 이 경로를 직접 참조합니다.
 """
     (model_output_dir / "README.md").write_text(content, encoding="utf-8")
 

@@ -13,9 +13,11 @@ from cas.agents.state import AgentState, AuditEntry, BaseAssessment, ModelResult
 from cas.utils.io import read_json, read_yaml
 
 if TYPE_CHECKING:
-    from xgboost import XGBClassifier
+    from xgboost import Booster
 
-_MODEL_ARTIFACT_PATH = Path("data/outputs/modeling/feature_43_xgboost/xgboost_model.pkl")
+_MODEL_ARTIFACT_DIR = Path("data/external/model_artifacts/feature_43_xgboost")
+_MODEL_ARTIFACT_PATH = _MODEL_ARTIFACT_DIR / "xgboost_model.json"
+_MODEL_METADATA_PATH = _MODEL_ARTIFACT_DIR / "model_artifact_metadata.json"
 _FEATURE_LIST_PATH = Path("data/input/credit_43_features/feature_43_list.json")
 
 
@@ -36,7 +38,9 @@ def run(state: AgentState) -> dict[str, Any]:
 
     try:
         bundle = _load_model_bundle()
-    except FileNotFoundError:
+    except Exception as error:
+        if not _is_missing_model_artifact_error(error):
+            raise
         return _run_fallback_prediction(
             state,
             normalized_features,
@@ -45,9 +49,11 @@ def run(state: AgentState) -> dict[str, Any]:
                 "falling back to deterministic Stage 1 scoring."
             ),
         )
+    import xgboost as xgb
+
     frame = _build_model_frame(model_features, bundle["feature_columns"], bundle["fill_values"])
     model = bundle["model"]
-    probability_speculative = round(float(model.predict_proba(frame)[0, 1]), 4)
+    probability_speculative = round(float(model.predict(xgb.DMatrix(frame))[0]), 4)
 
     model_registry = dict(cfg.get("model_registry", {}))
     threshold = float(bundle.get("threshold_default", model_registry.get("threshold", 0.5)))
@@ -192,6 +198,12 @@ def _run_fallback_prediction(
     }
 
 
+def _is_missing_model_artifact_error(error: Exception) -> bool:
+    if isinstance(error, FileNotFoundError):
+        return True
+    return error.__class__.__name__ == "XGBoostError" and "No such file or directory" in str(error)
+
+
 def _lens_scores(
     normalized_features: dict[str, float],
     cfg: dict[str, Any],
@@ -215,10 +227,21 @@ def _lens_scores(
 
 @lru_cache(maxsize=1)
 def _load_model_bundle() -> dict[str, Any]:
-    import pickle
+    import xgboost as xgb
 
-    with _MODEL_ARTIFACT_PATH.open("rb") as handle:
-        return cast(dict[str, Any], pickle.load(handle))
+    metadata = cast(dict[str, Any], read_json(_MODEL_METADATA_PATH))
+    booster = xgb.Booster()
+    booster.load_model(_MODEL_ARTIFACT_PATH)
+    return {
+        "dataset_name": metadata.get("dataset_name", "credit_43_features"),
+        "model_type": metadata.get("model_type", "xgboost_booster_json"),
+        "feature_columns": list(metadata.get("feature_columns", [])),
+        "source_features": list(metadata.get("source_features", [])),
+        "fill_values": dict(metadata.get("fill_values", {})),
+        "threshold_default": metadata.get("threshold_default", 0.5),
+        "threshold_tuned": metadata.get("threshold_tuned", 0.5),
+        "model": booster,
+    }
 
 
 def _build_model_frame(
@@ -234,14 +257,13 @@ def _build_model_frame(
 
 
 def _top_risk_drivers(
-    model: XGBClassifier,
+    model: Booster,
     frame: pd.DataFrame,
 ) -> list[tuple[str, float]]:
     import xgboost as xgb
 
     feature_spec = read_json(_FEATURE_LIST_PATH)
-    booster = model.get_booster()
-    contribs = booster.predict(xgb.DMatrix(frame), pred_contribs=True)
+    contribs = model.predict(xgb.DMatrix(frame), pred_contribs=True)
     contributions = contribs[0][:-1]
     feature_columns = list(frame.columns)
     feature_index = {name: idx for idx, name in enumerate(feature_columns)}
