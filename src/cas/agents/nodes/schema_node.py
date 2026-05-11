@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, cast
 
 from pydantic import ValidationError
 
@@ -19,9 +19,12 @@ def run(state: AgentState) -> dict[str, Any]:
         response = DashboardResponse.model_validate(payload).model_dump(mode="json")
         summary = "Dashboard response JSON validated against strict schema."
     except ValidationError as error:
-        response = payload
         errors = [err["msg"] for err in error.errors()]
-        summary = f"Dashboard response JSON failed schema validation: {errors}"
+        response = _build_schema_failure_response(state, payload, errors)
+        summary = (
+            "Dashboard response JSON failed schema validation; "
+            "emitted strict fallback response instead."
+        )
 
     audit = AuditEntry(
         node="json_schema",
@@ -124,12 +127,94 @@ def _agent_payloads(agent_summary: dict[str, Any]) -> dict[str, dict[str, Any]]:
     }
 
 
+def _build_schema_failure_response(
+    state: AgentState,
+    payload: dict[str, Any],
+    errors: list[str],
+) -> dict[str, Any]:
+    company_overview = dict(payload.get("company_overview") or {})
+    model_result = dict(payload.get("model_result") or {})
+    agent_summary = dict(payload.get("agent_summary") or {})
+    first_error = errors[0] if errors else "unknown schema validation error"
+    fallback_payload = {
+        "company_overview": {
+            "company_id": str(
+                company_overview.get("company_id") or state.get("company_id", "unknown")
+            ),
+            "company_name": str(
+                company_overview.get("company_name")
+                or state.get("company_name")
+                or state.get("company_id", "unknown")
+            ),
+            "market": str(company_overview.get("market") or state.get("market", "UNKNOWN")),
+            "analysis_year": int(
+                company_overview.get("analysis_year") or state.get("analysis_year") or 0
+            ),
+            "summary": "A strict fallback response was generated after schema validation failed.",
+        },
+        "model_result": {
+            "model_name": str(model_result.get("model_name", "xgboost_realtime")),
+            "model_version": str(model_result.get("model_version", "unavailable")),
+            "prediction_label": str(model_result.get("prediction_label", "unknown")),
+            "risk_band": "insufficient_data",
+            "probability_speculative": _clamp_probability(
+                model_result.get("probability_speculative", 0.0)
+            ),
+            "top_drivers": [],
+            "rule_label": "schema_validation_failed",
+        },
+        "news_analysis": {
+            "status": "schema_validation_failed",
+            "summary": (
+                "A fallback response was emitted because the generated payload failed "
+                f"strict schema validation: {first_error}"
+            ),
+        },
+        "agent_summary": {
+            "final_recommendation": str(
+                agent_summary.get("final_recommendation")
+                or state.get("final_recommendation")
+                or "review"
+            ),
+            "final_confidence": _clamp_probability(
+                agent_summary.get("final_confidence", state.get("final_confidence", 0.0))
+            ),
+            "synthesis": (
+                "The generated payload did not satisfy the strict dashboard schema, "
+                "so a safe fallback response was emitted."
+            ),
+            "agents": {
+                "synthesis_format": {
+                    "summary": "Strict fallback response generated.",
+                    "findings": [f"Schema validation error: {first_error}"],
+                    "confidence": 0.0,
+                }
+            },
+        },
+    }
+    validated = DashboardResponse.model_validate(fallback_payload)
+    return cast(dict[str, Any], validated.model_dump(mode="json"))
+
+
 def _news_summary(news_cache: dict[str, Any], *, insufficient: bool) -> str:
     if insufficient:
         return "News cache was not queried because required company inputs are missing."
     if news_cache.get("status") == "placeholder":
         return "News/crawling integration is a placeholder only."
     return "News/crawling integration is not implemented."
+
+
+def _clamp_probability(value: object) -> float:
+    try:
+        if value is None:
+            numeric = 0.0
+        elif isinstance(value, int | float | str):
+            numeric = float(value)
+        else:
+            raise ValueError("unsupported probability type")
+    except (TypeError, ValueError):
+        numeric = 0.0
+    return min(max(numeric, 0.0), 1.0)
 
 
 def _now() -> str:

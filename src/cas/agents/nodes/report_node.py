@@ -18,7 +18,8 @@ def run(state: AgentState) -> dict[str, Any]:
     ensure_dir(report_dir)
 
     payload = render_report(state)
-    response_json = state.get("response_json") or payload
+    response_json = dict(state.get("response_json") or payload)
+    schema_error_count = len(state.get("json_schema_errors", []))
     json_path = report_dir / "latest.json"
     md_path = report_dir / "latest.md"
 
@@ -31,7 +32,8 @@ def run(state: AgentState) -> dict[str, Any]:
         summary=(
             f"Report written to {json_path}. "
             f"final_recommendation={state.get('final_recommendation', 'n/a')}, "
-            f"insufficient_data={state.get('insufficient_data', False)}"
+            f"insufficient_data={state.get('insufficient_data', False)}, "
+            f"schema_errors={schema_error_count}"
         ),
         payload_ref=str(json_path),
     )
