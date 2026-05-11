@@ -1,0 +1,99 @@
+{
+  "schema_version": "1.0",
+  "source": "ECOS",
+  "source_name_kr": "한국은행 경제통계시스템",
+  "indicators": [
+    {
+      "code": "BaseRate",
+      "name_kr": "한국은행 기준금리",
+      "name_en": "Bank of Korea Base Rate",
+      "stat_code": "722Y001",
+      "cycle": "M",
+      "item_code": "0101000",
+      "unit": "%",
+      "lookback_days": 540,
+      "stale_after_days": 75,
+      "description_kr": "정책금리 수준을 통해 차입비용 부담과 금융환경 긴축도를 판단한다."
+    },
+    {
+      "code": "3YRate_KTB",
+      "name_kr": "국고채 3년 금리",
+      "name_en": "3-Year KTB Yield",
+      "stat_code": "817Y002",
+      "cycle": "D",
+      "item_code": "010200000",
+      "unit": "%",
+      "lookback_days": 45,
+      "stale_after_days": 7,
+      "description_kr": "무위험에 가까운 원화 금리 기준점으로 회사채 금리와 신용스프레드 계산에 사용한다."
+    },
+    {
+      "code": "3YRate_CorpBond_AA",
+      "name_kr": "회사채 AA- 3년 금리",
+      "name_en": "3-Year AA- Corporate Bond Yield",
+      "stat_code": "817Y002",
+      "cycle": "D",
+      "item_code": "010300000",
+      "unit": "%",
+      "lookback_days": 45,
+      "stale_after_days": 7,
+      "description_kr": "투자등급 우량 회사채 조달비용을 보여준다."
+    },
+    {
+      "code": "3YRate_CorpBond_BBB",
+      "name_kr": "회사채 BBB- 3년 금리",
+      "name_en": "3-Year BBB- Corporate Bond Yield",
+      "stat_code": "817Y002",
+      "cycle": "D",
+      "item_code": "010320000",
+      "unit": "%",
+      "lookback_days": 45,
+      "stale_after_days": 7,
+      "description_kr": "투기등급 경계 기업의 시장 조달비용과 위험 프리미엄을 보여준다."
+    },
+    {
+      "code": "USDKRW",
+      "name_kr": "원/달러 환율",
+      "name_en": "USD/KRW Exchange Rate",
+      "stat_code": "731Y001",
+      "cycle": "D",
+      "item_code": "0000001",
+      "unit": "KRW/USD",
+      "lookback_days": 45,
+      "stale_after_days": 7,
+      "description_kr": "수입원가, 외화부채, 수출기업 채산성에 영향을 주는 환율 환경을 나타낸다."
+    },
+    {
+      "code": "PPI",
+      "name_kr": "생산자물가지수",
+      "name_en": "Producer Price Index",
+      "stat_code": "404Y014",
+      "cycle": "M",
+      "item_code": "*AA",
+      "unit": "index",
+      "lookback_days": 720,
+      "stale_after_days": 120,
+      "description_kr": "원가 압력과 판매가격 전가 부담을 판단하는 물가 지표다."
+    }
+  ],
+  "derived_metrics": [
+    {
+      "code": "Spread_Credit",
+      "name_kr": "신용스프레드",
+      "name_en": "Credit Spread",
+      "formula": "3YRate_CorpBond_AA - 3YRate_KTB",
+      "unit": "%p",
+      "input_codes": ["3YRate_CorpBond_AA", "3YRate_KTB"],
+      "description_kr": "우량 회사채와 국고채 간 차이로 시장 전반의 신용위험 프리미엄을 나타낸다."
+    },
+    {
+      "code": "Spread_Quality",
+      "name_kr": "투기경계 스프레드",
+      "name_en": "Quality Spread",
+      "formula": "3YRate_CorpBond_BBB - 3YRate_CorpBond_AA",
+      "unit": "%p",
+      "input_codes": ["3YRate_CorpBond_BBB", "3YRate_CorpBond_AA"],
+      "description_kr": "BBB-와 AA- 회사채 금리 차이로 저신용 기업에 대한 시장 경계감을 나타낸다."
+    }
+  ]
+}
