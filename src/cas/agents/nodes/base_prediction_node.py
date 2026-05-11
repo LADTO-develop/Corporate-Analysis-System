@@ -34,7 +34,17 @@ def run(state: AgentState) -> dict[str, Any]:
         cfg["overall_weights"],
     )
 
-    bundle = _load_model_bundle()
+    try:
+        bundle = _load_model_bundle()
+    except FileNotFoundError:
+        return _run_fallback_prediction(
+            state,
+            normalized_features,
+            fallback_reason=(
+                "Saved XGBoost artifact was not found; "
+                "falling back to deterministic Stage 1 scoring."
+            ),
+        )
     frame = _build_model_frame(model_features, bundle["feature_columns"], bundle["fill_values"])
     model = bundle["model"]
     probability_speculative = round(float(model.predict_proba(frame)[0, 1]), 4)
@@ -102,6 +112,7 @@ def run(state: AgentState) -> dict[str, Any]:
 def _run_fallback_prediction(
     state: AgentState,
     normalized_features: dict[str, float],
+    fallback_reason: str | None = None,
 ) -> dict[str, Any]:
     """Preserve the legacy deterministic facade when model features are unavailable."""
     cfg = read_yaml("configs/runtime/analysis.yaml")
@@ -143,7 +154,12 @@ def _run_fallback_prediction(
         node="xgboost_inference",
         timestamp=_now(),
         summary=(
-            "Fallback Stage 1 inference completed from normalized snapshot: "
+            (
+                f"{fallback_reason} "
+                if fallback_reason
+                else ""
+            )
+            + "Fallback Stage 1 inference completed from normalized snapshot: "
             f"probability_speculative={probability_speculative:.3f}, "
             f"risk_band={risk_band}"
         ),
