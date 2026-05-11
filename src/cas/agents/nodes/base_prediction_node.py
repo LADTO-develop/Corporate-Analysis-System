@@ -160,11 +160,7 @@ def _run_fallback_prediction(
         node="xgboost_inference",
         timestamp=_now(),
         summary=(
-            (
-                f"{fallback_reason} "
-                if fallback_reason
-                else ""
-            )
+            (f"{fallback_reason} " if fallback_reason else "")
             + "Fallback Stage 1 inference completed from normalized snapshot: "
             f"probability_speculative={probability_speculative:.3f}, "
             f"risk_band={risk_band}"
