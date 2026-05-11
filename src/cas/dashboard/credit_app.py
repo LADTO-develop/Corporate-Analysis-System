@@ -13,6 +13,7 @@ import altair as alt
 import pandas as pd
 import streamlit as st
 
+from cas.agents.contracts import build_company_selection_from_row
 from cas.dashboard.data_loader import (
     TEAM43_ARTIFACT_DIR,
     DashboardArtifacts,
@@ -3779,6 +3780,7 @@ def main() -> None:
         st.stop()
 
     selected_row = pick_selected_company(artifacts)
+    st.session_state["company_selection"] = build_company_selection_from_row(selected_row.to_dict())
     prediction_row = resolve_company_prediction(selected_row, artifacts.prediction_scores)
     feature_map = build_company_feature_map(selected_row, artifacts.feature_dictionary)
     local_shap = resolve_company_local_shap(selected_row, artifacts.local_shap)

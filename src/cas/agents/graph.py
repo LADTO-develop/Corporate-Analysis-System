@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import importlib
-from collections.abc import Callable, Hashable
+from collections.abc import Callable, Hashable, Mapping
 from pathlib import Path
 from typing import Any, cast
 
+from cas.agents.contracts import CompanySelectionRequest, build_agent_state_seed
 from cas.agents.state import AgentState
 from cas.utils.io import read_yaml
 from cas.utils.logging import get_logger
@@ -145,7 +146,8 @@ def _merge_state(current: AgentState, updates: dict[str, Any]) -> AgentState:
 
 def run_once(
     *,
-    company_id: str,
+    company_id: str | None = None,
+    company_selection: CompanySelectionRequest | Mapping[str, Any] | None = None,
     market: str | None = None,
     analysis_year: int | None = None,
     config_path: str | Path = "configs/agent/graph.yaml",
@@ -154,18 +156,33 @@ def run_once(
     """Compile and run the graph once for a single company."""
     graph = build_graph(config_path)
 
-    initial: AgentState = {
-        "company_id": company_id,
-        "market": market or "UNKNOWN",
-        "analysis_year": analysis_year or 0,
-        "base_assessments": {},
-        "committee_reviews": [],
-        "agent_outputs": [],
-        "agent_summary": {},
-        "audit": [],
-        "artifacts": {},
-        "insufficient_data": False,
-    }
-    config = {"configurable": {"thread_id": thread_id or company_id}}
+    if company_selection is not None:
+        initial = build_agent_state_seed(company_selection)
+        if market is not None:
+            initial["market"] = market
+        if analysis_year is not None:
+            initial["analysis_year"] = analysis_year
+    elif company_id is not None:
+        initial = {
+            "company_id": company_id,
+            "market": market or "UNKNOWN",
+            "analysis_year": analysis_year or 0,
+            "base_assessments": {},
+            "committee_reviews": [],
+            "agent_outputs": [],
+            "agent_summary": {},
+            "audit": [],
+            "artifacts": {},
+            "insufficient_data": False,
+        }
+    else:
+        raise ValueError("company_id or company_selection is required")
+
+    default_thread_id = (
+        thread_id
+        or cast(dict[str, Any], initial.get("company_selection") or {}).get("request_id")
+        or initial["company_id"]
+    )
+    config = {"configurable": {"thread_id": default_thread_id}}
     final: AgentState = graph.invoke(initial, config=config)  # type: ignore[attr-defined]
     return final

@@ -225,6 +225,9 @@ pytest --cov=cas
 
 어느 경로든 동일한 `AgentState`로 정규화되어 파이프라인에 진입합니다.
 
+웹 리스팅에서 기업을 선택해 분석 파이프라인으로 넘기는 첫 입력 계약은
+[`docs/pipeline/data_pipeline.md`](docs/pipeline/data_pipeline.md)에 정리되어 있습니다.
+
 ## Roadmap
 
 1. ✅ 패키지명 `cas` 통일 및 LangGraph 베이스라인 구동
