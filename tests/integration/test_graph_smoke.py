@@ -134,3 +134,27 @@ class TestGraphBuild:
         assert state["processed_company"]["stock_code"] == "000250"
         assert state["response_json"]["company_overview"]["company_id"] == "KOSDAQ-000250-2023"
         assert state["json_schema_errors"] == []
+
+    def test_graph_runs_from_company_selection_without_explicit_year(self) -> None:
+        from cas.agents.graph import run_once
+
+        state = run_once(
+            company_selection={
+                "request_id": "req-smoke-selection-latest",
+                "source": "web_listing",
+                "selected_at": "2026-05-11T04:30:00Z",
+                "as_of_date": "2025-05-11",
+                "company": {
+                    "market": "KOSDAQ",
+                    "stock_code": "000250",
+                    "corp_name": "삼천당제약(주)",
+                },
+                "analysis": {},
+            }
+        )
+
+        assert state["company_id"] == "KOSDAQ-000250-2023"
+        assert state["processed_company"]["fiscal_year"] == 2023
+        assert state["processed_company"]["eval_year"] == 2024
+        assert state["response_json"]["company_overview"]["company_id"] == "KOSDAQ-000250-2023"
+        assert state["json_schema_errors"] == []

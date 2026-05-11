@@ -178,6 +178,11 @@ def run_once(
     else:
         raise ValueError("company_id or company_selection is required")
 
-    config = {"configurable": {"thread_id": thread_id or initial["company_id"]}}
+    default_thread_id = (
+        thread_id
+        or cast(dict[str, Any], initial.get("company_selection") or {}).get("request_id")
+        or initial["company_id"]
+    )
+    config = {"configurable": {"thread_id": default_thread_id}}
     final: AgentState = graph.invoke(initial, config=config)  # type: ignore[attr-defined]
     return final

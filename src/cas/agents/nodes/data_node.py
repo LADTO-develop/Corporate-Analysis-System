@@ -12,7 +12,6 @@ import pandas as pd
 from cas.agents.contracts import (
     CompanySelectionError,
     CompanySelectionRequest,
-    build_company_id,
     normalize_company_selection,
 )
 from cas.agents.state import AgentState, AuditEntry
@@ -261,7 +260,13 @@ def _dataset_backed_payload(
     industry = str(dataset_row.get("industry_macro_category") or "unknown")
     source_path = str(dataset_row.get("__source_path") or _FEATURE_MASTER_PATH)
     company_id = (
-        build_company_id(company_selection) if company_selection is not None else stock_code
+        _build_snapshot_company_id(
+            market=market,
+            stock_code=normalized_stock_code,
+            fiscal_year=fiscal_year,
+        )
+        if company_selection is not None
+        else stock_code
     )
     # 대시보드에서 미리 계산한 peer percentile 결과를 같이 실어 두면,
     # Stage 2 에이전트가 산업/시장 비교 문장을 별도 재계산 없이 바로 만들 수 있다.
@@ -322,6 +327,10 @@ def _dataset_backed_payload(
     if company_selection is not None:
         payload["company_selection"] = company_selection.model_dump(mode="json", exclude_none=True)
     return payload
+
+
+def _build_snapshot_company_id(*, market: str, stock_code: str, fiscal_year: int) -> str:
+    return f"{market.upper()}-{stock_code}-{fiscal_year}"
 
 
 def _resolve_peer_rows(*, stock_code: str, fiscal_year: int) -> list[dict[str, Any]]:
