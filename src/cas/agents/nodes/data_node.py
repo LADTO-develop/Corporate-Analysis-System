@@ -1,4 +1,4 @@
-"""Load a local company profile and validate the minimum input shape."""
+"""Select a company and validate the processed-company input shape."""
 
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ _REQUIRED_QUALITATIVE = {"governance_score", "product_momentum_score"}
 
 
 def run(state: AgentState) -> dict[str, Any]:
-    """Load a company profile from ``data/input/companies``."""
+    """Load the selected company profile from the processed-company list."""
     company_id = state["company_id"]
     profile_path = _PROFILE_ROOT / f"{company_id}.yaml"
     logger.info("data_node_run", company_id=company_id, path=str(profile_path))
@@ -42,6 +42,7 @@ def run(state: AgentState) -> dict[str, Any]:
     company = profile.get("company", {})
     financials = profile.get("financials", {})
     qualitative = profile.get("qualitative", {})
+    analysis_year = int(profile.get("analysis_year") or state.get("analysis_year") or 0)
     missing = sorted(
         [
             *(key for key in _REQUIRED_FINANCIALS if key not in financials),
@@ -60,14 +61,25 @@ def run(state: AgentState) -> dict[str, Any]:
     audit = AuditEntry(
         node="data",
         timestamp=_now(),
-        summary=f"Loaded company profile for {company.get('name', company_id)}",
+        summary=(
+            "Selected company loaded from processed-company list: "
+            f"{company.get('name', company_id)}"
+        ),
         metrics={"n_financial_fields": float(len(financials))},
     )
     return {
         "company_name": company.get("name", company_id),
         "market": company.get("market", state.get("market", "UNKNOWN")),
-        "analysis_year": int(profile.get("analysis_year") or state.get("analysis_year") or 0),
+        "analysis_year": analysis_year,
         "company_profile": profile,
+        "processed_company": {
+            "company_id": company.get("id", company_id),
+            "company_name": company.get("name", company_id),
+            "market": company.get("market", state.get("market", "UNKNOWN")),
+            "analysis_year": analysis_year,
+            "source": str(profile_path),
+        },
+        "processed_company_list_ref": str(_PROFILE_ROOT),
         "raw_financials": financials,
         "insufficient_data": False,
         "audit": [audit],
