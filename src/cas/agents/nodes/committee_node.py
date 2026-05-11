@@ -98,6 +98,8 @@ def run(state: AgentState) -> dict[str, Any]:
         )
         for agent in agents
     ]
+    # agent_summary는 대시보드/리포트에서 바로 읽기 쉬운 dict 구조이고,
+    # agent_outputs / committee_reviews는 schema와 audit trail 쪽에서 쓰는 정규화 결과다.
     agent_summary = {
         "final_recommendation": recommendation,
         "final_confidence": confidence,
@@ -153,6 +155,8 @@ def _financial_model_agent(state: AgentState, xgb: dict[str, Any]) -> AgentOutpu
 
     probability = float(xgb.get("probability_speculative", 0.0) or 0.0)
     prediction_label = str(xgb.get("prediction_label", "unknown"))
+    # Stage 1의 top_drivers와 source row 원값, peer comparison을 같이 묶어서
+    # "모델이 왜 그렇게 판단했는지"를 사람 문장으로 바꾸는 것이 FinancialModelAgent의 핵심 역할이다.
     driver_details = _describe_top_drivers(xgb, source_row, peer_by_feature)
     risk_items = [item for item in driver_details if item["direction"] == "risk"]
     support_items = [item for item in driver_details if item["direction"] == "support"]
@@ -188,6 +192,8 @@ def _financial_model_agent(state: AgentState, xgb: dict[str, Any]) -> AgentOutpu
 
 
 def _debt_liquidity_agent(state: AgentState) -> AgentOutput:
+    # 아래 4개 에이전트는 현재 "고정 역할 골격"만 제공한다.
+    # 실제 외부 데이터 연결과 라운드형 토론 로직은 이후 단계에서 채워 넣는다.
     source_row = dict(state.get("source_feature_row") or {})
     current_ratio = _safe_float(source_row.get("current_ratio"))
     cash_ratio = _safe_float(source_row.get("cash_ratio"))

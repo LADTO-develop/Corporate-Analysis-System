@@ -50,6 +50,8 @@ def run(state: AgentState) -> dict[str, Any]:
                 summary=f"Company profile not found: {profile_path}",
             )
             return {"insufficient_data": True, "audit": [audit]}
+        # YAML 입력이 없는 운영 경로에서는 정형 입력셋 row 하나를 "회사 프로필"처럼 취급한다.
+        # 여기서 만든 payload는 Stage 1 모델 실행과 Stage 2 에이전트 해석의 공통 출발점이 된다.
         return _dataset_backed_payload(dataset_row)
 
     profile = read_yaml(profile_path)
@@ -129,6 +131,8 @@ def _load_peer_percentiles() -> pd.DataFrame | None:
 
 
 def _resolve_feature_row(company_id: str, analysis_year: int) -> dict[str, Any] | None:
+    # company_id는 stock_code 또는 corp_name으로 들어올 수 있어서 둘 다 허용한다.
+    # 찾은 후보 중 가장 마지막 company-year row를 선택해 이후 노드의 기준 입력으로 쓴다.
     master = _load_feature_master().copy()
     normalized_company_id = company_id.strip()
     numeric_company_id = normalized_company_id.lstrip("0") or "0"
@@ -208,6 +212,8 @@ def _dataset_backed_payload(dataset_row: dict[str, Any]) -> dict[str, Any]:
         },
         "processed_company_list_ref": source_path,
         "raw_financials": {},
+        # source_feature_row는 Stage 1이 바로 모델 입력 벡터를 만들 때 쓰는 원본 row다.
+        # peer_comparison_rows는 Stage 2 FinancialModelAgent가 산업/시장 비교 문장을 만들 때 쓴다.
         "source_feature_row": dataset_row,
         "peer_comparison_rows": peer_rows,
         "insufficient_data": False,

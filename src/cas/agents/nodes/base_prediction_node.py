@@ -27,6 +27,8 @@ def run(state: AgentState) -> dict[str, Any]:
     normalized_features = dict(state.get("normalized_features") or {})
 
     if not model_features:
+        # feature_node가 정형 입력 벡터를 만들지 못한 경우에는
+        # 예전 deterministic scoring 경로로 내려가 파이프라인을 끊지 않는다.
         return _run_fallback_prediction(state, normalized_features)
 
     cfg = read_yaml("configs/runtime/analysis.yaml")
@@ -102,8 +104,11 @@ def run(state: AgentState) -> dict[str, Any]:
     return {
         "base_assessments": lens_scores,
         "overall_score": overall_score,
+        # model_view는 화면/에이전트가 공통으로 읽는 가벼운 표현이고,
+        # xgboost_result는 schema/export 쪽에서 쓰는 구조화 결과다.
         "model_view": model_view,
         "xgboost_result": xgboost_result.model_dump(),
+        # model_registry_ref는 "어떤 artifact와 threshold로 이 판단이 나왔는지"를 남기는 추적 정보다.
         "model_registry_ref": {
             "registry_name": model_registry.get("registry_name", "local_model_registry"),
             "active_model": xgboost_result.model_name,
@@ -177,6 +182,8 @@ def _run_fallback_prediction(
     return {
         "base_assessments": lens_scores,
         "overall_score": overall_score,
+        # fallback도 반환 shape는 Stage 1 정상 경로와 맞춰 둬야
+        # downstream node가 분기 없이 동일한 state key를 읽을 수 있다.
         "model_view": {
             "probability_speculative": probability_speculative,
             "prediction_label": prediction_label,
@@ -231,6 +238,8 @@ def _load_model_bundle() -> dict[str, Any]:
     metadata = cast(dict[str, Any], read_json(_MODEL_METADATA_PATH))
     booster = xgb.Booster()
     booster.load_model(_MODEL_ARTIFACT_PATH)
+    # json artifact와 metadata를 한 번에 묶어 두면
+    # 추론 시 feature column, 결측치 대치값, threshold를 같은 버전 기준으로 재사용할 수 있다.
     return {
         "dataset_name": metadata.get("dataset_name", "credit_43_features"),
         "model_type": metadata.get("model_type", "xgboost_booster_json"),
