@@ -17,6 +17,7 @@ logger = get_logger(__name__)
 
 _PROFILE_ROOT = Path("data/input/companies")
 _FEATURE_MASTER_PATH = Path("data/input/credit_43_features/feature_43_master.csv")
+_FEATURE_INFERENCE_2026_PATH = Path("data/input/credit_43_features/feature_43_inference_2026.csv")
 _REQUIRED_FINANCIALS = {
     "revenue_growth_pct",
     "operating_margin_pct",
@@ -103,7 +104,18 @@ def has_enough_data(state: AgentState) -> Literal["enough", "insufficient"]:
 
 @lru_cache(maxsize=1)
 def _load_feature_master() -> pd.DataFrame:
-    return pd.read_csv(_FEATURE_MASTER_PATH, encoding="utf-8-sig", dtype={"stock_code": str})
+    frames: list[pd.DataFrame] = []
+    for path in (_FEATURE_MASTER_PATH, _FEATURE_INFERENCE_2026_PATH):
+        if not path.exists():
+            continue
+        frame = pd.read_csv(path, encoding="utf-8-sig", dtype={"stock_code": str})
+        frame["__source_path"] = str(path)
+        frames.append(frame)
+    if not frames:
+        raise FileNotFoundError(
+            f"No feature input found at {_FEATURE_MASTER_PATH} or {_FEATURE_INFERENCE_2026_PATH}"
+        )
+    return pd.concat(frames, ignore_index=True, sort=False)
 
 
 def _resolve_feature_row(company_id: str, analysis_year: int) -> dict[str, Any] | None:
@@ -144,6 +156,7 @@ def _dataset_backed_payload(dataset_row: dict[str, Any]) -> dict[str, Any]:
     analysis_year = int(dataset_row.get("eval_year") or fiscal_year)
     size_group = str(dataset_row.get("firm_size_group") or "unknown")
     industry = str(dataset_row.get("industry_macro_category") or "unknown")
+    source_path = str(dataset_row.get("__source_path") or _FEATURE_MASTER_PATH)
 
     summary = (
         f"{industry} 업종의 {size_group} 상장기업이며, "
@@ -176,9 +189,9 @@ def _dataset_backed_payload(dataset_row: dict[str, Any]) -> dict[str, Any]:
             "market": market,
             "analysis_year": analysis_year,
             "fiscal_year": fiscal_year,
-            "source": str(_FEATURE_MASTER_PATH),
+            "source": source_path,
         },
-        "processed_company_list_ref": str(_FEATURE_MASTER_PATH),
+        "processed_company_list_ref": source_path,
         "raw_financials": {},
         "source_feature_row": dataset_row,
         "insufficient_data": False,
