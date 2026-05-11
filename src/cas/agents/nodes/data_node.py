@@ -18,6 +18,7 @@ logger = get_logger(__name__)
 _PROFILE_ROOT = Path("data/input/companies")
 _FEATURE_MASTER_PATH = Path("data/input/credit_43_features/feature_43_master.csv")
 _FEATURE_INFERENCE_2026_PATH = Path("data/input/credit_43_features/feature_43_inference_2026.csv")
+_PEER_PERCENTILES_PATH = Path("data/outputs/dashboard/feature_43_mvp/peer_percentiles.csv")
 _REQUIRED_FINANCIALS = {
     "revenue_growth_pct",
     "operating_margin_pct",
@@ -118,6 +119,13 @@ def _load_feature_master() -> pd.DataFrame:
     return pd.concat(frames, ignore_index=True, sort=False)
 
 
+@lru_cache(maxsize=1)
+def _load_peer_percentiles() -> pd.DataFrame | None:
+    if not _PEER_PERCENTILES_PATH.exists():
+        return None
+    return pd.read_csv(_PEER_PERCENTILES_PATH, encoding="utf-8-sig", dtype={"stock_code": str})
+
+
 def _resolve_feature_row(company_id: str, analysis_year: int) -> dict[str, Any] | None:
     master = _load_feature_master().copy()
     normalized_company_id = company_id.strip()
@@ -157,6 +165,7 @@ def _dataset_backed_payload(dataset_row: dict[str, Any]) -> dict[str, Any]:
     size_group = str(dataset_row.get("firm_size_group") or "unknown")
     industry = str(dataset_row.get("industry_macro_category") or "unknown")
     source_path = str(dataset_row.get("__source_path") or _FEATURE_MASTER_PATH)
+    peer_rows = _resolve_peer_rows(stock_code=stock_code, fiscal_year=fiscal_year)
 
     summary = (
         f"{industry} 업종의 {size_group} 상장기업이며, "
@@ -194,9 +203,33 @@ def _dataset_backed_payload(dataset_row: dict[str, Any]) -> dict[str, Any]:
         "processed_company_list_ref": source_path,
         "raw_financials": {},
         "source_feature_row": dataset_row,
+        "peer_comparison_rows": peer_rows,
         "insufficient_data": False,
         "audit": [audit],
     }
+
+
+def _resolve_peer_rows(*, stock_code: str, fiscal_year: int) -> list[dict[str, Any]]:
+    peer_percentiles = _load_peer_percentiles()
+    if peer_percentiles is None:
+        return []
+
+    normalized_stock_code = stock_code.strip()
+    numeric_company_id = normalized_stock_code.lstrip("0") or "0"
+    stock_codes = peer_percentiles["stock_code"].astype(str)
+    stock_codes_no_zero = stock_codes.str.lstrip("0").replace("", "0")
+
+    matched = peer_percentiles.loc[
+        ((stock_codes == normalized_stock_code) | (stock_codes_no_zero == numeric_company_id))
+        & (peer_percentiles["fiscal_year"] == fiscal_year)
+    ].copy()
+    if matched.empty:
+        return []
+
+    return [
+        {key: (None if pd.isna(value) else value) for key, value in row.items()}
+        for row in matched.to_dict(orient="records")
+    ]
 
 
 def _now() -> str:
