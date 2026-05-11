@@ -89,7 +89,13 @@ class CommitteeReview(BaseModel):
 class AgentOutput(BaseModel):
     """One role-fixed agent output in the Agno-style committee."""
 
-    role: Literal["news_summary", "model_interpretation", "risk_review", "synthesis_format"]
+    role: Literal[
+        "financial_model",
+        "debt_liquidity",
+        "macro_market",
+        "evidence_audit",
+        "chair_investment",
+    ]
     summary: str
     findings: list[str] = Field(default_factory=list)
     confidence: float = Field(ge=0.0, le=1.0)
@@ -133,7 +139,10 @@ class AgentState(TypedDict, total=False):
 
     company_profile: dict[str, Any]
     raw_financials: dict[str, Any]
+    source_feature_row: dict[str, Any]
+    peer_comparison_rows: list[dict[str, Any]]
     normalized_features: dict[str, float]
+    model_features: dict[str, float]
     processed_company: dict[str, Any]
     processed_company_list_ref: str
     feature_store_snapshot: dict[str, Any]
@@ -144,6 +153,7 @@ class AgentState(TypedDict, total=False):
     market_overlay: OverlayAssessment
     news_overlay: OverlayAssessment
     overall_score: float
+    model_view: dict[str, Any]
     xgboost_result: ModelResult
     rule_result: RuleResult
 

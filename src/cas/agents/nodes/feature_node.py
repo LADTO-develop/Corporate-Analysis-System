@@ -3,14 +3,23 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 from cas.agents.state import AgentState, AuditEntry
-from cas.utils.io import read_yaml
+from cas.utils.io import read_json, read_yaml
+
+_FEATURE_LIST_PATH = Path("data/input/credit_43_features/feature_43_list.json")
 
 
 def run(state: AgentState) -> dict[str, Any]:
     """Compute a local feature-store snapshot for downstream realtime inference."""
+    source_row = dict(state.get("source_feature_row") or {})
+    if source_row:
+        # 현재 프로젝트의 주 흐름은 정형화된 43변수 입력셋을 그대로 쓰는 것이다.
+        # 이 경우 feature node는 재계산보다 "모델 입력 벡터 구성"에 집중한다.
+        return _run_dataset_backed_feature_store(state, source_row)
+
     cfg = read_yaml("configs/runtime/analysis.yaml")
     financials = state.get("raw_financials") or {}
     profile = state.get("company_profile") or {}
@@ -84,6 +93,61 @@ def run(state: AgentState) -> dict[str, Any]:
     }
 
 
+def _run_dataset_backed_feature_store(
+    state: AgentState,
+    source_row: dict[str, Any],
+) -> dict[str, Any]:
+    feature_spec = read_json(_FEATURE_LIST_PATH)
+    model_feature_names = [str(name) for name in feature_spec["model_features"]]
+    model_features = {
+        name: _numeric_or_default(source_row.get(name), 0.0) for name in model_feature_names
+    }
+    normalized_features = {
+        "revenue_growth_score": _scale(source_row.get("total_assets_growth"), -0.3, 0.3),
+        "profitability_score": _scale(source_row.get("net_margin"), -0.3, 0.3),
+        "leverage_health_score": _scale(
+            source_row.get("debt_ratio"),
+            0.0,
+            2.0,
+            higher_is_better=False,
+        ),
+        "liquidity_score": _scale(source_row.get("current_ratio"), 0.5, 5.0),
+        "cash_generation_score": _scale(source_row.get("cashflow_coverage_ratio"), -5.0, 20.0),
+        "interest_coverage_score": _scale(
+            source_row.get("interest_coverage_ratio"),
+            -10.0,
+            20.0,
+        ),
+        "governance_score": 0.5,
+        "product_momentum_score": _scale(source_row.get("market_to_book"), 0.0, 10.0),
+        "concentration_health_score": 0.5,
+        "industry_position_score": 0.5,
+        "controversy_penalty": 0.45,
+    }
+    audit = AuditEntry(
+        node="feature_store",
+        timestamp=_now(),
+        summary=(
+            f"Loaded dataset-backed feature snapshot with {len(model_features)} model features "
+            f"for {state.get('company_name', state.get('company_id', 'unknown'))}"
+        ),
+        metrics={"n_model_features": float(len(model_features))},
+    )
+    return {
+        "normalized_features": normalized_features,
+        "model_features": model_features,
+        "feature_store_snapshot": {
+            "store_name": "credit_43_feature_store",
+            "company_id": state.get("company_id"),
+            "analysis_year": state.get("analysis_year", 0),
+            "source_path": str(_FEATURE_LIST_PATH),
+            "normalized_features": normalized_features,
+            "model_features": model_features,
+        },
+        "audit": [audit],
+    }
+
+
 def _score(value: Any, spec: dict[str, Any]) -> float:
     if value is None:
         return 0.5
@@ -101,6 +165,32 @@ def _score(value: Any, spec: dict[str, Any]) -> float:
 
 def _controversy_penalty(level: str) -> float:
     return {"low": 0.9, "moderate": 0.45, "high": 0.1}.get(level.lower(), 0.45)
+
+
+def _scale(
+    value: Any,
+    lower: float,
+    upper: float,
+    *,
+    higher_is_better: bool = True,
+) -> float:
+    if value is None:
+        return 0.5
+    numeric = float(value)
+    clipped = min(max(numeric, lower), upper)
+    ratio = (clipped - lower) / (upper - lower)
+    if not higher_is_better:
+        ratio = 1.0 - ratio
+    return round(ratio, 4)
+
+
+def _numeric_or_default(value: Any, default: float) -> float:
+    try:
+        if value is None:
+            return default
+        return float(value)
+    except (TypeError, ValueError):
+        return default
 
 
 def _now() -> str:

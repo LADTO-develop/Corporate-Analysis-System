@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Literal
+
+import pandas as pd
 
 from cas.agents.state import AgentState, AuditEntry
 from cas.utils.io import read_yaml
@@ -13,6 +16,9 @@ from cas.utils.logging import get_logger
 logger = get_logger(__name__)
 
 _PROFILE_ROOT = Path("data/input/companies")
+_FEATURE_MASTER_PATH = Path("data/input/credit_43_features/feature_43_master.csv")
+_FEATURE_INFERENCE_2026_PATH = Path("data/input/credit_43_features/feature_43_inference_2026.csv")
+_PEER_PERCENTILES_PATH = Path("data/outputs/dashboard/feature_43_mvp/peer_percentiles.csv")
 _REQUIRED_FINANCIALS = {
     "revenue_growth_pct",
     "operating_margin_pct",
@@ -26,17 +32,27 @@ _REQUIRED_QUALITATIVE = {"governance_score", "product_momentum_score"}
 
 def run(state: AgentState) -> dict[str, Any]:
     """Load the selected company profile from the processed-company list."""
-    company_id = state["company_id"]
+    company_id = str(state["company_id"])
     profile_path = _PROFILE_ROOT / f"{company_id}.yaml"
     logger.info("data_node_run", company_id=company_id, path=str(profile_path))
 
     if not profile_path.exists():
-        audit = AuditEntry(
-            node="data",
-            timestamp=_now(),
-            summary=f"Company profile not found: {profile_path}",
+        # Stage 1/2의 기본 입력은 feature master다. YAML 회사 프로필이 없으면
+        # 학습·추론용 정형 입력셋에서 가장 가까운 company-year row를 찾아 계속 진행한다.
+        dataset_row = _resolve_feature_row(
+            company_id=company_id,
+            analysis_year=int(state.get("analysis_year") or 0),
         )
-        return {"insufficient_data": True, "audit": [audit]}
+        if dataset_row is None:
+            audit = AuditEntry(
+                node="data",
+                timestamp=_now(),
+                summary=f"Company profile not found: {profile_path}",
+            )
+            return {"insufficient_data": True, "audit": [audit]}
+        # YAML 입력이 없는 운영 경로에서는 정형 입력셋 row 하나를 "회사 프로필"처럼 취급한다.
+        # 여기서 만든 payload는 Stage 1 모델 실행과 Stage 2 에이전트 해석의 공통 출발점이 된다.
+        return _dataset_backed_payload(dataset_row)
 
     profile = read_yaml(profile_path)
     company = profile.get("company", {})
@@ -89,6 +105,143 @@ def run(state: AgentState) -> dict[str, Any]:
 def has_enough_data(state: AgentState) -> Literal["enough", "insufficient"]:
     """Conditional-edge predicate referenced by the graph config."""
     return "insufficient" if state.get("insufficient_data") else "enough"
+
+
+@lru_cache(maxsize=1)
+def _load_feature_master() -> pd.DataFrame:
+    frames: list[pd.DataFrame] = []
+    for path in (_FEATURE_MASTER_PATH, _FEATURE_INFERENCE_2026_PATH):
+        if not path.exists():
+            continue
+        frame = pd.read_csv(path, encoding="utf-8-sig", dtype={"stock_code": str})
+        frame["__source_path"] = str(path)
+        frames.append(frame)
+    if not frames:
+        raise FileNotFoundError(
+            f"No feature input found at {_FEATURE_MASTER_PATH} or {_FEATURE_INFERENCE_2026_PATH}"
+        )
+    return pd.concat(frames, ignore_index=True, sort=False)
+
+
+@lru_cache(maxsize=1)
+def _load_peer_percentiles() -> pd.DataFrame | None:
+    if not _PEER_PERCENTILES_PATH.exists():
+        return None
+    return pd.read_csv(_PEER_PERCENTILES_PATH, encoding="utf-8-sig", dtype={"stock_code": str})
+
+
+def _resolve_feature_row(company_id: str, analysis_year: int) -> dict[str, Any] | None:
+    # company_id는 stock_code 또는 corp_name으로 들어올 수 있어서 둘 다 허용한다.
+    # 찾은 후보 중 가장 마지막 company-year row를 선택해 이후 노드의 기준 입력으로 쓴다.
+    master = _load_feature_master().copy()
+    normalized_company_id = company_id.strip()
+    numeric_company_id = normalized_company_id.lstrip("0") or "0"
+
+    stock_codes = master["stock_code"].astype(str)
+    stock_codes_no_zero = stock_codes.str.lstrip("0").replace("", "0")
+    company_names = master["corp_name"].astype(str)
+
+    matches = master.loc[
+        (stock_codes == normalized_company_id)
+        | (stock_codes_no_zero == numeric_company_id)
+        | (company_names == normalized_company_id)
+    ].copy()
+    if matches.empty:
+        return None
+
+    if analysis_year > 0:
+        # analysis_year는 보통 eval_year 기준 요청이므로 먼저 eval_year를 맞춰 보고,
+        # 없을 때만 fiscal_year fallback을 허용한다.
+        eval_matches = matches.loc[matches["eval_year"] == analysis_year]
+        if not eval_matches.empty:
+            matches = eval_matches
+        else:
+            fiscal_matches = matches.loc[matches["fiscal_year"] == analysis_year]
+            if not fiscal_matches.empty:
+                matches = fiscal_matches
+
+    row = matches.sort_values(["fiscal_year", "eval_year"]).iloc[-1]
+    return {key: (None if pd.isna(value) else value) for key, value in row.to_dict().items()}
+
+
+def _dataset_backed_payload(dataset_row: dict[str, Any]) -> dict[str, Any]:
+    company_name = str(dataset_row.get("corp_name") or dataset_row.get("stock_code") or "unknown")
+    market = str(dataset_row.get("market") or "UNKNOWN")
+    stock_code = str(dataset_row.get("stock_code") or "unknown")
+    fiscal_year = int(dataset_row.get("fiscal_year") or 0)
+    analysis_year = int(dataset_row.get("eval_year") or fiscal_year)
+    size_group = str(dataset_row.get("firm_size_group") or "unknown")
+    industry = str(dataset_row.get("industry_macro_category") or "unknown")
+    source_path = str(dataset_row.get("__source_path") or _FEATURE_MASTER_PATH)
+    # 대시보드에서 미리 계산한 peer percentile 결과를 같이 실어 두면,
+    # Stage 2 에이전트가 산업/시장 비교 문장을 별도 재계산 없이 바로 만들 수 있다.
+    peer_rows = _resolve_peer_rows(stock_code=stock_code, fiscal_year=fiscal_year)
+
+    summary = (
+        f"{industry} 업종의 {size_group} 상장기업이며, "
+        f"{fiscal_year} 회계연도 기준 정량 예측 입력 데이터를 불러왔습니다."
+    )
+    audit = AuditEntry(
+        node="data",
+        timestamp=_now(),
+        summary=f"Loaded feature-master row for {company_name} ({stock_code})",
+        metrics={"fiscal_year": float(fiscal_year), "analysis_year": float(analysis_year)},
+    )
+    return {
+        "company_name": company_name,
+        "market": market,
+        "analysis_year": analysis_year,
+        "company_profile": {
+            "company": {
+                "id": stock_code,
+                "name": company_name,
+                "market": market,
+                "summary": summary,
+            },
+            "financials": {},
+            "qualitative": {},
+            "market_context": {},
+        },
+        "processed_company": {
+            "company_id": stock_code,
+            "company_name": company_name,
+            "market": market,
+            "analysis_year": analysis_year,
+            "fiscal_year": fiscal_year,
+            "source": source_path,
+        },
+        "processed_company_list_ref": source_path,
+        "raw_financials": {},
+        # source_feature_row는 Stage 1이 바로 모델 입력 벡터를 만들 때 쓰는 원본 row다.
+        # peer_comparison_rows는 Stage 2 FinancialModelAgent가 산업/시장 비교 문장을 만들 때 쓴다.
+        "source_feature_row": dataset_row,
+        "peer_comparison_rows": peer_rows,
+        "insufficient_data": False,
+        "audit": [audit],
+    }
+
+
+def _resolve_peer_rows(*, stock_code: str, fiscal_year: int) -> list[dict[str, Any]]:
+    peer_percentiles = _load_peer_percentiles()
+    if peer_percentiles is None:
+        return []
+
+    normalized_stock_code = stock_code.strip()
+    numeric_company_id = normalized_stock_code.lstrip("0") or "0"
+    stock_codes = peer_percentiles["stock_code"].astype(str)
+    stock_codes_no_zero = stock_codes.str.lstrip("0").replace("", "0")
+
+    matched = peer_percentiles.loc[
+        ((stock_codes == normalized_stock_code) | (stock_codes_no_zero == numeric_company_id))
+        & (peer_percentiles["fiscal_year"] == fiscal_year)
+    ].copy()
+    if matched.empty:
+        return []
+
+    return [
+        {key: (None if pd.isna(value) else value) for key, value in row.items()}
+        for row in matched.to_dict(orient="records")
+    ]
 
 
 def _now() -> str:

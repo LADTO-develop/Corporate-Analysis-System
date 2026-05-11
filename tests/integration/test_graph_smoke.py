@@ -84,8 +84,8 @@ class TestGraphBuild:
     def test_graph_runs_on_sample_company(self) -> None:
         from cas.agents.graph import run_once
 
-        state = run_once(company_id="sample-company")
-        assert state["company_name"] == "Sample Components"
+        state = run_once(company_id="250", market="KOSDAQ", analysis_year=2024)
+        assert state["company_name"] == "삼천당제약(주)"
         assert state["final_recommendation"] in {"priority", "watch", "review", "defer"}
         assert state["response_json"].keys() == {
             "company_overview",
@@ -94,6 +94,17 @@ class TestGraphBuild:
             "agent_summary",
         }
         assert state["json_schema_errors"] == []
-        assert state["response_json"]["model_result"]["model_name"] == "xgboost_realtime"
-        assert "news_summary" in state["response_json"]["agent_summary"]["agents"]
+        assert state["response_json"]["model_result"]["model_name"] == "credit_43_features"
+        assert state["response_json"]["model_result"]["prediction_label"] in {"투자적격", "부적격"}
+        assert "financial_model" in state["response_json"]["agent_summary"]["agents"]
         assert "report_md" in state["artifacts"]
+
+    def test_graph_runs_on_2026_inference_company(self) -> None:
+        from cas.agents.graph import run_once
+
+        state = run_once(company_id="250", market="KOSDAQ", analysis_year=2026)
+        assert state["company_name"] == "삼천당제약(주)"
+        assert state["analysis_year"] == 2026
+        assert state["processed_company"]["fiscal_year"] == 2025
+        assert state["response_json"]["model_result"]["prediction_label"] in {"투자적격", "부적격"}
+        assert state["json_schema_errors"] == []
