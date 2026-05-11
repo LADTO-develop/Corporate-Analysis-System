@@ -14,6 +14,7 @@ CAS is organized around the runtime structure in the system diagram:
 The current repository uses local YAML and exported CSV/JSON artifacts as the
 deterministic stand-ins for external stores. The node boundaries match the target
 service architecture so each stand-in can be replaced without reshaping the graph.
+The web-to-pipeline input contract starts in `docs/pipeline/data_pipeline.md`.
 
 ## Offline Preparation Area
 

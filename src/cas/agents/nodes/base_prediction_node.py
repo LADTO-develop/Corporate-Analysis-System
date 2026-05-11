@@ -155,8 +155,13 @@ def _run_fallback_prediction(
     )
     # artifact가 없거나 최소 기능만 필요한 환경에서도 파이프라인 전체는 끝까지 돌도록 둔다.
     top_drivers = _top_risk_drivers_from_scores(normalized_features)
+    fallback_model_name = (
+        "credit_43_features"
+        if state.get("source_feature_row")
+        else str(model_registry.get("active_model", "xgboost_realtime"))
+    )
     xgboost_result = ModelResult(
-        model_name=str(model_registry.get("active_model", "xgboost_realtime")),
+        model_name=fallback_model_name,
         model_version=str(model_registry.get("model_version", "local-deterministic")),
         probability_speculative=probability_speculative,
         prediction_label=prediction_label,
@@ -205,6 +210,8 @@ def _run_fallback_prediction(
 
 
 def _is_missing_model_artifact_error(error: Exception) -> bool:
+    if isinstance(error, ModuleNotFoundError) and error.name == "xgboost":
+        return True
     if isinstance(error, FileNotFoundError):
         return True
     return error.__class__.__name__ == "XGBoostError" and "No such file or directory" in str(error)

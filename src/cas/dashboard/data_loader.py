@@ -11,6 +11,7 @@ from cas.utils.io import read_json
 
 ROOT = Path(__file__).resolve().parents[3]
 FEATURE43_ARTIFACT_DIR = ROOT / "data" / "outputs" / "dashboard" / "feature_43_mvp"
+TEAM43_ARTIFACT_DIR = FEATURE43_ARTIFACT_DIR
 DEFAULT_ARTIFACT_DIR = FEATURE43_ARTIFACT_DIR
 
 

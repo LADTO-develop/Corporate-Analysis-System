@@ -136,6 +136,8 @@ class AgentState(TypedDict, total=False):
     company_name: str
     market: str
     analysis_year: int
+    company_selection: dict[str, Any]
+    selection_errors: list[str]
 
     company_profile: dict[str, Any]
     raw_financials: dict[str, Any]

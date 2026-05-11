@@ -9,6 +9,12 @@ from typing import Any, Literal
 
 import pandas as pd
 
+from cas.agents.contracts import (
+    CompanySelectionError,
+    CompanySelectionRequest,
+    build_company_id,
+    normalize_company_selection,
+)
 from cas.agents.state import AgentState, AuditEntry
 from cas.utils.io import read_yaml
 from cas.utils.logging import get_logger
@@ -32,6 +38,10 @@ _REQUIRED_QUALITATIVE = {"governance_score", "product_momentum_score"}
 
 def run(state: AgentState) -> dict[str, Any]:
     """Load the selected company profile from the processed-company list."""
+    selection_payload = state.get("company_selection")
+    if selection_payload:
+        return _run_company_selection(selection_payload)
+
     company_id = str(state["company_id"])
     profile_path = _PROFILE_ROOT / f"{company_id}.yaml"
     logger.info("data_node_run", company_id=company_id, path=str(profile_path))
@@ -107,6 +117,38 @@ def has_enough_data(state: AgentState) -> Literal["enough", "insufficient"]:
     return "insufficient" if state.get("insufficient_data") else "enough"
 
 
+def _run_company_selection(payload: dict[str, Any]) -> dict[str, Any]:
+    try:
+        selection = normalize_company_selection(payload)
+    except CompanySelectionError as error:
+        return _insufficient_selection(error.code, str(error))
+
+    dataset_row, error_code = _resolve_feature_row_for_selection(selection)
+    if dataset_row is None:
+        return _insufficient_selection(
+            error_code or "snapshot_not_found",
+            (
+                "Could not resolve company selection to a feature snapshot: "
+                f"{selection.company.market} {selection.company.stock_code} "
+                f"{selection.company.corp_name}"
+            ),
+        )
+    return _dataset_backed_payload(dataset_row, company_selection=selection)
+
+
+def _insufficient_selection(code: str, message: str) -> dict[str, Any]:
+    audit = AuditEntry(
+        node="data",
+        timestamp=_now(),
+        summary=f"Company selection rejected ({code}): {message}",
+    )
+    return {
+        "insufficient_data": True,
+        "selection_errors": [code],
+        "audit": [audit],
+    }
+
+
 @lru_cache(maxsize=1)
 def _load_feature_master() -> pd.DataFrame:
     frames: list[pd.DataFrame] = []
@@ -164,18 +206,66 @@ def _resolve_feature_row(company_id: str, analysis_year: int) -> dict[str, Any] 
     return {key: (None if pd.isna(value) else value) for key, value in row.to_dict().items()}
 
 
-def _dataset_backed_payload(dataset_row: dict[str, Any]) -> dict[str, Any]:
+def _resolve_feature_row_for_selection(
+    selection: CompanySelectionRequest,
+) -> tuple[dict[str, Any] | None, str | None]:
+    master = _load_feature_master().copy()
+    stock_code = selection.company.stock_code
+    stock_code_no_zero = stock_code.lstrip("0") or "0"
+    stock_codes = master["stock_code"].astype(str)
+    stock_codes_no_zero = stock_codes.str.lstrip("0").replace("", "0")
+
+    matches = master.loc[
+        (master["market"].astype(str).str.upper() == selection.company.market)
+        & ((stock_codes == stock_code) | (stock_codes_no_zero == stock_code_no_zero))
+    ].copy()
+    if matches.empty:
+        return None, "snapshot_not_found"
+
+    fiscal_year = selection.analysis.fiscal_year
+    eval_year = selection.analysis.eval_year
+    if fiscal_year is not None:
+        matches = matches.loc[matches["fiscal_year"] == fiscal_year]
+    elif eval_year is not None:
+        matches = matches.loc[matches["eval_year"] == eval_year]
+    else:
+        matches = matches.loc[matches["eval_year"] <= selection.as_of_date.year]
+        if not matches.empty:
+            matches = matches.sort_values(["fiscal_year", "eval_year"]).tail(1)
+
+    if matches.empty:
+        return None, "snapshot_not_found"
+    if len(matches) > 1:
+        return None, "ambiguous_snapshot"
+
+    row = matches.iloc[0]
+    if int(row["eval_year"]) > selection.as_of_date.year:
+        return None, "as_of_date_violation"
+    return {key: (None if pd.isna(value) else value) for key, value in row.to_dict().items()}, None
+
+
+def _dataset_backed_payload(
+    dataset_row: dict[str, Any],
+    *,
+    company_selection: CompanySelectionRequest | None = None,
+) -> dict[str, Any]:
     company_name = str(dataset_row.get("corp_name") or dataset_row.get("stock_code") or "unknown")
     market = str(dataset_row.get("market") or "UNKNOWN")
     stock_code = str(dataset_row.get("stock_code") or "unknown")
+    normalized_stock_code = (
+        company_selection.company.stock_code if company_selection is not None else stock_code
+    )
     fiscal_year = int(dataset_row.get("fiscal_year") or 0)
     analysis_year = int(dataset_row.get("eval_year") or fiscal_year)
     size_group = str(dataset_row.get("firm_size_group") or "unknown")
     industry = str(dataset_row.get("industry_macro_category") or "unknown")
     source_path = str(dataset_row.get("__source_path") or _FEATURE_MASTER_PATH)
+    company_id = (
+        build_company_id(company_selection) if company_selection is not None else stock_code
+    )
     # 대시보드에서 미리 계산한 peer percentile 결과를 같이 실어 두면,
     # Stage 2 에이전트가 산업/시장 비교 문장을 별도 재계산 없이 바로 만들 수 있다.
-    peer_rows = _resolve_peer_rows(stock_code=stock_code, fiscal_year=fiscal_year)
+    peer_rows = _resolve_peer_rows(stock_code=normalized_stock_code, fiscal_year=fiscal_year)
 
     summary = (
         f"{industry} 업종의 {size_group} 상장기업이며, "
@@ -187,13 +277,30 @@ def _dataset_backed_payload(dataset_row: dict[str, Any]) -> dict[str, Any]:
         summary=f"Loaded feature-master row for {company_name} ({stock_code})",
         metrics={"fiscal_year": float(fiscal_year), "analysis_year": float(analysis_year)},
     )
-    return {
+
+    processed_company: dict[str, Any] = {
+        "company_id": company_id,
+        "company_name": company_name,
+        "market": market,
+        "stock_code": normalized_stock_code,
+        "analysis_year": analysis_year,
+        "fiscal_year": fiscal_year,
+        "eval_year": analysis_year,
+        "source": company_selection.source if company_selection else source_path,
+        "source_ref": source_path,
+    }
+    if company_selection is not None:
+        processed_company["corp_code"] = company_selection.company.corp_code
+        processed_company["request_id"] = company_selection.request_id
+
+    payload: dict[str, Any] = {
+        "company_id": company_id,
         "company_name": company_name,
         "market": market,
         "analysis_year": analysis_year,
         "company_profile": {
             "company": {
-                "id": stock_code,
+                "id": company_id,
                 "name": company_name,
                 "market": market,
                 "summary": summary,
@@ -202,14 +309,7 @@ def _dataset_backed_payload(dataset_row: dict[str, Any]) -> dict[str, Any]:
             "qualitative": {},
             "market_context": {},
         },
-        "processed_company": {
-            "company_id": stock_code,
-            "company_name": company_name,
-            "market": market,
-            "analysis_year": analysis_year,
-            "fiscal_year": fiscal_year,
-            "source": source_path,
-        },
+        "processed_company": processed_company,
         "processed_company_list_ref": source_path,
         "raw_financials": {},
         # source_feature_row는 Stage 1이 바로 모델 입력 벡터를 만들 때 쓰는 원본 row다.
@@ -219,6 +319,9 @@ def _dataset_backed_payload(dataset_row: dict[str, Any]) -> dict[str, Any]:
         "insufficient_data": False,
         "audit": [audit],
     }
+    if company_selection is not None:
+        payload["company_selection"] = company_selection.model_dump(mode="json", exclude_none=True)
+    return payload
 
 
 def _resolve_peer_rows(*, stock_code: str, fiscal_year: int) -> list[dict[str, Any]]:
