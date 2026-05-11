@@ -133,7 +133,9 @@ def _financial_model_agent(state: AgentState, xgb: dict[str, Any]) -> AgentOutpu
         str(row.get("feature")): row for row in peer_rows if isinstance(row.get("feature"), str)
     }
     company_name = str(state.get("company_name") or state.get("company_id", "unknown"))
-    market = _humanize_category(source_row.get("market"), fallback=str(state.get("market", "UNKNOWN")))
+    market = _humanize_category(
+        source_row.get("market"), fallback=str(state.get("market", "UNKNOWN"))
+    )
     industry = _humanize_category(
         source_row.get("industry_macro_category"),
         mapping=_INDUSTRY_LABELS,
@@ -214,7 +216,9 @@ def _debt_liquidity_agent(state: AgentState) -> AgentOutput:
 def _macro_market_agent(state: AgentState) -> AgentOutput:
     source_row = dict(state.get("source_feature_row") or {})
     spec_spread = _safe_float(source_row.get("spec_spread"))
-    market = _humanize_category(source_row.get("market"), fallback=str(state.get("market", "UNKNOWN")))
+    market = _humanize_category(
+        source_row.get("market"), fallback=str(state.get("market", "UNKNOWN"))
+    )
 
     summary = (
         f"MacroMarketAgent는 현재 {market} 시장과 거시 변수 중 즉시 연결된 "

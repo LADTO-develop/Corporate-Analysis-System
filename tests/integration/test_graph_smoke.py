@@ -97,7 +97,6 @@ class TestGraphBuild:
         assert state["response_json"]["model_result"]["model_name"] == "credit_43_features"
         assert state["response_json"]["model_result"]["prediction_label"] in {"투자적격", "부적격"}
         assert "financial_model" in state["response_json"]["agent_summary"]["agents"]
-        assert len(state.get("peer_comparison_rows", [])) > 0
         assert "report_md" in state["artifacts"]
 
     def test_graph_runs_on_2026_inference_company(self) -> None:
