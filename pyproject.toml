@@ -25,6 +25,7 @@ dependencies = [
     "pydantic>=2.7.0,<3.0.0",
     "PyYAML>=6.0.1,<7.0.0",
     "python-dotenv>=1.0.0,<2.0.0",
+    "requests>=2.32.0,<3.0.0",
     "structlog>=24.1.0,<26.0.0",
     "rich>=13.7.0,<14.0.0",
     "xgboost>=2.1.0,<3.0.0",
@@ -92,6 +93,10 @@ explicit_package_bases = true
 
 [[tool.mypy.overrides]]
 module = ["langgraph.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["requests", "requests.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
