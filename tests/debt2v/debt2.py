@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
+logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 
 try:
     from agno.agent import Agent
@@ -23,8 +23,8 @@ dummy_case_1 = {
         "T21000(부채비율)": "140% (업계 평균 수준)",
         "T61000(유동비율)": "55% (단기 현금 고갈 상태)",
         "T54000(영업활동현금흐름)": "10억 (흑자 유지 중)",
-        "T56000(재무활동현금흐름)": "50억 (단기 차입 증가)"
-    }
+        "T56000(재무활동현금흐름)": "50억 (단기 차입 증가)",
+    },
 }
 
 # ======== 테스트 케이스 2: 과거엔 망가졌으나 맹렬히 회복 중인 기업 (회생 가능성) ========
@@ -35,8 +35,8 @@ dummy_case_2 = {
         "T21000(부채비율)": "450% (과거 누적 적자로 인한 자본잠식 위험)",
         "T61000(유동비율)": "120% (단기 유동성 회복)",
         "T54000(영업활동현금흐름)": "+350억 (올해 대규모 흑자 전환 및 현금 유입)",
-        "T56000(재무활동현금흐름)": "-200억 (과거 고금리 차입금 조기 상환 중)"
-    }
+        "T56000(재무활동현금흐름)": "-200억 (과거 고금리 차입금 조기 상환 중)",
+    },
 }
 
 # ======== 테스트 케이스 3: 전형적인 폰지(돌려막기) 구조 기업 (부채의 질 악화) ========
@@ -47,8 +47,8 @@ dummy_case_3 = {
         "T21000(부채비율)": "300%",
         "T61000(유동비율)": "150% (현금 보유량은 많아 보임)",
         "T54000(영업활동현금흐름)": "-400억 (본업에서 심각한 현금 유출 지속)",
-        "T56000(재무활동현금흐름)": "+450억 (대규모 신규 회사채 발행으로 연명)"
-    }
+        "T56000(재무활동현금흐름)": "+450억 (대규모 신규 회사채 발행으로 연명)",
+    },
 }
 
 # ======== 테스트용 리스트로 묶어서 내보내기 (main.py에서 import 하기 위함) ========
@@ -76,8 +76,8 @@ debt_liquidity_agent = Agent(
         '  "weighted_score_rationale": "가중치 적용 핵심 사유 (2문장)",',
         '  "debt_repayment_capacity": "부채상환능력 상세 평가",',
         '  "domain_risk_level": "최종 위험도 (안전/주의/위험)"',
-        "}"
-    ]
+        "}",
+    ],
 )
 
 
@@ -90,9 +90,9 @@ def run_weighted_analysis_test(test_data: dict):
     company_name = test_data.get("company_info", {}).get("회사명", "알수없는 기업")
     model_status = test_data.get("model_view", "상태 미상")
 
-    print("="*70)
+    print("=" * 70)
     print(f"🔍 [{company_name}] 가중 분석 시작 (1단계 모델 판정: {model_status})")
-    print("="*70)
+    print("=" * 70)
 
     # 프롬프트 동적 생성
     query = f"1단계 결과인 '{model_status}'를 중심으로 아래 데이터를 가중 분석하세요: {json.dumps(test_data, ensure_ascii=False)}"
@@ -108,14 +108,15 @@ def run_weighted_analysis_test(test_data: dict):
         print(f" [가중치 사유]: {result.get('weighted_score_rationale', 'N/A')}")
         print(f" [상환능력평가]: {result.get('debt_repayment_capacity', 'N/A')}")
         print(f" [최종위험도]: {result.get('domain_risk_level', 'N/A')}")
-        print("="*70)
+        print("=" * 70)
     except json.JSONDecodeError as e:
         logging.error(f"에이전트가 JSON 형식을 위반했습니다. 파싱 실패: {e}")
         logging.error(f"원시 응답:\n{response.content}")
+
 
 # 실행부 (원하는 더미 데이터를 넣기만 하면 됩니다)
 if __name__ == "__main__":
     # Part 2의 더미 데이터가 이 파일 안에 있다고 가정합니다.
     # run_weighted_analysis_test(dummy_case_1)
     # run_weighted_analysis_test(dummy_case_2)
-    pass # 실제 구동 시 위에 있는 주석을 풀고 실행하세요.
+    pass  # 실제 구동 시 위에 있는 주석을 풀고 실행하세요.
