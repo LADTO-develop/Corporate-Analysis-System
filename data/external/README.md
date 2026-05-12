@@ -1,5 +1,8 @@
 # `data/external/`
 
-Reserved for future reference data and controlled mappings.
+Reserved for tracked external artifacts and stable reference data used by the
+application.
 
-The current baseline keeps this directory empty by design. Add only small, stable reference files here once the implementation actually needs them.
+Current contents:
+- `model_artifacts/feature_43_xgboost/`: tracked Stage 1 XGBoost artifacts
+  used by the dashboard and report pipeline.

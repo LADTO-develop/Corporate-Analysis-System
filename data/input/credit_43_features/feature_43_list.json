@@ -1,5 +1,5 @@
 {
-  "source": "03_Outputs/ts2000/TS2000_Credit_Model_Dataset_Model_V1.csv",
+  "source": "data/raw/ts2000/TS2000_Credit_Model_Dataset_Model_V1.csv",
   "target": "is_speculative",
   "split_rule": "train fiscal_year <= 2021, valid fiscal_year == 2022, test fiscal_year >= 2023",
   "design_note": "Based on selected29, with added cash-flow coverage and distress flags; removed broad absolute-level and low-gain macro variables from Best Hybrid v1.",

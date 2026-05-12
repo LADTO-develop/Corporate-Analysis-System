@@ -104,7 +104,7 @@ LangGraph는 모델이 아닌 오케스트레이션 레이어입니다. 데이�
 │       └── analysis.yaml         # 피처 범위, 스코어링 파라미터
 ├── data/
 │   ├── raw/
-│   │   ├── financial_source/     # 재무제표 원본
+│   │   ├── ts2000/               # 공식 TS2000 Model V1 기준 원본
 │   │   ├── ecos/                 # 한국은행 ECOS 거시지표
 │   │   ├── dart/                 # DART 사업보고서 (On-Demand 캐시)
 │   │   ├── ratings/              # 신용등급 이력
@@ -112,7 +112,9 @@ LangGraph는 모델이 아닌 오케스트레이션 레이어입니다. 데이�
 │   ├── interim/                  # 전처리 중간 산출물
 │   ├── input/
 │   │   ├── companies/            # 샘플/커스텀 기업 입력 YAML
-│   │   └── credit_43_features/  # 43개 변수 기반 입력셋
+│   │   └── credit_43_features/   # TS2000 기준 43개 변수 입력셋
+│   ├── external/
+│   │   └── model_artifacts/       # Stage 1 모델 artifact
 │   └── outputs/
 │       ├── dashboard/            # 대시보드용 가공 산출물
 │       └── reports/              # 기업별 리포트 (.md, .json)

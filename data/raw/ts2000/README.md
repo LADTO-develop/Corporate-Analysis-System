@@ -7,6 +7,11 @@ rebuild the 43-feature credit-risk inputs.
   generated from the project TS2000 pipeline after the target-rating
   preprocessing rules were consolidated.
 
+Baseline checks:
+- Rows: 5,199
+- 삼성전자(주): 10 company-year rows
+- (주)토마토시스템: 1 company-year row (`2023 -> 2024`)
+
 The 43-feature inputs in `data/input/credit_43_features/` can be regenerated
 from this file with:
 

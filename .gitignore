@@ -72,6 +72,9 @@ wandb/
 
 # --- Hydra / experiment output --------------------------------------------
 outputs/
+!data/outputs/
+data/outputs/**
+!data/outputs/README.md
 multirun/
 .hydra/
 
