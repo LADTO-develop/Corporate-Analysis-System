@@ -4,8 +4,8 @@ This directory stores the canonical TS2000 model source dataset used to
 rebuild the 43-feature credit-risk inputs.
 
 - `TS2000_Credit_Model_Dataset_Model_V1.csv`: unified preprocessing baseline
-  generated from the project TS2000 pipeline after the target-rating
-  preprocessing rules were consolidated.
+  stored as the CAS canonical source after the target-rating preprocessing
+  rules were consolidated.
 
 Baseline checks:
 - Rows: 5,199

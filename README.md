@@ -1,259 +1,231 @@
 # Corporate Analysis System (CAS)
 
-**ML-LLM 하이브리드 기반 기업 신용위험 조기탐지 및 투자 의사결정 지원 시스템**
+**상장기업 신용위험 조기경보 모델 및 설명형 대시보드**
 
-재무 원천 데이터, ECOS(거시경제), DART(정성 공시) 데이터를 결합해 국내 상장사의 투자적격 유지 여부와 신용위험 신호를 조기에 탐지하고, 실무자가 곧바로 활용할 수 있는 스크리닝형 의사결정 지원 대시보드를 제공합니다.
+Corporate Analysis System은 국내 KOSPI/KOSDAQ 상장기업의 다음 연도
+신용위험을 조기에 예측하고, 예측 결과를 재무지표·산업 비교·SHAP 기반 설명과
+함께 보여주는 프로젝트입니다.
 
-## Problem
+현재 CAS의 기준 데이터와 실행 흐름은 모두 이 저장소 내부에서 관리합니다.
+상위 로컬 작업공간이나 외부 폴더를 전제로 하지 않으며, 기준 원본은
+`data/raw/ts2000/TS2000_Credit_Model_Dataset_Model_V1.csv`입니다.
 
-신용위험 분석과 투자 의사결정 현장에는 세 가지 단절이 존재합니다.
+## 1. 프로젝트 목표
 
-1. 블랙박스 모델의 해석 한계 : 점수는 나오지만 "왜"가 따라오지 않음
-2. 정성 정보 반영의 어려움 : 사업보고서의 위험 문구가 정량 모델에 들어오지 못함
-3. 예측과 실제 의사결정의 단절 : 모델 결과가 투자 판단과 곧장 연결되지 않음
+CAS는 다음의 2단 구조를 목표로 설계합니다.
 
-CAS는 정량 예측 → 정성 보강 → 다중 에이전트 종합 판단의 3단계 흐름으로 이 단절을 메웁니다.
+| 단계 | 현재 상태 | 역할 |
+|---|---|---|
+| Stage 1. 정량 예측 | 구현 및 대시보드 연결 | XGBoost로 투기등급 위험확률(`y_proba`)과 모델 라벨 산출 |
+| Stage 2. 5에이전트 정성 검토 | 설계 문서 및 파이프라인 구조 정리 중 | 모델 결과를 덮어쓰지 않고 외부 근거와 정성 판단을 보완 |
 
-## Architecture
+현재 저장소의 중심은 **Stage 1 XGBoost 기반 정량 예측과 설명형 대시보드**입니다.
+Stage 2는 `model_view`와 구분되는 `committee_view`를 생성하는 후속 단계로
+정리되어 있습니다.
+
+## 2. 현재 기준 데이터
+
+| 항목 | 기준 |
+|---|---|
+| 분석 범위 | KOSPI, KOSDAQ 상장기업 |
+| 관측 단위 | 기업-회계연도 |
+| 기준 원본 | `data/raw/ts2000/TS2000_Credit_Model_Dataset_Model_V1.csv` |
+| 라벨 데이터 | 5,199개 기업-연도 |
+| 학습 입력 | `data/input/credit_43_features/` |
+| 2026 예측 입력 | `feature_43_inference_2026.csv`, 2,427개 기업-연도 |
+| 타겟 | `is_speculative` |
+| 라벨 정의 | `0 = 투자적격(AAA~BBB-)`, `1 = 투기등급(BB+ 이하)` |
+| 시점 정렬 | `fiscal_year=t` 재무/거시 정보로 `eval_year=t+1` 신용위험 예측 |
+
+Model V1 전체 5,199개 행은 전체 라벨 데이터입니다. 모델 학습에는 시간순 분할
+후 train 구간 3,851개 행을 사용하고, 나머지는 validation/test 성능 검증에
+사용합니다.
+
+| Split | 기준 | 행 수 | 양성 라벨 수 | 양성 비율 |
+|---|---|---:|---:|---:|
+| Train | `fiscal_year <= 2021` | 3,851 | 878 | 22.80% |
+| Validation | `fiscal_year == 2022` | 676 | 176 | 26.04% |
+| Test | `fiscal_year >= 2023` | 672 | 167 | 24.85% |
+
+## 3. 전처리 기준
+
+신용등급 타겟은 KOSPI와 KOSDAQ에 동일한 기준을 적용합니다.
+
+| 구분 | 기준 |
+|---|---|
+| 사용 등급 | 장기 기업신용 성격의 등급만 사용 |
+| 평가사 우선순위 | 국내 3대 평가사 → 기타 국내 평가사 → 외국 평가사 backfill |
+| 대표 등급 선택 | 같은 기업-평가연도 안에서 가장 낮은 등급 선택 |
+| 평가연도 정렬 | `eval_year = 평가연도`, `fiscal_year = eval_year - 1` |
+| 상장 전 제거 | `fiscal_year < listed_year` 행 제거 |
+| 누수 방지 | 미래 재무제표, 미래 거시지표, 미래 공시/뉴스 사용 금지 |
+
+자세한 규칙은 [docs/preprocessing_rules_ko.md](docs/preprocessing_rules_ko.md)에
+정리되어 있습니다.
+
+## 4. 모델 입력과 성능
+
+현재 대시보드의 기본 모델은 `credit_43_features` 기반 XGBoost입니다.
+
+| 구분 | 개수 | 설명 |
+|---|---:|---|
+| 선택 원천 변수 | 34개 | 재무비율, 원천 재무값, 시장/규모/산업 맥락 변수, 거시 변수 |
+| 원-핫 대상 | 3개 | `market`, `firm_size_group`, `industry_macro_category` |
+| 최종 모델 입력 | 43개 | XGBoost 학습 및 추론 입력 |
+
+최신 동일 split 기준 test 성능은 다음과 같습니다.
+
+| 모델 | PR-AUC | ROC-AUC | Precision | Recall | F1 |
+|---|---:|---:|---:|---:|---:|
+| Dummy | 0.2485 | 0.5000 | 0.0000 | 0.0000 | 0.0000 |
+| 43-feature Weighted Logistic Regression | 0.6903 | 0.8822 | 0.5560 | 0.8323 | 0.6667 |
+| 38-input XGBoost | 0.7804 | 0.9098 | 0.5911 | 0.8743 | 0.7053 |
+| 43-input XGBoost | 0.7755 | 0.9071 | 0.6083 | 0.8743 | 0.7174 |
+
+43-input XGBoost는 PR-AUC 기준으로 38-input XGBoost와 거의 유사하며,
+Precision과 F1은 더 높게 나타났습니다. 현재 대시보드는 해석 가능성,
+확장성, 변수 사전과의 연결성을 고려해 43-feature 입력셋을 기본으로 사용합니다.
+
+## 5. 시스템 흐름
+
+```mermaid
+flowchart TD
+    A["CAS 내부 Model V1 원본"] --> B["43-feature 입력셋 생성"]
+    B --> C["Train / Valid / Test 시간순 분할"]
+    C --> D["Stage 1 XGBoost 학습"]
+    D --> E["model_view"]
+    E --> F["위험확률 / 모델 라벨 / 위험 밴드 / SHAP"]
+    F --> G["Streamlit 설명형 대시보드"]
+    F --> H["Stage 2 5에이전트 검토 입력 번들"]
+    H --> I["committee_view"]
+```
+
+`model_view`는 XGBoost의 원본 판단입니다. Agent나 LLM은 이 값을 직접 수정하지
+않고, 후속 Stage 2에서 정성 근거를 보완한 `committee_view`를 별도로 생성하는
+구조를 목표로 합니다.
+
+## 6. 저장소 구조
 
 ```text
-+-----------------------------+
-|  1. ML 기반 정량 예측        |   Logistic Regression (baseline)
-|   - is_speculative 이진분류   |   XGBoost / LightGBM (core)
-|   - SHAP 설명                |   Global + Local feature contribution
-+--------------+--------------+
-               | 위험 신호 탐지
-               v
-+-----------------------------+
-|  2. LLM 기반 정성 보강        |   DART 사업보고서 핵심 섹션
-|   - On-Demand 공시 호출      |   GPT-4o / Claude
-|   - 정성 위험 요인 요약       |   Prompt-driven 분석
-+--------------+--------------+
-               |
-               v
-+-----------------------------+
-|  3. 다중 LLM 위원회 토론      |   LangGraph 멀티 에이전트
-|   - 심사역 / 리서치 / 리스크  |   역할 기반 독립 의견 → 토론 → 합의
-|   - 최종 투자 의견 도출       |
-+--------------+--------------+
-               |
-               v
-+-----------------------------+
-|  Streamlit 대시보드           |   기업 선택 → 예측 → SHAP → 정성 요약
-|                              |   → 위원회 결론 → 다건 비교 / 시나리오
-+-----------------------------+
-```
-
-LangGraph는 모델이 아닌 오케스트레이션 레이어입니다. 데이터 적재, 검증, 예측, 설명, 정성 보강, 위원회 토론, 리포트 생성까지의 흐름을 상태 기반으로 연결합니다.
-
-## Dataset
-
-| 항목 | 내용 |
-|---|---|
-| 분석 범위 | KOSPI·KOSDAQ 상장기업 |
-| 기간 | 2014 ~ 2024 (패널 데이터) |
-| 관측치 | 프로젝트 진행 단계에 따라 달라질 수 있으며, 현재 대시보드 기본 입력은 `credit_43_features` 기준입니다. |
-| 변수 수 | 현재 대시보드 기본 입력은 `credit_43_features` 기준 34개 원천 변수(원핫 후 43개 입력)입니다. |
-| 타깃 | `is_speculative` — `0 = 투자적격(AAA~BBB-)`, `1 = 투기등급(BB+ 이하)` |
-| 결합 키 | `stock_code + fiscal_year` |
-| 시점 정렬 | `fiscal_year = t` 재무정보 ↔ `eval_year = t+1` 신용등급 |
-| 분할 전략 | Out-of-time (OOT) validation — 미래 누수 차단 |
-
-피처 군 : 수익성 · 안정성 · 활동성 · 성장성 · 현금흐름/상환능력 · 거시지표 · 감사의견 · 추세 · 조기경보
-주요 파생변수 : 부채비율, 유동비율, 이자보상배율, 좀비기업 플래그 등
-사후 라벨 : 상장폐지일은 예측 변수로 사용하지 않고, 사후 검증 라벨로만 활용
-
-## Pipeline Stages
-
-### 1. 데이터 확보 및 피처 엔지니어링
-- 재무 원천 데이터·ECOS·DART 연계 마스터 테이블 구축
-- OOT 검증, 결합 키 기반 병합, 시점 일관성 검증
-
-### 2. 머신러닝 모델 학습 및 최적화
-- Baseline: Logistic Regression
-- Core: XGBoost, LightGBM 등 가장 높은 성능 채택
-- 클래스 불균형 대응: 가중치 조정 / SMOTE 검토
-- 평가 지표: **ROC-AUC, PR-AUC, F1, Precision, Recall** (Accuracy 지양)
-- 설명가능성: **SHAP** (global importance + local attribution)
-
-### 3. LLM 기반 정성 분석
-- 1차 ML 예측 결과를 트리거로 **On-Demand** DART 호출
-- 입력: 예측 결과 · 주요 변수 기여도 · 공시 핵심 문단
-- 출력: 기업별 정성 위험 요인 요약 및 투자 적격성 보조 보고서
-- 모델: **GPT-4o** 또는 **Claude** 계열
-
-### 4. 다중 LLM 위원회
-- 역할 기반 에이전트: **심사역 · 리서치 팀장 · 리스크 관리자**
-- 동일 기업에 대한 독립 의견 → 토론 → 합의 기반 최종 의견
-- **LangGraph** 기반 상태 머신 오케스트레이션
-
-### 5. Streamlit 대시보드
-- 기업명/종목코드 입력 → ML 결과 → SHAP 설명 → 정성 요약 → 위원회 결론
-- **다수 기업 동시 평가**, **산업군 비교**, **거시 충격 시나리오 민감도**
-- CSV 일괄 업로드 기반 배치 스크리닝
-
-## Repository Structure
-
-```
 .
 ├── configs/
-│   ├── agent/
-│   │   ├── graph.yaml            # LangGraph 노드·엣지 정의
-│   │   └── committee.yaml        # 다중 LLM 위원회 역할/정책
-│   └── runtime/
-│       └── analysis.yaml         # 피처 범위, 스코어링 파라미터
+│   ├── agent/                   # LangGraph 노드/위원회 설정
+│   └── runtime/                 # 실행 설정
 ├── data/
 │   ├── raw/
-│   │   ├── ts2000/               # 공식 TS2000 Model V1 기준 원본
-│   │   ├── ecos/                 # 한국은행 ECOS 거시지표
-│   │   ├── dart/                 # DART 사업보고서 (On-Demand 캐시)
-│   │   ├── ratings/              # 신용등급 이력
-│   │   └── news/                 # (옵션) 뉴스/공시 보조 데이터
-│   ├── interim/                  # 전처리 중간 산출물
+│   │   └── ts2000/              # CAS 기준 Model V1 원본
 │   ├── input/
-│   │   ├── companies/            # 샘플/커스텀 기업 입력 YAML
-│   │   └── credit_43_features/   # TS2000 기준 43개 변수 입력셋
-│   ├── external/
-│   │   └── model_artifacts/       # Stage 1 모델 artifact
+│   │   └── credit_43_features/  # 43개 모델 입력셋, split, 2026 추론 입력
 │   └── outputs/
-│       ├── dashboard/            # 대시보드용 가공 산출물
-│       └── reports/              # 기업별 리포트 (.md, .json)
-├── docs/                         # 설계 문서
-├── notebooks/                    # 피처·모델 실험 노트북
-├── scripts/                      # 일회성 스크립트
-├── src/cas/                      # 메인 패키지 (import 경로: cas.*)
-│   ├── agents/
-│   │   ├── graph.py              # LangGraph 파이프라인 조립
-│   │   ├── state.py              # AgentState 스키마
-│   │   └── nodes/                # 데이터 / 피처 / 예측 / 위원회 / 리포트 노드
-│   ├── reporting/                # Markdown/JSON 리포트 생성
-│   ├── utils/                    # 로깅, I/O 유틸
-│   └── cli.py                    # cas-agent CLI 진입점
-├── tests/
-├── .env.example
-├── pyproject.toml
-└── README.md
+│       ├── dashboard/           # 대시보드용 예측/SHAP/요약 산출물
+│       ├── modeling/            # Stage 1 모델 artifact와 팀 공유용 모델링 산출물
+│       └── reports/             # CLI/에이전트 리포트 산출물
+├── docs/
+│   ├── preprocessing_rules_ko.md
+│   ├── five_agent_credit_review_design_ko.md
+│   └── pipeline/
+├── scripts/
+│   ├── rebuild_feature_43_dataset.py
+│   ├── build_feature_43_inference_2026.py
+│   ├── export_feature_43_dashboard_artifacts.py
+│   └── run_credit_dashboard.py
+├── src/cas/
+│   ├── agents/                  # LangGraph 상태, 노드, 입력 계약
+│   ├── dashboard/               # Streamlit 대시보드
+│   ├── reporting/               # 리포트 생성
+│   └── utils/
+└── tests/
 ```
 
-> **패키지 import 경로는 `cas.*`** 로 통일되어 있습니다. Streamlit 앱(`src/cas/dashboard/`)과 DART 로더는 로드맵 단계에서 추가됩니다.
+## 7. 주요 문서
 
-## Tech Stack
-
-| 영역 | 도구 |
+| 문서 | 내용 |
 |---|---|
-| 데이터 수집·처리 | Python, Pandas, NumPy, Requests, **OpenDartReader** |
-| 머신러닝 | scikit-learn, **XGBoost**, **LightGBM** |
-| 설명가능성(XAI) | **SHAP** |
-| LLM / 오케스트레이션 | OpenAI **GPT-4o**, **Claude**, **LangGraph** |
-| 시각화 / 대시보드 | **Plotly**, Matplotlib, **Streamlit** |
-| 검증 / 타입 | Pydantic v2, mypy (strict) |
-| 품질 | Ruff, pytest, pre-commit |
+| [docs/preprocessing_rules_ko.md](docs/preprocessing_rules_ko.md) | 신용등급 타겟, 재무/거시 결합, 43개 입력셋 전처리 기준 |
+| [docs/five_agent_credit_review_design_ko.md](docs/five_agent_credit_review_design_ko.md) | 5에이전트 기반 Stage 2 정성 검토 구조 |
+| [docs/credit_dashboard_quickstart_ko.md](docs/credit_dashboard_quickstart_ko.md) | Streamlit 대시보드 실행 안내 |
+| [docs/pipeline/data_pipeline.md](docs/pipeline/data_pipeline.md) | 웹 리스팅 입력과 `company_selection` 계약 |
+| [data/README.md](data/README.md) | CAS 데이터 디렉터리와 재생성 흐름 |
 
-Python 버전 : `3.12` (`requires-python = ">=3.12,<3.13"`)
+## 8. 실행 방법
 
-## Quick Start
+Python 3.12 환경을 사용합니다. 팀 로컬 기준으로는 `aura` 환경을 사용할 수 있습니다.
 
 ```bash
-python -m venv .venv
-# Windows
-.venv\Scripts\activate
-# macOS / Linux
-source .venv/bin/activate
-
-python -m pip install --upgrade pip
-pip install -e ".[dev]"
-pre-commit install
+/opt/anaconda3/envs/aura/bin/python -m pip install -e ".[dev,ml,viz]"
 ```
 
-### 환경 변수
+대시보드 실행에 필요한 패키지가 없다면 아래 패키지를 추가로 설치합니다.
 
 ```bash
-cp .env.example .env   # Windows: Copy-Item .env.example .env
+/opt/anaconda3/envs/aura/bin/python -m pip install streamlit altair shap
 ```
 
-자주 쓰는 키:
+43개 입력셋 재생성:
 
-```env
-CAS_ENV=local
-CAS_LOG_LEVEL=INFO
-CAS_RANDOM_SEED=42
-ECOS_API_KEY=
-DART_API_KEY=
-OPENAI_API_KEY=
-OPENAI_MODEL=
-ANTHROPIC_API_KEY=
-OUTPUT_DIR=data/outputs
+```bash
+/opt/anaconda3/envs/aura/bin/python scripts/rebuild_feature_43_dataset.py
 ```
 
-`.env.example`만 저장소에 커밋되며, 실제 비밀값이 들어 있는 `.env`는 `.gitignore`로 제외됩니다.
+2026 추론 입력 검증:
 
-### 파이프라인 실행 (CLI 베이스라인)
+```bash
+/opt/anaconda3/envs/aura/bin/python scripts/build_feature_43_inference_2026.py --check-only
+```
+
+대시보드/모델 artifact 재생성:
+
+```bash
+/opt/anaconda3/envs/aura/bin/python scripts/export_feature_43_dashboard_artifacts.py
+```
+
+이 스크립트는 Stage 1 런타임과 팀 공유가 함께 사용하는 모델 artifact를
+`data/outputs/modeling/feature_43_xgboost/`에 저장합니다.
+
+대시보드 실행:
+
+```bash
+/opt/anaconda3/envs/aura/bin/python scripts/run_credit_dashboard.py
+```
+
+실행 후 브라우저에서 Streamlit이 표시하는 로컬 주소로 접속합니다.
+
+## 9. CLI 파이프라인
+
+웹 리스팅 또는 JSON 입력은 `company_selection` 계약으로 정규화되어
+LangGraph 파이프라인에 들어갑니다.
+
+```bash
+cas-agent --company-selection-file path/to/company_selection.json
+```
+
+기존 단일 회사 ID 경로도 유지합니다.
 
 ```bash
 cas-agent --company-id sample-company
 ```
 
-출력:
-
-```
-data/outputs/reports/<company-id>/latest.md
-data/outputs/reports/<company-id>/latest.json
-```
-
-### Streamlit 대시보드 (로드맵)
+## 10. 개발 및 검증
 
 ```bash
-# 구현 완료 시
-streamlit run src/cas/dashboard/app.py
+/opt/anaconda3/envs/aura/bin/python -m ruff check .
+/opt/anaconda3/envs/aura/bin/python -m mypy src/cas
+/opt/anaconda3/envs/aura/bin/python -m pytest
 ```
 
-### 품질 검사
+현재 주요 테스트는 `company_selection` 입력 계약, 기본 예측 노드,
+위원회 노드, 그래프 스모크 테스트를 포함합니다.
 
-```bash
-ruff check --fix . && ruff format .
-mypy src/cas
-pytest -m "not slow"
-pytest -m integration      # 파이프라인 end-to-end
-pytest --cov=cas
-```
+## 11. 운영 원칙
 
-## Input Modes
-
-현재 베이스라인은 `data/input/companies/<id>.yaml` 로컬 파일 입력 기준이며, 아래 3가지로 확장 예정입니다.
-
-1. **회사 검색 기반** — 종목코드/회사명 → DART 최신 공시 자동 수집
-2. **CSV 일괄 업로드** — 외부 추출 데이터 배치 분석
-3. **최소 직접 입력** — 핵심 지표만 입력해 간이 판단
-
-어느 경로든 동일한 `AgentState`로 정규화되어 파이프라인에 진입합니다.
-
-웹 리스팅에서 기업을 선택해 분석 파이프라인으로 넘기는 첫 입력 계약은
-[`docs/pipeline/data_pipeline.md`](docs/pipeline/data_pipeline.md)에 정리되어 있습니다.
-
-## Roadmap
-
-1. ✅ 패키지명 `cas` 통일 및 LangGraph 베이스라인 구동
-2. ⬜ 재무 원천 데이터 + ECOS 결합 마스터 테이블 구축 (4,596×157)
-3. ⬜ OOT 분할 · 클래스 불균형 처리 · 평가 하네스 정비
-4. ⬜ LogReg / XGBoost / LightGBM 비교 학습 및 최적 모델 채택
-5. ⬜ SHAP 기반 global + local 설명 통합
-6. ⬜ DART On-Demand 로더 및 LLM 정성 분석 프롬프트 설계
-7. ⬜ 심사역·리서치·리스크 다중 LLM 위원회 토론 구조
-8. ⬜ Streamlit 대시보드: 단건/다건/산업비교/거시 시나리오
-9. ⬜ 투자적격성 최종 리포트 자동 생성
-
-## Principles
-
-- **시점 일관성** (look-ahead 금지): 모든 노드는 `as_of_date` 이후의 데이터를 조회하지 않습니다.
-- **결정론적 리포트**: 같은 입력 → 같은 결과 (LLM 사용 시 `temperature=0`, seed 고정).
-- **설정 기반 분기**: 시장/모델/임계값 차이는 코드가 아닌 `configs/**` YAML로 관리합니다.
-- **상태 단일화**: 모든 노드는 단일 `AgentState`를 공유하며, 신규 필드는 하위 호환을 유지합니다.
+- CAS 기준 데이터와 실행 파일은 저장소 내부 경로만 참조합니다.
+- Model V1은 CAS의 기준 원본이며, 43-feature 입력셋은 이 파일에서 재생성합니다.
+- `model_view`와 `committee_view`는 분리합니다.
+- 모델 예측은 LLM이나 Agent가 직접 수정하지 않습니다.
+- 모든 성능 평가는 시간순 OOT split 기준으로 해석합니다.
+- 미래 정보는 과거 예측에 사용하지 않습니다.
 
 ## References
 
-- **Repository**: https://github.com/LADTO-develop/Corporate-Analysis-System
-- **License**: Apache-2.0
-- **LangGraph**: https://langchain-ai.github.io/langgraph/
-- **ECOS Open API**: 한국은행 경제통계시스템
-- **DART Open API**: 금융감독원 전자공시시스템
-- **재무 원천 DB**: 국내 상장사 재무 데이터
+- Repository: https://github.com/LADTO-develop/Corporate-Analysis-System
+- License: Apache-2.0

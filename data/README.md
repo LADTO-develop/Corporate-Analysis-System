@@ -16,14 +16,15 @@ reproducible flow.
    - Contains the master table, train/valid/test matrices, split identifiers,
      and feature metadata.
 
-3. `data/external/model_artifacts/feature_43_xgboost/`
-   - Tracked Stage 1 XGBoost model artifacts used by dashboard inference.
-   - Contains the model file and model metadata.
-
-4. `data/outputs/dashboard/feature_43_mvp/`
+3. `data/outputs/dashboard/feature_43_mvp/`
    - Dashboard-ready exports derived from `credit_43_features`.
    - Contains company lists, prediction scores, SHAP summaries, peer
      percentiles, and the dashboard manifest.
+
+4. `data/outputs/modeling/feature_43_xgboost/`
+   - Stage 1 XGBoost model artifacts used by runtime inference and team
+     handoff.
+   - Contains the model JSON and model metadata.
 
 5. `data/outputs/reports/`
    - Generated per-company report outputs.
