@@ -30,8 +30,7 @@ ID_SPLIT_COLUMNS = [*ID_COLUMNS, "label_eval_year"]
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Rebuild the credit_43_features input tables from the latest "
-            "TS2000 Model_V1 dataset."
+            "Rebuild the credit_43_features input tables from the latest TS2000 Model_V1 dataset."
         )
     )
     parser.add_argument(
@@ -55,7 +54,8 @@ def load_feature_spec(path: Path) -> dict[str, object]:
 
 def build_master_frame(source: pd.DataFrame, feature_spec: dict[str, object]) -> pd.DataFrame:
     selected_source_features = [
-        str(feature) for feature in feature_spec["selected_source_features"]  # type: ignore[index]
+        str(feature)
+        for feature in feature_spec["selected_source_features"]  # type: ignore[index]
     ]
     model_features = [str(feature) for feature in feature_spec["model_features"]]  # type: ignore[index]
     categorical = {
@@ -106,7 +106,9 @@ def build_master_frame(source: pd.DataFrame, feature_spec: dict[str, object]) ->
     return master
 
 
-def split_master(master: pd.DataFrame, model_features: list[str]) -> dict[str, tuple[pd.DataFrame, pd.DataFrame]]:
+def split_master(
+    master: pd.DataFrame, model_features: list[str]
+) -> dict[str, tuple[pd.DataFrame, pd.DataFrame]]:
     split_masks = {
         "train": master["fiscal_year"] <= 2021,
         "valid": master["fiscal_year"] == 2022,
