@@ -88,8 +88,7 @@ def validate_inference_frame(
     duplicate_count = int(frame.duplicated(["market", "stock_code", "fiscal_year"]).sum())
     if duplicate_count:
         raise ValueError(
-            "Inference table has duplicate market/stock_code/fiscal_year rows: "
-            f"{duplicate_count}"
+            f"Inference table has duplicate market/stock_code/fiscal_year rows: {duplicate_count}"
         )
 
     null_model_feature_counts = frame[model_features].isna().sum()
