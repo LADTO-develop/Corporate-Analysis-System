@@ -7,11 +7,8 @@ from pathlib import Path
 import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[1]
-WORKSPACE_ROOT = ROOT.parent
 INPUT_DIR = ROOT / "data" / "input" / "credit_43_features"
-SOURCE_DATASET_PATH = (
-    WORKSPACE_ROOT / "03_Outputs" / "ts2000" / "TS2000_Credit_Model_Dataset_Model_V1.csv"
-)
+SOURCE_DATASET_PATH = ROOT / "data" / "raw" / "ts2000" / "TS2000_Credit_Model_Dataset_Model_V1.csv"
 FEATURE_SPEC_PATH = INPUT_DIR / "feature_43_list.json"
 MASTER_PATH = INPUT_DIR / "feature_43_master.csv"
 

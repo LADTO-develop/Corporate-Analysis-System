@@ -1,6 +1,6 @@
 # 43-Feature Dataset
 
-이 폴더는 최신 `TS2000_Credit_Model_Dataset_Model_V1.csv`를 바탕으로 만든
+이 폴더는 `data/raw/ts2000/TS2000_Credit_Model_Dataset_Model_V1.csv`를 바탕으로 만든
 `credit_43_features` 입력 파일 모음입니다.
 
 구성:

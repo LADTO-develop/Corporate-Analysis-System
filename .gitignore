@@ -53,6 +53,9 @@ data/interim/**/
 data/processed/**/
 !data/**/.gitkeep
 !data/**/README.md
+!data/raw/ts2000/
+!data/raw/ts2000/README.md
+!data/raw/ts2000/TS2000_Credit_Model_Dataset_Model_V1.csv
 # External mapping tables ARE tracked (small, versioned reference data).
 !data/external/**
 

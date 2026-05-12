@@ -1,5 +1,8 @@
 # `data/raw/`
 
-Reserved for future raw source ingestion.
+Reserved for raw and canonical source datasets that downstream processing
+scripts need in order to be reproducible from a fresh repository checkout.
 
-The current implementation baseline does not require any raw external datasets. The runnable scaffold uses local profile files in `data/input/company_profiles/`.
+Current contents:
+- `ts2000/`: canonical TS2000 model source dataset for rebuilding the
+  43-feature credit-risk inputs.
