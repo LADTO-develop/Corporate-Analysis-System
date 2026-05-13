@@ -13,7 +13,7 @@ try:
     # from test_cases import dummy_case_1, dummy_case_2, dummy_case_3 # 모듈화 시 주석 해제
 except ImportError as e:
     logging.error(f"모듈 Import 실패: {e}")
-    raise SystemExit(1)
+    raise SystemExit(1) from e
 
 # ======== 테스트 케이스 1: 겉보기엔 멀쩡하지만 속은 곪은 기업 (유동성 부족) ========
 dummy_case_1 = {
