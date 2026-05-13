@@ -53,6 +53,9 @@ data/interim/**/
 data/processed/**/
 !data/**/.gitkeep
 !data/**/README.md
+!data/raw/ts2000/
+!data/raw/ts2000/README.md
+!data/raw/ts2000/TS2000_Credit_Model_Dataset_Model_V1.csv
 # External mapping tables ARE tracked (small, versioned reference data).
 !data/external/**
 
@@ -69,6 +72,14 @@ wandb/
 
 # --- Hydra / experiment output --------------------------------------------
 outputs/
+!data/outputs/
+data/outputs/**
+!data/outputs/README.md
+!data/outputs/modeling/
+!data/outputs/modeling/feature_43_xgboost/
+!data/outputs/modeling/feature_43_xgboost/README.md
+!data/outputs/modeling/feature_43_xgboost/model_artifact_metadata.json
+!data/outputs/modeling/feature_43_xgboost/xgboost_model.json
 multirun/
 .hydra/
 

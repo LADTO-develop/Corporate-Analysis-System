@@ -248,6 +248,12 @@ KOSDAQ,25440,(주)디에이치오토웨어,2018,2019,mid_sized,manufacturing,201
 KOSDAQ,25440,(주)디에이치오토웨어,2019,2020,mid_sized,manufacturing,2020
 KOSDAQ,25440,(주)디에이치오토웨어,2020,2021,mid_sized,manufacturing,2021
 KOSDAQ,25440,(주)디에이치오토웨어,2021,2022,mid_sized,manufacturing,2022
+KOSDAQ,25870,신라에스지(주),2015,2016,mid_sized,wholesale_retail,2016
+KOSDAQ,25870,신라에스지(주),2016,2017,small_and_medium,wholesale_retail,2017
+KOSDAQ,25870,신라에스지(주),2017,2018,small_and_medium,wholesale_retail,2018
+KOSDAQ,25870,신라에스지(주),2018,2019,small_and_medium,wholesale_retail,2019
+KOSDAQ,25870,신라에스지(주),2019,2020,small_and_medium,wholesale_retail,2020
+KOSDAQ,25870,신라에스지(주),2020,2021,small_and_medium,wholesale_retail,2021
 KOSDAQ,25900,동화기업(주),2017,2018,mid_sized,manufacturing,2018
 KOSDAQ,25900,동화기업(주),2018,2019,mid_sized,manufacturing,2019
 KOSDAQ,25900,동화기업(주),2019,2020,mid_sized,manufacturing,2020
@@ -1735,7 +1741,6 @@ KOSDAQ,232140,(주)와이씨,2018,2019,mid_sized,manufacturing,2019
 KOSDAQ,232140,(주)와이씨,2019,2020,mid_sized,manufacturing,2020
 KOSDAQ,232140,(주)와이씨,2020,2021,mid_sized,manufacturing,2021
 KOSDAQ,232140,(주)와이씨,2021,2022,mid_sized,manufacturing,2022
-KOSDAQ,232680,(주)라온로보틱스,2020,2021,small_and_medium,manufacturing,2021
 KOSDAQ,234100,(주)폴라리스세원,2018,2019,small_and_medium,manufacturing,2019
 KOSDAQ,234100,(주)폴라리스세원,2019,2020,small_and_medium,manufacturing,2020
 KOSDAQ,234100,(주)폴라리스세원,2020,2021,small_and_medium,manufacturing,2021
@@ -1957,7 +1962,6 @@ KOSDAQ,382800,(주)지앤비에스에코,2021,2022,small_and_medium,manufacturin
 KOSDAQ,382840,(주)원준,2021,2022,small_and_medium,manufacturing,2022
 KOSDAQ,383310,(주)에코프로에이치엔,2021,2022,small_and_medium,manufacturing,2022
 KOSDAQ,391710,코닉오토메이션(주),2021,2022,mid_sized,manufacturing,2022
-KOSDAQ,393210,(주)토마토시스템,2021,2022,small_and_medium,it_services,2022
 KOSPI,20,동화약품(주),2015,2016,mid_sized,manufacturing,2016
 KOSPI,20,동화약품(주),2016,2017,mid_sized,manufacturing,2017
 KOSPI,20,동화약품(주),2017,2018,mid_sized,manufacturing,2018
@@ -2261,6 +2265,7 @@ KOSPI,2900,티와이엠(주),2014,2015,mid_sized,manufacturing,2015
 KOSPI,2900,티와이엠(주),2019,2020,mid_sized,manufacturing,2020
 KOSPI,2900,티와이엠(주),2020,2021,mid_sized,manufacturing,2021
 KOSPI,2900,티와이엠(주),2021,2022,mid_sized,manufacturing,2022
+KOSPI,2960,한국쉘석유(주),2014,2015,mid_sized,manufacturing,2015
 KOSPI,2960,한국쉘석유(주),2018,2019,mid_sized,manufacturing,2019
 KOSPI,2990,금호건설(주),2020,2021,large,construction,2021
 KOSPI,2990,금호건설(주),2021,2022,large,construction,2022
@@ -2509,6 +2514,14 @@ KOSPI,5870,(주)휴니드테크놀러지스,2021,2022,mid_sized,manufacturing,20
 KOSPI,5880,대한해운(주),2016,2017,mid_sized,transport_storage,2017
 KOSPI,5880,대한해운(주),2020,2021,large,transport_storage,2021
 KOSPI,5880,대한해운(주),2021,2022,large,transport_storage,2022
+KOSPI,5930,삼성전자(주),2014,2015,large,manufacturing,2015
+KOSPI,5930,삼성전자(주),2015,2016,large,manufacturing,2016
+KOSPI,5930,삼성전자(주),2016,2017,large,manufacturing,2017
+KOSPI,5930,삼성전자(주),2017,2018,large,manufacturing,2018
+KOSPI,5930,삼성전자(주),2018,2019,large,manufacturing,2019
+KOSPI,5930,삼성전자(주),2019,2020,large,manufacturing,2020
+KOSPI,5930,삼성전자(주),2020,2021,large,manufacturing,2021
+KOSPI,5930,삼성전자(주),2021,2022,large,manufacturing,2022
 KOSPI,5950,(주)이수화학,2014,2015,mid_sized,manufacturing,2015
 KOSPI,5950,(주)이수화학,2015,2016,mid_sized,manufacturing,2016
 KOSPI,5950,(주)이수화학,2016,2017,mid_sized,manufacturing,2017
@@ -2816,6 +2829,12 @@ KOSPI,11930,(주)신성이엔지,2019,2020,mid_sized,manufacturing,2020
 KOSPI,11930,(주)신성이엔지,2020,2021,mid_sized,manufacturing,2021
 KOSPI,11930,(주)신성이엔지,2021,2022,mid_sized,manufacturing,2022
 KOSPI,12030,(주)디비아이엔씨,2014,2015,large,it_services,2015
+KOSPI,12330,현대모비스(주),2014,2015,large,manufacturing,2015
+KOSPI,12330,현대모비스(주),2015,2016,large,manufacturing,2016
+KOSPI,12330,현대모비스(주),2016,2017,large,manufacturing,2017
+KOSPI,12330,현대모비스(주),2017,2018,large,manufacturing,2018
+KOSPI,12330,현대모비스(주),2018,2019,large,manufacturing,2019
+KOSPI,12330,현대모비스(주),2019,2020,large,manufacturing,2020
 KOSPI,12330,현대모비스(주),2020,2021,large,manufacturing,2021
 KOSPI,12330,현대모비스(주),2021,2022,large,manufacturing,2022
 KOSPI,12450,한화에어로스페이스(주),2014,2015,large,manufacturing,2015
@@ -2910,6 +2929,10 @@ KOSPI,15230,대창단조(주),2018,2019,mid_sized,manufacturing,2019
 KOSPI,15230,대창단조(주),2019,2020,mid_sized,manufacturing,2020
 KOSPI,15230,대창단조(주),2020,2021,mid_sized,manufacturing,2021
 KOSPI,15230,대창단조(주),2021,2022,mid_sized,manufacturing,2022
+KOSPI,15760,한국전력공사(주),2015,2016,large,other,2016
+KOSPI,15760,한국전력공사(주),2017,2018,mid_sized,other,2018
+KOSPI,15760,한국전력공사(주),2018,2019,mid_sized,other,2019
+KOSPI,15760,한국전력공사(주),2019,2020,mid_sized,other,2020
 KOSPI,15890,태경산업(주),2019,2020,mid_sized,manufacturing,2020
 KOSPI,15890,태경산업(주),2020,2021,mid_sized,manufacturing,2021
 KOSPI,15890,태경산업(주),2021,2022,mid_sized,manufacturing,2022
@@ -3009,6 +3032,9 @@ KOSPI,19180,(주)티에이치엔,2016,2017,mid_sized,manufacturing,2017
 KOSPI,19180,(주)티에이치엔,2017,2018,mid_sized,manufacturing,2018
 KOSPI,19180,(주)티에이치엔,2018,2019,mid_sized,manufacturing,2019
 KOSPI,19180,(주)티에이치엔,2019,2020,mid_sized,manufacturing,2020
+KOSPI,20000,(주)한섬,2016,2017,large,manufacturing,2017
+KOSPI,20000,(주)한섬,2017,2018,large,manufacturing,2018
+KOSPI,20000,(주)한섬,2018,2019,large,manufacturing,2019
 KOSPI,20560,아시아나항공(주),2014,2015,large,transport_storage,2015
 KOSPI,20560,아시아나항공(주),2015,2016,large,transport_storage,2016
 KOSPI,20560,아시아나항공(주),2016,2017,large,transport_storage,2017
@@ -3775,6 +3801,9 @@ KOSPI,282330,(주)비지에프리테일,2020,2021,mid_sized,wholesale_retail,202
 KOSPI,282330,(주)비지에프리테일,2021,2022,mid_sized,wholesale_retail,2022
 KOSPI,285130,에스케이케미칼(주),2018,2019,large,manufacturing,2019
 KOSPI,285130,에스케이케미칼(주),2021,2022,large,manufacturing,2022
+KOSPI,286940,롯데이노베이트(주),2019,2020,large,it_services,2020
+KOSPI,286940,롯데이노베이트(주),2020,2021,large,it_services,2021
+KOSPI,286940,롯데이노베이트(주),2021,2022,large,it_services,2022
 KOSPI,294870,에이치디씨현대산업개발(주),2018,2019,large,construction,2019
 KOSPI,294870,에이치디씨현대산업개발(주),2019,2020,large,construction,2020
 KOSPI,294870,에이치디씨현대산업개발(주),2020,2021,large,construction,2021

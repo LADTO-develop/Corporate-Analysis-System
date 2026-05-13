@@ -16,7 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 INPUT_DIR = ROOT / "data" / "input" / "credit_43_features"
 METADATA_PATH = INPUT_DIR / "feature_43_dictionary_metadata.json"
 OUTPUT_DIR = ROOT / "data" / "outputs" / "dashboard" / "feature_43_mvp"
-MODEL_OUTPUT_DIR = ROOT / "data" / "external" / "model_artifacts" / "feature_43_xgboost"
+MODEL_OUTPUT_DIR = ROOT / "data" / "outputs" / "modeling" / "feature_43_xgboost"
 
 SCENARIO_PRESETS: dict[str, dict[str, float]] = {
     "base": {},
@@ -550,14 +550,16 @@ def write_model_readme(model_output_dir: Path) -> None:
     content = """# 43-Feature XGBoost Model Artifacts
 
 이 폴더는 `credit_43_features` 데이터를 기준으로 다시 학습한
-XGBoost 모델 artifact를 저장한 결과입니다.
+XGBoost 모델링 산출물을 저장한 결과입니다. CAS 기준 원본은
+`data/raw/ts2000/TS2000_Credit_Model_Dataset_Model_V1.csv`이고,
+전체 5,199개 라벨 기업-연도 중 train 3,851개 행으로 학습합니다.
 
 구성:
 - `xgboost_model.json`: XGBoost 원본 모델 파일
 - `model_artifact_metadata.json`: 사용 변수, 결측 대치값, 기준선 등 메타데이터
 
-이 폴더는 Git에 포함되는 기준 모델 artifact 위치이며,
-Stage 1 모델 추론은 이 경로를 직접 참조합니다.
+이 경로는 팀 공유용 모델링 산출물이자 Stage 1 런타임이 직접 참조하는 기준
+모델 artifact 위치입니다.
 """
     (model_output_dir / "README.md").write_text(content, encoding="utf-8")
 

@@ -15,7 +15,7 @@ from cas.utils.io import read_json, read_yaml
 if TYPE_CHECKING:
     from xgboost import Booster
 
-_MODEL_ARTIFACT_DIR = Path("data/external/model_artifacts/feature_43_xgboost")
+_MODEL_ARTIFACT_DIR = Path("data/outputs/modeling/feature_43_xgboost")
 _MODEL_ARTIFACT_PATH = _MODEL_ARTIFACT_DIR / "xgboost_model.json"
 _MODEL_METADATA_PATH = _MODEL_ARTIFACT_DIR / "model_artifact_metadata.json"
 _FEATURE_LIST_PATH = Path("data/input/credit_43_features/feature_43_list.json")

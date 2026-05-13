@@ -21,7 +21,7 @@
 프로젝트 루트:
 
 ```bash
-cd "/Users/inji/Documents/금융 데이터 분석/Project/Corporate-Analysis-System"
+cd Corporate-Analysis-System
 ```
 
 대시보드 입력 파일 생성:
