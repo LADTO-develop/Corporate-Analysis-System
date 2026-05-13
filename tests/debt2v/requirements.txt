@@ -1,0 +1,5 @@
+agno
+anthropic
+openai
+pydantic<=2.12.3
+python-dotenv
