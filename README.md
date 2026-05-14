@@ -17,7 +17,7 @@ CAS는 다음의 2단 구조를 목표로 설계합니다.
 | 단계 | 현재 상태 | 역할 |
 |---|---|---|
 | Stage 1. 정량 예측 | 구현 및 대시보드 연결 | XGBoost로 투기등급 위험확률(`y_proba`)과 모델 라벨 산출 |
-| Stage 2. 5에이전트 정성 검토 | 설계 문서 및 파이프라인 구조 정리 중 | 모델 결과를 덮어쓰지 않고 외부 근거와 정성 판단을 보완 |
+| Stage 2. 3에이전트 정성 검토 | 설계 문서 및 파이프라인 구조 정리 중 | 모델 결과를 덮어쓰지 않고 정량 해석, 외부 근거 검증, 최종 보고를 분리 |
 
 현재 저장소의 중심은 **Stage 1 XGBoost 기반 정량 예측과 설명형 대시보드**입니다.
 Stage 2는 `model_view`와 구분되는 `committee_view`를 생성하는 후속 단계로
@@ -96,13 +96,40 @@ flowchart TD
     D --> E["model_view"]
     E --> F["위험확률 / 모델 라벨 / 위험 밴드 / SHAP"]
     F --> G["Streamlit 설명형 대시보드"]
-    F --> H["Stage 2 5에이전트 검토 입력 번들"]
+    F --> H["Stage 2 3에이전트 검토 입력 번들"]
     H --> I["committee_view"]
 ```
 
 `model_view`는 XGBoost의 원본 판단입니다. Agent나 LLM은 이 값을 직접 수정하지
 않고, 후속 Stage 2에서 정성 근거를 보완한 `committee_view`를 별도로 생성하는
 구조를 목표로 합니다.
+
+`committee_view`는 `final_committee_label`, `veto_triggered`,
+`conflict_resolution`, `key_risk_factors`, `mitigating_factors`,
+`evidence_summary`, `final_review_memo`를 포함합니다. 즉, 모델 판단을 바꿨는지보다
+왜 최종 위원회 의견이 그렇게 정리됐는지를 설명하는 데 초점을 둡니다.
+
+Stage 2 코드도 이 기준에 맞춰 분리되어 있습니다.
+`src/cas/agents/stage2_specs.py`는 향후 Agno/Claude에 넘길 역할 계약을 정의하고,
+`src/cas/agents/stage2_bundle.py`는 LangGraph state를 에이전트 입력 번들로
+정규화합니다. `src/cas/agents/stage2_outputs.py`는 Agent별 출력 schema를 검증한 뒤
+공통 `AgentOutput`으로 변환합니다. `src/cas/agents/stage2_runner.py`는 기본
+deterministic runner와 선택형 Agno runner가 공유할 실행 인터페이스를 제공합니다.
+EvidenceAuditAgent의 부채/유동성, 거시환경, 외부 근거 신호는 `src/cas/agents/signals/` 아래에서 각각 계산합니다.
+`src/cas/agents/nodes/committee_node.py`는 현재 deterministic scaffold 실행 흐름을 담당하며, 최종 JSON 조립은
+`src/cas/agents/committee_view.py`에서 처리합니다. `committee_view` 출력 계약은
+`src/cas/agents/committee_schema.py`의 Pydantic 모델로 검증합니다.
+강제 경고 기준은 `configs/agent/committee.yaml`의 `veto_rules`에서 관리합니다.
+
+Stage 2는 CI와 기본 로컬 실행에서 `CAS_STAGE2_RUNNER=deterministic`을 사용합니다.
+Agno/Claude 호출을 붙인 로컬 데모에서는 optional dependency를 설치한 뒤
+`CAS_STAGE2_RUNNER=agno`, `CAS_STAGE2_MODEL=claude-sonnet-4-5-20250929`,
+`ANTHROPIC_API_KEY`를 설정하면 됩니다.
+
+외부 근거 수집은 기본적으로 꺼져 있습니다. 로컬 데모에서만 `.env`에
+`CAS_ENABLE_EXTERNAL_EVIDENCE=1`과 `OPENDART_API_KEY`, `NAVER_CLIENT_ID`,
+`NAVER_CLIENT_SECRET`, `TAVILY_API_KEY`를 설정하면 `news_cache` 노드가
+뉴스/공시/웹 검색 근거를 EvidenceAuditAgent 입력으로 전달합니다.
 
 ## 6. 저장소 구조
 
@@ -122,7 +149,7 @@ flowchart TD
 │       └── reports/             # CLI/에이전트 리포트 산출물
 ├── docs/
 │   ├── preprocessing_rules_ko.md
-│   ├── five_agent_credit_review_design_ko.md
+│   ├── three_agent_credit_review_design_ko.md
 │   └── pipeline/
 ├── scripts/
 │   ├── rebuild_feature_43_dataset.py
@@ -142,7 +169,7 @@ flowchart TD
 | 문서 | 내용 |
 |---|---|
 | [docs/preprocessing_rules_ko.md](docs/preprocessing_rules_ko.md) | 신용등급 타겟, 재무/거시 결합, 43개 입력셋 전처리 기준 |
-| [docs/five_agent_credit_review_design_ko.md](docs/five_agent_credit_review_design_ko.md) | 5에이전트 기반 Stage 2 정성 검토 구조 |
+| [docs/three_agent_credit_review_design_ko.md](docs/three_agent_credit_review_design_ko.md) | 3에이전트 기반 Stage 2 정성 검토 구조 |
 | [docs/credit_dashboard_quickstart_ko.md](docs/credit_dashboard_quickstart_ko.md) | Streamlit 대시보드 실행 안내 |
 | [docs/pipeline/data_pipeline.md](docs/pipeline/data_pipeline.md) | 웹 리스팅 입력과 `company_selection` 계약 |
 | [data/README.md](data/README.md) | CAS 데이터 디렉터리와 재생성 흐름 |

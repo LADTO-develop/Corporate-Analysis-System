@@ -171,6 +171,7 @@ def run_once(
             "committee_reviews": [],
             "agent_outputs": [],
             "agent_summary": {},
+            "committee_view": {},
             "audit": [],
             "artifacts": {},
             "insufficient_data": False,

@@ -17,6 +17,7 @@ def render_report(state: AgentState | dict[str, Any]) -> dict[str, Any]:
     model_result = dict(response.get("model_result") or {})
     news = dict(response.get("news_analysis") or {})
     agent_summary = dict(response.get("agent_summary") or {})
+    committee_view = dict(response.get("committee_view") or {})
     audit = s.get("audit") or []
     schema_errors = [str(error) for error in s.get("json_schema_errors", [])]
 
@@ -65,7 +66,26 @@ def render_report(state: AgentState | dict[str, Any]) -> dict[str, Any]:
         f"- **Status**: `{news.get('status', 'not_implemented')}`",
         f"- **Summary**: {news.get('summary', '')}",
         "",
+        "## Committee View",
+        "",
+        f"- **Final Committee Label**: `{committee_view.get('final_committee_label', '보류')}`",
+        f"- **Veto Triggered**: `{bool(committee_view.get('veto_triggered', False))}`",
+        f"- **Conflict Resolution**: {committee_view.get('conflict_resolution', '')}",
+        f"- **Final Review Memo**: {committee_view.get('final_review_memo', '')}",
+        "",
     ]
+
+    risk_factors = [str(item) for item in committee_view.get("key_risk_factors", []) or []]
+    mitigating_factors = [str(item) for item in committee_view.get("mitigating_factors", []) or []]
+    if risk_factors:
+        md_lines += ["### Key Risk Factors", "", *[f"- {item}" for item in risk_factors], ""]
+    if mitigating_factors:
+        md_lines += [
+            "### Mitigating Factors",
+            "",
+            *[f"- {item}" for item in mitigating_factors],
+            "",
+        ]
 
     md_lines += [
         "## Agent Summary",
@@ -131,5 +151,14 @@ def _fallback_response(state: dict[str, Any]) -> dict[str, Any]:
             "final_confidence": float(state.get("final_confidence", 0.0) or 0.0),
             "synthesis": "No agent summary was generated.",
             "agents": {},
+        },
+        "committee_view": {
+            "final_committee_label": "보류",
+            "veto_triggered": False,
+            "conflict_resolution": "No committee_view was generated.",
+            "key_risk_factors": [],
+            "mitigating_factors": [],
+            "evidence_summary": [],
+            "final_review_memo": "No committee_view was generated.",
         },
     }

@@ -54,7 +54,7 @@ flowchart LR
 }
 ```
 
-필수 필드는 `market`, `stock_code`, `corp_name`이다. `corp_code`는 DART 연동 안정성을 위해 가능하면 함께 넘긴다. `fiscal_year` 또는 `eval_year`가 없으면 서버가 `as_of_date` 기준으로 조회 가능한 최신 스냅샷을 선택한다.
+필수 필드는 `market`, `stock_code`, `corp_name`이다. `corp_code`는 DART 연동 안정성을 위해 가능하면 함께 넘긴다. 없으면 OpenDART `corpCode.xml` 캐시에서 `stock_code` 기준으로 자동 보강한다. `fiscal_year` 또는 `eval_year`가 없으면 서버가 `as_of_date` 기준으로 조회 가능한 최신 스냅샷을 선택한다.
 
 ### 검증 규칙
 
@@ -64,7 +64,7 @@ flowchart LR
 2. `stock_code`는 숫자 문자열로 받고 6자리로 zero-padding한다.
 3. `corp_name`은 앞뒤 공백과 보이지 않는 문자를 제거한다.
 4. `fiscal_year`와 `eval_year`가 모두 있으면 `eval_year = fiscal_year + 1` 관계를 확인한다.
-5. `as_of_date` 이후의 재무, 공시, 뉴스 데이터는 조회하지 않는다.
+5. `as_of_date` 이후의 재무, 공시 데이터는 조회하지 않는다. 공시 조회 기준일은 `as_of_date`가 있으면 그 날짜, 없으면 `eval_year` 말일을 사용한다.
 6. `stock_code + fiscal_year`가 여러 행에 매칭되면 최신 `selected_at`이 아니라 데이터 기준 키로만 하나를 결정한다.
 7. 매칭 실패, 중복, 필수값 누락은 모델을 실행하지 않고 `insufficient_data` 상태로 종료한다.
 

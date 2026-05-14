@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 from cas.agents.nodes.committee_node import (
-    _debt_liquidity_agent,
-    _financial_model_agent,
+    _evidence_audit_agent,
+    _quant_credit_agent,
     _recommendation_from_score,
+    run,
 )
+from cas.agents.stage2_bundle import build_stage2_input_bundle
 from cas.agents.state import AgentState
 
 
@@ -18,7 +20,7 @@ def test_recommendation_thresholds() -> None:
     assert _recommendation_from_score(0.30, thresholds) == "defer"
 
 
-def test_financial_model_agent_generates_quant_summary() -> None:
+def test_quant_credit_agent_generates_quant_summary() -> None:
     state: AgentState = {
         "company_id": "250",
         "company_name": "삼천당제약(주)",
@@ -52,9 +54,13 @@ def test_financial_model_agent_generates_quant_summary() -> None:
         ],
     }
 
-    agent = _financial_model_agent(state, xgb_result)
+    state["xgboost_result"] = xgb_result
+    structured_output = _quant_credit_agent(build_stage2_input_bundle(state))
+    agent = structured_output.to_agent_output()
 
-    assert agent.role == "financial_model"
+    assert structured_output.role == "quant_credit"
+    assert structured_output.key_risk_factors or structured_output.mitigating_factors
+    assert agent.role == "quant_credit"
     assert "투자적격" in agent.summary
     assert "위험확률" in agent.summary
     assert len(agent.findings) == 3
@@ -63,7 +69,7 @@ def test_financial_model_agent_generates_quant_summary() -> None:
     assert "산업 중앙값" in " ".join(agent.findings)
 
 
-def test_debt_liquidity_agent_flags_liquidity_mismatch() -> None:
+def test_evidence_audit_agent_flags_liquidity_mismatch() -> None:
     state: AgentState = {
         "source_feature_row": {
             "current_ratio": 0.82,
@@ -80,16 +86,19 @@ def test_debt_liquidity_agent_flags_liquidity_mismatch() -> None:
         "xgboost_result": {"prediction_label": "투자적격"},
     }
 
-    agent = _debt_liquidity_agent(state)
+    structured_output = _evidence_audit_agent(build_stage2_input_bundle(state))
+    agent = structured_output.to_agent_output()
 
-    assert agent.role == "debt_liquidity"
+    assert structured_output.role == "evidence_audit"
+    assert structured_output.debt_liquidity_cross_check
+    assert agent.role == "evidence_audit"
     assert "투자적격" in agent.summary
     assert "추가 경계" in agent.summary
     assert any("유동비율이 1.0 미만" in item for item in agent.findings)
     assert any("단기차입금 비중이 높아 차환 리스크" in item for item in agent.findings)
 
 
-def test_debt_liquidity_agent_preserves_downside_but_notes_support() -> None:
+def test_evidence_audit_agent_preserves_downside_but_notes_support() -> None:
     state: AgentState = {
         "source_feature_row": {
             "current_ratio": 2.10,
@@ -106,10 +115,50 @@ def test_debt_liquidity_agent_preserves_downside_but_notes_support() -> None:
         "xgboost_result": {"prediction_label": "부적격"},
     }
 
-    agent = _debt_liquidity_agent(state)
+    structured_output = _evidence_audit_agent(build_stage2_input_bundle(state))
+    agent = structured_output.to_agent_output()
 
-    assert agent.role == "debt_liquidity"
+    assert structured_output.role == "evidence_audit"
+    assert structured_output.debt_liquidity_cross_check
+    assert agent.role == "evidence_audit"
     assert "부적격" in agent.summary
     assert "완화 신호" in agent.summary
     assert any("현금흐름 커버리지가 5배 이상" in item for item in agent.findings)
     assert any("영업현금흐름이 총부채 대비 0.1 이상" in item for item in agent.findings)
+
+
+def test_committee_view_exposes_final_decision_fields() -> None:
+    state: AgentState = {
+        "company_id": "250",
+        "company_name": "삼천당제약(주)",
+        "market": "KOSDAQ",
+        "source_feature_row": {
+            "market": "KOSDAQ",
+            "industry_macro_category": "manufacturing",
+            "firm_size_group": "mid_sized",
+            "current_ratio": 0.82,
+            "cash_ratio": 0.11,
+            "short_term_borrowings_share": 0.71,
+        },
+        "xgboost_result": {
+            "prediction_label": "투자적격",
+            "probability_speculative": 0.31,
+            "top_drivers": [("current_ratio", 0.22)],
+        },
+        "rule_result": {
+            "recommendation": "review",
+            "confidence": 0.62,
+            "blocking_flags": [],
+        },
+        "news_cache_snapshot": {"status": "not_implemented"},
+    }
+
+    result = run(state)
+    committee_view = result["committee_view"]
+
+    assert committee_view["final_committee_label"] == "보류"
+    assert committee_view["veto_triggered"] is False
+    assert "conflict_resolution" in committee_view
+    assert committee_view["key_risk_factors"]
+    assert committee_view["evidence_summary"][0]["source"] == "model_view"
+    assert "deterministic runner" in result["audit"][0].summary
