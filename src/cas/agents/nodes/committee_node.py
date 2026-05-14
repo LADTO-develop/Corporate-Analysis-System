@@ -1,12 +1,31 @@
-"""Run the Stage 2 five-agent review scaffold."""
+"""Run the Stage 2 three-agent review scaffold."""
 
 from __future__ import annotations
 
+import os
 from datetime import UTC, datetime
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Literal, cast
 
+from cas.agents.committee_view import build_committee_view
+from cas.agents.signals import (
+    evaluate_debt_liquidity,
+    evaluate_external_evidence,
+    evaluate_macro_market,
+)
+from cas.agents.stage2_bundle import Stage2InputBundle, build_stage2_input_bundle
+from cas.agents.stage2_outputs import (
+    ChairReportOutput,
+    EvidenceAuditOutput,
+    QuantCreditOutput,
+)
+from cas.agents.stage2_runner import (
+    AgnoStage2AgentRunner,
+    DeterministicStage2AgentRunner,
+    Stage2AgentRunner,
+)
+from cas.agents.stage2_specs import STAGE2_AGENT_ROLES
 from cas.agents.state import (
     AgentOutput,
     AgentState,
@@ -67,28 +86,29 @@ _POLARITY: dict[str, Literal["higher_better", "lower_better", "contextual", "fla
 
 
 def run(state: AgentState) -> dict[str, Any]:
-    """Run the five-agent Stage 2 scaffold over Stage 1 outputs."""
-    xgb = dict(state.get("xgboost_result") or {})
-    rule = dict(state.get("rule_result") or {})
+    """Run the three-agent Stage 2 scaffold over Stage 1 outputs."""
+    bundle = build_stage2_input_bundle(state)
 
     recommendation = cast(
         Recommendation,
-        rule.get("recommendation") or state.get("final_recommendation") or "review",
+        bundle.rule_result.get("recommendation") or state.get("final_recommendation") or "review",
     )
-    confidence = round(
-        float(rule.get("confidence", state.get("final_confidence", 0.0)) or 0.0),
+    rule_confidence = round(
+        float(bundle.rule_result.get("confidence", state.get("final_confidence", 0.0)) or 0.0),
         4,
     )
 
-    # 지금은 FinancialModelAgent만 실제 정량 해석을 수행하고,
-    # 나머지 에이전트는 후속 구현을 위한 Stage 2 골격을 유지한다.
-    agents = [
-        _financial_model_agent(state, xgb),
-        _debt_liquidity_agent(state),
-        _macro_market_agent(state),
-        _evidence_audit_agent(state),
-        _chair_investment_agent(state, recommendation, confidence),
-    ]
+    # Stage 2 execution goes through a runner adapter. Today it is deterministic
+    # for CI stability; later it can be swapped for an Agno-backed runner.
+    runner = _stage2_runner()
+    structured_outputs = runner.run(
+        bundle=bundle,
+        recommendation=recommendation,
+        confidence=rule_confidence,
+    )
+    runtime_backend_name = str(getattr(runner, "last_run_backend_name", runner.backend_name))
+    agents = [output.to_agent_output() for output in structured_outputs]
+    _validate_agent_order(agents)
     reviews = [
         CommitteeReview(
             perspective=agent.role,
@@ -98,11 +118,23 @@ def run(state: AgentState) -> dict[str, Any]:
         )
         for agent in agents
     ]
+    committee_view = build_committee_view(
+        bundle=bundle,
+        recommendation=recommendation,
+        agents=agents,
+    )
+    committee_confidence = _committee_confidence(
+        bundle=bundle,
+        agents=agents,
+        committee_view=committee_view,
+        rule_confidence=rule_confidence,
+        runtime_backend_name=runtime_backend_name,
+    )
     # agent_summary는 대시보드/리포트에서 바로 읽기 쉬운 dict 구조이고,
     # agent_outputs / committee_reviews는 schema와 audit trail 쪽에서 쓰는 정규화 결과다.
     agent_summary = {
         "final_recommendation": recommendation,
-        "final_confidence": confidence,
+        "final_confidence": committee_confidence,
         "synthesis": agents[-1].summary,
         "agents": {
             agent.role: {
@@ -117,31 +149,197 @@ def run(state: AgentState) -> dict[str, Any]:
     audit = AuditEntry(
         node="agno_agents",
         timestamp=_now(),
-        summary=f"Five-agent Stage 2 scaffold completed: {', '.join(agent.role for agent in agents)}",
-        metrics={"n_agents": float(len(agents)), "final_confidence": confidence},
+        summary=(
+            f"Three-agent Stage 2 scaffold completed via {runtime_backend_name} runner: "
+            f"{', '.join(agent.role for agent in agents)}"
+        ),
+        metrics={
+            "n_agents": float(len(agents)),
+            "rule_confidence": rule_confidence,
+            "final_confidence": committee_confidence,
+        },
     )
     return {
         "agent_outputs": agents,
         "committee_reviews": reviews,
         "agent_summary": agent_summary,
+        "committee_view": committee_view,
         "final_recommendation": recommendation,
-        "final_confidence": confidence,
+        "final_confidence": committee_confidence,
         "audit": [audit],
     }
 
 
-def _financial_model_agent(state: AgentState, xgb: dict[str, Any]) -> AgentOutput:
-    source_row = dict(state.get("source_feature_row") or {})
-    peer_rows = list(state.get("peer_comparison_rows") or [])
-    # feature별 peer row를 미리 맵으로 만들어 두면, SHAP 상위 변수 설명에
-    # 산업/시장 중앙값과 백분위를 바로 붙일 수 있다.
-    peer_by_feature = {
-        str(row.get("feature")): row for row in peer_rows if isinstance(row.get("feature"), str)
-    }
-    company_name = str(state.get("company_name") or state.get("company_id", "unknown"))
-    market = _humanize_category(
-        source_row.get("market"), fallback=str(state.get("market", "UNKNOWN"))
+def _validate_agent_order(agents: list[AgentOutput]) -> None:
+    actual_roles = tuple(agent.role for agent in agents)
+    if actual_roles != STAGE2_AGENT_ROLES:
+        expected = ", ".join(STAGE2_AGENT_ROLES)
+        actual = ", ".join(actual_roles)
+        raise ValueError(f"Stage 2 agent order mismatch: expected {expected}, got {actual}")
+
+
+def _committee_confidence(
+    *,
+    bundle: Stage2InputBundle,
+    agents: list[AgentOutput],
+    committee_view: dict[str, Any],
+    rule_confidence: float,
+    runtime_backend_name: str,
+) -> float:
+    """Blend model certainty, evidence quality, and agent certainty into one score."""
+    probability = _clamp(bundle.probability_speculative)
+    model_confidence = 0.45 + 0.35 * min(abs(probability - 0.5) * 2.0, 1.0)
+    agent_confidence = _average_agent_confidence(agents)
+    evidence_confidence = _external_evidence_quality(
+        bundle.news_cache_snapshot,
+        veto_triggered=bool(committee_view.get("veto_triggered", False)),
     )
+    alignment_adjustment = _committee_alignment_adjustment(
+        bundle=bundle,
+        committee_label=str(committee_view.get("final_committee_label", "")),
+    )
+    fallback_penalty = -0.07 if "fallback" in runtime_backend_name else 0.0
+    score = (
+        0.35 * _clamp(rule_confidence)
+        + 0.35 * model_confidence
+        + 0.20 * agent_confidence
+        + 0.10 * evidence_confidence
+        + alignment_adjustment
+        + fallback_penalty
+    )
+    return round(_clamp(score, minimum=0.2, maximum=0.95), 4)
+
+
+def _average_agent_confidence(agents: list[AgentOutput]) -> float:
+    if not agents:
+        return 0.35
+    return _clamp(sum(agent.confidence for agent in agents) / len(agents))
+
+
+def _external_evidence_quality(
+    news_cache: dict[str, Any],
+    *,
+    veto_triggered: bool,
+) -> float:
+    status = str(news_cache.get("status", "not_implemented"))
+    if status in {"disabled", "not_implemented", "placeholder", "missing_credentials"}:
+        return 0.35
+    raw_items = news_cache.get("items", [])
+    if not isinstance(raw_items, list) or not raw_items:
+        return 0.4
+
+    verified_count = _safe_int(news_cache.get("verified_item_count"))
+    direct_count = sum(
+        1
+        for item in raw_items
+        if isinstance(item, dict) and item.get("company_match") is True
+    )
+    weak_count = sum(
+        1
+        for item in raw_items
+        if isinstance(item, dict) and item.get("company_match") is False
+    )
+    high_reliability_count = sum(
+        1
+        for item in raw_items
+        if isinstance(item, dict)
+        and (
+            str(item.get("reliability", "")).lower() == "high"
+            or str(item.get("source", "")).lower() == "opendart"
+        )
+    )
+    average_item_score = _average_evidence_item_score(raw_items)
+    score = 0.38 + 0.07 * min(verified_count, 3) + 0.04 * min(direct_count, 3)
+    score += 0.08 * min(high_reliability_count, 2) + 0.15 * average_item_score
+    score -= 0.05 * min(weak_count, 3)
+    if veto_triggered:
+        score += 0.15
+    elif news_cache.get("has_critical_risk"):
+        score -= 0.08
+    return _clamp(score, minimum=0.2, maximum=0.85)
+
+
+def _average_evidence_item_score(raw_items: list[object]) -> float:
+    scores: list[float] = []
+    for item in raw_items:
+        if not isinstance(item, dict):
+            continue
+        score = item.get("evidence_score")
+        if isinstance(score, int | float | str):
+            try:
+                scores.append(_clamp(float(score)))
+            except ValueError:
+                continue
+    if not scores:
+        return 0.35
+    return sum(scores) / len(scores)
+
+
+def _safe_int(value: object) -> int:
+    try:
+        return int(value) if isinstance(value, int | float | str) else 0
+    except (TypeError, ValueError):
+        return 0
+
+
+def _committee_alignment_adjustment(
+    *,
+    bundle: Stage2InputBundle,
+    committee_label: str,
+) -> float:
+    model_label = "적격" if bundle.prediction_label == "투자적격" else "부적격"
+    if committee_label == model_label:
+        return 0.08
+    if committee_label == "보류":
+        risk_band = str(bundle.rule_result.get("risk_band", ""))
+        return 0.03 if risk_band == "watch" else 0.0
+    return -0.06
+
+
+def _clamp(value: float, *, minimum: float = 0.0, maximum: float = 1.0) -> float:
+    return min(max(value, minimum), maximum)
+
+
+def _stage2_runner() -> Stage2AgentRunner:
+    deterministic_runner = DeterministicStage2AgentRunner(
+        quant_credit_agent=_quant_credit_agent,
+        evidence_audit_agent=_evidence_audit_agent,
+        chair_report_agent=_chair_report_agent,
+    )
+    runner_name = _stage2_runner_name()
+    if runner_name in {"", "deterministic", "local", "offline"}:
+        return deterministic_runner
+    if runner_name == "agno":
+        return AgnoStage2AgentRunner(
+            deterministic_runner=deterministic_runner,
+            model_name=os.environ.get("CAS_STAGE2_MODEL", "claude-sonnet-4-5-20250929"),
+            max_tokens=_stage2_max_tokens(),
+        )
+    raise ValueError(
+        f"Unsupported CAS_STAGE2_RUNNER value. Use 'deterministic' or 'agno', got {runner_name!r}."
+    )
+
+
+def _stage2_max_tokens() -> int:
+    try:
+        return int(os.environ.get("CAS_STAGE2_MAX_TOKENS", "6000"))
+    except ValueError:
+        return 6000
+
+
+def _stage2_runner_name() -> str:
+    if "PYTEST_CURRENT_TEST" in os.environ and os.environ.get(
+        "CAS_ALLOW_LIVE_STAGE2_IN_TESTS", ""
+    ).strip().lower() not in {"1", "true", "yes", "on"}:
+        return "deterministic"
+    return os.environ.get("CAS_STAGE2_RUNNER", "deterministic").strip().lower()
+
+
+def _quant_credit_agent(bundle: Stage2InputBundle) -> QuantCreditOutput:
+    source_row = bundle.source_feature_row
+    peer_by_feature = bundle.peer_rows_by_feature
+    company_name = bundle.company_name
+    market = _humanize_category(source_row.get("market"), fallback=bundle.market)
     industry = _humanize_category(
         source_row.get("industry_macro_category"),
         mapping=_INDUSTRY_LABELS,
@@ -153,11 +351,11 @@ def _financial_model_agent(state: AgentState, xgb: dict[str, Any]) -> AgentOutpu
         fallback="규모 정보 미확인",
     )
 
-    probability = float(xgb.get("probability_speculative", 0.0) or 0.0)
-    prediction_label = str(xgb.get("prediction_label", "unknown"))
+    probability = bundle.probability_speculative
+    prediction_label = bundle.prediction_label
     # Stage 1의 top_drivers와 source row 원값, peer comparison을 같이 묶어서
-    # "모델이 왜 그렇게 판단했는지"를 사람 문장으로 바꾸는 것이 FinancialModelAgent의 핵심 역할이다.
-    driver_details = _describe_top_drivers(xgb, source_row, peer_by_feature)
+    # "모델이 왜 그렇게 판단했는지"를 사람 문장으로 바꾸는 것이 QuantCreditAgent의 핵심 역할이다.
+    driver_details = _describe_top_drivers(bundle.xgboost_result, source_row, peer_by_feature)
     risk_items = [item for item in driver_details if item["direction"] == "risk"]
     support_items = [item for item in driver_details if item["direction"] == "support"]
 
@@ -172,230 +370,71 @@ def _financial_model_agent(state: AgentState, xgb: dict[str, Any]) -> AgentOutpu
         primary_support = "상위 변수 기준 완화 요인은 제한적으로 확인됩니다."
 
     summary = (
-        f"{company_name}은(는) {market} 시장의 {industry} {size_group} 분류에 속하며, "
+        f"QuantCreditAgent는 {company_name}이(가) {market} 시장의 {industry} "
+        f"{size_group} 분류에 속한다는 맥락에서 Stage 1 결과를 해석했습니다. "
         f"모델은 현재 기업을 {prediction_label}으로 판단했습니다. "
         f"투기등급 위험확률은 {probability:.1%}이며, {primary_risk} {primary_support}"
     )
 
-    findings = [
-        f"정량 해석 요약: 상위 SHAP 변수 {min(len(driver_details), 3)}개를 기준으로 모델 판단의 근거를 정리했습니다.",
-        f"핵심 위험 요인: {_join_feature_points(risk_items) or '상위 변수 기준 뚜렷한 위험 가중 요인은 제한적입니다.'}",
-        f"완화 요인: {_join_feature_points(support_items) or '상위 변수 기준 완화 요인은 제한적입니다.'}",
-    ]
-
-    return AgentOutput(
-        role="financial_model",
-        summary=summary,
-        findings=findings,
-        confidence=0.82 if xgb else 0.35,
+    return QuantCreditOutput(
+        quant_summary=summary,
+        model_rationale=(
+            f"상위 SHAP 변수 {min(len(driver_details), 3)}개를 기준으로 모델 판단의 근거를 정리했습니다."
+        ),
+        key_risk_factors=[str(item.get("detail", "")) for item in risk_items if item.get("detail")],
+        mitigating_factors=[
+            str(item.get("detail", "")) for item in support_items if item.get("detail")
+        ],
+        confidence=0.82 if bundle.xgboost_result else 0.35,
     )
 
 
-def _debt_liquidity_agent(state: AgentState) -> AgentOutput:
-    source_row = dict(state.get("source_feature_row") or {})
-    xgb = dict(state.get("xgboost_result") or {})
-    model_view = dict(state.get("model_view") or {})
-    prediction_label = str(
-        xgb.get("prediction_label") or model_view.get("prediction_label") or "unknown"
-    )
-
-    current_ratio = _safe_float(source_row.get("current_ratio"))
-    cash_ratio = _safe_float(source_row.get("cash_ratio"))
-    debt_ratio = _safe_float(source_row.get("debt_ratio"))
-    short_term_share = _safe_float(source_row.get("short_term_borrowings_share"))
-    cashflow_coverage = _safe_float(source_row.get("cashflow_coverage_ratio"))
-    interest_coverage = _safe_float(source_row.get("interest_coverage_ratio"))
-    ocf_to_liabilities = _safe_float(source_row.get("ocf_to_total_liabilities"))
-    ocf_to_borrowings = _safe_float(source_row.get("ocf_to_total_borrowings"))
-    ocf_deficit_flag = _safe_float(source_row.get("is_2y_consecutive_ocf_deficit"))
-    icr_under_1_flag = _safe_float(source_row.get("icr_under_1"))
-
-    liquidity_risks: list[str] = []
-    liquidity_supports: list[str] = []
-    repayment_risks: list[str] = []
-    repayment_supports: list[str] = []
-
-    if current_ratio is not None:
-        if current_ratio < 1.0:
-            liquidity_risks.append("유동비율이 1.0 미만으로 단기 상환 재원이 부족합니다.")
-        elif current_ratio < 1.5:
-            liquidity_risks.append("유동비율이 1.5 미만으로 단기 완충력이 제한적입니다.")
-        elif current_ratio >= 2.0:
-            liquidity_supports.append(
-                "유동비율이 2.0 이상으로 단기 유동성 방어력이 확보되어 있습니다."
-            )
-
-    if cash_ratio is not None:
-        if cash_ratio < 0.2:
-            liquidity_risks.append("현금비율이 0.2 미만으로 즉시 사용 가능한 현금 버퍼가 약합니다.")
-        elif cash_ratio >= 0.5:
-            liquidity_supports.append(
-                "현금비율이 0.5 이상으로 즉시 대응 가능한 현금 여력이 있습니다."
-            )
-
-    if short_term_share is not None:
-        if short_term_share >= 0.6:
-            liquidity_risks.append("단기차입금 비중이 높아 차환 리스크에 취약합니다.")
-        elif short_term_share <= 0.35:
-            liquidity_supports.append("단기차입금 비중이 낮아 만기구조 부담이 상대적으로 덜합니다.")
-
-    if debt_ratio is not None:
-        if debt_ratio >= 2.5:
-            repayment_risks.append("부채비율이 높아 자본 완충력이 얇습니다.")
-        elif debt_ratio <= 1.0:
-            repayment_supports.append("부채비율이 1.0 이하로 레버리지 부담이 과도하지 않습니다.")
-
-    if (icr_under_1_flag is not None and icr_under_1_flag >= 1.0) or (
-        interest_coverage is not None and interest_coverage < 1.0
-    ):
-        repayment_risks.append(
-            "이자보상배율이 1배 미만이어서 영업이익만으로 금융비용을 감당하기 어렵습니다."
-        )
-
-    if ocf_deficit_flag is not None and ocf_deficit_flag >= 1.0:
-        repayment_risks.append("영업현금흐름 적자가 이어져 상환 재원의 지속성이 약합니다.")
-    elif ocf_to_liabilities is not None:
-        if ocf_to_liabilities < 0.0:
-            repayment_risks.append(
-                "영업현금흐름이 총부채 대비 음수로 상환 재원 창출력이 부족합니다."
-            )
-        elif ocf_to_liabilities >= 0.1:
-            repayment_supports.append(
-                "영업현금흐름이 총부채 대비 0.1 이상으로 상환 재원 창출력이 확인됩니다."
-            )
-
-    if cashflow_coverage is not None:
-        if cashflow_coverage < 1.0:
-            repayment_risks.append(
-                "현금흐름 커버리지가 1배 미만으로 상환 부담 흡수력이 제한적입니다."
-            )
-        elif cashflow_coverage >= 5.0:
-            repayment_supports.append("현금흐름 커버리지가 5배 이상으로 상환 방어력이 양호합니다.")
-
-    if ocf_to_borrowings is not None and ocf_to_borrowings >= 0.2:
-        repayment_supports.append(
-            "영업현금흐름이 차입금 대비 0.2 이상으로 차입 상환 여력이 뒷받침됩니다."
-        )
-
-    if interest_coverage is not None and interest_coverage >= 3.0:
-        repayment_supports.append("이자보상배율이 3배 이상으로 이자 부담 흡수력이 양호합니다.")
-
-    validation = _debt_liquidity_validation(
-        prediction_label=prediction_label,
-        liquidity_risks=liquidity_risks,
-        liquidity_supports=liquidity_supports,
-        repayment_risks=repayment_risks,
-        repayment_supports=repayment_supports,
-    )
-
+def _evidence_audit_agent(bundle: Stage2InputBundle) -> EvidenceAuditOutput:
+    status = bundle.news_status
+    debt_signals = evaluate_debt_liquidity(bundle)
+    macro_signals = evaluate_macro_market(bundle)
+    external_signals = evaluate_external_evidence(bundle.news_cache_snapshot)
     summary = (
-        f"DebtLiquidityAgent는 1단계 {prediction_label} 판단을 부채상환능력과 "
-        f"유동성 관점에서 검증했습니다. {validation}"
+        "EvidenceAuditAgent는 뉴스·공시·거시환경·산업 맥락과 부채/유동성 신호를 "
+        f"결합해 재무제표에 덜 드러난 꼬리 위험을 점검했습니다. {debt_signals.summary}"
     )
-    findings = [
-        f"모델 검증 의견: {validation}",
-        "유동성 점검: "
-        + _join_signal_text(
-            risks=liquidity_risks,
-            supports=liquidity_supports,
-            fallback=(
-                f"유동비율은 {_format_number(current_ratio, 'ratio')}이고 "
-                f"현금비율은 {_format_number(cash_ratio, 'ratio')}로, 즉시 두드러진 유동성 경고는 제한적입니다."
-            ),
-        ),
-        "상환여력 점검: "
-        + _join_signal_text(
-            risks=repayment_risks,
-            supports=repayment_supports,
-            fallback=(
-                "현금흐름 커버리지와 이자보상배율을 함께 보더라도 "
-                "즉시 상환여력 신호는 중립적인 수준입니다."
-            ),
-        ),
-    ]
-
-    return AgentOutput(
-        role="debt_liquidity",
-        summary=summary,
-        findings=findings,
-        confidence=_debt_liquidity_confidence(
-            [
-                current_ratio,
-                cash_ratio,
-                debt_ratio,
-                short_term_share,
-                cashflow_coverage,
-                interest_coverage,
-                ocf_to_liabilities,
-                ocf_to_borrowings,
-            ]
+    return EvidenceAuditOutput(
+        evidence_summary=summary,
+        evidence_status=status,
+        evidence_reliability="출처 신뢰도, 최신성, 중복 여부, 루머 가능성을 구분해 evidence bundle을 구성합니다.",
+        debt_liquidity_cross_check=debt_signals.findings,
+        macro_industry_sensitivity=macro_signals.findings,
+        external_evidence_findings=external_signals.findings,
+        confidence=max(
+            0.25 if status in {"not_implemented", "disabled", "placeholder"} else 0.5,
+            debt_signals.confidence - 0.08,
         ),
     )
 
 
-def _macro_market_agent(state: AgentState) -> AgentOutput:
-    source_row = dict(state.get("source_feature_row") or {})
-    spec_spread = _safe_float(source_row.get("spec_spread"))
-    market = _humanize_category(
-        source_row.get("market"), fallback=str(state.get("market", "UNKNOWN"))
-    )
-
-    summary = (
-        f"MacroMarketAgent는 현재 {market} 시장과 거시 변수 중 즉시 연결된 "
-        "투기경계 스프레드 수준을 확인했습니다."
-    )
-    findings = [
-        f"투기경계 스프레드는 {_format_number(spec_spread, '%p')}입니다."
-        if spec_spread is not None
-        else "현재 source row에는 투기경계 스프레드 값이 없습니다.",
-        "추후 금리, 환율, 회사채 스프레드 묶음을 연결하면 거시 해석을 확장할 수 있습니다.",
-    ]
-    return AgentOutput(
-        role="macro_market",
-        summary=summary,
-        findings=findings,
-        confidence=0.5,
-    )
-
-
-def _evidence_audit_agent(state: AgentState) -> AgentOutput:
-    news_cache = dict(state.get("news_cache_snapshot") or {})
-    status = str(news_cache.get("status", "not_implemented"))
-    summary = "EvidenceAuditAgent는 외부 뉴스·공시 근거 번들의 연결 상태를 점검했습니다."
-    findings = [
-        f"현재 뉴스/공시 근거 상태는 `{status}`입니다.",
-        "외부 근거 수집 파이프라인이 연결되면 기사·공시·주석의 신뢰도 검증을 담당합니다.",
-    ]
-    return AgentOutput(
-        role="evidence_audit",
-        summary=summary,
-        findings=findings,
-        confidence=0.2 if status == "not_implemented" else 0.45,
-    )
-
-
-def _chair_investment_agent(
-    state: AgentState,
+def _chair_report_agent(
+    bundle: Stage2InputBundle,
     recommendation: Recommendation,
     confidence: float,
-) -> AgentOutput:
-    xgb = dict(state.get("xgboost_result") or {})
-    prediction_label = str(xgb.get("prediction_label", "unknown"))
-    probability = float(xgb.get("probability_speculative", 0.0) or 0.0)
+) -> ChairReportOutput:
+    prediction_label = bundle.prediction_label
+    probability = bundle.probability_speculative
     summary = (
-        f"ChairInvestmentAgent는 현재 단계에서 모델 원판단 {prediction_label}과 "
-        f"위험확률 {probability:.1%}를 유지하되, 후속 에이전트 근거가 연결되면 "
-        f"최종 위원회 의견을 보완하도록 정리했습니다. 현재 서비스 recommendation은 "
-        f"{recommendation}입니다."
+        f"ChairReportAgent는 모델 원판단 {prediction_label}과 위험확률 {probability:.1%}를 "
+        "그대로 보존하면서, QuantCreditAgent의 정량 해석과 EvidenceAuditAgent의 "
+        f"검증 근거를 종합했습니다. 현재 서비스 recommendation은 {recommendation}입니다."
     )
-    findings = [
-        "정량 판단은 model_view로 보존하고, committee_view에서는 해석과 보완 의견만 추가합니다.",
-        "외부 근거 에이전트가 연결되면 적격/보류/부적격 3단 위원회 의견으로 확장합니다.",
-    ]
-    return AgentOutput(
-        role="chair_investment",
-        summary=summary,
-        findings=findings,
+    return ChairReportOutput(
+        report_summary=summary,
+        model_preservation_note=(
+            "정량 판단은 model_view로 보존하고, committee_view에서는 해석과 보완 의견만 추가합니다."
+        ),
+        committee_scope_note=(
+            "최종 보고서는 적격/보류/부적격 3단 위원회 의견과 주요 위험/완화 요인을 함께 제시합니다."
+        ),
+        final_review_memo_seed=(
+            "ChairReportAgent는 정량 해석과 검증 근거를 사람이 읽는 심사 메모로 연결합니다."
+        ),
         confidence=max(0.5, confidence),
     )
 
@@ -431,45 +470,6 @@ def _describe_top_drivers(
             }
         )
     return details
-
-
-def _join_feature_points(items: list[dict[str, Any]]) -> str:
-    points = [str(item.get("detail", "")) for item in items[:3] if item.get("detail")]
-    return " / ".join(points)
-
-
-def _join_signal_text(*, risks: list[str], supports: list[str], fallback: str) -> str:
-    points = [*risks[:3], *supports[:2]]
-    if points:
-        return " ".join(points)
-    return fallback
-
-
-def _debt_liquidity_validation(
-    *,
-    prediction_label: str,
-    liquidity_risks: list[str],
-    liquidity_supports: list[str],
-    repayment_risks: list[str],
-    repayment_supports: list[str],
-) -> str:
-    risk_count = len(liquidity_risks) + len(repayment_risks)
-    support_count = len(liquidity_supports) + len(repayment_supports)
-
-    if prediction_label == "투자적격" and risk_count >= 2:
-        return "정량상 투자적격이더라도 단기 유동성과 상환여력에는 추가 경계가 필요합니다."
-    if prediction_label == "부적격" and support_count >= 2 and risk_count <= 1:
-        return "정량상 부적격 판단은 유지하되, 현금흐름과 상환여력 측면의 완화 신호가 확인됩니다."
-    if risk_count > support_count:
-        return f"부채 및 유동성 지표는 현재 {prediction_label} 판단을 보수적으로 뒷받침합니다."
-    if support_count > risk_count:
-        return f"부채 및 유동성 지표는 현재 {prediction_label} 판단에 일부 완충 근거를 제공합니다."
-    return "부채 및 유동성 지표는 현재 모델 판단과 대체로 중립적으로 맞물립니다."
-
-
-def _debt_liquidity_confidence(metrics: list[float | None]) -> float:
-    available = sum(value is not None for value in metrics)
-    return min(0.78, 0.42 + available * 0.04)
 
 
 def _feature_point_text(

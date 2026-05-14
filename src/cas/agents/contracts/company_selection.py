@@ -171,6 +171,7 @@ def build_agent_state_seed(
         "committee_reviews": [],
         "agent_outputs": [],
         "agent_summary": {},
+        "committee_view": {},
         "audit": [],
         "artifacts": {},
         "insufficient_data": False,

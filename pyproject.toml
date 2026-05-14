@@ -48,6 +48,10 @@ viz = [
 ml = [
     "scikit-learn>=1.5.0,<1.8.0",
 ]
+agent = [
+    "agno>=2.0.0",
+    "anthropic>=0.60.0",
+]
 
 [project.urls]
 Repository = "https://github.com/LADTO-develop/Corporate-Analysis-System"

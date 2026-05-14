@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from cas.agents.committee_schema import CommitteeViewPayload
+
 
 class _StrictModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -69,3 +71,4 @@ class DashboardResponse(_StrictModel):
     model_result: ModelResultPayload
     news_analysis: NewsAnalysisPayload
     agent_summary: AgentSummaryPayload
+    committee_view: CommitteeViewPayload

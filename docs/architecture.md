@@ -71,10 +71,19 @@ Node responsibilities:
 
 - `data`: resolves the selected company from the processed company list.
 - `feature_store`: builds the feature-store snapshot and records the active model registry ref.
-- `news_cache`: placeholder node only; crawling/news-cache implementation is intentionally absent.
+- `news_cache`: collects optional external evidence when `CAS_ENABLE_EXTERNAL_EVIDENCE=1`;
+  otherwise emits a deterministic disabled snapshot for CI and offline runs.
 - `xgboost_inference`: emits realtime model output shaped as the production XGBoost result.
 - `rule_engine`: converts model output plus cached context into the service risk band.
-- `agno_agents`: runs fixed roles: news summary, model interpretation, risk review, synthesis/format.
+- `agno_agents`: runs fixed Stage 2 roles: QuantCreditAgent, EvidenceAuditAgent, ChairReportAgent.
+  Role contracts live in `src/cas/agents/stage2_specs.py`, state is normalized
+  through `src/cas/agents/stage2_bundle.py`, role-specific outputs are validated
+  in `src/cas/agents/stage2_outputs.py`, execution goes through
+  `src/cas/agents/stage2_runner.py`, EvidenceAuditAgent signal logic is split
+  under `src/cas/agents/signals/`, the strict `committee_view` schema lives in
+  `src/cas/agents/committee_schema.py`, veto rules are read from
+  `configs/agent/committee.yaml`, and the payload is assembled in
+  `src/cas/agents/committee_view.py`.
 - `json_schema`: validates the strict dashboard response JSON.
 - `report`: writes `latest.json` and `latest.md`.
 
@@ -87,7 +96,16 @@ The online service emits exactly these dashboard sections before rendering:
   "company_overview": {},
   "model_result": {},
   "news_analysis": {},
-  "agent_summary": {}
+  "agent_summary": {},
+  "committee_view": {
+    "final_committee_label": "적격 | 보류 | 부적격",
+    "veto_triggered": false,
+    "conflict_resolution": "",
+    "key_risk_factors": [],
+    "mitigating_factors": [],
+    "evidence_summary": [],
+    "final_review_memo": ""
+  }
 }
 ```
 

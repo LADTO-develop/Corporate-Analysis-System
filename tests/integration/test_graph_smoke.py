@@ -92,11 +92,18 @@ class TestGraphBuild:
             "model_result",
             "news_analysis",
             "agent_summary",
+            "committee_view",
         }
         assert state["json_schema_errors"] == []
         assert state["response_json"]["model_result"]["model_name"] == "credit_43_features"
         assert state["response_json"]["model_result"]["prediction_label"] in {"투자적격", "부적격"}
-        assert "financial_model" in state["response_json"]["agent_summary"]["agents"]
+        assert "quant_credit" in state["response_json"]["agent_summary"]["agents"]
+        assert state["response_json"]["committee_view"]["final_committee_label"] in {
+            "적격",
+            "보류",
+            "부적격",
+        }
+        assert "conflict_resolution" in state["response_json"]["committee_view"]
         assert "report_md" in state["artifacts"]
 
     def test_graph_runs_on_2026_inference_company(self) -> None:

@@ -9,6 +9,7 @@ from pydantic import ValidationError
 
 from cas.agents.response_schema import DashboardResponse
 from cas.agents.state import AgentState, AuditEntry
+from cas.veto_rules import external_evidence_veto_triggered
 
 
 def run(state: AgentState) -> dict[str, Any]:
@@ -42,6 +43,8 @@ def _build_response_payload(state: AgentState) -> dict[str, Any]:
     rule = dict(state.get("rule_result") or {})
     news_cache = dict(state.get("news_cache_snapshot") or {})
     agent_summary = dict(state.get("agent_summary") or {})
+    committee_view = dict(state.get("committee_view") or {})
+    processed_company = dict(state.get("processed_company") or {})
 
     insufficient = bool(state.get("insufficient_data", False))
     company_name = str(state.get("company_name") or company.get("name") or state["company_id"])
@@ -68,7 +71,14 @@ def _build_response_payload(state: AgentState) -> dict[str, Any]:
         },
         "news_analysis": {
             "status": str(news_cache.get("status", "not_implemented")),
-            "summary": _news_summary(news_cache, insufficient=insufficient),
+            "summary": _news_summary(
+                news_cache,
+                insufficient=insufficient,
+                company_name=company_name,
+                stock_code=str(
+                    processed_company.get("stock_code") or state.get("company_id", "")
+                ),
+            ),
         },
         "agent_summary": {
             "final_recommendation": str(
@@ -87,6 +97,11 @@ def _build_response_payload(state: AgentState) -> dict[str, Any]:
             ),
             "agents": _agent_payloads(agent_summary),
         },
+        "committee_view": _committee_view_payload(
+            committee_view,
+            prediction_label=str(xgb.get("prediction_label", "unknown")),
+            insufficient=insufficient,
+        ),
     }
 
 
@@ -127,6 +142,60 @@ def _agent_payloads(agent_summary: dict[str, Any]) -> dict[str, dict[str, Any]]:
     }
 
 
+def _committee_view_payload(
+    committee_view: dict[str, Any],
+    *,
+    prediction_label: str,
+    insufficient: bool,
+) -> dict[str, Any]:
+    if committee_view:
+        return {
+            "final_committee_label": str(committee_view.get("final_committee_label", "보류")),
+            "veto_triggered": bool(committee_view.get("veto_triggered", False)),
+            "conflict_resolution": str(committee_view.get("conflict_resolution", "")),
+            "key_risk_factors": [
+                str(item) for item in committee_view.get("key_risk_factors", []) or []
+            ],
+            "mitigating_factors": [
+                str(item) for item in committee_view.get("mitigating_factors", []) or []
+            ],
+            "evidence_summary": _evidence_items(committee_view.get("evidence_summary", [])),
+            "final_review_memo": str(committee_view.get("final_review_memo", "")),
+        }
+    if insufficient:
+        label = "보류"
+        memo = "필수 입력이 부족해 위원회 검토를 보류했습니다."
+    else:
+        label = "적격" if prediction_label == "투자적격" else "부적격"
+        memo = "Stage 2 committee_view가 생성되지 않아 model_view 기준 라벨만 반영했습니다."
+    return {
+        "final_committee_label": label,
+        "veto_triggered": False,
+        "conflict_resolution": memo,
+        "key_risk_factors": [],
+        "mitigating_factors": [],
+        "evidence_summary": [],
+        "final_review_memo": memo,
+    }
+
+
+def _evidence_items(raw_items: object) -> list[dict[str, str]]:
+    if not isinstance(raw_items, list):
+        return []
+    items: list[dict[str, str]] = []
+    for item in raw_items:
+        if not isinstance(item, dict):
+            continue
+        items.append(
+            {
+                "source": str(item.get("source", "unknown")),
+                "summary": str(item.get("summary", "")),
+                "reliability": str(item.get("reliability", "unknown")),
+            }
+        )
+    return items
+
+
 def _build_schema_failure_response(
     state: AgentState,
     payload: dict[str, Any],
@@ -135,6 +204,7 @@ def _build_schema_failure_response(
     company_overview = dict(payload.get("company_overview") or {})
     model_result = dict(payload.get("model_result") or {})
     agent_summary = dict(payload.get("agent_summary") or {})
+    committee_view = dict(payload.get("committee_view") or {})
     first_error = errors[0] if errors else "unknown schema validation error"
     fallback_payload = {
         "company_overview": {
@@ -191,17 +261,118 @@ def _build_schema_failure_response(
                 }
             },
         },
+        "committee_view": {
+            "final_committee_label": str(committee_view.get("final_committee_label") or "보류"),
+            "veto_triggered": bool(committee_view.get("veto_triggered", False)),
+            "conflict_resolution": (
+                "A fallback committee_view was emitted because strict schema "
+                f"validation failed: {first_error}"
+            ),
+            "key_risk_factors": [
+                f"Schema validation error: {first_error}",
+            ],
+            "mitigating_factors": [],
+            "evidence_summary": [],
+            "final_review_memo": (
+                "The generated payload did not satisfy the strict dashboard schema, "
+                "so committee_view was reduced to a safe fallback."
+            ),
+        },
     }
     validated = DashboardResponse.model_validate(fallback_payload)
     return cast(dict[str, Any], validated.model_dump(mode="json"))
 
 
-def _news_summary(news_cache: dict[str, Any], *, insufficient: bool) -> str:
+def _news_summary(
+    news_cache: dict[str, Any],
+    *,
+    insufficient: bool,
+    company_name: str = "",
+    stock_code: str = "",
+) -> str:
     if insufficient:
         return "News cache was not queried because required company inputs are missing."
-    if news_cache.get("status") == "placeholder":
+    status = str(news_cache.get("status", "not_implemented"))
+    if status == "disabled":
+        return "External evidence collection is disabled for this deterministic run."
+    if status == "ready":
+        raw_items = news_cache.get("items", []) or []
+        item_count = len(raw_items) if isinstance(raw_items, list) else 0
+        direct_count, weak_count = _external_item_match_counts(news_cache)
+        verified_count = _int_value(news_cache.get("verified_item_count"), fallback=direct_count)
+        high_confidence_critical_count = _int_value(
+            news_cache.get("high_confidence_critical_count"),
+            fallback=0,
+        )
+        relevance_text = (
+            f"{verified_count} verified, {direct_count} direct-match, "
+            f"{weak_count} weak/indirect"
+        )
+        critical_terms = ", ".join(str(term) for term in news_cache.get("critical_terms", []) or [])
+        if critical_terms:
+            if external_evidence_veto_triggered(
+                news_cache,
+                company_name=company_name,
+                stock_code=stock_code,
+            ):
+                return (
+                    f"Collected {item_count} external evidence item(s) "
+                    f"({relevance_text}); confirmed high-confidence critical evidence: "
+                    f"{critical_terms}."
+                )
+            return (
+                f"Collected {item_count} external evidence item(s) ({relevance_text}); "
+                f"unconfirmed keyword hit(s): {critical_terms}; "
+                f"{high_confidence_critical_count} item(s) had company-keyword context, "
+                "but no high-confidence direct veto evidence."
+            )
+        return (
+            f"Collected {item_count} external evidence item(s) ({relevance_text}); "
+            "no configured critical terms were found."
+        )
+    if status == "missing_credentials":
+        return "External evidence collection was enabled, but provider credentials are missing."
+    if status == "partial_error":
+        return "External evidence collection returned partial provider errors; inspect provider status."
+    if status == "no_results":
+        return "External evidence collection was enabled, but no provider results were returned."
+    if status == "placeholder":
         return "News/crawling integration is a placeholder only."
-    return "News/crawling integration is not implemented."
+    return "External evidence collection status is not implemented."
+
+
+def _external_item_match_counts(news_cache: dict[str, Any]) -> tuple[int, int]:
+    direct_count = news_cache.get("direct_match_count")
+    weak_count = news_cache.get("weak_evidence_count")
+    if isinstance(direct_count, int) and isinstance(weak_count, int):
+        return direct_count, weak_count
+
+    raw_items = news_cache.get("items", [])
+    if not isinstance(raw_items, list):
+        return 0, 0
+    direct = sum(
+        1
+        for item in raw_items
+        if isinstance(item, dict) and item.get("company_match") is True
+    )
+    weak = sum(
+        1
+        for item in raw_items
+        if isinstance(item, dict) and item.get("company_match") is False
+    )
+    unknown = sum(
+        1
+        for item in raw_items
+        if isinstance(item, dict) and item.get("company_match") not in {True, False}
+    )
+    return direct, weak + unknown
+
+
+def _int_value(value: object, *, fallback: int) -> int:
+    try:
+        return int(value) if isinstance(value, int | float | str) else fallback
+    except (TypeError, ValueError):
+        return fallback
 
 
 def _clamp_probability(value: object) -> float:

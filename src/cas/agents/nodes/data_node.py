@@ -297,6 +297,7 @@ def _dataset_backed_payload(
     if company_selection is not None:
         processed_company["corp_code"] = company_selection.company.corp_code
         processed_company["request_id"] = company_selection.request_id
+        processed_company["as_of_date"] = company_selection.as_of_date.isoformat()
 
     payload: dict[str, Any] = {
         "company_id": company_id,
@@ -318,7 +319,7 @@ def _dataset_backed_payload(
         "processed_company_list_ref": source_path,
         "raw_financials": {},
         # source_feature_row는 Stage 1이 바로 모델 입력 벡터를 만들 때 쓰는 원본 row다.
-        # peer_comparison_rows는 Stage 2 FinancialModelAgent가 산업/시장 비교 문장을 만들 때 쓴다.
+        # peer_comparison_rows는 Stage 2 QuantCreditAgent가 산업/시장 비교 문장을 만들 때 쓴다.
         "source_feature_row": dataset_row,
         "peer_comparison_rows": peer_rows,
         "insufficient_data": False,
