@@ -75,9 +75,7 @@ def _build_response_payload(state: AgentState) -> dict[str, Any]:
                 news_cache,
                 insufficient=insufficient,
                 company_name=company_name,
-                stock_code=str(
-                    processed_company.get("stock_code") or state.get("company_id", "")
-                ),
+                stock_code=str(processed_company.get("stock_code") or state.get("company_id", "")),
             ),
         },
         "agent_summary": {
@@ -305,8 +303,7 @@ def _news_summary(
             fallback=0,
         )
         relevance_text = (
-            f"{verified_count} verified, {direct_count} direct-match, "
-            f"{weak_count} weak/indirect"
+            f"{verified_count} verified, {direct_count} direct-match, {weak_count} weak/indirect"
         )
         critical_terms = ", ".join(str(term) for term in news_cache.get("critical_terms", []) or [])
         if critical_terms:
@@ -351,14 +348,10 @@ def _external_item_match_counts(news_cache: dict[str, Any]) -> tuple[int, int]:
     if not isinstance(raw_items, list):
         return 0, 0
     direct = sum(
-        1
-        for item in raw_items
-        if isinstance(item, dict) and item.get("company_match") is True
+        1 for item in raw_items if isinstance(item, dict) and item.get("company_match") is True
     )
     weak = sum(
-        1
-        for item in raw_items
-        if isinstance(item, dict) and item.get("company_match") is False
+        1 for item in raw_items if isinstance(item, dict) and item.get("company_match") is False
     )
     unknown = sum(
         1

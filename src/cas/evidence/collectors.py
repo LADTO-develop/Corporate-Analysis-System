@@ -341,9 +341,7 @@ def _collect_opendart(
                 {
                     "source": "opendart",
                     "title": report_name,
-                    "summary": (
-                        f"{company_name} OpenDART {disclosure_label} 공시: {report_name}"
-                    ),
+                    "summary": (f"{company_name} OpenDART {disclosure_label} 공시: {report_name}"),
                     "url": f"https://dart.fss.or.kr/dsaf001/main.do?rcpNo={receipt_no}"
                     if receipt_no
                     else "",
@@ -499,7 +497,9 @@ def _dedupe_raw_opendart_items(items: list[dict[str, str]]) -> list[dict[str, st
 def _opendart_relevance(report_name: str) -> str:
     if any(term in report_name for term in _OPENDART_RISK_TERMS):
         return "risk"
-    if any(term in report_name for term in ("사업보고서", "반기보고서", "분기보고서", "감사보고서")):
+    if any(
+        term in report_name for term in ("사업보고서", "반기보고서", "분기보고서", "감사보고서")
+    ):
         return "context"
     return "routine"
 

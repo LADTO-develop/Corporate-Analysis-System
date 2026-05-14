@@ -230,14 +230,10 @@ def _external_evidence_quality(
 
     verified_count = _safe_int(news_cache.get("verified_item_count"))
     direct_count = sum(
-        1
-        for item in raw_items
-        if isinstance(item, dict) and item.get("company_match") is True
+        1 for item in raw_items if isinstance(item, dict) and item.get("company_match") is True
     )
     weak_count = sum(
-        1
-        for item in raw_items
-        if isinstance(item, dict) and item.get("company_match") is False
+        1 for item in raw_items if isinstance(item, dict) and item.get("company_match") is False
     )
     high_reliability_count = sum(
         1
