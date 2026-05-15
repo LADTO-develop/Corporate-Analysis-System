@@ -127,6 +127,53 @@ def test_evidence_audit_agent_preserves_downside_but_notes_support() -> None:
     assert any("영업현금흐름이 총부채 대비 0.1 이상" in item for item in agent.findings)
 
 
+def test_evidence_audit_agent_scores_direct_external_risk_evidence() -> None:
+    state: AgentState = {
+        "company_id": "000250",
+        "company_name": "삼천당제약(주)",
+        "source_feature_row": {
+            "stock_code": "000250",
+            "current_ratio": 1.8,
+            "cash_ratio": 0.4,
+            "short_term_borrowings_share": 0.25,
+            "cashflow_coverage_ratio": 4.2,
+            "interest_coverage_ratio": 3.4,
+        },
+        "xgboost_result": {"prediction_label": "투자적격", "probability_speculative": 0.31},
+        "news_cache_snapshot": {
+            "status": "ready",
+            "items": [
+                {
+                    "source": "opendart",
+                    "title": "삼천당제약(주) 횡령 혐의 발생",
+                    "summary": "삼천당제약(주) 공시: 횡령 혐의 발생",
+                    "reliability": "high",
+                    "company_match": True,
+                    "critical_terms": ["횡령"],
+                    "critical_context_confirmed": True,
+                    "veto_candidate": True,
+                    "evidence_score": 0.91,
+                    "evidence_quality": "high",
+                }
+            ],
+            "direct_match_count": 1,
+            "verified_item_count": 1,
+            "veto_candidate_count": 1,
+            "high_confidence_critical_count": 1,
+            "critical_terms": ["횡령"],
+            "has_critical_risk": True,
+        },
+    }
+
+    structured_output = _evidence_audit_agent(build_stage2_input_bundle(state))
+    agent = structured_output.to_agent_output()
+
+    assert structured_output.evidence_strength == "strong"
+    assert "보수 검토" in structured_output.model_challenge
+    assert "보류 또는 부적격 검토" in structured_output.audit_conclusion
+    assert any("외부근거 위험" in item for item in agent.findings)
+
+
 def test_committee_view_exposes_final_decision_fields() -> None:
     state: AgentState = {
         "company_id": "250",

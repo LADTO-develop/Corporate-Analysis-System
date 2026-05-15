@@ -52,6 +52,9 @@ class EvidenceAuditOutput(_StrictModel):
     evidence_summary: str
     evidence_status: str
     evidence_reliability: str
+    evidence_strength: Literal["none", "weak", "moderate", "strong", "critical"] = "none"
+    model_challenge: str = ""
+    audit_conclusion: str = ""
     debt_liquidity_cross_check: list[str]
     macro_industry_sensitivity: list[str]
     external_evidence_findings: list[str]
@@ -65,6 +68,13 @@ class EvidenceAuditOutput(_StrictModel):
             findings=[
                 f"외부 근거 상태: 현재 뉴스/공시 근거 번들 상태는 `{self.evidence_status}`입니다.",
                 f"근거 검증 원칙: {self.evidence_reliability}",
+                f"외부근거 강도: {self.evidence_strength}",
+                *([f"모델-근거 충돌 점검: {self.model_challenge}"] if self.model_challenge else []),
+                *(
+                    [f"EvidenceAudit 검토 결론: {self.audit_conclusion}"]
+                    if self.audit_conclusion
+                    else []
+                ),
                 *self.debt_liquidity_cross_check,
                 *self.macro_industry_sensitivity,
                 *self.external_evidence_findings,

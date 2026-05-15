@@ -216,6 +216,7 @@ def _build_prompt_payload(
             "Use evidence_quality, evidence_score, and verification_flags when judging news strength.",
             "Do not describe critical_terms as confirmed events unless veto_candidate=true or veto_triggered=true.",
             "If direct_match_count is positive, do not claim all external evidence lacks company relevance.",
+            "EvidenceAuditAgent must state evidence_strength, model_challenge, and audit_conclusion.",
             "Keep all confidence values between 0 and 1.",
             "Keep each list to at most 3 items and each Korean sentence concise.",
             "Return compact JSON only; do not include markdown or commentary outside the schema.",
