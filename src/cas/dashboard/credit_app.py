@@ -218,11 +218,13 @@ def pick_selected_company(artifacts: DashboardArtifacts) -> pd.Series:
         st.stop()
 
     options = latest.assign(
-        label=lambda frame: frame["corp_name"]
-        + " | "
-        + frame["stock_code"].astype(str)
-        + " | FY"
-        + frame["fiscal_year"].astype(int).astype(str)
+        label=lambda frame: (
+            frame["corp_name"]
+            + " | "
+            + frame["stock_code"].astype(str)
+            + " | FY"
+            + frame["fiscal_year"].astype(int).astype(str)
+        )
     )
     labels = options["label"].tolist()
     default_index = 0

@@ -59,7 +59,10 @@ def run(state: AgentState) -> dict[str, Any]:
     probability_speculative = round(float(model.predict(xgb.DMatrix(frame))[0]), 4)
 
     model_registry = dict(cfg.get("model_registry", {}))
-    threshold = float(bundle.get("threshold_default", model_registry.get("threshold", 0.5)))
+    threshold_value = bundle.get("threshold_default")
+    if threshold_value is None:
+        threshold_value = model_registry.get("threshold", 0.5)
+    threshold = _to_float(threshold_value)
     watch_threshold = float(model_registry.get("watch_threshold", 0.4))
     high_risk_threshold = float(model_registry.get("high_risk_threshold", 0.65))
     prediction_label = "부적격" if probability_speculative >= threshold else "투자적격"
@@ -214,7 +217,14 @@ def _is_missing_model_artifact_error(error: Exception) -> bool:
         return True
     if isinstance(error, FileNotFoundError):
         return True
-    return error.__class__.__name__ == "XGBoostError" and "No such file or directory" in str(error)
+    if error.__class__.__name__ != "XGBoostError":
+        return False
+    message = str(error).lower()
+    return (
+        "no such file or directory" in message
+        or "cannot find the file" in message
+        or ("opening" in message and "failed" in message)
+    )
 
 
 def _lens_scores(

@@ -52,10 +52,12 @@ def build_committee_view_model(
         committee_label=committee_label,
         veto_triggered=veto_triggered,
     )
-    final_review_memo = (
-        f"모델 원판단은 {prediction_label}으로 보존합니다. 위원회는 정량 해석, "
-        f"부채/유동성 교차 검증, 외부 근거 상태를 함께 검토해 최종 의견을 "
-        f"{committee_label}로 정리했습니다."
+    final_review_memo = _final_review_memo(
+        prediction_label=prediction_label,
+        committee_label=committee_label,
+        veto_triggered=veto_triggered,
+        risk_factors=risk_factors,
+        mitigating_factors=mitigating_factors,
     )
 
     return CommitteeViewPayload(
@@ -124,28 +126,40 @@ def _committee_factor_value(text: str, *, target: Literal["risk", "mitigation"])
         return text.removeprefix("핵심 위험 요인:").strip()
     if target == "mitigation" and text.startswith("완화 요인:"):
         return text.removeprefix("완화 요인:").strip()
-    if not text.startswith("부채·유동성 검증 의견:"):
-        return None
-
-    value = text.removeprefix("부채·유동성 검증 의견:").strip()
-    classification = _classify_debt_liquidity_validation(value)
-    if classification == target:
-        return value
+    for prefix in (
+        "부채·유동성 검증 의견:",
+        "EvidenceAudit 검토 결론:",
+        "모델-근거 충돌 점검:",
+        "외부근거 위험:",
+        "외부근거 점검:",
+    ):
+        if text.startswith(prefix):
+            value = text.removeprefix(prefix).strip()
+            classification = _classify_committee_factor(value)
+            if classification == target:
+                return value
+            return None
     return None
 
 
-def _classify_debt_liquidity_validation(
+def _classify_committee_factor(
     text: str,
 ) -> Literal["risk", "mitigation", "neutral"]:
     risk_markers = (
         "추가 경계",
         "추가 점검",
+        "보수 검토",
+        "보수적인",
         "부적격 판단을 보수적으로 뒷받침",
         "부족",
         "취약",
         "제한",
         "어렵습니다",
         "약합니다",
+        "차환 리스크",
+        "치명 리스크",
+        "위험 근거",
+        "veto",
     )
     mitigation_markers = (
         "완충 근거",
@@ -155,6 +169,8 @@ def _classify_debt_liquidity_validation(
         "확보",
         "여력",
         "과도하지",
+        "완화 요인",
+        "뒤집기보다 설명",
     )
     if any(marker in text for marker in risk_markers):
         return "risk"
@@ -241,6 +257,36 @@ def _conflict_resolution(
     return (
         f"모델 원판단({prediction_label})과 위원회 라벨({committee_label})이 대체로 일치하며, "
         "Stage 2는 판단을 덮어쓰기보다 근거와 설명을 보완했습니다."
+    )
+
+
+def _final_review_memo(
+    *,
+    prediction_label: str,
+    committee_label: str,
+    veto_triggered: bool,
+    risk_factors: list[str],
+    mitigating_factors: list[str],
+) -> str:
+    if veto_triggered:
+        return (
+            f"모델 원판단은 {prediction_label}으로 보존하지만, 강제 경고 조건을 충족하는 "
+            "외부 또는 정책 위험 신호가 있어 위원회 의견을 부적격으로 정리했습니다."
+        )
+    risk_note = (
+        f"주요 위험은 {risk_factors[0]}"
+        if risk_factors
+        else "추가로 확정된 핵심 위험 요인은 제한적입니다"
+    )
+    mitigation_note = (
+        f"완화 요인은 {mitigating_factors[0]}"
+        if mitigating_factors
+        else "명시적 완화 요인은 제한적입니다"
+    )
+    return (
+        f"모델 원판단은 {prediction_label}으로 보존합니다. 위원회는 정량 해석, "
+        f"부채/유동성 교차 검증, 외부 근거 상태를 함께 검토해 최종 의견을 "
+        f"{committee_label}로 정리했습니다. {risk_note}. {mitigation_note}."
     )
 
 
