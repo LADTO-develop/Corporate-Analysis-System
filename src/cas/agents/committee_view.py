@@ -46,6 +46,11 @@ def build_committee_view_model(
 
     risk_factors = _collect_committee_factors(agents, target="risk")
     mitigating_factors = _collect_committee_factors(agents, target="mitigation")
+    if not veto_triggered:
+        committee_label = _committee_label_with_evidence_escalation(
+            committee_label,
+            agents=agents,
+        )
     evidence_summary = _evidence_summary_items(bundle, agents)
     conflict_resolution = _conflict_resolution(
         prediction_label=prediction_label,
@@ -103,6 +108,34 @@ def _veto_triggered_label(veto_rules: VetoRules) -> CommitteeLabel:
     if label in {"적격", "보류", "부적격"}:
         return cast(CommitteeLabel, label)
     return "부적격"
+
+
+def _committee_label_with_evidence_escalation(
+    committee_label: CommitteeLabel,
+    *,
+    agents: list[AgentOutput],
+) -> CommitteeLabel:
+    """Escalate non-veto EvidenceAudit red flags without overwriting model_view."""
+    if committee_label != "적격":
+        return committee_label
+    evidence_agent = next((agent for agent in agents if agent.role == "evidence_audit"), None)
+    if evidence_agent is None:
+        return committee_label
+    if _evidence_agent_requires_hold(evidence_agent):
+        return "보류"
+    return committee_label
+
+
+def _evidence_agent_requires_hold(agent: AgentOutput) -> bool:
+    for finding in agent.findings:
+        text = str(finding)
+        if text.startswith("외부근거 강도:"):
+            strength = text.removeprefix("외부근거 강도:").strip().lower()
+            if strength in {"strong", "critical"}:
+                return True
+        if _committee_factor_value(text, target="risk"):
+            return True
+    return False
 
 
 def _collect_committee_factors(
@@ -170,7 +203,6 @@ def _classify_committee_factor(
         "여력",
         "과도하지",
         "완화 요인",
-        "뒤집기보다 설명",
     )
     if any(marker in text for marker in risk_markers):
         return "risk"

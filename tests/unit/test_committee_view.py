@@ -89,7 +89,7 @@ def test_committee_view_moves_debt_liquidity_support_to_mitigation() -> None:
     ]
 
 
-def test_committee_view_collects_evidence_audit_risk_conclusion() -> None:
+def test_committee_view_escalates_priority_to_hold_on_evidence_audit_risk() -> None:
     state: AgentState = {
         "xgboost_result": {"prediction_label": "투자적격"},
         "news_cache_snapshot": {"status": "ready"},
@@ -110,7 +110,7 @@ def test_committee_view_collects_evidence_audit_risk_conclusion() -> None:
 
     committee_view = build_committee_view(
         bundle=build_stage2_input_bundle(state),
-        recommendation="watch",
+        recommendation="priority",
         agents=agents,
     )
 
@@ -120,6 +120,36 @@ def test_committee_view_collects_evidence_audit_risk_conclusion() -> None:
         "외부 근거가 강하므로 모델 원판단보다 보수적인 보류 또는 부적격 검토가 필요합니다.",
     ]
     assert "주요 위험은 직접 관련 외부 위험 근거" in committee_view["final_review_memo"]
+
+
+def test_committee_view_does_not_treat_neutral_audit_conclusion_as_mitigation() -> None:
+    state: AgentState = {
+        "xgboost_result": {"prediction_label": "투자적격"},
+        "news_cache_snapshot": {"status": "ready"},
+    }
+    agents = [
+        AgentOutput(role="quant_credit", summary="정량 결과", findings=[], confidence=0.8),
+        AgentOutput(
+            role="evidence_audit",
+            summary="외부근거 검토",
+            findings=[
+                "EvidenceAudit 검토 결론: 현재 확인된 외부 근거는 모델 원판단을 뒤집기보다 설명과 점검 포인트를 보완합니다."
+            ],
+            confidence=0.7,
+        ),
+        AgentOutput(role="chair_report", summary="종합", findings=[], confidence=0.7),
+    ]
+
+    committee_view = build_committee_view(
+        bundle=build_stage2_input_bundle(state),
+        recommendation="priority",
+        agents=agents,
+    )
+
+    assert committee_view["final_committee_label"] == "적격"
+    assert committee_view["mitigating_factors"] == [
+        "현재 scaffold 기준 명시적 완화 요인은 제한적입니다."
+    ]
 
 
 def test_committee_view_model_validates_strict_payload() -> None:

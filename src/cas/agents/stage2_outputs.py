@@ -52,9 +52,9 @@ class EvidenceAuditOutput(_StrictModel):
     evidence_summary: str
     evidence_status: str
     evidence_reliability: str
-    evidence_strength: Literal["none", "weak", "moderate", "strong", "critical"] = "none"
-    model_challenge: str = ""
-    audit_conclusion: str = ""
+    evidence_strength: Literal["none", "weak", "moderate", "strong", "critical"]
+    model_challenge: str
+    audit_conclusion: str
     debt_liquidity_cross_check: list[str]
     macro_industry_sensitivity: list[str]
     external_evidence_findings: list[str]
