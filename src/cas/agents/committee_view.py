@@ -134,6 +134,8 @@ def _evidence_agent_requires_hold(agent: AgentOutput) -> bool:
             if strength in {"strong", "critical"}:
                 return True
         if _committee_factor_value(text, target="risk"):
+            if _non_escalating_risk_text(text):
+                continue
             return True
     return False
 
@@ -168,11 +170,27 @@ def _committee_factor_value(text: str, *, target: Literal["risk", "mitigation"])
     ):
         if text.startswith(prefix):
             value = text.removeprefix(prefix).strip()
+            if target == "risk" and _non_escalating_risk_text(value):
+                return None
             classification = _classify_committee_factor(value)
             if classification == target:
                 return value
             return None
     return None
+
+
+def _non_escalating_risk_text(text: str) -> bool:
+    """Keep missing or unconfirmed evidence from escalating an eligible company to hold."""
+    neutral_markers = (
+        "확정되지 않았",
+        "중대한 충돌은 제한적",
+        "현재 연결된 뉴스/공시 항목은 없습니다",
+        "확인 가능한 외부 근거가 제한적",
+        "수집 상태가 `not_requested`",
+        "수집 상태가 `disabled`",
+        "수집 상태가 `no_results`",
+    )
+    return any(marker in text for marker in neutral_markers)
 
 
 def _classify_committee_factor(

@@ -887,6 +887,8 @@ def _critical_context_confirmed(
     normalized_text = _normalize_entity_text(text)
     aliases = _entity_aliases(company_name=company_name, stock_code=stock_code)
     normalized_terms = [_normalize_entity_text(term) for term in critical_terms]
+    if _critical_context_scope_excluded(normalized_text, normalized_terms):
+        return False
     for alias in aliases:
         alias_index = normalized_text.find(alias)
         if alias_index < 0:
@@ -896,6 +898,26 @@ def _critical_context_confirmed(
             if term_index >= 0 and abs(alias_index - term_index) <= 80:
                 return True
     return False
+
+
+def _critical_context_scope_excluded(normalized_text: str, normalized_terms: list[str]) -> bool:
+    """Exclude snippets where a critical term is scoped away from the selected common stock."""
+    if "상장폐지" not in normalized_terms:
+        return False
+    preferred_only_markers = (
+        "우선주에만해당",
+        "우선주만해당",
+        "우선주에해당",
+    )
+    common_stock_unaffected_markers = (
+        "보통주에는영향",
+        "보통주에영향",
+        "보통주에는해당없",
+        "보통주해당없",
+    )
+    return any(marker in normalized_text for marker in preferred_only_markers) or any(
+        marker in normalized_text for marker in common_stock_unaffected_markers
+    )
 
 
 def _verification_summary(items: list[dict[str, object]]) -> dict[str, object]:

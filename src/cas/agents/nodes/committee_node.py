@@ -568,8 +568,8 @@ def _evidence_profile_finding(
         )
     if strength == "moderate":
         return (
-            f"외부근거 점검: {counts}입니다. 치명 리스크 확정은 아니지만 "
-            "모델 판단을 보완할 직접 관련 근거가 있습니다."
+            f"외부근거 점검: {counts}입니다. 강한 위험 신호로 확인된 항목은 없으며 "
+            "모델 판단을 보완할 참고 근거로 활용합니다."
         )
     return (
         f"외부근거 점검: {counts}입니다. 현재 근거는 약하거나 간접적이므로 "
