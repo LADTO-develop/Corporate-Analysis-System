@@ -88,30 +88,48 @@ def summary_row(variant: dict[str, Any]) -> dict[str, Any]:
     row: dict[str, Any] = {
         "variant": variant["name"],
         "feature_count": variant["feature_count"],
-        "added_features": ", ".join(CANDIDATE_COLUMNS)
-        if variant["name"] == CANDIDATE_NAME
-        else "",
+        "added_features": ", ".join(CANDIDATE_COLUMNS) if variant["name"] == CANDIDATE_NAME else "",
         "best_iteration": variant["best_iteration"],
         "threshold_tuned": threshold,
     }
-    row.update({f"valid_{key}": value for key, value in probability_metrics(
-        variant["y_valid"],
-        variant["valid_prob"],
-    ).items()})
-    row.update({f"test_{key}": value for key, value in probability_metrics(
-        variant["y_test"],
-        variant["test_prob"],
-    ).items()})
-    row.update({f"valid_{key}_at_threshold": value for key, value in metrics_at_threshold(
-        y_true=variant["y_valid"],
-        probabilities=variant["valid_prob"],
-        threshold=threshold,
-    ).items()})
-    row.update({f"test_{key}_at_threshold": value for key, value in metrics_at_threshold(
-        y_true=variant["y_test"],
-        probabilities=variant["test_prob"],
-        threshold=threshold,
-    ).items()})
+    row.update(
+        {
+            f"valid_{key}": value
+            for key, value in probability_metrics(
+                variant["y_valid"],
+                variant["valid_prob"],
+            ).items()
+        }
+    )
+    row.update(
+        {
+            f"test_{key}": value
+            for key, value in probability_metrics(
+                variant["y_test"],
+                variant["test_prob"],
+            ).items()
+        }
+    )
+    row.update(
+        {
+            f"valid_{key}_at_threshold": value
+            for key, value in metrics_at_threshold(
+                y_true=variant["y_valid"],
+                probabilities=variant["valid_prob"],
+                threshold=threshold,
+            ).items()
+        }
+    )
+    row.update(
+        {
+            f"test_{key}_at_threshold": value
+            for key, value in metrics_at_threshold(
+                y_true=variant["y_test"],
+                probabilities=variant["test_prob"],
+                threshold=threshold,
+            ).items()
+        }
+    )
     return row
 
 
@@ -215,7 +233,9 @@ def build_segments(
     )
     rows = []
     for segment_type, segment_name, column, value in FOCUS_SEGMENTS:
-        segment = segment_base if column is None else segment_base.loc[segment_base[column] == value]
+        segment = (
+            segment_base if column is None else segment_base.loc[segment_base[column] == value]
+        )
         if segment.empty:
             continue
         y_true = segment["is_speculative"].astype(int)
@@ -251,7 +271,9 @@ def selected_sweep_view(sweep: pd.DataFrame, highlights: pd.DataFrame) -> pd.Dat
         0.4,
         *highlights["threshold"].tolist(),
     }
-    return sweep.loc[sweep["threshold"].round(6).isin({round(value, 6) for value in selected_thresholds})]
+    return sweep.loc[
+        sweep["threshold"].round(6).isin({round(value, 6) for value in selected_thresholds})
+    ]
 
 
 def build_report(
