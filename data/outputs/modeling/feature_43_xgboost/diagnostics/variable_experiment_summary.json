@@ -1,0 +1,43 @@
+{
+  "generated_at_utc": "2026-05-17T08:36:38+00:00",
+  "dataset_name": "credit_43_features",
+  "best_feature_variant": {
+    "variant": "drop_market_kospi",
+    "note": "market_KOSDAQ만 유지",
+    "feature_count": 42,
+    "best_iteration": 228,
+    "threshold_tuned": 0.35864800214767456,
+    "test_pr_auc": 0.7684646403742686,
+    "test_roc_auc": 0.9052291456690579,
+    "test_precision": 0.6439024390243903,
+    "test_recall": 0.7904191616766467,
+    "test_f1": 0.7096774193548387,
+    "test_balanced_accuracy": 0.822932353115551,
+    "test_brier": 0.1046683416429381,
+    "test_logloss": 0.3292769902082682,
+    "raw_test_brier": 0.12347544376161675,
+    "raw_test_logloss": 0.38142997934460565
+  },
+  "best_imputation_variant": {
+    "variant": "xgboost_native_missing",
+    "note": "XGBoost가 NaN 방향을 직접 학습",
+    "feature_count": 43,
+    "best_iteration": 332,
+    "threshold_tuned": 0.28870901465415955,
+    "test_pr_auc": 0.7743939580944008,
+    "test_roc_auc": 0.9110393075235668,
+    "test_precision": 0.6092436974789915,
+    "test_recall": 0.8682634730538922,
+    "test_f1": 0.7160493827160493,
+    "test_balanced_accuracy": 0.842052528606154,
+    "test_brier": 0.10178817167985191,
+    "test_logloss": 0.3210880411511589,
+    "raw_test_brier": 0.11845694202942965,
+    "raw_test_logloss": 0.3719453511720213
+  },
+  "amount_columns_tested": [
+    "assets_total",
+    "gross_profit",
+    "depreciation"
+  ]
+}

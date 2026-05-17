@@ -73,6 +73,8 @@ def build_master_frame(source: pd.DataFrame, feature_spec: dict[str, object]) ->
     # The 43-feature spec keeps categorical source values on the row while also
     # materializing one-hot columns that the model consumes directly.
     for feature in model_features:
+        if feature in raw_feature_columns:
+            continue
         if feature.startswith("market_"):
             category = feature.removeprefix("market_")
             master[feature] = (master["market"].astype(str) == category).astype(int)

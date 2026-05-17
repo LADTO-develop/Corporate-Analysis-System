@@ -17,6 +17,7 @@ INPUT_DIR = ROOT / "data" / "input" / "credit_43_features"
 METADATA_PATH = INPUT_DIR / "feature_43_dictionary_metadata.json"
 OUTPUT_DIR = ROOT / "data" / "outputs" / "dashboard" / "feature_43_mvp"
 MODEL_OUTPUT_DIR = ROOT / "data" / "outputs" / "modeling" / "feature_43_xgboost"
+PROBABILITY_CLIP_EPSILON = 1e-6
 
 SCENARIO_PRESETS: dict[str, dict[str, float]] = {
     "base": {},
@@ -226,6 +227,99 @@ def metrics(y_true: pd.Series, probabilities: np.ndarray, threshold: float) -> d
     }
 
 
+def _probability_to_logit(probabilities: np.ndarray) -> np.ndarray:
+    clipped = np.clip(
+        probabilities.astype(float), PROBABILITY_CLIP_EPSILON, 1.0 - PROBABILITY_CLIP_EPSILON
+    )
+    return np.log(clipped / (1.0 - clipped))
+
+
+def _sigmoid(values: np.ndarray) -> np.ndarray:
+    return 1.0 / (1.0 + np.exp(-values))
+
+
+def fit_platt_calibration(
+    y_valid: pd.Series,
+    valid_probabilities: np.ndarray,
+) -> dict[str, object]:
+    """Fit a sigmoid calibration layer on validation predictions."""
+    from sklearn.linear_model import LogisticRegression
+
+    valid_logits = _probability_to_logit(valid_probabilities).reshape(-1, 1)
+    calibrator = LogisticRegression(random_state=42, solver="lbfgs", max_iter=1000)
+    calibrator.fit(valid_logits, y_valid.astype(int))
+    return {
+        "method": "platt_sigmoid",
+        "fit_split": "valid",
+        "input": "xgboost_probability_logit",
+        "coef": float(calibrator.coef_[0][0]),
+        "intercept": float(calibrator.intercept_[0]),
+        "clip_epsilon": PROBABILITY_CLIP_EPSILON,
+    }
+
+
+def apply_probability_calibration(
+    probabilities: np.ndarray,
+    calibration: dict[str, object],
+) -> np.ndarray:
+    """Apply the saved sigmoid calibration parameters to raw XGBoost probabilities."""
+    if calibration.get("method") != "platt_sigmoid":
+        return probabilities.astype(float)
+    coef = float(calibration["coef"])
+    intercept = float(calibration["intercept"])
+    logits = _probability_to_logit(probabilities)
+    return _sigmoid(intercept + coef * logits)
+
+
+def build_calibration_summary(
+    *,
+    calibration: dict[str, object],
+    y_valid: pd.Series,
+    y_test: pd.Series,
+    valid_raw_probabilities: np.ndarray,
+    test_raw_probabilities: np.ndarray,
+    valid_calibrated_probabilities: np.ndarray,
+    test_calibrated_probabilities: np.ndarray,
+) -> dict[str, object]:
+    from sklearn.metrics import brier_score_loss, log_loss
+
+    def calibration_metrics(
+        y_true: pd.Series, raw: np.ndarray, calibrated: np.ndarray
+    ) -> dict[str, float]:
+        return {
+            "brier_raw": float(brier_score_loss(y_true, raw)),
+            "brier_calibrated": float(brier_score_loss(y_true, calibrated)),
+            "logloss_raw": float(
+                log_loss(
+                    y_true, np.clip(raw, PROBABILITY_CLIP_EPSILON, 1 - PROBABILITY_CLIP_EPSILON)
+                )
+            ),
+            "logloss_calibrated": float(
+                log_loss(
+                    y_true,
+                    np.clip(
+                        calibrated,
+                        PROBABILITY_CLIP_EPSILON,
+                        1 - PROBABILITY_CLIP_EPSILON,
+                    ),
+                )
+            ),
+        }
+
+    return {
+        **calibration,
+        "probability_output": "calibrated_probability",
+        "valid": calibration_metrics(
+            y_valid, valid_raw_probabilities, valid_calibrated_probabilities
+        ),
+        "test": calibration_metrics(y_test, test_raw_probabilities, test_calibrated_probabilities),
+        "note": (
+            "XGBoost raw probabilities are transformed with a validation-fitted Platt "
+            "sigmoid before being shown as prob_speculative."
+        ),
+    }
+
+
 def choose_tuned_threshold(y_valid: pd.Series, valid_probabilities: np.ndarray) -> float:
     from sklearn.metrics import f1_score
 
@@ -246,12 +340,17 @@ def build_prediction_scores(
     probabilities: dict[str, np.ndarray],
     tuned_threshold: float,
     y_frames: dict[str, pd.Series],
+    raw_probabilities: dict[str, np.ndarray] | None = None,
+    calibration_method: str | None = None,
 ) -> pd.DataFrame:
     chunks: list[pd.DataFrame] = []
     for split, id_frame in id_frames.items():
         scored = id_frame.copy()
         scored["split"] = split
         scored["is_speculative"] = y_frames[split].astype(int).to_numpy()
+        if raw_probabilities is not None:
+            scored["prob_speculative_raw"] = raw_probabilities[split]
+        scored["probability_calibration_method"] = calibration_method or "none"
         scored["prob_speculative"] = probabilities[split]
         scored["pred_label_0_5"] = (scored["prob_speculative"] >= 0.5).astype(int)
         scored["pred_label_tuned"] = (scored["prob_speculative"] >= tuned_threshold).astype(int)
@@ -426,6 +525,9 @@ def build_model_summary(
     valid_prob: np.ndarray,
     test_prob: np.ndarray,
     tuned_threshold: float,
+    calibration_summary: dict[str, object],
+    valid_raw_prob: np.ndarray,
+    test_raw_prob: np.ndarray,
 ) -> dict[str, object]:
     return {
         "selected_model": "feature_43_xgboost",
@@ -469,6 +571,7 @@ def build_model_summary(
             "Per-company prediction probabilities, local SHAP, and industry summaries are "
             "exported from the credit_43_features split."
         ),
+        "probability_calibration": calibration_summary,
         "split_summary": {
             "train": {"rows": len(train_y), "positive_rate": float(train_y.mean())},
             "valid": {"rows": len(valid_y), "positive_rate": float(valid_y.mean())},
@@ -477,6 +580,8 @@ def build_model_summary(
         "valid_default_0_5": metrics(valid_y, valid_prob, 0.5),
         "test_default_0_5": metrics(test_y, test_prob, 0.5),
         "test_tuned": metrics(test_y, test_prob, tuned_threshold),
+        "raw_valid_default_0_5": metrics(valid_y, valid_raw_prob, 0.5),
+        "raw_test_default_0_5": metrics(test_y, test_raw_prob, 0.5),
     }
 
 
@@ -520,6 +625,7 @@ def save_model_artifacts(
     fill_values: pd.Series,
     tuned_threshold: float,
     source_features: list[str],
+    calibration_summary: dict[str, object],
 ) -> None:
     model_output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -533,9 +639,12 @@ def save_model_artifacts(
             "feature_count": len(model_features),
             "feature_columns": model_features,
             "source_features": source_features,
+            "missing_value_strategy": "xgboost_native_missing",
             "fill_values": {str(key): float(value) for key, value in fill_values.to_dict().items()},
             "threshold_default": 0.5,
             "threshold_tuned": tuned_threshold,
+            "probability_output": "calibrated_probability",
+            "probability_calibration": calibration_summary,
             "best_iteration": getattr(model, "best_iteration", None),
             "best_score": getattr(model, "best_score", None),
             "saved_files": [
@@ -556,10 +665,22 @@ XGBoost 모델링 산출물을 저장한 결과입니다. CAS 기준 원본은
 
 구성:
 - `xgboost_model.json`: XGBoost 원본 모델 파일
-- `model_artifact_metadata.json`: 사용 변수, 결측 대치값, 기준선 등 메타데이터
+- `model_artifact_metadata.json`: 사용 변수, 결측 처리 전략, 기준선 등 메타데이터
+- `diagnostics/`: 연도/시장/산업별 성능, threshold trade-off, calibration,
+  대표 오류 사례를 정리한 모델 진단 산출물
 
 이 경로는 팀 공유용 모델링 산출물이자 Stage 1 런타임이 직접 참조하는 기준
 모델 artifact 위치입니다.
+
+`prob_speculative`는 검증셋 기준 Platt scaling을 적용한 보정 확률입니다.
+결측값은 XGBoost native missing 방향 학습을 사용하며, metadata의
+`fill_values`는 진단/후속 비교용 참고값으로만 보존합니다.
+
+진단 산출물은 모델을 다시 학습하지 않고 아래 명령으로 재생성할 수 있습니다.
+
+```bash
+/opt/anaconda3/envs/aura/bin/python scripts/export_feature_43_model_diagnostics.py
+```
 """
     (model_output_dir / "README.md").write_text(content, encoding="utf-8")
 
@@ -624,11 +745,11 @@ def main() -> None:
     ]
 
     medians = train_ready[model_features].median(numeric_only=True)
-    x_train = train_ready[model_features].fillna(medians)
+    x_train = train_ready[model_features]
     y_train = train_ready["is_speculative"].astype(int)
-    x_valid = valid_ready[model_features].fillna(medians)
+    x_valid = valid_ready[model_features]
     y_valid = valid_ready["is_speculative"].astype(int)
-    x_test = test_ready[model_features].fillna(medians)
+    x_test = test_ready[model_features]
     y_test = test_ready["is_speculative"].astype(int)
 
     pos = int(y_train.sum())
@@ -653,9 +774,22 @@ def main() -> None:
     )
     model.fit(x_train, y_train, eval_set=[(x_valid, y_valid)], verbose=False)
 
-    valid_prob = model.predict_proba(x_valid)[:, 1]
-    test_prob = model.predict_proba(x_test)[:, 1]
-    train_prob = model.predict_proba(x_train)[:, 1]
+    valid_raw_prob = model.predict_proba(x_valid)[:, 1]
+    test_raw_prob = model.predict_proba(x_test)[:, 1]
+    train_raw_prob = model.predict_proba(x_train)[:, 1]
+    calibration = fit_platt_calibration(y_valid, valid_raw_prob)
+    valid_prob = apply_probability_calibration(valid_raw_prob, calibration)
+    test_prob = apply_probability_calibration(test_raw_prob, calibration)
+    train_prob = apply_probability_calibration(train_raw_prob, calibration)
+    calibration_summary = build_calibration_summary(
+        calibration=calibration,
+        y_valid=y_valid,
+        y_test=y_test,
+        valid_raw_probabilities=valid_raw_prob,
+        test_raw_probabilities=test_raw_prob,
+        valid_calibrated_probabilities=valid_prob,
+        test_calibrated_probabilities=test_prob,
+    )
     tuned_threshold = choose_tuned_threshold(y_valid, valid_prob)
 
     probabilities = {
@@ -663,8 +797,20 @@ def main() -> None:
         "valid": valid_prob,
         "test": test_prob,
     }
+    raw_probabilities = {
+        "train": train_raw_prob,
+        "valid": valid_raw_prob,
+        "test": test_raw_prob,
+    }
     y_frames = {"train": y_train, "valid": y_valid, "test": y_test}
-    prediction_scores = build_prediction_scores(id_frames, probabilities, tuned_threshold, y_frames)
+    prediction_scores = build_prediction_scores(
+        id_frames,
+        probabilities,
+        tuned_threshold,
+        y_frames,
+        raw_probabilities=raw_probabilities,
+        calibration_method=str(calibration["method"]),
+    )
 
     explainer = shap.TreeExplainer(model)
     shap_values_by_split = {}
@@ -700,6 +846,9 @@ def main() -> None:
         valid_prob,
         test_prob,
         tuned_threshold,
+        calibration_summary,
+        valid_raw_prob,
+        test_raw_prob,
     )
 
     scenario_presets = {
@@ -744,6 +893,7 @@ def main() -> None:
         fill_values=medians,
         tuned_threshold=tuned_threshold,
         source_features=source_features,
+        calibration_summary=calibration_summary,
     )
     write_json(
         output_dir / "dashboard_export_manifest.json",

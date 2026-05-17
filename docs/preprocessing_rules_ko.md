@@ -173,7 +173,7 @@ Moody's 계열 등급처럼 표기 체계가 다른 경우에는 국내 등급 �
 |---|---|
 | 시점 정렬 | `fiscal_year=t` 재무/거시 정보로 `eval_year=t+1` 신용등급 예측 |
 | 미래 정보 금지 | 미래 재무제표, 미래 거시지표, 미래 공시/뉴스는 과거 예측에 사용하지 않음 |
-| train 기준 대치 | 결측 대치값은 학습 데이터 기준으로 산출하고 valid/test에 적용 |
+| 결측 처리 | Stage 1 XGBoost는 native missing 방향 학습을 사용하고, train 중앙값은 후속 진단/비교용 참고값으로 보존 |
 | model_view 보존 | Stage 1 모델 예측 결과는 LLM이나 Agent가 직접 수정하지 않음 |
 
 ## 7. 현재 기준 데이터 검증 포인트
@@ -199,9 +199,11 @@ Corporate Analysis System은 상위 작업공간이나 외부 로컬 폴더를 �
 | 내부 경로 | 역할 |
 |---|---|
 | `data/raw/ts2000/TS2000_Credit_Model_Dataset_Model_V1.csv` | 43개 라벨 입력셋을 재생성하는 CAS 기준 원본 |
+| `data/raw/ts2000/feature_43_inference_2026_aux.csv` | 2026 추론 입력의 기업규모와 `market_to_book` 보정을 위한 최소 2025 보조 원천 |
 | `data/input/credit_43_features/feature_43_master.csv` | 전체 라벨 기업-연도 기준 입력 테이블 |
 | `data/input/credit_43_features/feature_43_inference_2026.csv` | 2026 예측용 CAS 내부 추론 입력 테이블 |
 | `data/outputs/modeling/feature_43_xgboost/` | Stage 1 XGBoost 모델 artifact 및 팀 공유용 모델링 산출물 |
+| `data/outputs/modeling/feature_43_xgboost/diagnostics/` | Stage 1 성능 진단 리포트, segment/threshold/calibration/error-case 테이블 |
 | `data/outputs/dashboard/feature_43_mvp/` | 대시보드용 예측, SHAP, 요약 산출물 |
 
 신용등급 타겟 전처리 규칙은 본 문서에 고정하고, CAS 실행 기준은 아래 내부
@@ -210,8 +212,11 @@ Corporate Analysis System은 상위 작업공간이나 외부 로컬 폴더를 �
 | 스크립트 | 역할 |
 |---|---|
 | `scripts/rebuild_feature_43_dataset.py` | Corporate Analysis System의 43개 입력셋 재생성 |
-| `scripts/build_feature_43_inference_2026.py` | CAS 내부 2026 추론 입력 테이블 검증 및 정렬 |
-| `scripts/export_feature_43_dashboard_artifacts.py` | XGBoost 학습, SHAP, 대시보드 산출물 생성 |
+| `scripts/import_feature_43_inference_2026_aux.py` | 2026 추론 입력 보정을 위한 최소 2025 보조 원천 생성 |
+| `scripts/build_feature_43_inference_2026.py` | CAS 내부 2026 추론 입력 테이블 보정, 검증 및 정렬 |
+| `scripts/export_feature_43_dashboard_artifacts.py` | XGBoost 학습, Platt scaling 확률 보정, SHAP, 대시보드 산출물 생성 |
+| `scripts/export_feature_43_model_diagnostics.py` | 기존 예측 결과 기준 모델 성능 진단 산출물 생성 |
+| `scripts/export_feature_43_variable_experiments.py` | 시장 더미, 절대금액 변환, 산업 백분위, 결측 대체 전략 비교 실험 |
 
 ## 9. 발표용 요약 문장
 

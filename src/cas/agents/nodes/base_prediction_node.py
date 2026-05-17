@@ -19,6 +19,7 @@ _MODEL_ARTIFACT_DIR = Path("data/outputs/modeling/feature_43_xgboost")
 _MODEL_ARTIFACT_PATH = _MODEL_ARTIFACT_DIR / "xgboost_model.json"
 _MODEL_METADATA_PATH = _MODEL_ARTIFACT_DIR / "model_artifact_metadata.json"
 _FEATURE_LIST_PATH = Path("data/input/credit_43_features/feature_43_list.json")
+_DEFAULT_MISSING_VALUE_STRATEGY = "xgboost_native_missing"
 
 
 def run(state: AgentState) -> dict[str, Any]:
@@ -54,12 +55,28 @@ def run(state: AgentState) -> dict[str, Any]:
         )
     import xgboost as xgb
 
-    frame = _build_model_frame(model_features, bundle["feature_columns"], bundle["fill_values"])
+    frame = _build_model_frame(
+        model_features,
+        bundle["feature_columns"],
+        bundle["fill_values"],
+        missing_value_strategy=str(
+            bundle.get("missing_value_strategy", _DEFAULT_MISSING_VALUE_STRATEGY)
+        ),
+    )
     model = bundle["model"]
-    probability_speculative = round(float(model.predict(xgb.DMatrix(frame))[0]), 4)
+    raw_probability_speculative = float(model.predict(xgb.DMatrix(frame))[0])
+    probability_speculative = round(
+        _apply_probability_calibration(
+            raw_probability_speculative,
+            bundle.get("probability_calibration"),
+        ),
+        4,
+    )
 
     model_registry = dict(cfg.get("model_registry", {}))
-    threshold_value = bundle.get("threshold_default")
+    threshold_value = bundle.get("threshold_tuned")
+    if threshold_value is None:
+        threshold_value = bundle.get("threshold_default")
     if threshold_value is None:
         threshold_value = model_registry.get("threshold", 0.5)
     threshold = _to_float(threshold_value)
@@ -100,6 +117,7 @@ def run(state: AgentState) -> dict[str, Any]:
         ),
         metrics={
             "probability_speculative": probability_speculative,
+            "raw_probability_speculative": raw_probability_speculative,
             "overall_score": overall_score,
             "n_top_drivers": float(len(top_drivers)),
         },
@@ -120,6 +138,12 @@ def run(state: AgentState) -> dict[str, Any]:
             "watch_threshold": watch_threshold,
             "high_risk_threshold": high_risk_threshold,
             "artifact_path": str(_MODEL_ARTIFACT_PATH),
+            "missing_value_strategy": str(
+                bundle.get("missing_value_strategy", _DEFAULT_MISSING_VALUE_STRATEGY)
+            ),
+            "probability_calibration_method": _probability_calibration_method(
+                bundle.get("probability_calibration")
+            ),
         },
         "audit": [audit],
     }
@@ -262,22 +286,56 @@ def _load_model_bundle() -> dict[str, Any]:
         "model_type": metadata.get("model_type", "xgboost_booster_json"),
         "feature_columns": list(metadata.get("feature_columns", [])),
         "source_features": list(metadata.get("source_features", [])),
+        "missing_value_strategy": metadata.get(
+            "missing_value_strategy", _DEFAULT_MISSING_VALUE_STRATEGY
+        ),
         "fill_values": dict(metadata.get("fill_values", {})),
         "threshold_default": metadata.get("threshold_default", 0.5),
         "threshold_tuned": metadata.get("threshold_tuned", 0.5),
+        "probability_calibration": metadata.get("probability_calibration"),
         "model": booster,
     }
+
+
+def _apply_probability_calibration(
+    probability: float,
+    calibration: object,
+) -> float:
+    """Apply metadata-defined probability calibration to the raw XGBoost score."""
+    if not isinstance(calibration, dict) or calibration.get("method") != "platt_sigmoid":
+        return probability
+
+    import math
+
+    epsilon = _to_float(calibration.get("clip_epsilon", 1e-6))
+    clipped = min(max(probability, epsilon), 1.0 - epsilon)
+    logit = math.log(clipped / (1.0 - clipped))
+    coef = _to_float(calibration.get("coef"))
+    intercept = _to_float(calibration.get("intercept"))
+    return 1.0 / (1.0 + math.exp(-(intercept + coef * logit)))
+
+
+def _probability_calibration_method(calibration: object) -> str:
+    if not isinstance(calibration, dict):
+        return "none"
+    method = calibration.get("method")
+    return str(method) if method else "none"
 
 
 def _build_model_frame(
     model_features: dict[str, float],
     feature_columns: list[str],
     fill_values: dict[str, float],
+    *,
+    missing_value_strategy: str = _DEFAULT_MISSING_VALUE_STRATEGY,
 ) -> pd.DataFrame:
-    row = {
-        column: _to_float(model_features.get(column, fill_values.get(column, 0.0)))
-        for column in feature_columns
-    }
+    native_missing = missing_value_strategy == "xgboost_native_missing"
+    row = {}
+    for column in feature_columns:
+        value = _to_optional_float(model_features.get(column))
+        if value is None:
+            value = float("nan") if native_missing else _to_float(fill_values.get(column, 0.0))
+        row[column] = value
     return pd.DataFrame([row], columns=feature_columns)
 
 
@@ -367,6 +425,20 @@ def _to_float(value: object) -> float:
         return float(value)
     except (TypeError, ValueError):
         return 0.0
+
+
+def _to_optional_float(value: object) -> float | None:
+    try:
+        if value is None:
+            return None
+        if not isinstance(value, int | float | str):
+            return None
+        numeric = float(value)
+        if numeric != numeric:
+            return None
+        return numeric
+    except (TypeError, ValueError):
+        return None
 
 
 def _now() -> str:

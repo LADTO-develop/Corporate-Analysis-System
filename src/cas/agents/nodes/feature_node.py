@@ -99,9 +99,11 @@ def _run_dataset_backed_feature_store(
 ) -> dict[str, Any]:
     feature_spec = read_json(_FEATURE_LIST_PATH)
     model_feature_names = [str(name) for name in feature_spec["model_features"]]
-    model_features = {
-        name: _numeric_or_default(source_row.get(name), 0.0) for name in model_feature_names
-    }
+    model_features: dict[str, float] = {}
+    for name in model_feature_names:
+        value = _numeric_or_none(source_row.get(name))
+        if value is not None:
+            model_features[name] = value
     normalized_features = {
         "revenue_growth_score": _scale(source_row.get("total_assets_growth"), -0.3, 0.3),
         "profitability_score": _scale(source_row.get("net_margin"), -0.3, 0.3),
@@ -177,6 +179,8 @@ def _scale(
     if value is None:
         return 0.5
     numeric = float(value)
+    if numeric != numeric:
+        return 0.5
     clipped = min(max(numeric, lower), upper)
     ratio = (clipped - lower) / (upper - lower)
     if not higher_is_better:
@@ -184,13 +188,16 @@ def _scale(
     return round(ratio, 4)
 
 
-def _numeric_or_default(value: Any, default: float) -> float:
+def _numeric_or_none(value: Any) -> float | None:
     try:
         if value is None:
-            return default
-        return float(value)
+            return None
+        numeric = float(value)
+        if numeric != numeric:
+            return None
+        return numeric
     except (TypeError, ValueError):
-        return default
+        return None
 
 
 def _now() -> str:

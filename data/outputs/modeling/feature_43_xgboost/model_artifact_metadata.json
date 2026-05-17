@@ -83,6 +83,7 @@
     "icr_under_1",
     "is_2y_consecutive_operating_loss"
   ],
+  "missing_value_strategy": "xgboost_native_missing",
   "fill_values": {
     "listed_year": 2004.0,
     "current_ratio": 1.409046,
@@ -107,7 +108,7 @@
     "intangible_assets_ratio": 0.0140035,
     "total_debt_turnover": 1.7905375000000001,
     "dividend_payer": 1.0,
-    "market_to_book": 0.0,
+    "market_to_book": 1.029261,
     "spec_spread": 6.168,
     "short_term_borrowings_share": 0.540569,
     "total_assets_growth": 0.0523685,
@@ -129,9 +130,32 @@
     "industry_macro_category_wholesale_retail": 0.0
   },
   "threshold_default": 0.5,
-  "threshold_tuned": 0.5432630181312561,
-  "best_iteration": 276,
-  "best_score": 0.8096283277399253,
+  "threshold_tuned": 0.288709,
+  "probability_output": "calibrated_probability",
+  "probability_calibration": {
+    "method": "platt_sigmoid",
+    "fit_split": "valid",
+    "input": "xgboost_probability_logit",
+    "coef": 0.8253650698825209,
+    "intercept": -0.8080086323675747,
+    "clip_epsilon": 1e-06,
+    "probability_output": "calibrated_probability",
+    "valid": {
+      "brier_raw": 0.1058461191654009,
+      "brier_calibrated": 0.0944402621774703,
+      "logloss_raw": 0.336606073516699,
+      "logloss_calibrated": 0.2991601301043383
+    },
+    "test": {
+      "brier_raw": 0.11845694202942965,
+      "brier_calibrated": 0.10178817168439046,
+      "logloss_raw": 0.3719453511720213,
+      "logloss_calibrated": 0.3210880399888357
+    },
+    "note": "XGBoost raw probabilities are transformed with a validation-fitted Platt sigmoid before being shown as prob_speculative."
+  },
+  "best_iteration": 332,
+  "best_score": 0.8151718010038821,
   "saved_files": [
     "xgboost_model.json",
     "model_artifact_metadata.json"

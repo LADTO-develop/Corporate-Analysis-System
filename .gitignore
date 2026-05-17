@@ -80,6 +80,10 @@ data/outputs/**
 !data/outputs/modeling/feature_43_xgboost/README.md
 !data/outputs/modeling/feature_43_xgboost/model_artifact_metadata.json
 !data/outputs/modeling/feature_43_xgboost/xgboost_model.json
+!data/outputs/modeling/feature_43_xgboost/diagnostics/
+!data/outputs/modeling/feature_43_xgboost/diagnostics/*.csv
+!data/outputs/modeling/feature_43_xgboost/diagnostics/*.json
+!data/outputs/modeling/feature_43_xgboost/diagnostics/*.md
 multirun/
 .hydra/
 

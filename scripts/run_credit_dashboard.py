@@ -14,7 +14,7 @@ def main() -> None:
         message = (
             "Streamlit is not installed in the current environment. "
             "Install it first, then rerun this script.\n"
-            "Recommended command: python -m pip install streamlit"
+            'Recommended command: python -m pip install -e ".[dashboard]"'
         )
         raise SystemExit(message) from error
 

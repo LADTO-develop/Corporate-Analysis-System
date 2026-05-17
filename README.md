@@ -66,6 +66,10 @@ Model V1 전체 5,199개 행은 전체 라벨 데이터입니다. 모델 학습�
 ## 4. 모델 입력과 성능
 
 현재 대시보드의 기본 모델은 `credit_43_features` 기반 XGBoost입니다.
+대시보드에 표시되는 투기등급 확률은 XGBoost raw 확률에 검증셋 기준
+Platt scaling을 적용한 보정 확률입니다. Raw 확률은 산출물에
+`prob_speculative_raw`로 함께 보존해 비교할 수 있습니다.
+결측값은 사전 중앙값 대체 대신 XGBoost native missing 방향 학습을 사용합니다.
 
 | 구분 | 개수 | 설명 |
 |---|---:|---|
@@ -80,7 +84,7 @@ Model V1 전체 5,199개 행은 전체 라벨 데이터입니다. 모델 학습�
 | Dummy | 0.2485 | 0.5000 | 0.0000 | 0.0000 | 0.0000 |
 | 43-feature Weighted Logistic Regression | 0.6903 | 0.8822 | 0.5560 | 0.8323 | 0.6667 |
 | 38-input XGBoost | 0.7804 | 0.9098 | 0.5911 | 0.8743 | 0.7053 |
-| 43-input XGBoost | 0.7755 | 0.9071 | 0.6083 | 0.8743 | 0.7174 |
+| 43-input XGBoost (native missing) | 0.7744 | 0.9110 | 0.6092 | 0.8683 | 0.7160 |
 
 43-input XGBoost는 PR-AUC 기준으로 38-input XGBoost와 거의 유사하며,
 Precision과 F1은 더 높게 나타났습니다. 현재 대시보드는 해석 가능성,
@@ -145,7 +149,7 @@ Agno/Claude 호출을 붙인 로컬 데모에서는 optional dependency를 설�
 │   │   └── credit_43_features/  # 43개 모델 입력셋, split, 2026 추론 입력
 │   └── outputs/
 │       ├── dashboard/           # 대시보드용 예측/SHAP/요약 산출물
-│       ├── modeling/            # Stage 1 모델 artifact와 팀 공유용 모델링 산출물
+│       ├── modeling/            # Stage 1 모델 artifact와 성능 진단 산출물
 │       └── reports/             # CLI/에이전트 리포트 산출물
 ├── docs/
 │   ├── preprocessing_rules_ko.md
@@ -155,6 +159,8 @@ Agno/Claude 호출을 붙인 로컬 데모에서는 optional dependency를 설�
 │   ├── rebuild_feature_43_dataset.py
 │   ├── build_feature_43_inference_2026.py
 │   ├── export_feature_43_dashboard_artifacts.py
+│   ├── export_feature_43_model_diagnostics.py
+│   ├── export_feature_43_variable_experiments.py
 │   └── run_credit_dashboard.py
 ├── src/cas/
 │   ├── agents/                  # LangGraph 상태, 노드, 입력 계약
@@ -179,13 +185,7 @@ Agno/Claude 호출을 붙인 로컬 데모에서는 optional dependency를 설�
 Python 3.12 환경을 사용합니다. 팀 로컬 기준으로는 `aura` 환경을 사용할 수 있습니다.
 
 ```bash
-/opt/anaconda3/envs/aura/bin/python -m pip install -e ".[dev,ml,viz]"
-```
-
-대시보드 실행에 필요한 패키지가 없다면 아래 패키지를 추가로 설치합니다.
-
-```bash
-/opt/anaconda3/envs/aura/bin/python -m pip install streamlit altair shap
+/opt/anaconda3/envs/aura/bin/python -m pip install -e ".[dev,ml,viz,dashboard]"
 ```
 
 43개 입력셋 재생성:
@@ -194,11 +194,16 @@ Python 3.12 환경을 사용합니다. 팀 로컬 기준으로는 `aura` 환경�
 /opt/anaconda3/envs/aura/bin/python scripts/rebuild_feature_43_dataset.py
 ```
 
-2026 추론 입력 검증:
+2026 추론 입력 보정/검증:
 
 ```bash
-/opt/anaconda3/envs/aura/bin/python scripts/build_feature_43_inference_2026.py --check-only
+/opt/anaconda3/envs/aura/bin/python scripts/import_feature_43_inference_2026_aux.py
+/opt/anaconda3/envs/aura/bin/python scripts/build_feature_43_inference_2026.py
 ```
+
+`import_feature_43_inference_2026_aux.py`는 2026 추론 입력의 기업규모와
+`market_to_book` 보정을 위한 최소 보조 원천을 CAS 내부 `data/raw/ts2000/`에
+저장합니다.
 
 대시보드/모델 artifact 재생성:
 
@@ -208,6 +213,25 @@ Python 3.12 환경을 사용합니다. 팀 로컬 기준으로는 `aura` 환경�
 
 이 스크립트는 Stage 1 런타임과 팀 공유가 함께 사용하는 모델 artifact를
 `data/outputs/modeling/feature_43_xgboost/`에 저장합니다.
+
+모델 성능 진단 리포트 재생성:
+
+```bash
+/opt/anaconda3/envs/aura/bin/python scripts/export_feature_43_model_diagnostics.py
+```
+
+이 스크립트는 기존 예측 결과를 다시 학습하지 않고 연도/시장/산업별 성능,
+threshold trade-off, 확률 보정, 대표 오류 사례를
+`data/outputs/modeling/feature_43_xgboost/diagnostics/`에 저장합니다.
+
+변수 개선 및 결측값 대체 실험 재생성:
+
+```bash
+/opt/anaconda3/envs/aura/bin/python scripts/export_feature_43_variable_experiments.py
+```
+
+이 스크립트는 시장 더미 축소, 절대금액 log/산업 백분위 변환, 중앙값 대체와
+XGBoost native missing 전략을 비교해 같은 diagnostics 폴더에 저장합니다.
 
 대시보드 실행:
 
