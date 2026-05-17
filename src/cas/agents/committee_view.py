@@ -234,7 +234,7 @@ def _item_critical_terms(item: dict[str, Any]) -> list[str]:
     if isinstance(raw_terms, list | tuple):
         return [str(term) for term in raw_terms if str(term).strip()]
     text = " ".join(str(item.get(key, "")) for key in ("title", "summary"))
-    return critical_terms_in_text(text)
+    return cast(list[str], critical_terms_in_text(text))
 
 
 def _model_threshold(bundle: Stage2InputBundle) -> float:
