@@ -165,6 +165,16 @@ def render_external_evidence_judgment(
         colors=colors,
     )
     renderers.render_summary_banner("외부 근거를 이렇게 해석했어요", summary_text, summary_color)
+    if bool(committee_view.get("hidden_tail_risk_flag", False)):
+        reason = str(
+            committee_view.get("hidden_tail_risk_reason")
+            or "모델은 안정적으로 봤지만 외부근거가 숨은 위험 가능성을 보완했습니다."
+        )
+        renderers.render_summary_banner(
+            "숨은 위험 보완 플래그",
+            reason,
+            "#c0841a",
+        )
 
     evidence_frame = _external_evidence_items_frame(evidence_snapshot)
     direct_count = (

@@ -109,9 +109,11 @@ flowchart TD
 구조를 목표로 합니다.
 
 `committee_view`는 `final_committee_label`, `veto_triggered`,
-`conflict_resolution`, `key_risk_factors`, `mitigating_factors`,
-`evidence_summary`, `final_review_memo`를 포함합니다. 즉, 모델 판단을 바꿨는지보다
+`hidden_tail_risk_flag`, `conflict_resolution`, `key_risk_factors`,
+`mitigating_factors`, `evidence_summary`, `final_review_memo`를 포함합니다. 즉, 모델 판단을 바꿨는지보다
 왜 최종 위원회 의견이 그렇게 정리됐는지를 설명하는 데 초점을 둡니다.
+`hidden_tail_risk_flag`는 모델이 `투자적격`으로 본 기업에 직접 관련 외부 위험 근거가
+확인되어 false negative 가능성을 보수적으로 점검해야 할 때 켜집니다.
 
 Stage 2 코드도 이 기준에 맞춰 분리되어 있습니다.
 `src/cas/agents/stage2_specs.py`는 향후 Agno/Claude에 넘길 역할 계약을 정의하고,
@@ -160,7 +162,11 @@ Agno/Claude 호출을 붙인 로컬 데모에서는 optional dependency를 설�
 │   ├── build_feature_43_inference_2026.py
 │   ├── export_feature_43_dashboard_artifacts.py
 │   ├── export_feature_43_model_diagnostics.py
-│   ├── export_feature_43_variable_experiments.py
+│   ├── export_feature_43_threshold_policy_experiments.py
+│   ├── export_feature_43_error_shap_analysis.py
+│   ├── export_feature_43_error_case_review.py
+│   ├── export_feature_43_shap_feature_experiments.py
+│   ├── export_feature_43_xgboost_tuning_experiments.py
 │   └── run_credit_dashboard.py
 ├── src/cas/
 │   ├── agents/                  # LangGraph 상태, 노드, 입력 계약
@@ -224,14 +230,25 @@ Python 3.12 환경을 사용합니다. 팀 로컬 기준으로는 `aura` 환경�
 threshold trade-off, 확률 보정, 대표 오류 사례를
 `data/outputs/modeling/feature_43_xgboost/diagnostics/`에 저장합니다.
 
-변수 개선 및 결측값 대체 실험 재생성:
+SHAP 기반 변수 개선 후보 실험 재생성:
 
 ```bash
-/opt/anaconda3/envs/aura/bin/python scripts/export_feature_43_variable_experiments.py
+/opt/anaconda3/envs/aura/bin/python scripts/export_feature_43_shap_feature_experiments.py
 ```
 
-이 스크립트는 시장 더미 축소, 절대금액 log/산업 백분위 변환, 중앙값 대체와
-XGBoost native missing 전략을 비교해 같은 diagnostics 폴더에 저장합니다.
+이 스크립트는 오류 사례 SHAP 분석에서 나온 절대금액, 기업규모, 산업 내 위치,
+전년 대비 악화 신호를 후보 변수로 만들어 현재 운영 기준인 XGBoost native
+missing, Platt scaling, recall 0.85 이상 threshold 정책으로 비교합니다.
+
+XGBoost 하이퍼파라미터 튜닝 실험 재생성:
+
+```bash
+/opt/anaconda3/envs/aura/bin/python scripts/export_feature_43_xgboost_tuning_experiments.py
+```
+
+이 스크립트는 `max_depth`, `min_child_weight`, `reg_lambda`, `subsample`,
+`colsample_bytree`, `scale_pos_weight` 후보를 OOT validation 기준으로 탐색하고,
+test는 사후 확인용으로만 사용합니다.
 
 대시보드 실행:
 

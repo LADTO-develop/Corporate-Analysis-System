@@ -1,0 +1,69 @@
+{
+  "generated_at": "2026-05-17T11:14:56.766028+00:00",
+  "false_positive_count": 81,
+  "false_negative_count": 23,
+  "high_priority_count": 43,
+  "category_summary": [
+    {
+      "error_type": "false_negative",
+      "review_category": "현재 재무비율 안정 신호가 위험을 가림",
+      "cases": 15,
+      "high_priority_cases": 5,
+      "mean_probability": 0.16959525084042204,
+      "mean_gap": 0.14540474915957796
+    },
+    {
+      "error_type": "false_negative",
+      "review_category": "규모·우량기업 안정 신호가 위험을 가림",
+      "cases": 8,
+      "high_priority_cases": 5,
+      "mean_probability": 0.10840370089888259,
+      "mean_gap": 0.20659629910111743
+    },
+    {
+      "error_type": "false_positive",
+      "review_category": "수익성·현금흐름 경고 과대반응",
+      "cases": 23,
+      "high_priority_cases": 6,
+      "mean_probability": 0.5205381990027815,
+      "mean_gap": 0.20553819900278153
+    },
+    {
+      "error_type": "false_positive",
+      "review_category": "규모/상장맥락 과민반응",
+      "cases": 22,
+      "high_priority_cases": 6,
+      "mean_probability": 0.4961684387768276,
+      "mean_gap": 0.18116843877682756
+    },
+    {
+      "error_type": "false_positive",
+      "review_category": "수익성·상환능력 복합 경고 과대반응",
+      "cases": 19,
+      "high_priority_cases": 15,
+      "mean_probability": 0.6970392279178638,
+      "mean_gap": 0.38203922791786377
+    },
+    {
+      "error_type": "false_positive",
+      "review_category": "부채·상환능력 경고 과대반응",
+      "cases": 11,
+      "high_priority_cases": 4,
+      "mean_probability": 0.5162588316049879,
+      "mean_gap": 0.2012588316049878
+    },
+    {
+      "error_type": "false_positive",
+      "review_category": "규모/상장맥락 보조 신호 과민반응",
+      "cases": 6,
+      "high_priority_cases": 2,
+      "mean_probability": 0.47917222567816126,
+      "mean_gap": 0.1641722256781612
+    }
+  ],
+  "output_files": {
+    "review_table": "data/outputs/modeling/feature_43_xgboost/diagnostics/error_case_review_table.csv",
+    "category_summary": "data/outputs/modeling/feature_43_xgboost/diagnostics/error_case_review_category_summary.csv",
+    "report": "data/outputs/modeling/feature_43_xgboost/diagnostics/error_case_review_report.md"
+  }
+}

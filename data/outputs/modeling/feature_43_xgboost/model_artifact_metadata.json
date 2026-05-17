@@ -130,7 +130,9 @@
     "industry_macro_category_wholesale_retail": 0.0
   },
   "threshold_default": 0.5,
-  "threshold_tuned": 0.288709,
+  "threshold_tuned": 0.315,
+  "threshold_selection_rule": "valid_max_precision_with_recall_ge_0.85",
+  "threshold_recall_floor": 0.85,
   "probability_output": "calibrated_probability",
   "probability_calibration": {
     "method": "platt_sigmoid",

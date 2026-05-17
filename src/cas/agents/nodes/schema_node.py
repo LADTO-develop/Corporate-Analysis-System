@@ -150,6 +150,8 @@ def _committee_view_payload(
         return {
             "final_committee_label": str(committee_view.get("final_committee_label", "보류")),
             "veto_triggered": bool(committee_view.get("veto_triggered", False)),
+            "hidden_tail_risk_flag": bool(committee_view.get("hidden_tail_risk_flag", False)),
+            "hidden_tail_risk_reason": str(committee_view.get("hidden_tail_risk_reason", "")),
             "conflict_resolution": str(committee_view.get("conflict_resolution", "")),
             "key_risk_factors": [
                 str(item) for item in committee_view.get("key_risk_factors", []) or []
@@ -169,6 +171,8 @@ def _committee_view_payload(
     return {
         "final_committee_label": label,
         "veto_triggered": False,
+        "hidden_tail_risk_flag": False,
+        "hidden_tail_risk_reason": "",
         "conflict_resolution": memo,
         "key_risk_factors": [],
         "mitigating_factors": [],

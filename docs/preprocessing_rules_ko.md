@@ -216,7 +216,11 @@ Corporate Analysis System은 상위 작업공간이나 외부 로컬 폴더를 �
 | `scripts/build_feature_43_inference_2026.py` | CAS 내부 2026 추론 입력 테이블 보정, 검증 및 정렬 |
 | `scripts/export_feature_43_dashboard_artifacts.py` | XGBoost 학습, Platt scaling 확률 보정, SHAP, 대시보드 산출물 생성 |
 | `scripts/export_feature_43_model_diagnostics.py` | 기존 예측 결과 기준 모델 성능 진단 산출물 생성 |
-| `scripts/export_feature_43_variable_experiments.py` | 시장 더미, 절대금액 변환, 산업 백분위, 결측 대체 전략 비교 실험 |
+| `scripts/export_feature_43_threshold_policy_experiments.py` | global/segment threshold 정책별 성능 비교 실험 |
+| `scripts/export_feature_43_error_shap_analysis.py` | FP/FN 오류 사례의 SHAP 패턴 분석 |
+| `scripts/export_feature_43_error_case_review.py` | FP/FN 오류 사례의 유형, 모델 오해 가설, 개선 액션 리뷰 테이블 생성 |
+| `scripts/export_feature_43_shap_feature_experiments.py` | SHAP 오류 패턴 기반 변수 개선 후보 비교 실험 |
+| `scripts/export_feature_43_xgboost_tuning_experiments.py` | XGBoost 하이퍼파라미터 후보를 OOT validation 기준으로 비교 실험 |
 
 ## 9. 발표용 요약 문장
 

@@ -100,6 +100,8 @@ The online service emits exactly these dashboard sections before rendering:
   "committee_view": {
     "final_committee_label": "적격 | 보류 | 부적격",
     "veto_triggered": false,
+    "hidden_tail_risk_flag": false,
+    "hidden_tail_risk_reason": "",
     "conflict_resolution": "",
     "key_risk_factors": [],
     "mitigating_factors": [],

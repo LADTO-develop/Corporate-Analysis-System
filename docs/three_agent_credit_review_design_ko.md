@@ -234,6 +234,8 @@ Agno structured output 기반 실행으로 교체된다. 이때 모델 판단은
 {
   "final_committee_label": "보류",
   "veto_triggered": false,
+  "hidden_tail_risk_flag": true,
+  "hidden_tail_risk_reason": "모델은 투자적격으로 봤지만 직접 관련 외부 위험 근거가 확인되어 FN 가능성을 보수적으로 점검",
   "conflict_resolution": "모델 원판단과 외부 검증 근거가 충돌하는 지점을 어떻게 조율했는지 설명",
   "key_risk_factors": [
     "최종 판단에서 중요하게 본 위험 요인"
@@ -256,6 +258,8 @@ Agno structured output 기반 실행으로 교체된다. 이때 모델 판단은
 
 - `final_committee_label`: 최종 위원회 라벨 (`적격` / `보류` / `부적격`)
 - `veto_triggered`: 횡령, 배임, 상장폐지, 감사의견 거절 같은 치명적 외부 리스크가 있어 강제 경고가 필요한지 여부
+- `hidden_tail_risk_flag`: 모델이 `투자적격`으로 본 기업에서 직접 관련 외부 위험 근거가 확인되어 false negative 가능성을 보완해야 하는지 여부
+- `hidden_tail_risk_reason`: 숨은 꼬리위험 보완 플래그가 켜진 이유
 - `conflict_resolution`: 모델 판단과 외부 근거가 충돌할 때 어떤 근거에 더 무게를 두었는지 설명
 - `key_risk_factors`: 최종 판단에서 중요하게 본 위험 요인
 - `mitigating_factors`: 위험을 낮춰주는 완화 요인

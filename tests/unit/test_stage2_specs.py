@@ -30,5 +30,6 @@ def test_chair_report_spec_owns_committee_view_fields() -> None:
 
     assert "final_committee_label" in spec.output_fields
     assert "veto_triggered" in spec.output_fields
+    assert "hidden_tail_risk_flag" in spec.output_fields
     assert "conflict_resolution" in spec.output_fields
     assert "final_review_memo" in spec.output_fields

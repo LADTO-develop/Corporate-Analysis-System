@@ -18,6 +18,9 @@ METADATA_PATH = INPUT_DIR / "feature_43_dictionary_metadata.json"
 OUTPUT_DIR = ROOT / "data" / "outputs" / "dashboard" / "feature_43_mvp"
 MODEL_OUTPUT_DIR = ROOT / "data" / "outputs" / "modeling" / "feature_43_xgboost"
 PROBABILITY_CLIP_EPSILON = 1e-6
+TUNED_THRESHOLD_RECALL_FLOOR = 0.85
+TUNED_THRESHOLD_SELECTION_RULE = "valid_max_precision_with_recall_ge_0.85"
+THRESHOLD_GRID = np.round(np.arange(0.05, 0.951, 0.005), 6)
 
 SCENARIO_PRESETS: dict[str, dict[str, float]] = {
     "base": {},
@@ -321,18 +324,31 @@ def build_calibration_summary(
 
 
 def choose_tuned_threshold(y_valid: pd.Series, valid_probabilities: np.ndarray) -> float:
-    from sklearn.metrics import f1_score
+    from sklearn.metrics import precision_recall_fscore_support
 
-    candidates = np.unique(np.round(valid_probabilities, 6))
-    best_threshold = 0.5
-    best_score = -1.0
-    for threshold in candidates:
+    candidates: list[tuple[float, float, float, float]] = []
+    for threshold in THRESHOLD_GRID:
         predictions = (valid_probabilities >= threshold).astype(int)
-        score = float(f1_score(y_valid, predictions, zero_division=0))
-        if score > best_score:
-            best_threshold = float(threshold)
-            best_score = score
-    return best_threshold
+        precision, recall, f1, _ = precision_recall_fscore_support(
+            y_valid,
+            predictions,
+            average="binary",
+            zero_division=0,
+        )
+        candidates.append((float(threshold), float(precision), float(recall), float(f1)))
+
+    recall_candidates = [
+        candidate for candidate in candidates if candidate[2] >= TUNED_THRESHOLD_RECALL_FLOOR
+    ]
+    if recall_candidates:
+        threshold, _, _, _ = max(
+            recall_candidates,
+            key=lambda candidate: (candidate[1], candidate[3], candidate[0]),
+        )
+        return threshold
+
+    threshold, _, _, _ = max(candidates, key=lambda candidate: (candidate[3], candidate[2]))
+    return threshold
 
 
 def build_prediction_scores(
@@ -558,7 +574,7 @@ def build_model_summary(
             {
                 "threshold_type": "tuned",
                 "threshold": tuned_threshold,
-                "selection_rule": "best_valid_f1",
+                "selection_rule": TUNED_THRESHOLD_SELECTION_RULE,
                 "test_precision": metrics(test_y, test_prob, tuned_threshold)["precision"],
                 "test_recall": metrics(test_y, test_prob, tuned_threshold)["recall"],
                 "test_f1": metrics(test_y, test_prob, tuned_threshold)["f1"],
@@ -643,6 +659,8 @@ def save_model_artifacts(
             "fill_values": {str(key): float(value) for key, value in fill_values.to_dict().items()},
             "threshold_default": 0.5,
             "threshold_tuned": tuned_threshold,
+            "threshold_selection_rule": TUNED_THRESHOLD_SELECTION_RULE,
+            "threshold_recall_floor": TUNED_THRESHOLD_RECALL_FLOOR,
             "probability_output": "calibrated_probability",
             "probability_calibration": calibration_summary,
             "best_iteration": getattr(model, "best_iteration", None),
@@ -667,7 +685,7 @@ XGBoost 모델링 산출물을 저장한 결과입니다. CAS 기준 원본은
 - `xgboost_model.json`: XGBoost 원본 모델 파일
 - `model_artifact_metadata.json`: 사용 변수, 결측 처리 전략, 기준선 등 메타데이터
 - `diagnostics/`: 연도/시장/산업별 성능, threshold trade-off, calibration,
-  대표 오류 사례를 정리한 모델 진단 산출물
+  대표 오류 사례, threshold 정책 실험을 정리한 모델 진단 산출물
 
 이 경로는 팀 공유용 모델링 산출물이자 Stage 1 런타임이 직접 참조하는 기준
 모델 artifact 위치입니다.
@@ -675,11 +693,19 @@ XGBoost 모델링 산출물을 저장한 결과입니다. CAS 기준 원본은
 `prob_speculative`는 검증셋 기준 Platt scaling을 적용한 보정 확률입니다.
 결측값은 XGBoost native missing 방향 학습을 사용하며, metadata의
 `fill_values`는 진단/후속 비교용 참고값으로만 보존합니다.
+`threshold_tuned`는 validation 기준 Recall 0.85 이상을 유지하는 후보 중
+Precision이 가장 높은 기준선을 사용합니다.
 
 진단 산출물은 모델을 다시 학습하지 않고 아래 명령으로 재생성할 수 있습니다.
 
 ```bash
 /opt/anaconda3/envs/aura/bin/python scripts/export_feature_43_model_diagnostics.py
+```
+
+threshold 정책별 valid/test 성능 실험은 아래 명령으로 재생성할 수 있습니다.
+
+```bash
+/opt/anaconda3/envs/aura/bin/python scripts/export_feature_43_threshold_policy_experiments.py
 ```
 """
     (model_output_dir / "README.md").write_text(content, encoding="utf-8")

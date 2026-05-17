@@ -14,7 +14,7 @@
     artifact입니다.
   - `diagnostics/`에는 같은 예측 결과를 기준으로 만든 성능 진단 리포트와
     segment/threshold/calibration/error-case 테이블, 변수 개선 및 결측 대체
-    실험 결과를 둡니다.
+    실험 결과, threshold 정책 및 KOSDAQ/산업별 FP 집중 구간 실험 결과를 둡니다.
 - `README.md`
   - 이 폴더의 산출물 기준과 재생성 방법을 설명합니다.
 
@@ -47,10 +47,35 @@ Git에 올리지 않는 재생성 산출물입니다.
 /opt/anaconda3/envs/aura/bin/python scripts/export_feature_43_model_diagnostics.py
 ```
 
-변수 개선 및 결측값 대체 실험을 다시 만들려면 아래 스크립트를 실행합니다.
+SHAP 기반 변수 개선 후보 실험을 다시 만들려면 아래 스크립트를 실행합니다.
 
 ```bash
-/opt/anaconda3/envs/aura/bin/python scripts/export_feature_43_variable_experiments.py
+/opt/anaconda3/envs/aura/bin/python scripts/export_feature_43_shap_feature_experiments.py
+```
+
+XGBoost 하이퍼파라미터 튜닝 실험을 다시 만들려면 아래 스크립트를 실행합니다.
+
+```bash
+/opt/anaconda3/envs/aura/bin/python scripts/export_feature_43_xgboost_tuning_experiments.py
+```
+
+threshold 정책별 valid/test 성능 비교를 다시 만들려면 아래 스크립트를 실행합니다.
+
+```bash
+/opt/anaconda3/envs/aura/bin/python scripts/export_feature_43_threshold_policy_experiments.py
+```
+
+오류 사례별 SHAP 패턴 분석을 다시 만들려면 아래 스크립트를 실행합니다.
+
+```bash
+/opt/anaconda3/envs/aura/bin/python scripts/export_feature_43_error_shap_analysis.py
+```
+
+오류 사례를 사람이 읽기 쉬운 유형/가설/개선 액션 테이블로 정리하려면 아래
+스크립트를 실행합니다.
+
+```bash
+/opt/anaconda3/envs/aura/bin/python scripts/export_feature_43_error_case_review.py
 ```
 
 기업별 리포트는 CLI 실행 시 자동으로 `data/outputs/reports/` 아래에 생성됩니다.
