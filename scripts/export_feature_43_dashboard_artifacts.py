@@ -15,12 +15,16 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parents[1]
 INPUT_DIR = ROOT / "data" / "input" / "credit_43_features"
 METADATA_PATH = INPUT_DIR / "feature_43_dictionary_metadata.json"
+RAW_PATH = ROOT / "data" / "raw" / "ts2000" / "TS2000_Credit_Model_Dataset_Model_V1.csv"
 OUTPUT_DIR = ROOT / "data" / "outputs" / "dashboard" / "feature_43_mvp"
 MODEL_OUTPUT_DIR = ROOT / "data" / "outputs" / "modeling" / "feature_43_xgboost"
 PROBABILITY_CLIP_EPSILON = 1e-6
 TUNED_THRESHOLD_RECALL_FLOOR = 0.85
 TUNED_THRESHOLD_SELECTION_RULE = "valid_max_precision_with_recall_ge_0.85"
 THRESHOLD_GRID = np.round(np.arange(0.05, 0.951, 0.005), 6)
+JOIN_KEYS = ["market", "stock_code", "corp_name", "fiscal_year", "eval_year"]
+STAGE2_REVIEW_FEATURES = ["delta_accruals_ratio", "is_3y_consecutive_operating_loss"]
+STAGE2_IT_SERVICES_RECALL_FLOOR = 0.90
 
 SCENARIO_PRESETS: dict[str, dict[str, float]] = {
     "base": {},
@@ -45,6 +49,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--input-dir", type=Path, default=INPUT_DIR)
     parser.add_argument("--metadata-path", type=Path, default=METADATA_PATH)
+    parser.add_argument("--raw-path", type=Path, default=RAW_PATH)
     parser.add_argument("--output-dir", type=Path, default=OUTPUT_DIR)
     parser.add_argument("--model-output-dir", type=Path, default=MODEL_OUTPUT_DIR)
     parser.add_argument("--seed", type=int, default=42)
@@ -349,6 +354,253 @@ def choose_tuned_threshold(y_valid: pd.Series, valid_probabilities: np.ndarray) 
 
     threshold, _, _, _ = max(candidates, key=lambda candidate: (candidate[3], candidate[2]))
     return threshold
+
+
+def choose_max_precision_threshold_at_recall(
+    y_valid: pd.Series,
+    valid_probabilities: np.ndarray,
+    recall_floor: float,
+) -> float:
+    from sklearn.metrics import precision_recall_fscore_support
+
+    candidates: list[tuple[float, float, float, float]] = []
+    for threshold in THRESHOLD_GRID:
+        predictions = (valid_probabilities >= threshold).astype(int)
+        precision, recall, f1, _ = precision_recall_fscore_support(
+            y_valid,
+            predictions,
+            average="binary",
+            zero_division=0,
+        )
+        candidates.append((float(threshold), float(precision), float(recall), float(f1)))
+
+    recall_candidates = [candidate for candidate in candidates if candidate[2] >= recall_floor]
+    if not recall_candidates:
+        threshold, _, _, _ = max(candidates, key=lambda candidate: (candidate[3], candidate[2]))
+        return threshold
+    threshold, _, _, _ = max(
+        recall_candidates,
+        key=lambda candidate: (candidate[1], candidate[3], candidate[0]),
+    )
+    return threshold
+
+
+def _normalized_join_frame(frame: pd.DataFrame) -> pd.DataFrame:
+    normalized = frame.loc[:, JOIN_KEYS].copy()
+    normalized["stock_code"] = normalized["stock_code"].astype(str)
+    for column in ["fiscal_year", "eval_year"]:
+        normalized[column] = pd.to_numeric(normalized[column], errors="raise").astype(int)
+    return normalized
+
+
+def attach_stage2_review_features(
+    *,
+    frames: dict[str, pd.DataFrame],
+    id_frames: dict[str, pd.DataFrame],
+    raw_path: Path,
+) -> dict[str, pd.DataFrame]:
+    raw = pd.read_csv(raw_path, encoding="utf-8-sig", dtype={"stock_code": str})
+    missing_columns = [column for column in STAGE2_REVIEW_FEATURES if column not in raw.columns]
+    if missing_columns:
+        raise KeyError(
+            f"Stage 2 review feature columns are missing from raw data: {missing_columns}"
+        )
+    duplicates = raw.duplicated(JOIN_KEYS).sum()
+    if duplicates:
+        raise ValueError(f"Raw Model V1 has duplicate rows for join keys: {duplicates}")
+
+    raw_subset = raw.loc[:, [*JOIN_KEYS, *STAGE2_REVIEW_FEATURES]].copy()
+    raw_subset["stock_code"] = raw_subset["stock_code"].astype(str)
+    for column in ["fiscal_year", "eval_year"]:
+        raw_subset[column] = pd.to_numeric(raw_subset[column], errors="raise").astype(int)
+    for column in STAGE2_REVIEW_FEATURES:
+        raw_subset[column] = pd.to_numeric(raw_subset[column], errors="coerce")
+
+    output: dict[str, pd.DataFrame] = {}
+    for split, frame in frames.items():
+        join_keys = _normalized_join_frame(id_frames[split].reset_index(drop=True))
+        joined = join_keys.merge(raw_subset, on=JOIN_KEYS, how="left", indicator=True)
+        unmatched = int(joined["_merge"].ne("both").sum())
+        if unmatched:
+            raise ValueError(
+                f"{split} split has unmatched Stage 2 review feature rows: {unmatched}"
+            )
+        split_frame = frame.reset_index(drop=True).copy()
+        for column in STAGE2_REVIEW_FEATURES:
+            split_frame[column] = joined[column]
+        output[split] = split_frame
+    return output
+
+
+def build_stage2_review_probabilities(
+    *,
+    frames: dict[str, pd.DataFrame],
+    id_frames: dict[str, pd.DataFrame],
+    raw_path: Path,
+    base_model_features: list[str],
+    seed: int,
+) -> dict[str, object]:
+    from xgboost import XGBClassifier
+
+    review_frames = attach_stage2_review_features(
+        frames=frames,
+        id_frames=id_frames,
+        raw_path=raw_path,
+    )
+    review_features = [*base_model_features, *STAGE2_REVIEW_FEATURES]
+    y_train = review_frames["train"]["is_speculative"].astype(int)
+    y_valid = review_frames["valid"]["is_speculative"].astype(int)
+
+    pos = int(y_train.sum())
+    neg = int(len(y_train) - pos)
+    scale_pos_weight = float(neg / pos) if pos else 1.0
+    model = XGBClassifier(
+        objective="binary:logistic",
+        eval_metric="aucpr",
+        n_estimators=400,
+        learning_rate=0.05,
+        max_depth=4,
+        min_child_weight=3,
+        subsample=0.9,
+        colsample_bytree=0.9,
+        reg_alpha=0.0,
+        reg_lambda=1.0,
+        random_state=seed,
+        n_jobs=4,
+        tree_method="hist",
+        scale_pos_weight=scale_pos_weight,
+        early_stopping_rounds=50,
+    )
+    model.fit(
+        review_frames["train"].loc[:, review_features],
+        y_train,
+        eval_set=[(review_frames["valid"].loc[:, review_features], y_valid)],
+        verbose=False,
+    )
+    raw_probabilities = {
+        split: model.predict_proba(review_frames[split].loc[:, review_features])[:, 1]
+        for split in ["train", "valid", "test"]
+    }
+    calibration = fit_platt_calibration(y_valid, raw_probabilities["valid"])
+    probabilities = {
+        split: apply_probability_calibration(raw_probabilities[split], calibration)
+        for split in ["train", "valid", "test"]
+    }
+    default_threshold = choose_tuned_threshold(y_valid, probabilities["valid"])
+    valid_ids = id_frames["valid"].reset_index(drop=True)
+    valid_it_mask = valid_ids["industry_macro_category"].astype(str).eq("it_services")
+    if valid_it_mask.any():
+        it_threshold = choose_max_precision_threshold_at_recall(
+            y_valid.loc[valid_it_mask.to_numpy()],
+            probabilities["valid"][valid_it_mask.to_numpy()],
+            STAGE2_IT_SERVICES_RECALL_FLOOR,
+        )
+    else:
+        it_threshold = default_threshold
+    return {
+        "probabilities": probabilities,
+        "raw_probabilities": raw_probabilities,
+        "default_threshold": default_threshold,
+        "it_services_threshold": it_threshold,
+        "feature_columns": review_features,
+        "calibration_method": calibration["method"],
+    }
+
+
+def add_stage2_review_signals(
+    prediction_scores: pd.DataFrame,
+    *,
+    review_probabilities: dict[str, np.ndarray],
+    review_raw_probabilities: dict[str, np.ndarray],
+    review_default_threshold: float,
+    review_it_services_threshold: float,
+    review_calibration_method: str,
+) -> pd.DataFrame:
+    output = prediction_scores.copy()
+    for split, split_probabilities in review_probabilities.items():
+        split_mask = output["split"].eq(split)
+        output.loc[split_mask, "prob_speculative_45"] = split_probabilities
+        output.loc[split_mask, "prob_speculative_45_raw"] = review_raw_probabilities[split]
+
+    stage1_risk = output["pred_label_tuned"].astype(int).eq(1)
+    feature45_risk = output["prob_speculative_45"].astype(float).ge(review_default_threshold)
+    it_services_review = output["industry_macro_category"].astype(str).eq("it_services") & output[
+        "prob_speculative_45"
+    ].astype(float).ge(review_it_services_threshold)
+    secondary_trigger = (~stage1_risk) & (feature45_risk | it_services_review)
+    output["probability_45_calibration_method"] = review_calibration_method
+    output["threshold_45"] = review_default_threshold
+    output["threshold_45_it_services_review"] = review_it_services_threshold
+    output["pred_label_45_tuned"] = feature45_risk.astype(int)
+    output["stage2_review_trigger"] = stage1_risk | secondary_trigger
+    output["stage2_secondary_trigger"] = secondary_trigger
+    output["stage2_review_priority"] = np.select(
+        [
+            stage1_risk,
+            (~stage1_risk) & feature45_risk,
+            (~stage1_risk) & it_services_review,
+        ],
+        ["high", "medium", "watch"],
+        default="none",
+    )
+    output["trigger_reason_code"] = np.select(
+        [
+            stage1_risk & feature45_risk,
+            stage1_risk,
+            (~stage1_risk) & feature45_risk,
+            (~stage1_risk) & it_services_review,
+        ],
+        [
+            "stage1_and_45_risk",
+            "stage1_model_risk",
+            "45_feature_set_only",
+            "it_services_low_threshold",
+        ],
+        default="none",
+    )
+    output["trigger_reason"] = np.select(
+        [
+            stage1_risk & feature45_risk,
+            stage1_risk,
+            (~stage1_risk) & feature45_risk,
+            (~stage1_risk) & it_services_review,
+        ],
+        [
+            "1차 모델과 45개 변수셋이 모두 위험 기준선을 넘겨 위원회 검토 대상으로 분류했습니다.",
+            "1차 모델이 위험 기준선을 넘겨 위원회 검토 대상으로 분류했습니다.",
+            "43개 모델은 투자적격이나 45개 변수셋이 위험 기준선을 넘어 추가 검토 대상으로 올렸습니다.",
+            "IT서비스 업종 보조 기준선을 넘어 45개 변수셋 기반 추가 검토 대상으로 올렸습니다.",
+        ],
+        default="추가 위원회 검토 트리거 없음",
+    )
+    output["trigger_policy"] = "43_model_default_or_45_feature_set_or_it_services_review_threshold"
+    return output
+
+
+def build_stage2_review_signal_summary(prediction_scores: pd.DataFrame) -> dict[str, object]:
+    summary: dict[str, object] = {}
+    for split, split_frame in prediction_scores.groupby("split"):
+        y_true = split_frame["is_speculative"].astype(int)
+        trigger = split_frame["stage2_review_trigger"].astype(bool)
+        secondary_trigger = split_frame["stage2_secondary_trigger"].astype(bool)
+        true_positive = int((trigger & y_true.eq(1)).sum())
+        false_positive = int((trigger & y_true.eq(0)).sum())
+        false_negative = int((~trigger & y_true.eq(1)).sum())
+        precision_denominator = true_positive + false_positive
+        recall_denominator = true_positive + false_negative
+        summary[str(split)] = {
+            "rows": len(split_frame),
+            "stage2_review_trigger_count": int(trigger.sum()),
+            "stage2_secondary_trigger_count": int(secondary_trigger.sum()),
+            "stage2_secondary_true_risk_count": int((secondary_trigger & y_true.eq(1)).sum()),
+            "stage2_secondary_normal_count": int((secondary_trigger & y_true.eq(0)).sum()),
+            "trigger_precision": true_positive / precision_denominator
+            if precision_denominator
+            else 0.0,
+            "trigger_recall": true_positive / recall_denominator if recall_denominator else 0.0,
+            "trigger_reason_counts": split_frame["trigger_reason_code"].value_counts().to_dict(),
+        }
+    return summary
 
 
 def build_prediction_scores(
@@ -685,7 +937,8 @@ XGBoost 모델링 산출물을 저장한 결과입니다. CAS 기준 원본은
 - `xgboost_model.json`: XGBoost 원본 모델 파일
 - `model_artifact_metadata.json`: 사용 변수, 결측 처리 전략, 기준선 등 메타데이터
 - `diagnostics/`: 연도/시장/산업별 성능, threshold trade-off, calibration,
-  대표 오류 사례, threshold 정책 실험을 정리한 모델 진단 산출물
+  대표 오류 사례, threshold 정책, FP 집중 구간, SHAP 기반 변수 개선 후보
+  실험을 정리한 모델 진단 산출물
 
 이 경로는 팀 공유용 모델링 산출물이자 Stage 1 런타임이 직접 참조하는 기준
 모델 artifact 위치입니다.
@@ -695,6 +948,11 @@ XGBoost 모델링 산출물을 저장한 결과입니다. CAS 기준 원본은
 `fill_values`는 진단/후속 비교용 참고값으로만 보존합니다.
 `threshold_tuned`는 validation 기준 Recall 0.85 이상을 유지하는 후보 중
 Precision이 가장 높은 기준선을 사용합니다.
+
+Rolling validation은 단일 1년 validation에 대한 과신을 줄이기 위해 사용합니다.
+특정 경기/시장 국면에 우연히 잘 맞은 후보 변수를 바로 채택하지 않고, 여러
+평가연도에서 반복적으로 안정적인지 확인한 뒤 final test는 마지막 확인용으로만
+사용합니다.
 
 진단 산출물은 모델을 다시 학습하지 않고 아래 명령으로 재생성할 수 있습니다.
 
@@ -706,6 +964,70 @@ threshold 정책별 valid/test 성능 실험은 아래 명령으로 재생성할
 
 ```bash
 /opt/anaconda3/envs/aura/bin/python scripts/export_feature_43_threshold_policy_experiments.py
+```
+
+오류 사례별 SHAP 패턴 분석은 아래 명령으로 재생성할 수 있습니다.
+
+```bash
+/opt/anaconda3/envs/aura/bin/python scripts/export_feature_43_error_shap_analysis.py
+```
+
+오류 사례별 리뷰 테이블은 아래 명령으로 재생성할 수 있습니다.
+
+```bash
+/opt/anaconda3/envs/aura/bin/python scripts/export_feature_43_error_case_review.py
+```
+
+SHAP 오류 패턴 기반 변수 개선 후보 실험은 아래 명령으로 재생성할 수 있습니다.
+
+```bash
+/opt/anaconda3/envs/aura/bin/python scripts/export_feature_43_shap_feature_experiments.py
+```
+
+원본 Model V1의 미사용 후보 변수를 묶음별로 추가하는 실험은 아래 명령으로 재생성할 수 있습니다.
+
+```bash
+/opt/anaconda3/envs/aura/bin/python scripts/export_feature_43_candidate_feature_pack_experiments.py
+```
+
+단일 후보 변수와 2개 조합 기반 forward selection 실험은 아래 명령으로 재생성할 수 있습니다.
+
+```bash
+/opt/anaconda3/envs/aura/bin/python scripts/export_feature_43_forward_selection_experiments.py
+```
+
+여러 연도 walk-forward rolling OOT validation 실험은 아래 명령으로 재생성할 수 있습니다.
+
+```bash
+/opt/anaconda3/envs/aura/bin/python scripts/export_feature_43_rolling_validation_experiments.py
+```
+
+rolling validation으로 전체 후보를 선별한 뒤 final test 성능을 확인하는 실험은 아래 명령으로 재생성할 수 있습니다.
+
+```bash
+/opt/anaconda3/envs/aura/bin/python scripts/export_feature_43_rolling_selection_test_experiments.py
+```
+
+43개 기준 모델과 45개 변수셋(`delta_accruals_ratio`,
+`is_3y_consecutive_operating_loss` 추가)을 직접 비교하는 실험은 아래 명령으로
+재생성할 수 있습니다. 이 산출물은 운영 모델 교체가 아니라 Recall 우선 후보
+검토용입니다.
+
+```bash
+/opt/anaconda3/envs/aura/bin/python scripts/export_feature_45_experiment.py
+```
+
+45개 변수셋 기준으로 하이퍼파라미터, threshold 정책, Stage 2 보조 트리거 가능성을
+비교하는 실험은 아래 명령으로 재생성할 수 있습니다.
+
+```bash
+/opt/anaconda3/envs/aura/bin/python scripts/export_feature_45_improvement_experiments.py
+```
+
+XGBoost 하이퍼파라미터 튜닝 실험은 아래 명령으로 재생성할 수 있습니다.
+
+```bash
+/opt/anaconda3/envs/aura/bin/python scripts/export_feature_43_xgboost_tuning_experiments.py
 ```
 """
     (model_output_dir / "README.md").write_text(content, encoding="utf-8")
@@ -723,9 +1045,14 @@ def write_readme(output_dir: Path) -> None:
 - `peer_percentiles.csv`: 산업/시장 비교용 백분위
 - `feature_dictionary.csv`: 지표 설명 사전
 - `prediction_scores.csv`: 기업별 예측확률/판정
+- `stage2_review_signals.csv`: 45개 변수셋 기반 2차 위원회 추가 검토 트리거
 - `local_shap.csv`: 기업별 주요 영향 요인
 - `industry_*`: 산업 집계 요약
 - `model_summary.json`: 성능/기준선 요약
+
+`stage2_review_trigger`는 1차 43개 모델 판단을 덮어쓰지 않습니다.
+43개 모델이 위험으로 본 기업 또는 45개 변수셋/IT서비스 보조 기준선이 추가로
+감지한 기업을 2차 위원회 검토 대상으로 표시하는 보조 신호입니다.
 """
     (output_dir / "README.md").write_text(content, encoding="utf-8")
 
@@ -837,6 +1164,21 @@ def main() -> None:
         raw_probabilities=raw_probabilities,
         calibration_method=str(calibration["method"]),
     )
+    stage2_review_model = build_stage2_review_probabilities(
+        frames={"train": train_ready, "valid": valid_ready, "test": test_ready},
+        id_frames=id_frames,
+        raw_path=args.raw_path,
+        base_model_features=model_features,
+        seed=args.seed,
+    )
+    prediction_scores = add_stage2_review_signals(
+        prediction_scores,
+        review_probabilities=stage2_review_model["probabilities"],
+        review_raw_probabilities=stage2_review_model["raw_probabilities"],
+        review_default_threshold=float(stage2_review_model["default_threshold"]),
+        review_it_services_threshold=float(stage2_review_model["it_services_threshold"]),
+        review_calibration_method=str(stage2_review_model["calibration_method"]),
+    )
 
     explainer = shap.TreeExplainer(model)
     shap_values_by_split = {}
@@ -876,6 +1218,26 @@ def main() -> None:
         valid_raw_prob,
         test_raw_prob,
     )
+    model_summary["stage2_review_trigger_policy"] = {
+        "purpose": (
+            "43개 모델 원판단은 유지하고, 45개 변수셋은 2차 위원회 검토 대상을 "
+            "넓히는 보조 레이더로 사용합니다."
+        ),
+        "base_model": "feature_43_xgboost",
+        "secondary_feature_set": "feature_45",
+        "secondary_features": STAGE2_REVIEW_FEATURES,
+        "default_45_threshold": float(stage2_review_model["default_threshold"]),
+        "it_services_review_threshold": float(stage2_review_model["it_services_threshold"]),
+        "it_services_recall_floor": STAGE2_IT_SERVICES_RECALL_FLOOR,
+        "trigger_columns": [
+            "stage2_review_trigger",
+            "stage2_secondary_trigger",
+            "stage2_review_priority",
+            "trigger_reason_code",
+            "trigger_reason",
+        ],
+        "summary": build_stage2_review_signal_summary(prediction_scores),
+    }
 
     scenario_presets = {
         name: {feature: value for feature, value in preset.items() if feature in source_features}
@@ -897,6 +1259,32 @@ def main() -> None:
     )
     prediction_scores.to_csv(
         output_dir / "prediction_scores.csv", index=False, encoding="utf-8-sig"
+    )
+    stage2_review_columns = [
+        "market",
+        "stock_code",
+        "corp_name",
+        "fiscal_year",
+        "eval_year",
+        "split",
+        "is_speculative",
+        "prob_speculative",
+        "pred_label_tuned",
+        "prob_speculative_45",
+        "pred_label_45_tuned",
+        "threshold",
+        "threshold_45",
+        "threshold_45_it_services_review",
+        "stage2_review_trigger",
+        "stage2_secondary_trigger",
+        "stage2_review_priority",
+        "trigger_reason_code",
+        "trigger_reason",
+    ]
+    prediction_scores.loc[:, stage2_review_columns].to_csv(
+        output_dir / "stage2_review_signals.csv",
+        index=False,
+        encoding="utf-8-sig",
     )
     local_shap.to_csv(output_dir / "local_shap.csv", index=False, encoding="utf-8-sig")
     industry_year_summary.to_csv(

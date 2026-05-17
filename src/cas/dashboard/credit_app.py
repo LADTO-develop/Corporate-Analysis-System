@@ -426,6 +426,23 @@ def _optional_int(value: object) -> int | None:
         return None
 
 
+def _optional_bool(value: object, *, default: bool = False) -> bool:
+    """Return a safe bool from dashboard artifacts."""
+    cleaned = _clean_dashboard_value(value)
+    if cleaned is None:
+        return default
+    if isinstance(cleaned, bool):
+        return cleaned
+    if isinstance(cleaned, int | float):
+        return bool(cleaned)
+    text = str(cleaned).strip().lower()
+    if text in {"1", "true", "yes", "y", "on"}:
+        return True
+    if text in {"0", "false", "no", "n", "off"}:
+        return False
+    return default
+
+
 def _stock_code_text(value: object) -> str:
     """Normalize stock code text while preserving leading zeroes."""
     cleaned = _clean_dashboard_value(value)
@@ -805,6 +822,23 @@ def build_dashboard_model_view(
         "risk_band": risk_band,
         "risk_band_display": format_stage2_risk_band(risk_band),
         "top_drivers": _dashboard_top_drivers(local_shap),
+        "probability_speculative_45": _optional_float(prediction_row.get("prob_speculative_45")),
+        "threshold_45": _optional_float(prediction_row.get("threshold_45")),
+        "threshold_45_it_services_review": _optional_float(
+            prediction_row.get("threshold_45_it_services_review")
+        ),
+        "stage2_review_trigger": _optional_bool(prediction_row.get("stage2_review_trigger")),
+        "stage2_secondary_trigger": _optional_bool(prediction_row.get("stage2_secondary_trigger")),
+        "stage2_review_priority": str(
+            _clean_dashboard_value(prediction_row.get("stage2_review_priority")) or "none"
+        ),
+        "trigger_reason_code": str(
+            _clean_dashboard_value(prediction_row.get("trigger_reason_code")) or "none"
+        ),
+        "trigger_reason": str(
+            _clean_dashboard_value(prediction_row.get("trigger_reason"))
+            or "추가 위원회 검토 트리거 없음"
+        ),
     }
 
 
@@ -3124,6 +3158,27 @@ def render_committee_view_tab(
             model_metric_cols[2],
             "위원회 신뢰도",
             format_percent(committee_context.get("final_confidence")),
+        )
+        trigger_cols = st.columns(3)
+        secondary_triggered = bool(model_view.get("stage2_secondary_trigger", False))
+        review_triggered = bool(model_view.get("stage2_review_trigger", False))
+        trigger_status = (
+            "추가 검토" if secondary_triggered else "1차 위험 검토" if review_triggered else "일반"
+        )
+        render_badge_value_block(
+            trigger_cols[0],
+            "2차 검토 트리거",
+            render_decision_badge(trigger_status),
+        )
+        render_bold_value_block(
+            trigger_cols[1],
+            "45개 변수셋 확률",
+            format_percent(model_view.get("probability_speculative_45")),
+        )
+        render_text_card(
+            trigger_cols[2],
+            "검토 사유",
+            str(model_view.get("trigger_reason") or "추가 위원회 검토 트리거 없음"),
         )
         render_summary_banner("판단 차이 해석", summary_text, summary_color)
 

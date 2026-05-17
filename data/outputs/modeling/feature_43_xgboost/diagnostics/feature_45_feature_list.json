@@ -1,5 +1,5 @@
 {
-  "variant": "feature_45_candidate3",
+  "variant": "feature_45",
   "base_feature_count": 43,
   "added_feature_count": 2,
   "feature_count": 45,
@@ -54,5 +54,5 @@
     "delta_accruals_ratio",
     "is_3y_consecutive_operating_loss"
   ],
-  "note": "Experimental 45-feature candidate; production model remains feature_43."
+  "note": "Experimental 45-feature set; production model remains feature_43."
 }

@@ -80,13 +80,20 @@ rolling validation으로 전체 후보를 선별한 뒤 final test 성능을 확
 /opt/anaconda3/envs/aura/bin/python scripts/export_feature_43_rolling_selection_test_experiments.py
 ```
 
-43개 기준 모델과 후보3 45개 변수셋(`delta_accruals_ratio`,
+43개 기준 모델과 45개 변수셋(`delta_accruals_ratio`,
 `is_3y_consecutive_operating_loss` 추가)을 직접 비교하는 실험은 아래 명령으로
 재생성할 수 있습니다. 이 산출물은 운영 모델 교체가 아니라 Recall 우선 후보
 검토용입니다.
 
 ```bash
-/opt/anaconda3/envs/aura/bin/python scripts/export_feature_45_candidate3_experiment.py
+/opt/anaconda3/envs/aura/bin/python scripts/export_feature_45_experiment.py
+```
+
+45개 변수셋 기준으로 하이퍼파라미터, threshold 정책, Stage 2 보조 트리거 가능성을
+비교하는 실험은 아래 명령으로 재생성할 수 있습니다.
+
+```bash
+/opt/anaconda3/envs/aura/bin/python scripts/export_feature_45_improvement_experiments.py
 ```
 
 XGBoost 하이퍼파라미터 튜닝 실험은 아래 명령으로 재생성할 수 있습니다.

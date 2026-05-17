@@ -370,6 +370,9 @@ def _quant_credit_agent(bundle: Stage2InputBundle) -> QuantCreditOutput:
     driver_details = _describe_top_drivers(bundle.xgboost_result, source_row, peer_by_feature)
     risk_items = [item for item in driver_details if item["direction"] == "risk"]
     support_items = [item for item in driver_details if item["direction"] == "support"]
+    secondary_triggered = bool(bundle.model_view.get("stage2_secondary_trigger"))
+    review_priority = str(bundle.model_view.get("stage2_review_priority") or "none")
+    trigger_reason = str(bundle.model_view.get("trigger_reason") or "")
 
     if risk_items:
         primary_risk = f"{risk_items[0]['feature']}이(가) 위험을 높이는 요인으로 해석됩니다."
@@ -387,13 +390,21 @@ def _quant_credit_agent(bundle: Stage2InputBundle) -> QuantCreditOutput:
         f"모델은 현재 기업을 {prediction_label}으로 판단했습니다. "
         f"투기등급 위험확률은 {probability:.1%}이며, {primary_risk} {primary_support}"
     )
+    if secondary_triggered:
+        summary += (
+            f" 다만 45개 변수셋 보조 신호가 `{review_priority}` 우선순위의 "
+            f"추가 위원회 검토 대상으로 표시했습니다."
+        )
+    key_risk_factors = [str(item.get("detail", "")) for item in risk_items if item.get("detail")]
+    if secondary_triggered and trigger_reason:
+        key_risk_factors.insert(0, f"45개 변수셋 보조 검토 신호: {trigger_reason}")
 
     return QuantCreditOutput(
         quant_summary=summary,
         model_rationale=(
             f"상위 SHAP 변수 {min(len(driver_details), 3)}개를 기준으로 모델 판단의 근거를 정리했습니다."
         ),
-        key_risk_factors=[str(item.get("detail", "")) for item in risk_items if item.get("detail")],
+        key_risk_factors=key_risk_factors,
         mitigating_factors=[
             str(item.get("detail", "")) for item in support_items if item.get("detail")
         ],

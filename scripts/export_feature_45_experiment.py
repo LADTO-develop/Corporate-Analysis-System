@@ -29,7 +29,7 @@ from export_feature_43_candidate_feature_pack_experiments import (
 )
 
 ROOT = Path(__file__).resolve().parents[1]
-CANDIDATE_NAME = "feature_45_candidate3"
+FEATURE_SET_NAME = "feature_45"
 CANDIDATE_COLUMNS = ["delta_accruals_ratio", "is_3y_consecutive_operating_loss"]
 
 
@@ -88,7 +88,9 @@ def summary_row(variant: dict[str, Any]) -> dict[str, Any]:
     row: dict[str, Any] = {
         "variant": variant["name"],
         "feature_count": variant["feature_count"],
-        "added_features": ", ".join(CANDIDATE_COLUMNS) if variant["name"] == CANDIDATE_NAME else "",
+        "added_features": (
+            ", ".join(CANDIDATE_COLUMNS) if variant["name"] == FEATURE_SET_NAME else ""
+        ),
         "best_iteration": variant["best_iteration"],
         "threshold_tuned": threshold,
     }
@@ -284,16 +286,16 @@ def build_report(
     segments: pd.DataFrame,
 ) -> str:
     baseline = comparison.loc[comparison["variant"].eq("baseline_43_native")].iloc[0]
-    candidate = comparison.loc[comparison["variant"].eq(CANDIDATE_NAME)].iloc[0]
+    candidate = comparison.loc[comparison["variant"].eq(FEATURE_SET_NAME)].iloc[0]
     fn_delta = int(candidate["delta_test_false_negative_at_threshold"])
     fp_delta = int(candidate["delta_test_false_positive_at_threshold"])
 
     return "\n".join(
         [
-            "# Feature 45 Candidate 3 Experiment",
+            "# Feature 45 Experiment",
             "",
             "현재 운영 기준인 43개 변수셋에 `delta_accruals_ratio`, "
-            "`is_3y_consecutive_operating_loss`를 추가한 45개 실험 후보입니다.",
+            "`is_3y_consecutive_operating_loss`를 추가한 45개 변수셋 실험입니다.",
             "이 산출물은 운영 모델 교체가 아니라 후보 변수 조합의 재현 가능한 기록입니다.",
             "",
             "## 1. 결론",
@@ -302,14 +304,14 @@ def build_report(
             f"`{baseline['test_f1_at_threshold']:.4f}` / "
             f"`{baseline['test_recall_at_threshold']:.4f}` / "
             f"`{baseline['test_precision_at_threshold']:.4f}`",
-            f"- 45개 후보3 test F1/Recall/Precision: "
+            f"- 45개 변수셋 test F1/Recall/Precision: "
             f"`{candidate['test_f1_at_threshold']:.4f}` / "
             f"`{candidate['test_recall_at_threshold']:.4f}` / "
             f"`{candidate['test_precision_at_threshold']:.4f}`",
-            f"- 후보3은 FN을 `{abs(fn_delta)}`개 줄였지만 FP는 `{fp_delta}`개 늘었습니다.",
+            f"- 45개 변수셋은 FN을 `{abs(fn_delta)}`개 줄였지만 FP는 `{fp_delta}`개 늘었습니다.",
             "- 조기경보 관점에서는 의미가 있으나, F1 기준 운영 반영은 아직 보류가 안전합니다.",
             "",
-            "## 2. 43개 Baseline vs 45개 후보3",
+            "## 2. 43개 Baseline vs 45개 변수셋",
             "",
             markdown_table(
                 comparison,
@@ -327,7 +329,7 @@ def build_report(
                 ],
             ),
             "",
-            "## 3. 45개 후보3 Threshold 진단",
+            "## 3. 45개 변수셋 Threshold 진단",
             "",
             markdown_table(
                 threshold_highlights,
@@ -375,14 +377,14 @@ def build_report(
             "## 6. 45개 기준 개선 방향",
             "",
             "1. `threshold`를 먼저 고정하지 말고 Stage 2 실행 조건과 같이 설계합니다. "
-            "45개 후보3은 FN을 줄이는 대신 FP를 늘리므로, 모델 라벨 변경보다 "
+            "45개 변수셋은 FN을 줄이는 대신 FP를 늘리므로, 모델 라벨 변경보다 "
             "`에이전트 검토 대상 확대` 용도로 쓰는 편이 안전합니다.",
             "2. FP가 늘어난 시장/산업 구간을 먼저 봅니다. KOSDAQ, 제조업, IT서비스처럼 "
             "오경보가 집중되는 구간은 segment threshold 또는 보류 밴드 정책을 별도로 비교합니다.",
-            "3. 후보3의 추가 변수 SHAP을 오류 사례별로 확인합니다. "
+            "3. 45개 변수셋의 추가 변수 SHAP을 오류 사례별로 확인합니다. "
             "`delta_accruals_ratio`와 `is_3y_consecutive_operating_loss`가 실제 FN을 "
             "잡는 이유인지, 아니면 특정 산업의 정상 기업을 과민하게 밀어올리는지 확인해야 합니다.",
-            "4. 45개 전체 모델을 바로 운영 반영하기보다, 43개 모델 점수와 45개 후보3 점수의 "
+            "4. 45개 전체 모델을 바로 운영 반영하기보다, 43개 모델 점수와 45개 변수셋 점수의 "
             "차이를 `secondary_signal`로 쓰는 앙상블/룰 기반 트리거를 검토합니다.",
             "5. 최종 판단은 test 1회가 아니라 rolling validation에서 Recall 개선과 FP 증가가 "
             "반복적으로 안정적인지 확인한 뒤 결정합니다.",
@@ -414,7 +416,7 @@ def main() -> None:
         feature_columns=base_features,
     )
     candidate = fit_variant(
-        name=CANDIDATE_NAME,
+        name=FEATURE_SET_NAME,
         frames=candidate_frames,
         feature_columns=candidate_features,
     )
@@ -434,13 +436,13 @@ def main() -> None:
         ignore_index=True,
     )
     feature_list = {
-        "variant": CANDIDATE_NAME,
+        "variant": FEATURE_SET_NAME,
         "base_feature_count": len(base_features),
         "added_feature_count": len(CANDIDATE_COLUMNS),
         "feature_count": len(candidate_features),
         "added_features": CANDIDATE_COLUMNS,
         "feature_columns": candidate_features,
-        "note": "Experimental 45-feature candidate; production model remains feature_43.",
+        "note": "Experimental 45-feature set; production model remains feature_43.",
     }
     threshold_view = selected_sweep_view(threshold_sweep, threshold_highlights)
     report = build_report(
@@ -451,13 +453,13 @@ def main() -> None:
     )
     summary = {
         "generated_at": datetime.now(UTC).isoformat(),
-        "variant": CANDIDATE_NAME,
+        "variant": FEATURE_SET_NAME,
         "candidate_columns": CANDIDATE_COLUMNS,
         "production_baseline": "baseline_43_native",
         "selection_principle": "Validation threshold policy is used for fair test comparison.",
         "recommendation": (
-            "Keep 43-feature model as production baseline; keep 45-feature candidate3 as "
-            "a recall-priority experimental candidate or Stage 2 trigger signal."
+            "Keep 43-feature model as production baseline; use the 45-feature set as "
+            "a recall-priority Stage 2 review trigger signal."
         ),
         "comparison": comparison.to_dict(orient="records"),
         "threshold_highlights": threshold_highlights.to_dict(orient="records"),
@@ -465,34 +467,34 @@ def main() -> None:
 
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     comparison.to_csv(
-        OUTPUT_DIR / "feature_45_candidate3_comparison.csv",
+        OUTPUT_DIR / "feature_45_comparison.csv",
         index=False,
         encoding="utf-8-sig",
     )
     threshold_sweep.to_csv(
-        OUTPUT_DIR / "feature_45_candidate3_threshold_sweep.csv",
+        OUTPUT_DIR / "feature_45_threshold_sweep.csv",
         index=False,
         encoding="utf-8-sig",
     )
     threshold_highlights.to_csv(
-        OUTPUT_DIR / "feature_45_candidate3_threshold_highlights.csv",
+        OUTPUT_DIR / "feature_45_threshold_highlights.csv",
         index=False,
         encoding="utf-8-sig",
     )
     segments.to_csv(
-        OUTPUT_DIR / "feature_45_candidate3_segment_performance.csv",
+        OUTPUT_DIR / "feature_45_segment_performance.csv",
         index=False,
         encoding="utf-8-sig",
     )
-    (OUTPUT_DIR / "feature_45_candidate3_feature_list.json").write_text(
+    (OUTPUT_DIR / "feature_45_feature_list.json").write_text(
         json.dumps(feature_list, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
-    (OUTPUT_DIR / "feature_45_candidate3_summary.json").write_text(
+    (OUTPUT_DIR / "feature_45_summary.json").write_text(
         json.dumps(summary, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
-    (OUTPUT_DIR / "feature_45_candidate3_report.md").write_text(report, encoding="utf-8")
+    (OUTPUT_DIR / "feature_45_report.md").write_text(report, encoding="utf-8")
 
 
 if __name__ == "__main__":

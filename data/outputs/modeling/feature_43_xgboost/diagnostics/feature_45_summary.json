@@ -1,13 +1,13 @@
 {
-  "generated_at": "2026-05-17T13:51:51.057313+00:00",
-  "variant": "feature_45_candidate3",
+  "generated_at": "2026-05-17T14:37:42.484341+00:00",
+  "variant": "feature_45",
   "candidate_columns": [
     "delta_accruals_ratio",
     "is_3y_consecutive_operating_loss"
   ],
   "production_baseline": "baseline_43_native",
   "selection_principle": "Validation threshold policy is used for fair test comparison.",
-  "recommendation": "Keep 43-feature model as production baseline; keep 45-feature candidate3 as a recall-priority experimental candidate or Stage 2 trigger signal.",
+  "recommendation": "Keep 43-feature model as production baseline; use the 45-feature set as a recall-priority Stage 2 review trigger signal.",
   "comparison": [
     {
       "variant": "baseline_43_native",
@@ -48,7 +48,7 @@
       "delta_test_false_negative_at_threshold": 0
     },
     {
-      "variant": "feature_45_candidate3",
+      "variant": "feature_45",
       "feature_count": 45,
       "added_features": "delta_accruals_ratio, is_3y_consecutive_operating_loss",
       "best_iteration": 272,
