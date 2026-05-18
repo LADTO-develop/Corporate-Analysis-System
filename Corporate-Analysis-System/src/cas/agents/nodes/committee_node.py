@@ -1,20 +1,22 @@
 """Run the Stage 2 three-agent Agno LLM review scaffold."""
 
 from __future__ import annotations
+
 from datetime import UTC, datetime
 from typing import Any
 
-from cas.agents.state import AgentState, AuditEntry, CommitteeReview
+from agents.nodes.tripletagents.chair_report_agent import build_chair_agent_output
+from agents.nodes.tripletagents.evidence_audit_agent import build_evidence_agent_output
 
 # 💡 우리가 만든 진짜 Agno 에이전트 모듈 임포트
 # (선생님이 지정하신 agents/nodes/tripletagents/ 경로 기준)
 from agents.nodes.tripletagents.quant_credit_agent import build_quant_agent_output
-from agents.nodes.tripletagents.evidence_audit_agent import build_evidence_agent_output
-from agents.nodes.tripletagents.chair_report_agent import build_chair_agent_output
+
+from cas.agents.state import AgentState, AuditEntry, CommitteeReview
+
 
 def run(state: AgentState) -> dict[str, Any]:
     """Agno 기반 3인 위원회를 순차적으로 실행하여 최종 결과를 도출합니다."""
-    
     # 1. 1단계 모델 예측 결과 및 초기 상태 확보
     xgb_result = dict(state.get("xgboost_result") or {})
     recommendation = state.get("final_recommendation", "review")
@@ -26,7 +28,7 @@ def run(state: AgentState) -> dict[str, Any]:
     # ==========================================
     # 2. 에이전트 순차 실행 (Sequential Execution)
     # ==========================================
-    
+
     # [Step 1] 재무/정량 분석가 실행
     quant_agent_output = build_quant_agent_output(state, xgb_result)
     print(f"✅ QuantCreditAgent 심사 완료 (위험도: {quant_agent_output.confidence:.2f})")
@@ -39,7 +41,7 @@ def run(state: AgentState) -> dict[str, Any]:
     # state 버스에 임시로 두 에이전트의 결과를 싣고 의장에게 넘깁니다.
     state["agent_outputs"] = [quant_agent_output, evidence_agent_output]
     chair_agent_output = build_chair_agent_output(state, xgb_result)
-    print(f"✅ ChairReportAgent 최종 심의 완료\n")
+    print("✅ ChairReportAgent 최종 심의 완료\n")
 
     # ==========================================
     # 3. 결과물 패키징 및 State 반환
@@ -90,6 +92,7 @@ def run(state: AgentState) -> dict[str, Any]:
         "agent_summary": agent_summary,
         "audit": [audit],
     }
+
 
 def _now() -> str:
     return datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z")
