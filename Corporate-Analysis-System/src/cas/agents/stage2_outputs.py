@@ -1,4 +1,5 @@
 """Agent-specific Stage 2 output schemas."""
+
 from __future__ import annotations
 
 from typing import Literal

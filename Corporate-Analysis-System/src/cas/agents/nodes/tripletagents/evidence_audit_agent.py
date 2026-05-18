@@ -13,6 +13,7 @@ from cas.agents.state import AgentOutput, AgentState
 # ==========================================
 class EvidenceAuditOutput(BaseModel):
     """외부 리스크 분석 에이전트의 출력 스키마입니다."""
+
     macro_environmental_impact: str = Field(
         description="거시경제 및 시장 환경이 기업에 미칠 타격 분석 (2~3문장)"
     )

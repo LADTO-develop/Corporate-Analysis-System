@@ -12,6 +12,7 @@ from cas.agents.state import AgentOutput, AgentState
 # ==========================================
 class QuantCreditOutput(BaseModel):
     """내부 재무 분석 에이전트의 출력 스키마입니다."""
+
     quantitative_interpretation: str = Field(
         description="XGBoost 예측 확률, SHAP 주요 변수, 산업/시장 평균 비교를 바탕으로 모델의 원판단 논리 요약"
     )
