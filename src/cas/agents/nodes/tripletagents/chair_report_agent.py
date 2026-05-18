@@ -25,9 +25,7 @@ class AgnoChairReportResponse(BaseModel):
     conflict_resolution: str = Field(
         description="How conflicts between model view and external evidence are resolved."
     )
-    executive_summary: str = Field(
-        description="Final executive summary for the committee report."
-    )
+    executive_summary: str = Field(description="Final executive summary for the committee report.")
 
 
 def run_chair_report_agent(
