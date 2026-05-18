@@ -1,4 +1,4 @@
-"""Convenience launcher for the credit risk Streamlit dashboard."""
+"""Compatibility wrapper for the operational Streamlit dashboard launcher."""
 
 from __future__ import annotations
 
@@ -7,20 +7,15 @@ from pathlib import Path
 
 
 def main() -> None:
-    """Run the credit risk dashboard with Streamlit if available."""
-    try:
-        from streamlit.web import cli as stcli
-    except ImportError as error:
-        message = (
-            "Streamlit is not installed in the current environment. "
-            "Install it first, then rerun this script.\n"
-            'Recommended command: python -m pip install -e ".[dashboard]"'
-        )
-        raise SystemExit(message) from error
+    """Run the operational dashboard launcher from a source checkout."""
+    root = Path(__file__).resolve().parents[1]
+    src_path = root / "src"
+    if str(src_path) not in sys.path:
+        sys.path.insert(0, str(src_path))
 
-    app_path = Path(__file__).resolve().parents[1] / "src" / "cas" / "dashboard" / "credit_app.py"
-    sys.argv = ["streamlit", "run", str(app_path)]
-    sys.exit(stcli.main())
+    from cas.dashboard.launcher import main as launcher_main
+
+    launcher_main()
 
 
 if __name__ == "__main__":

@@ -326,6 +326,7 @@ def _stage2_runner() -> Stage2AgentRunner:
             deterministic_runner=deterministic_runner,
             model_name=os.environ.get("CAS_STAGE2_MODEL", "claude-sonnet-4-5-20250929"),
             max_tokens=_stage2_max_tokens(),
+            fallback_on_error=_stage2_fallback_on_error(),
         )
     raise ValueError(
         f"Unsupported CAS_STAGE2_RUNNER value. Use 'deterministic' or 'agno', got {runner_name!r}."
@@ -345,6 +346,11 @@ def _stage2_runner_name() -> str:
     ).strip().lower() not in {"1", "true", "yes", "on"}:
         return "deterministic"
     return os.environ.get("CAS_STAGE2_RUNNER", "deterministic").strip().lower()
+
+
+def _stage2_fallback_on_error() -> bool:
+    value = os.environ.get("CAS_STAGE2_FALLBACK_ON_ERROR", "1").strip().lower()
+    return value not in {"0", "false", "no", "off"}
 
 
 def _quant_credit_agent(bundle: Stage2InputBundle) -> QuantCreditOutput:

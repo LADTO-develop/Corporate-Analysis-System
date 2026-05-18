@@ -24,21 +24,29 @@
 cd Corporate-Analysis-System
 ```
 
-대시보드 입력 파일 생성:
-
-```bash
-/opt/anaconda3/envs/aura/bin/python scripts/export_feature_43_dashboard_artifacts.py
-```
-
-대시보드 실행:
+운영형 실행:
 
 ```bash
 /opt/anaconda3/envs/aura/bin/python scripts/run_credit_dashboard.py
 ```
 
+위 명령은 `data/outputs/dashboard/feature_43_mvp` 아래의 대시보드 입력 파일이
+없으면 먼저 생성한 뒤 Streamlit을 실행합니다. 산출물을 강제로 다시 만들고 싶으면
+다음처럼 실행합니다.
+
+```bash
+/opt/anaconda3/envs/aura/bin/python scripts/run_credit_dashboard.py --rebuild-artifacts
+```
+
 실행 후 브라우저에서 아래와 같은 로컬 주소로 접속하면 됩니다.
 - `http://localhost:8501`
 - 실제 포트는 실행 시점에 따라 달라질 수 있습니다.
+
+패키지를 editable로 설치한 환경에서는 같은 launcher를 콘솔 명령으로도 실행할 수 있습니다.
+
+```bash
+cas-dashboard
+```
 
 ## 주요 파일 위치
 
@@ -64,6 +72,10 @@ cd Corporate-Analysis-System
   - 예측 라벨
   - 위험 밴드
   - 핵심 지표
+- `위원회 검토`
+  - 1차 모델 판단과 2차 위원회 판단 비교
+  - 외부 근거, 위험 요인, 완화 요인 확인
+  - API 키 없이 위원회 검토 Markdown 보고서 다운로드
 - `AI 심사 요약`
   - OpenAI API 기반 심사 메모 생성
   - HTML/Markdown 다운로드
@@ -93,6 +105,7 @@ cd Corporate-Analysis-System
 
 ## 추천 사용 순서
 1. 저장소 `pull`
-2. `export_feature_43_dashboard_artifacts.py` 실행
-3. `run_credit_dashboard.py` 실행
-4. 브라우저에서 로컬 주소 접속
+2. `run_credit_dashboard.py` 실행
+3. 브라우저에서 로컬 주소 접속
+4. 사이드바에서 기업 검색/필터 후 리스팅된 기업 선택
+5. `위원회 검토` 탭에서 Markdown 보고서를 다운로드하거나, API 키가 있으면 `AI 심사 요약` 탭에서 AI 보고서를 생성

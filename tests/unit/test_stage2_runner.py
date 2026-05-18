@@ -4,6 +4,9 @@ from __future__ import annotations
 
 from typing import Any
 
+import pytest
+
+from cas.agents import stage2_runner as stage2_runner_module
 from cas.agents.stage2_bundle import build_stage2_input_bundle
 from cas.agents.stage2_outputs import (
     ChairReportOutput,
@@ -135,6 +138,88 @@ def test_agno_stage2_runner_accepts_structured_llm_client() -> None:
     assert outputs[0].quant_summary == "LLM 정량 요약"
 
 
+def test_agno_stage2_runner_uses_triplet_agents(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fake_triplet_agents(**kwargs: Any) -> Stage2LLMResponse:
+        assert kwargs["model_name"] == "claude-sonnet"
+        return Stage2LLMResponse(
+            quant_credit=QuantCreditOutput(
+                quant_summary="Triplet quant summary",
+                model_rationale="Triplet model rationale",
+                key_risk_factors=["Triplet risk"],
+                mitigating_factors=["Triplet mitigation"],
+                confidence=0.77,
+            ),
+            evidence_audit=EvidenceAuditOutput(
+                evidence_summary="Triplet evidence summary",
+                evidence_status="ready",
+                evidence_reliability="Triplet reliability",
+                evidence_strength="moderate",
+                model_challenge="Triplet challenge",
+                audit_conclusion="Triplet conclusion",
+                debt_liquidity_cross_check=["Triplet debt check"],
+                macro_industry_sensitivity=["Triplet macro check"],
+                external_evidence_findings=["Triplet evidence"],
+                confidence=0.72,
+            ),
+            chair_report=ChairReportOutput(
+                report_summary="Triplet chair summary",
+                model_preservation_note="Triplet model preservation",
+                committee_scope_note="Triplet scope",
+                final_review_memo_seed="Triplet memo",
+                confidence=0.74,
+            ),
+        )
+
+    monkeypatch.setattr(
+        stage2_runner_module,
+        "_run_triplet_agents_with_agno",
+        fake_triplet_agents,
+    )
+    runner = AgnoStage2AgentRunner(
+        deterministic_runner=_deterministic_runner(),
+        model_name="claude-sonnet",
+    )
+
+    outputs = runner.run(
+        bundle=build_stage2_input_bundle(_minimal_state()),
+        recommendation="review",
+        confidence=0.7,
+    )
+
+    assert runner.last_run_backend_name == "agno"
+    assert outputs[0].quant_summary == "Triplet quant summary"
+    assert outputs[2].report_summary == "Triplet chair summary"
+
+
+def test_agno_stage2_runner_falls_back_when_triplet_agents_fail(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fail_triplet_agents(**_kwargs: Any) -> Stage2LLMResponse:
+        raise RuntimeError("missing agno runtime")
+
+    monkeypatch.setattr(
+        stage2_runner_module,
+        "_run_triplet_agents_with_agno",
+        fail_triplet_agents,
+    )
+    runner = AgnoStage2AgentRunner(
+        deterministic_runner=_deterministic_runner(),
+        model_name="claude-sonnet",
+    )
+
+    outputs = runner.run(
+        bundle=build_stage2_input_bundle(_minimal_state()),
+        recommendation="review",
+        confidence=0.7,
+    )
+
+    assert runner.last_run_backend_name == "agno_fallback_deterministic"
+    assert "missing agno runtime" in runner.last_error_message
+    assert outputs[0].role == "quant_credit"
+
+
 def test_agno_stage2_runner_falls_back_to_deterministic_runner_on_error() -> None:
     runner = AgnoStage2AgentRunner(
         deterministic_runner=_deterministic_runner(),
@@ -151,6 +236,22 @@ def test_agno_stage2_runner_falls_back_to_deterministic_runner_on_error() -> Non
     assert runner.last_run_backend_name == "agno_fallback_deterministic"
     assert "temporary LLM outage" in runner.last_error_message
     assert outputs[0].quant_summary == "정량 요약"
+
+
+def test_agno_stage2_runner_raises_when_fallback_is_disabled() -> None:
+    runner = AgnoStage2AgentRunner(
+        deterministic_runner=_deterministic_runner(),
+        llm_client=_FailingStage2LLMClient(),
+        model_name="claude-sonnet",
+        fallback_on_error=False,
+    )
+
+    with pytest.raises(RuntimeError, match="temporary LLM outage"):
+        runner.run(
+            bundle=build_stage2_input_bundle(_minimal_state()),
+            recommendation="review",
+            confidence=0.7,
+        )
 
 
 def _deterministic_runner() -> DeterministicStage2AgentRunner:

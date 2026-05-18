@@ -8,6 +8,8 @@ from dataclasses import dataclass
 import pandas as pd
 import streamlit as st
 
+from cas.dashboard.streamlit_compat import stretch_dataframe
+
 EXTERNAL_EVIDENCE_STATUS_LABELS = {
     "not_requested": "아직 수집하지 않음",
     "ready": "수집 완료",
@@ -132,10 +134,9 @@ def render_external_evidence_items(
         ]
         if include_summary:
             display_columns.insert(-1, "요약")
-        st.dataframe(
+        stretch_dataframe(
             evidence_frame.loc[:, display_columns],
             hide_index=True,
-            width="stretch",
             column_config={
                 "제목/공시명": st.column_config.TextColumn("제목/공시명", width="large"),
                 "요약": st.column_config.TextColumn("요약", width="large"),
