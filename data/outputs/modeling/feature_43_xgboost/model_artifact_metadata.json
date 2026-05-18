@@ -130,7 +130,7 @@
     "industry_macro_category_wholesale_retail": 0.0
   },
   "threshold_default": 0.5,
-  "threshold_tuned": 0.315,
+  "threshold_tuned": 0.325,
   "threshold_selection_rule": "valid_max_precision_with_recall_ge_0.85",
   "threshold_recall_floor": 0.85,
   "probability_output": "calibrated_probability",
@@ -138,26 +138,26 @@
     "method": "platt_sigmoid",
     "fit_split": "valid",
     "input": "xgboost_probability_logit",
-    "coef": 0.8253650698825209,
-    "intercept": -0.8080086323675747,
+    "coef": 0.9901848724198378,
+    "intercept": -0.934499895637178,
     "clip_epsilon": 1e-06,
     "probability_output": "calibrated_probability",
     "valid": {
-      "brier_raw": 0.1058461191654009,
-      "brier_calibrated": 0.0944402621774703,
-      "logloss_raw": 0.336606073516699,
-      "logloss_calibrated": 0.2991601301043383
+      "brier_raw": 0.11147426813840866,
+      "brier_calibrated": 0.09663118206040361,
+      "logloss_raw": 0.34846370997842513,
+      "logloss_calibrated": 0.3044208120925921
     },
     "test": {
-      "brier_raw": 0.11845694202942965,
-      "brier_calibrated": 0.10178817168439046,
-      "logloss_raw": 0.3719453511720213,
-      "logloss_calibrated": 0.3210880399888357
+      "brier_raw": 0.12609723210334778,
+      "brier_calibrated": 0.1039427262325995,
+      "logloss_raw": 0.3875459030220733,
+      "logloss_calibrated": 0.32773018750527266
     },
     "note": "XGBoost raw probabilities are transformed with a validation-fitted Platt sigmoid before being shown as prob_speculative."
   },
-  "best_iteration": 332,
-  "best_score": 0.8151718010038821,
+  "best_iteration": 153,
+  "best_score": 0.8111194190685959,
   "saved_files": [
     "xgboost_model.json",
     "model_artifact_metadata.json"
