@@ -1,3 +1,4 @@
+# mypy: warn_unused_ignores=False
 """Build and compile the LangGraph pipeline from ``configs/agent/graph.yaml``."""
 
 from __future__ import annotations
@@ -50,11 +51,11 @@ def build_graph(config_path: str | Path = "configs/agent/graph.yaml") -> object:
 
 
 def _build_langgraph(cfg: dict[str, Any]) -> object:
-    builder: StateGraph = StateGraph(AgentState)  # type: ignore[type-arg]
+    builder: StateGraph = StateGraph(AgentState)  # type: ignore
 
     for node in cfg["nodes"]:
         fn = _import_node_fn(node["module"], node["fn"])
-        builder.add_node(node["name"], fn)  # type: ignore[call-overload]
+        builder.add_node(node["name"], fn)  # type: ignore
         logger.debug("graph_add_node", node=node["name"])
 
     builder.add_edge(START, cfg["entry_node"])

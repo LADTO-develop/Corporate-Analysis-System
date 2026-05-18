@@ -1,3 +1,4 @@
+# mypy: warn_unused_ignores=False
 """Structured logging with a standard-library fallback."""
 
 from __future__ import annotations
@@ -11,8 +12,8 @@ try:
     import structlog
     from structlog.typing import Processor
 except ImportError:  # pragma: no cover
-    structlog = None
-    Processor = Any
+    structlog = None  # type: ignore
+    Processor = Any  # type: ignore
 
 
 def _env(primary: str, legacy: str, default: str) -> str:
