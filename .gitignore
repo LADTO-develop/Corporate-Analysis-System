@@ -71,7 +71,7 @@ lightning_logs/
 wandb/
 
 # --- Hydra / experiment output --------------------------------------------
-outputs/
+/outputs/
 !data/outputs/
 data/outputs/**
 !data/outputs/README.md

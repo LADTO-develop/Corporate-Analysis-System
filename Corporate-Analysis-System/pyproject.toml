@@ -1,0 +1,129 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "corporate-analysis-system"
+version = "0.1.0"
+description = "LangGraph-based corporate investment suitability analysis system."
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+license = { text = "Apache-2.0" }
+authors = [{ name = "Corporate Analysis System" }]
+keywords = ["corporate-analysis", "investment-review", "langgraph", "workflow"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3.12",
+    "License :: OSI Approved :: Apache Software License",
+]
+dependencies = [
+    "langgraph>=0.2.60,<0.3",
+    "pandas>=2.2.0,<2.3",
+    "numpy>=1.26,<2.2",
+    "pyarrow>=15.0.0,<20.0.0",
+    "pydantic>=2.7.0,<3.0.0",
+    "PyYAML>=6.0.1,<7.0.0",
+    "python-dotenv>=1.0.0,<2.0.0",
+    "requests>=2.32.0,<3.0.0",
+    "structlog>=24.1.0,<26.0.0",
+    "rich>=13.7.0,<14.0.0",
+    "xgboost>=2.1.0,<3.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.5.0,<0.12",
+    "mypy>=1.10.0,<1.16",
+    "pytest>=8.2.0,<9.0.0",
+    "pytest-cov>=5.0.0,<7.0.0",
+    "pre-commit>=3.7.0,<5.0.0",
+    "ipykernel>=6.29.0,<7.0.0",
+    "types-PyYAML>=6.0.12,<7.0.0",
+]
+viz = [
+    "matplotlib>=3.9.0,<3.11",
+    "plotly>=5.22.0,<6.0.0",
+]
+dashboard = [
+    "altair>=5.4.0,<6.0.0",
+    "shap>=0.46.0,<0.50.0",
+    "streamlit>=1.40.0,<2.0.0",
+]
+ml = [
+    "scikit-learn>=1.5.0,<1.8.0",
+]
+agent = [
+    "agno>=2.0.0",
+    "anthropic>=0.60.0",
+]
+
+[project.urls]
+Repository = "https://github.com/LADTO-develop/Corporate-Analysis-System"
+Issues = "https://github.com/LADTO-develop/Corporate-Analysis-System/issues"
+
+[project.scripts]
+cas-agent = "cas.cli:main"
+corporate-analysis-agent = "cas.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/cas"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests", "scripts"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "SIM", "RUF", "ANN", "D"]
+ignore = ["D100", "D104", "D107", "E501"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["D", "ANN"]
+"scripts/**/*.py" = ["D"]
+"src/cas/agents/graph.py" = ["ANN401"]
+"src/cas/agents/nodes/feature_node.py" = ["ANN401"]
+"src/cas/utils/io.py" = ["ANN401"]
+"src/cas/utils/logging.py" = ["ANN401"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+plugins = ["pydantic.mypy"]
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+ignore_missing_imports = true
+namespace_packages = true
+explicit_package_bases = true
+
+[[tool.mypy.overrides]]
+module = ["langgraph.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["requests", "requests.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers --strict-config"
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests that exercise the end-to-end pipeline",
+]
+
+[tool.coverage.run]
+source = ["src/cas"]
+branch = true
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+    "if __name__ == .__main__.:",
+]
