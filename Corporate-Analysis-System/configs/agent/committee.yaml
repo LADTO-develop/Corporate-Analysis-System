@@ -1,0 +1,67 @@
+aggregation:
+  confidence_gap: 0.12
+  recommendation_thresholds:
+    priority: 0.75
+    watch: 0.60
+    review: 0.45
+
+veto_rules:
+  enabled: true
+  triggered_label: "부적격"
+  honor_news_cache_critical_risk: true
+  external_veto_requires_company_match: true
+  external_veto_min_confirming_items: 2
+  external_veto_min_confirming_sources: 2
+  external_veto_min_high_reliability_items: 1
+  external_veto_high_reliability_sources:
+    - "opendart"
+  external_veto_high_reliability_levels:
+    - "high"
+  blocking_flag_markers:
+    - "critical"
+    - "veto"
+    - "delisting"
+    - "fraud"
+    - "횡령"
+    - "배임"
+    - "상장폐지"
+    - "감사의견 거절"
+    - "감사의견거절"
+  external_evidence_terms:
+    - "횡령"
+    - "배임"
+    - "감사의견 거절"
+    - "상장폐지"
+    - "거래정지"
+    - "회생절차"
+    - "부도"
+    - "대규모 소송"
+    - "자본잠식"
+    - "delisting"
+    - "fraud"
+    - "embezzlement"
+
+agents:
+  - kind: "quant_credit"
+    display_name: "QuantCreditAgent"
+    role: "XGBoost 결과, SHAP, 핵심 재무지표, 산업/시장 비교를 해석한다."
+    output_focus:
+      - model_rationale
+      - key_risk_drivers
+      - mitigating_factors
+  - kind: "evidence_audit"
+    display_name: "EvidenceAuditAgent"
+    role: "뉴스, 공시, 거시환경, 산업 맥락, 부채/유동성 신호를 결합해 숨은 꼬리 위험을 검증한다."
+    output_focus:
+      - evidence_reliability
+      - hidden_tail_risk
+      - fn_supplement_flag
+      - macro_industry_sensitivity
+      - debt_liquidity_cross_check
+  - kind: "chair_report"
+    display_name: "ChairReportAgent"
+    role: "정량 해석과 검증 근거를 종합해 committee_view와 최종 보고서 메모를 작성한다."
+    output_focus:
+      - committee_label
+      - risk_and_mitigation_summary
+      - final_review_memo
