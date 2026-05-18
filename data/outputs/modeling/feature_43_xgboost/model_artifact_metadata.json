@@ -143,13 +143,13 @@
     "clip_epsilon": 1e-06,
     "probability_output": "calibrated_probability",
     "valid": {
-      "brier_raw": 0.11147426813840866,
+      "brier_raw": 0.11147427117280483,
       "brier_calibrated": 0.09663118206040361,
       "logloss_raw": 0.34846370997842513,
       "logloss_calibrated": 0.3044208120925921
     },
     "test": {
-      "brier_raw": 0.12609723210334778,
+      "brier_raw": 0.12609723367215636,
       "brier_calibrated": 0.1039427262325995,
       "logloss_raw": 0.3875459030220733,
       "logloss_calibrated": 0.32773018750527266
