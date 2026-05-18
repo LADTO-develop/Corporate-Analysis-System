@@ -215,6 +215,7 @@ def _build_prompt_payload(
             "Treat external items with company_match=false as weak/indirect evidence.",
             "Use evidence_quality, evidence_score, and verification_flags when judging news strength.",
             "Do not describe critical_terms as confirmed events unless veto_candidate=true or veto_triggered=true.",
+            "Use hidden_tail_risk_flag when direct, verified external adverse evidence challenges an eligible model decision.",
             "If direct_match_count is positive, do not claim all external evidence lacks company relevance.",
             "EvidenceAuditAgent must state evidence_strength, model_challenge, and audit_conclusion.",
             "Keep all confidence values between 0 and 1.",

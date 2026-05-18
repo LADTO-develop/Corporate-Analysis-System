@@ -70,6 +70,7 @@ STAGE2_AGENT_SPECS: tuple[Stage2AgentSpec, ...] = (
         output_fields=(
             "evidence_reliability",
             "hidden_tail_risk",
+            "fn_supplement_flag",
             "debt_liquidity_cross_check",
             "macro_industry_sensitivity",
             "confidence",
@@ -96,6 +97,8 @@ STAGE2_AGENT_SPECS: tuple[Stage2AgentSpec, ...] = (
         output_fields=(
             "final_committee_label",
             "veto_triggered",
+            "hidden_tail_risk_flag",
+            "hidden_tail_risk_reason",
             "conflict_resolution",
             "key_risk_factors",
             "mitigating_factors",

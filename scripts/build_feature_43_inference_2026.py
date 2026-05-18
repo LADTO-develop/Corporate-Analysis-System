@@ -11,6 +11,7 @@ INPUT_DIR = ROOT / "data" / "input" / "credit_43_features"
 FEATURE_MASTER_PATH = INPUT_DIR / "feature_43_master.csv"
 FEATURE_SPEC_PATH = INPUT_DIR / "feature_43_list.json"
 CANONICAL_INFERENCE_PATH = INPUT_DIR / "feature_43_inference_2026.csv"
+INFERENCE_AUX_PATH = ROOT / "data" / "raw" / "ts2000" / "feature_43_inference_2026_aux.csv"
 
 
 def parse_args() -> argparse.Namespace:
@@ -45,6 +46,75 @@ def load_expected_columns() -> tuple[list[str], list[str]]:
         )
 
     return expected_columns, model_features
+
+
+def repair_inference_frame(
+    frame: pd.DataFrame,
+    *,
+    model_features: list[str],
+) -> tuple[pd.DataFrame, dict[str, int]]:
+    """Repair placeholder inference fields from the CAS-internal 2025 auxiliary source."""
+    repaired = frame.copy()
+    stats = {
+        "firm_size_rows_repaired": 0,
+        "market_to_book_rows_repaired": 0,
+        "market_to_book_rows_set_missing": 0,
+    }
+    if not INFERENCE_AUX_PATH.exists():
+        return repaired, stats
+
+    aux = pd.read_csv(INFERENCE_AUX_PATH, encoding="utf-8-sig", dtype={"stock_code": "string"})
+    aux["stock_code"] = normalize_stock_code(aux["stock_code"])
+    repaired["stock_code"] = normalize_stock_code(repaired["stock_code"])
+    merge_columns = [
+        "market",
+        "stock_code",
+        "fiscal_year",
+        "firm_size_group_source",
+        "market_to_book_source",
+    ]
+    merged = repaired.merge(
+        aux[merge_columns],
+        on=["market", "stock_code", "fiscal_year"],
+        how="left",
+    )
+
+    source_size = merged["firm_size_group_source"].astype("string")
+    valid_size = (source_size.notna() & source_size.ne("") & source_size.ne("<NA>")).fillna(False)
+    before_size = repaired["firm_size_group"].astype("string")
+    repaired.loc[valid_size, "firm_size_group"] = source_size.loc[valid_size]
+    stats["firm_size_rows_repaired"] = int((valid_size & before_size.ne(source_size)).sum())
+    for feature in [name for name in model_features if name.startswith("firm_size_group_")]:
+        category = feature.removeprefix("firm_size_group_")
+        repaired[feature] = (repaired["firm_size_group"].astype(str) == category).astype(int)
+
+    source_market_to_book = pd.to_numeric(merged["market_to_book_source"], errors="coerce")
+    current_market_to_book = pd.to_numeric(repaired["market_to_book"], errors="coerce")
+    placeholder_all_zero = bool(
+        current_market_to_book.notna().any() and current_market_to_book.fillna(0).eq(0).all()
+    )
+    if placeholder_all_zero:
+        repaired["market_to_book"] = source_market_to_book
+        stats["market_to_book_rows_repaired"] = int(source_market_to_book.notna().sum())
+        stats["market_to_book_rows_set_missing"] = int(source_market_to_book.isna().sum())
+    else:
+        missing_market_to_book = current_market_to_book.isna()
+        fill_mask = missing_market_to_book & source_market_to_book.notna()
+        repaired.loc[fill_mask, "market_to_book"] = source_market_to_book.loc[fill_mask]
+        stats["market_to_book_rows_repaired"] = int(fill_mask.sum())
+
+    return repaired, stats
+
+
+def normalize_stock_code(series: pd.Series) -> pd.Series:
+    text = (
+        series.astype("string")
+        .fillna("")
+        .str.replace("\ufeff", "", regex=False)
+        .str.strip()
+        .str.replace(r"\.0+$", "", regex=True)
+    )
+    return text.where(text == "", text.str.zfill(6))
 
 
 def validate_inference_frame(
@@ -103,6 +173,10 @@ def main() -> None:
     args = parse_args()
     expected_columns, model_features = load_expected_columns()
     inference = pd.read_csv(args.source, encoding="utf-8-sig")
+    inference, repair_stats = repair_inference_frame(
+        inference,
+        model_features=model_features,
+    )
     validate_inference_frame(
         inference,
         expected_columns=expected_columns,
@@ -117,6 +191,13 @@ def main() -> None:
 
     action = "Checked" if args.check_only else "Saved"
     print(f"[{action}] {args.output} ({len(ordered):,} rows)")
+    if INFERENCE_AUX_PATH.exists():
+        print(
+            "[Repair] "
+            f"firm_size={repair_stats['firm_size_rows_repaired']:,}, "
+            f"market_to_book={repair_stats['market_to_book_rows_repaired']:,}, "
+            f"market_to_book_missing={repair_stats['market_to_book_rows_set_missing']:,}"
+        )
     print(
         ordered[["market", "stock_code", "corp_name", "fiscal_year", "eval_year"]]
         .head()

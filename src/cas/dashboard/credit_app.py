@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import re
 from collections.abc import Callable
+from datetime import date
 from html import escape
 from pathlib import Path
 from typing import cast
@@ -12,14 +13,26 @@ from typing import cast
 import altair as alt
 import pandas as pd
 import streamlit as st
+from dotenv import load_dotenv
 
 from cas.agents.contracts import build_company_selection_from_row
+from cas.agents.nodes import committee_node, rule_engine_node
+from cas.agents.state import AgentState
 from cas.dashboard.data_loader import (
     TEAM43_ARTIFACT_DIR,
     DashboardArtifacts,
     load_dashboard_artifacts,
 )
+from cas.dashboard.evidence_panel import (
+    EvidencePanelColors,
+    EvidencePanelRenderers,
+    dashboard_veto_status_label,
+    external_veto_candidate_count,
+    render_external_evidence_items,
+    render_external_evidence_judgment,
+)
 from cas.dashboard.llm import generate_llm_explanation
+from cas.evidence import collect_external_evidence
 
 MARKET_LABELS = {
     "KOSPI": "코스피",
@@ -45,6 +58,19 @@ INDUSTRY_LABELS = {
 PREDICTION_LABELS = {
     0: "투자적격",
     1: "투기등급",
+}
+
+STAGE2_RISK_BAND_LABELS = {
+    "stable": "안정",
+    "watch": "관찰",
+    "high_risk": "고위험",
+    "insufficient_data": "데이터 부족",
+}
+
+STAGE2_AGENT_ROLE_LABELS = {
+    "quant_credit": "QuantCreditAgent",
+    "evidence_audit": "EvidenceAuditAgent",
+    "chair_report": "ChairReportAgent",
 }
 
 PREFERRED_DEFAULT_COMPANIES = [
@@ -106,6 +132,12 @@ LLM_OUTPUT_FORMATS = {
     "brief": "간단 요약",
     "memo": "기본 심사 메모",
     "detailed": "상세 보고서형",
+}
+
+OUTPUT_FORMAT_DESCRIPTIONS = {
+    "brief": "핵심 판단과 주요 근거만 빠르게 읽는 형식입니다.",
+    "memo": "판단 차이, 위험/완화 요인, 근거 요약을 균형 있게 보여주는 기본 형식입니다.",
+    "detailed": "에이전트별 검토, 규칙 기반 판단 근거, 1차 모델 세부 항목까지 함께 확인하는 상세 형식입니다.",
 }
 
 MONEY_DISPLAY_MODES = {
@@ -178,6 +210,26 @@ def to_prediction_label(value: object) -> str:
         return PREDICTION_LABELS.get(int(float(str(value))), str(value))
     except (TypeError, ValueError):
         return str(value)
+
+
+def to_stage2_model_label(value: object) -> str:
+    """Convert dashboard prediction labels into the Stage 2 model_view label space."""
+    label = to_prediction_label(value)
+    if label in {"투기등급", "부적격"}:
+        return "부적격"
+    if label in {"투자적격", "적격"}:
+        return "투자적격"
+    return label
+
+
+def to_committee_base_label(model_label: object) -> str:
+    """Map a binary Stage 1 model label onto the committee label space."""
+    label = str(model_label)
+    if label == "투자적격":
+        return "적격"
+    if label in {"투기등급", "부적격"}:
+        return "부적격"
+    return "보류"
 
 
 def pick_selected_company(artifacts: DashboardArtifacts) -> pd.Series:
@@ -327,6 +379,584 @@ def resolve_company_prediction(
     if matched.empty:
         return None
     return matched.iloc[0]
+
+
+def _clean_dashboard_value(value: object) -> object:
+    """Convert pandas/numpy scalars into plain values for Stage 2 payloads."""
+    if isinstance(value, dict):
+        return {str(key): _clean_dashboard_value(item) for key, item in value.items()}
+    if isinstance(value, list | tuple):
+        return [_clean_dashboard_value(item) for item in value]
+    if value is None:
+        return None
+    if isinstance(value, pd.Timestamp):
+        return value.isoformat()
+    if hasattr(value, "item") and not isinstance(value, str):
+        try:
+            return _clean_dashboard_value(value.item())
+        except (AttributeError, TypeError, ValueError):
+            pass
+    try:
+        if pd.isna(value):
+            return None
+    except (TypeError, ValueError):
+        return value
+    return value
+
+
+def _optional_float(value: object, *, default: float = 0.0) -> float:
+    """Return a safe float from dashboard artifacts."""
+    cleaned = _clean_dashboard_value(value)
+    if cleaned is None:
+        return default
+    try:
+        return float(str(cleaned))
+    except (TypeError, ValueError):
+        return default
+
+
+def _optional_int(value: object) -> int | None:
+    """Return a safe int from dashboard artifacts."""
+    cleaned = _clean_dashboard_value(value)
+    if cleaned is None:
+        return None
+    try:
+        return int(float(str(cleaned)))
+    except (TypeError, ValueError):
+        return None
+
+
+def _optional_bool(value: object, *, default: bool = False) -> bool:
+    """Return a safe bool from dashboard artifacts."""
+    cleaned = _clean_dashboard_value(value)
+    if cleaned is None:
+        return default
+    if isinstance(cleaned, bool):
+        return cleaned
+    if isinstance(cleaned, int | float):
+        return bool(cleaned)
+    text = str(cleaned).strip().lower()
+    if text in {"1", "true", "yes", "y", "on"}:
+        return True
+    if text in {"0", "false", "no", "n", "off"}:
+        return False
+    return default
+
+
+def _stock_code_text(value: object) -> str:
+    """Normalize stock code text while preserving leading zeroes."""
+    cleaned = _clean_dashboard_value(value)
+    text = str(cleaned or "").strip()
+    if text.endswith(".0"):
+        text = text.removesuffix(".0")
+    return text.zfill(6) if text.isdigit() else text
+
+
+def _optional_text(value: object) -> str | None:
+    """Return a clean optional text value."""
+    cleaned = _clean_dashboard_value(value)
+    if cleaned is None:
+        return None
+    text = str(cleaned).strip()
+    return text or None
+
+
+def _series_record(row: pd.Series) -> dict[str, object]:
+    """Convert a pandas row into a plain dict for the Stage 2 state."""
+    return {str(key): _clean_dashboard_value(value) for key, value in row.to_dict().items()}
+
+
+def _frame_records(frame: pd.DataFrame) -> list[dict[str, object]]:
+    """Convert a dataframe into plain records for the Stage 2 state."""
+    if frame.empty:
+        return []
+    records: list[dict[str, object]] = []
+    for record in frame.to_dict(orient="records"):
+        records.append({str(key): _clean_dashboard_value(value) for key, value in record.items()})
+    return records
+
+
+def _as_plain_dict(value: object) -> dict[str, object]:
+    """Return a plain dict when Streamlit context values are nested mappings."""
+    if isinstance(value, dict):
+        return dict(value)
+    return {}
+
+
+def _as_text_list(value: object) -> list[str]:
+    """Return a list of non-empty display strings."""
+    if not isinstance(value, list | tuple):
+        return []
+    return [str(item) for item in value if str(item).strip()]
+
+
+def _friendly_committee_text(
+    value: object,
+    feature_map: pd.DataFrame | None = None,
+) -> str:
+    """Make deterministic committee text easier to read in the dashboard."""
+    text = str(value or "").strip()
+    if not text:
+        return ""
+
+    replacements = {
+        "모델 원판단": "1차 모델 판단",
+        "위원회 라벨": "2차 위원회 판단",
+        "Stage 2는": "2차 검토는",
+        "정량 해석, 부채/유동성 교차 검증, 외부 근거 상태": "모델 해석, 부채·유동성 점검, 외부 근거",
+        "부채 및 유동성 지표는 현재 투자적격 판단에 일부 완충 근거를 제공합니다.": (
+            "부채와 유동성 지표는 현재 판단을 뒷받침하는 완충 근거로 보입니다."
+        ),
+        "적격로": "적격으로",
+        "부적격로": "부적격으로",
+    }
+    for source, target in replacements.items():
+        text = text.replace(source, target)
+
+    text = re.sub(
+        r"(.+?)이\(가\) 현재 모델에서 위험을 높이는 방향으로 작용했습니다\.",
+        r"\1 항목은 모델에서 위험을 높이는 신호로 잡혔습니다.",
+        text,
+    )
+    text = re.sub(
+        r"(.+?)이\(가\) 현재 모델에서 위험을 낮추는 방향으로 작용했습니다\.",
+        r"\1 항목은 모델에서 위험을 낮추는 신호로 잡혔습니다.",
+        text,
+    )
+    text = text.replace("산업 중앙값은", "같은 산업의 중앙값은")
+    text = text.replace("시장 중앙값은", "같은 시장의 중앙값은")
+    text = text.replace("입니다 시장", "이고, 시장")
+    text = text.replace("입니다 같은 시장", "이고, 같은 시장")
+    text = text.replace("산업 내 위치는", "산업 안에서의 위치는")
+    text = text.replace("입니다 산업 안에서의 위치는", "이며, 산업 안에서의 위치는")
+    text = _format_committee_feature_values(text, feature_map)
+    text = _format_committee_percentile_phrases(text)
+    text = text.replace("입니다..", "입니다.")
+    return text
+
+
+def _friendly_committee_items(
+    items: list[str],
+    feature_map: pd.DataFrame | None = None,
+) -> list[str]:
+    """Split and polish committee bullets for user-facing display."""
+    friendly_items: list[str] = []
+    for item in items:
+        parts = [part.strip() for part in str(item).split(" / ") if part.strip()]
+        for part in parts or [item]:
+            friendly_text = _friendly_committee_text(part, feature_map)
+            if friendly_text:
+                friendly_items.append(friendly_text)
+    return friendly_items
+
+
+def _format_committee_feature_values(
+    text: str,
+    feature_map: pd.DataFrame | None,
+) -> str:
+    """Format numbers embedded in committee sentences using dashboard unit settings."""
+    if feature_map is None or feature_map.empty:
+        return text
+    required_columns = {"feature", "korean_name", "unit"}
+    if not required_columns.issubset(set(feature_map.columns)):
+        return text
+
+    feature_records = sorted(
+        feature_map.loc[:, ["feature", "korean_name", "unit"]].to_dict(orient="records"),
+        key=lambda record: len(str(record.get("korean_name") or "")),
+        reverse=True,
+    )
+    feature_matches: list[tuple[int, dict[str, object]]] = []
+    for record in feature_records:
+        korean_name = str(record.get("korean_name") or "").strip()
+        if not korean_name:
+            continue
+        for match in re.finditer(rf"{re.escape(korean_name)}\(", text):
+            feature_matches.append((match.start(), record))
+
+    if not feature_matches:
+        return text
+
+    sorted_matches = sorted(feature_matches, key=lambda item: item[0])
+    formatted_parts: list[str] = []
+    cursor = 0
+    for index, (start, record) in enumerate(sorted_matches):
+        end = sorted_matches[index + 1][0] if index + 1 < len(sorted_matches) else len(text)
+        if start < cursor:
+            continue
+        formatted_parts.append(text[cursor:start])
+        feature = str(record.get("feature") or "")
+        korean_name = str(record.get("korean_name") or "").strip()
+        unit = str(record.get("unit") or "")
+        segment = text[start:end]
+        formatted_parts.append(
+            _format_committee_feature_segment(
+                segment,
+                feature=feature,
+                korean_name=korean_name,
+                unit=unit,
+            )
+        )
+        cursor = end
+    formatted_parts.append(text[cursor:])
+    return "".join(formatted_parts)
+
+
+def _format_committee_feature_segment(
+    text: str,
+    *,
+    feature: str,
+    korean_name: str,
+    unit: str,
+) -> str:
+    """Format one feature-specific clause in a committee sentence."""
+
+    def format_parenthesized_value(match: re.Match[str]) -> str:
+        raw_value = match.group("value").strip()
+        formatted_value = format_value_with_unit(
+            _committee_numeric_literal(raw_value),
+            unit,
+            feature,
+        )
+        return f"{korean_name}({formatted_value})"
+
+    formatted_text = re.sub(
+        rf"{re.escape(korean_name)}\((?P<value>[^)]*)\)",
+        format_parenthesized_value,
+        text,
+    )
+
+    def format_median_value(match: re.Match[str]) -> str:
+        label = match.group("label")
+        raw_value = match.group("value").strip()
+        formatted_value = format_value_with_unit(
+            _committee_numeric_literal(raw_value),
+            unit,
+            feature,
+        )
+        return f"{label} {formatted_value}"
+
+    return re.sub(
+        r"(?P<label>같은 산업의 중앙값은|같은 시장의 중앙값은)\s*"
+        r"(?P<value>[-+]?\d[\d,]*(?:\.\d+)?)",
+        format_median_value,
+        formatted_text,
+    )
+
+
+def _committee_numeric_literal(value: str) -> str:
+    """Normalize comma-separated numeric literals before unit formatting."""
+    cleaned = value.replace(",", "").strip()
+    if re.fullmatch(r"[-+]?\d+(?:\.\d+)?", cleaned):
+        return cleaned
+    return value
+
+
+def _format_committee_percentile_phrases(text: str) -> str:
+    """Turn terse percentile text into a friendlier relative-position phrase."""
+
+    def replace_percentile(match: re.Match[str]) -> str:
+        raw_value = match.group("value")
+        try:
+            percentile = float(raw_value)
+        except (TypeError, ValueError):
+            return match.group(0)
+        if 45.0 <= percentile <= 55.0:
+            position_text = "중간 수준입니다"
+        elif percentile > 55.0:
+            position_text = f"상위 {_format_percentile_gap(100.0 - percentile)}% 수준입니다"
+        else:
+            position_text = f"하위 {_format_percentile_gap(percentile)}% 수준입니다"
+        return f"산업 안에서는 {position_text}"
+
+    return re.sub(
+        r"산업 안에서의 위치는\s*(?P<value>[-+]?\d+(?:\.\d+)?)백분위입니다",
+        replace_percentile,
+        text,
+    )
+
+
+def _format_percentile_gap(value: float) -> str:
+    """Format a percentile gap without noisy trailing zeros."""
+    rounded = round(max(0.0, min(100.0, value)), 1)
+    if rounded.is_integer():
+        return str(int(rounded))
+    return f"{rounded:.1f}"
+
+
+def _empty_dashboard_evidence_snapshot() -> dict[str, object]:
+    """Return a friendly empty evidence snapshot for dashboard-first review."""
+    return {
+        "status": "not_requested",
+        "source": "external_evidence",
+        "enabled": False,
+        "items": [],
+        "providers": {},
+        "has_critical_risk": False,
+        "critical_terms": [],
+        "message": "대시보드에서 아직 실시간 뉴스/웹/OpenDART 외부 근거를 수집하지 않았습니다.",
+    }
+
+
+def _dashboard_evidence_key(selected_row: pd.Series) -> str:
+    """Build a Streamlit session key for cached dashboard evidence."""
+    return (
+        f"external_evidence:v2:{_stock_code_text(selected_row.get('stock_code'))}:"
+        f"{_optional_int(selected_row.get('fiscal_year')) or 'latest'}"
+    )
+
+
+def _dashboard_evidence_as_of_date(selected_row: pd.Series) -> str:
+    """Return the date cut-off for dashboard evidence collection."""
+    eval_year = _optional_int(selected_row.get("eval_year"))
+    if eval_year is None:
+        return date.today().isoformat()
+    return min(date(eval_year, 12, 31), date.today()).isoformat()
+
+
+def collect_dashboard_external_evidence(selected_row: pd.Series) -> dict[str, object]:
+    """Collect live external evidence for the selected dashboard company on demand."""
+    env = dict(os.environ)
+    env["CAS_ENABLE_EXTERNAL_EVIDENCE"] = "1"
+    env.setdefault("CAS_OPENDART_CORP_CODE_CACHE_PATH", "/private/tmp/cas_opendart_corp_codes.csv")
+    return cast(
+        dict[str, object],
+        collect_external_evidence(
+            company_name=str(selected_row.get("corp_name") or ""),
+            stock_code=_stock_code_text(selected_row.get("stock_code")),
+            corp_code=_optional_text(selected_row.get("corp_code")),
+            as_of_date=_dashboard_evidence_as_of_date(selected_row),
+            env=env,
+        ),
+    )
+
+
+def resolve_dashboard_external_evidence(selected_row: pd.Series) -> dict[str, object]:
+    """Return cached live evidence, collecting it automatically on first tab render."""
+    evidence_key = _dashboard_evidence_key(selected_row)
+    cached = st.session_state.get(evidence_key)
+    if isinstance(cached, dict):
+        return cast(dict[str, object], cached)
+    try:
+        with st.spinner("외부 근거를 자동 수집하고 2차 위원회 판단에 반영하는 중입니다..."):
+            snapshot = collect_dashboard_external_evidence(selected_row)
+    except Exception as error:  # pragma: no cover - runtime/network dependent
+        snapshot = {
+            "status": "error",
+            "source": "external_evidence",
+            "enabled": True,
+            "items": [],
+            "providers": {},
+            "has_critical_risk": False,
+            "critical_terms": [],
+            "message": str(error),
+        }
+    st.session_state[evidence_key] = snapshot
+    return snapshot
+
+
+def to_stage2_risk_band(value: object) -> str:
+    """Map dashboard risk-band labels to the Stage 2 internal labels."""
+    label = str(_clean_dashboard_value(value) or "")
+    return {
+        "안정": "stable",
+        "관찰": "watch",
+        "고위험": "high_risk",
+        "데이터 부족": "insufficient_data",
+    }.get(label, label or "insufficient_data")
+
+
+def format_stage2_risk_band(value: object) -> str:
+    """Map Stage 2 internal risk-band labels back to dashboard Korean labels."""
+    return STAGE2_RISK_BAND_LABELS.get(str(value), str(value))
+
+
+def _dashboard_company_id(selected_row: pd.Series) -> str:
+    """Build the same human-readable company-year key used by Stage 2."""
+    market = str(selected_row.get("market") or "UNKNOWN")
+    stock_code = _stock_code_text(selected_row.get("stock_code"))
+    fiscal_year = _optional_int(selected_row.get("fiscal_year"))
+    if fiscal_year is None:
+        return f"{market}-{stock_code}"
+    return f"{market}-{stock_code}-{fiscal_year}"
+
+
+def _dashboard_top_drivers(local_shap: pd.DataFrame, *, limit: int = 5) -> list[dict[str, object]]:
+    """Return Stage 2-compatible top driver records from local SHAP output."""
+    if local_shap.empty:
+        return []
+    top_rows = local_shap.sort_values("abs_shap", ascending=False).head(limit)
+    drivers: list[dict[str, object]] = []
+    for record in top_rows.to_dict(orient="records"):
+        name = str(record.get("feature") or "")
+        if not name:
+            continue
+        drivers.append(
+            {
+                "name": name,
+                "feature": name,
+                "value": _optional_float(record.get("shap_value")),
+                "abs_value": _optional_float(record.get("abs_shap")),
+                "feature_value": _clean_dashboard_value(record.get("feature_value")),
+            }
+        )
+    return drivers
+
+
+def build_dashboard_model_view(
+    prediction_row: pd.Series,
+    local_shap: pd.DataFrame,
+) -> dict[str, object]:
+    """Build the read-only Stage 1 model_view shown and passed to Stage 2."""
+    probability = _optional_float(prediction_row.get("prob_speculative"))
+    risk_band = to_stage2_risk_band(prediction_row.get("risk_band"))
+    model_label = to_stage2_model_label(prediction_row.get("predicted_label"))
+    return {
+        "source": "dashboard_prediction_scores",
+        "model_name": "feature_43_xgboost",
+        "model_version": "dashboard_artifacts",
+        "prediction_label": model_label,
+        "probability_speculative": probability,
+        "y_proba": probability,
+        "threshold": _optional_float(prediction_row.get("threshold"), default=0.5),
+        "risk_band": risk_band,
+        "risk_band_display": format_stage2_risk_band(risk_band),
+        "top_drivers": _dashboard_top_drivers(local_shap),
+        "probability_speculative_45": _optional_float(prediction_row.get("prob_speculative_45")),
+        "threshold_45": _optional_float(prediction_row.get("threshold_45")),
+        "threshold_45_it_services_review": _optional_float(
+            prediction_row.get("threshold_45_it_services_review")
+        ),
+        "stage2_review_trigger": _optional_bool(prediction_row.get("stage2_review_trigger")),
+        "stage2_secondary_trigger": _optional_bool(prediction_row.get("stage2_secondary_trigger")),
+        "stage2_review_priority": str(
+            _clean_dashboard_value(prediction_row.get("stage2_review_priority")) or "none"
+        ),
+        "trigger_reason_code": str(
+            _clean_dashboard_value(prediction_row.get("trigger_reason_code")) or "none"
+        ),
+        "trigger_reason": str(
+            _clean_dashboard_value(prediction_row.get("trigger_reason"))
+            or "추가 위원회 검토 트리거 없음"
+        ),
+    }
+
+
+def build_dashboard_committee_context(
+    selected_row: pd.Series,
+    prediction_row: pd.Series | None,
+    local_shap: pd.DataFrame,
+    peer_slice: pd.DataFrame,
+    external_evidence_snapshot: dict[str, object] | None = None,
+) -> dict[str, object] | None:
+    """Run the deterministic Stage 2 review for the selected dashboard company."""
+    if prediction_row is None:
+        return None
+
+    model_view = build_dashboard_model_view(prediction_row, local_shap)
+    source_feature_row = _series_record(selected_row)
+    source_feature_row["company_name"] = str(selected_row.get("corp_name") or "")
+    source_feature_row["stock_code"] = _stock_code_text(selected_row.get("stock_code"))
+    source_feature_row["company_id"] = _dashboard_company_id(selected_row)
+    xgboost_result = dict(model_view)
+
+    state_payload: dict[str, object] = {
+        "company_id": source_feature_row["company_id"],
+        "company_name": source_feature_row["company_name"],
+        "market": str(selected_row.get("market") or "UNKNOWN"),
+        "analysis_year": _optional_int(selected_row.get("eval_year")) or 0,
+        "company_selection": build_company_selection_from_row(selected_row.to_dict()),
+        "company_profile": {
+            "company_id": source_feature_row["company_id"],
+            "company_name": source_feature_row["company_name"],
+            "stock_code": source_feature_row["stock_code"],
+            "market": str(selected_row.get("market") or ""),
+            "industry_macro_category": str(selected_row.get("industry_macro_category") or ""),
+            "firm_size_group": str(selected_row.get("firm_size_group") or ""),
+            "fiscal_year": _optional_int(selected_row.get("fiscal_year")),
+            "eval_year": _optional_int(selected_row.get("eval_year")),
+        },
+        "source_feature_row": source_feature_row,
+        "peer_comparison_rows": _frame_records(peer_slice),
+        "model_view": model_view,
+        "xgboost_result": xgboost_result,
+        "news_cache_snapshot": external_evidence_snapshot or _empty_dashboard_evidence_snapshot(),
+        "base_assessments": {},
+        "committee_reviews": [],
+        "agent_outputs": [],
+        "agent_summary": {},
+        "committee_view": {},
+        "audit": [],
+        "artifacts": {},
+        "insufficient_data": False,
+    }
+    state = cast(AgentState, state_payload)
+    state.update(rule_engine_node.run(state))
+    stage2_result = _run_dashboard_stage2(state)
+    state.update(stage2_result)
+
+    return {
+        "model_view": model_view,
+        "rule_result": dict(state.get("rule_result") or {}),
+        "agent_summary": dict(state.get("agent_summary") or {}),
+        "committee_view": dict(state.get("committee_view") or {}),
+        "final_confidence": state.get("final_confidence"),
+    }
+
+
+def _run_dashboard_stage2(state: AgentState) -> dict[str, object]:
+    """Run Stage 2 deterministically so the dashboard never triggers paid API calls."""
+    previous_runner = os.environ.get("CAS_STAGE2_RUNNER")
+    os.environ["CAS_STAGE2_RUNNER"] = "deterministic"
+    try:
+        return cast(dict[str, object], committee_node.run(state))
+    finally:
+        if previous_runner is None:
+            os.environ.pop("CAS_STAGE2_RUNNER", None)
+        else:
+            os.environ["CAS_STAGE2_RUNNER"] = previous_runner
+
+
+def _committee_evidence_frame(evidence_summary: object) -> pd.DataFrame:
+    """Build a user-facing evidence summary table from committee_view."""
+    if not isinstance(evidence_summary, list | tuple):
+        return pd.DataFrame()
+    rows: list[dict[str, object]] = []
+    for item in evidence_summary:
+        if not isinstance(item, dict):
+            continue
+        rows.append(
+            {
+                "근거 출처": item.get("source", "-"),
+                "요약": _humanize_evidence_summary(
+                    source=item.get("source"),
+                    summary=item.get("summary", "-"),
+                ),
+                "신뢰도": item.get("reliability", "-"),
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def _humanize_evidence_summary(*, source: object, summary: object) -> str:
+    """Hide internal evidence status codes from user-facing tables."""
+    text = str(summary)
+    if str(source) != "news_cache":
+        return text
+    replacements = {
+        "`not_requested`": "아직 수집하지 않음",
+        "`dashboard_not_collected`": "아직 수집하지 않음",
+        "`ready`": "수집 완료",
+        "`no_results`": "검색 결과 없음",
+        "`missing_credentials`": "API 키 미설정",
+        "`partial_error`": "일부 수집 오류",
+        "`disabled`": "수집 비활성화",
+    }
+    for raw, label in replacements.items():
+        text = text.replace(raw, label)
+    if "뉴스/공시 근거 번들 상태는" in text:
+        return text.replace("뉴스/공시 근거 번들 상태는", "외부 근거 수집 상태는")
+    return text
 
 
 def format_scalar(value: object) -> str:
@@ -521,6 +1151,33 @@ def render_risk_band_badge(risk_band: object) -> str:
         f"background:{style['bg']};color:{style['fg']};border:1px solid {style['border']};"
         "font-weight:700;font-size:0.95rem;'>"
         f"{label}</div>"
+    )
+
+
+def render_decision_badge(label: object, *, muted: bool = False) -> str:
+    """Render a colored badge for model and committee decisions."""
+    text = str(label) if pd.notna(label) else "-"
+    style_map = {
+        "적격": {"bg": "#e8f6ee", "fg": COLOR_MITIGATE, "border": "#b9e3c8"},
+        "투자적격": {"bg": "#e8f6ee", "fg": COLOR_MITIGATE, "border": "#b9e3c8"},
+        "보류": {"bg": "#fff4dd", "fg": "#b7791f", "border": "#f2d39a"},
+        "부적격": {"bg": "#fdeaea", "fg": COLOR_RISK, "border": "#f1bcbc"},
+        "투기등급": {"bg": "#fdeaea", "fg": COLOR_RISK, "border": "#f1bcbc"},
+        "차이 있음": {"bg": "#fff4dd", "fg": "#b7791f", "border": "#f2d39a"},
+        "일치": {"bg": "#e8f6ee", "fg": COLOR_MITIGATE, "border": "#b9e3c8"},
+        "발동": {"bg": "#fdeaea", "fg": COLOR_RISK, "border": "#f1bcbc"},
+        "후보 검토": {"bg": "#fff4dd", "fg": "#b7791f", "border": "#f2d39a"},
+        "미발동": {"bg": "#eef2f7", "fg": COLOR_DARK, "border": "#d7dfe8"},
+    }
+    if muted:
+        style = {"bg": "#eef2f7", "fg": COLOR_DARK, "border": "#d7dfe8"}
+    else:
+        style = style_map.get(text, {"bg": "#eef2f7", "fg": COLOR_DARK, "border": "#d7dfe8"})
+    return (
+        f"<div style='display:inline-block;padding:0.45rem 0.8rem;border-radius:999px;"
+        f"background:{style['bg']};color:{style['fg']};border:1px solid {style['border']};"
+        "font-weight:700;font-size:0.95rem;'>"
+        f"{escape(text)}</div>"
     )
 
 
@@ -2328,6 +2985,315 @@ def render_overview_tab(
             st.altair_chart(percentile_chart, width="stretch")
 
 
+def render_committee_view_tab(
+    *,
+    selected_row: pd.Series,
+    prediction_row: pd.Series | None,
+    feature_map: pd.DataFrame,
+    local_shap: pd.DataFrame,
+    peer_slice: pd.DataFrame,
+    developer_mode: bool,
+) -> None:
+    """Render the Stage 1 model_view and Stage 2 committee_view side by side."""
+    st.subheader("외부 근거 중심 위원회 검토")
+    st.caption(
+        "모델 점수는 다른 탭에서도 충분히 확인할 수 있으므로, 이 탭에서는 뉴스·웹·공시 근거가 "
+        "2차 위원회 판단에 어떤 보완 정보를 주는지 더 자세히 보여줍니다."
+    )
+    selected_output_format = st.selectbox(
+        "위원회 검토 출력 방식",
+        options=list(LLM_OUTPUT_FORMATS.keys()),
+        format_func=lambda value: LLM_OUTPUT_FORMATS.get(value, value),
+        index=1,
+        key="committee_output_format",
+        help="같은 위원회 판단 결과를 짧게, 기본 메모형, 또는 상세 보고서형으로 나누어 볼 수 있습니다.",
+    )
+    output_format_label = LLM_OUTPUT_FORMATS.get(selected_output_format, selected_output_format)
+    format_description = OUTPUT_FORMAT_DESCRIPTIONS.get(
+        selected_output_format, "선택한 형식에 맞춰 위원회 판단 결과를 보여줍니다."
+    )
+    intro_col1, intro_col2, intro_col3 = st.columns(3)
+    render_text_card(
+        intro_col1,
+        "무엇을 자세히 보나요?",
+        f"현재는 {output_format_label} 형식입니다. {format_description} 외부 근거의 관련성과 품질을 중심으로 봅니다.",
+    )
+    render_text_card(
+        intro_col2,
+        "어떻게 걸러내나요?",
+        "기업명·종목코드 직접 관련성, 출처 신뢰도, 위험 키워드가 실제 문맥에서 확인되는지를 나누어 봅니다.",
+    )
+    render_text_card(
+        intro_col3,
+        "모델과의 관계",
+        "외부 근거는 1차 모델 판단을 덮어쓰는 용도가 아니라, 보류·주의가 필요한 근거를 보완하는 역할입니다.",
+    )
+    evidence_snapshot = resolve_dashboard_external_evidence(selected_row)
+
+    try:
+        committee_context = build_dashboard_committee_context(
+            selected_row=selected_row,
+            prediction_row=prediction_row,
+            local_shap=local_shap,
+            peer_slice=peer_slice,
+            external_evidence_snapshot=evidence_snapshot,
+        )
+    except (KeyError, TypeError, ValueError, RuntimeError) as error:
+        st.error("2차 에이전트 위원회 판단을 생성하는 중 문제가 발생했습니다.")
+        if developer_mode:
+            st.exception(error)
+        return
+
+    if committee_context is None:
+        st.info(
+            "선택 기업의 예측확률 파일이 없어 2차 에이전트 위원회 판단을 생성할 수 없습니다. "
+            "기업별 prediction_scores.csv가 연결되면 이 탭에서 1차 모델 판단과 2차 위원회 판단을 함께 볼 수 있습니다."
+        )
+        return
+
+    model_view = _as_plain_dict(committee_context.get("model_view"))
+    committee_view = _as_plain_dict(committee_context.get("committee_view"))
+    agent_summary = _as_plain_dict(committee_context.get("agent_summary"))
+    rule_result = _as_plain_dict(committee_context.get("rule_result"))
+    st.session_state["model_view"] = model_view
+    st.session_state["committee_view"] = committee_view
+
+    model_label = str(model_view.get("prediction_label") or "-")
+    model_display_label = "투기등급(부적격)" if model_label == "부적격" else model_label
+    committee_label = str(committee_view.get("final_committee_label") or "보류")
+    model_base_label = to_committee_base_label(model_label)
+    has_decision_gap = model_base_label != committee_label
+    veto_triggered = bool(committee_view.get("veto_triggered", False))
+    decision_gap_label = "차이 있음" if has_decision_gap else "일치"
+    veto_label = dashboard_veto_status_label(committee_view, evidence_snapshot)
+    evidence_panel_colors = EvidencePanelColors(
+        risk=COLOR_RISK,
+        mitigate=COLOR_MITIGATE,
+        neutral=COLOR_NEUTRAL,
+    )
+    evidence_panel_renderers = EvidencePanelRenderers(
+        render_badge_value_block=render_badge_value_block,
+        render_bold_value_block=render_bold_value_block,
+        render_decision_badge=render_decision_badge,
+        render_list_card=render_list_card,
+        render_summary_banner=render_summary_banner,
+        render_text_card=render_text_card,
+    )
+
+    if veto_triggered:
+        summary_text = (
+            "강제 경고가 발동되었습니다. 강한 외부 위험 신호나 차단 규칙이 감지되어, "
+            "위원회 의견은 모델 원판단보다 보수적으로 제시됩니다."
+        )
+        summary_color = COLOR_RISK
+    elif veto_label == "후보 검토":
+        summary_text = (
+            "강제 경고 후보가 감지되었지만, 최종 발동 기준인 다중 출처·고신뢰 근거 조건은 "
+            "아직 충족하지 않았습니다. 따라서 화면에서는 후보 상태로 분리해 표시합니다."
+        )
+        summary_color = "#c0841a"
+    elif has_decision_gap:
+        summary_text = (
+            f"모델 기준 위원회 대응 라벨은 {model_base_label}이지만, "
+            f"2차 위원회는 {committee_label}로 정리했습니다. 아래 판단 차이 설명에서 "
+            "왜 차이가 났는지 확인할 수 있습니다."
+        )
+        summary_color = "#c0841a"
+    else:
+        summary_text = (
+            f"1차 모델 판단과 2차 에이전트 위원회 판단이 {committee_label} 방향으로 일치합니다. "
+            "위원회 메모는 모델 판단의 근거와 보완 요인을 설명하는 역할을 합니다."
+        )
+        summary_color = COLOR_MITIGATE
+
+    render_external_evidence_judgment(
+        evidence_snapshot,
+        committee_view,
+        veto_label=veto_label,
+        colors=evidence_panel_colors,
+        renderers=evidence_panel_renderers,
+    )
+    render_external_evidence_items(
+        evidence_snapshot,
+        expanded=True,
+        include_summary=selected_output_format == "detailed",
+        renderers=evidence_panel_renderers,
+    )
+
+    with st.expander("1차 모델 판단과 비교해서 보기", expanded=False):
+        comparison_cols = st.columns(4)
+        render_badge_value_block(
+            comparison_cols[0],
+            "1차 모델 판단",
+            render_decision_badge(model_display_label),
+        )
+        render_badge_value_block(
+            comparison_cols[1],
+            "2차 위원회 판단",
+            render_decision_badge(committee_label),
+        )
+        render_badge_value_block(
+            comparison_cols[2],
+            "판단 차이",
+            render_decision_badge(decision_gap_label),
+        )
+        render_badge_value_block(
+            comparison_cols[3],
+            "강제 경고 상태",
+            render_decision_badge(veto_label),
+        )
+
+        model_metric_cols = st.columns(3)
+        render_bold_value_block(
+            model_metric_cols[0],
+            "XGBoost 투기등급 확률",
+            format_percent(model_view.get("probability_speculative")),
+        )
+        render_badge_value_block(
+            model_metric_cols[1],
+            "1차 모델 위험 밴드",
+            render_risk_band_badge(format_stage2_risk_band(model_view.get("risk_band"))),
+        )
+        render_bold_value_block(
+            model_metric_cols[2],
+            "위원회 신뢰도",
+            format_percent(committee_context.get("final_confidence")),
+        )
+        trigger_cols = st.columns(3)
+        secondary_triggered = bool(model_view.get("stage2_secondary_trigger", False))
+        review_triggered = bool(model_view.get("stage2_review_trigger", False))
+        trigger_status = (
+            "추가 검토" if secondary_triggered else "1차 위험 검토" if review_triggered else "일반"
+        )
+        render_badge_value_block(
+            trigger_cols[0],
+            "2차 검토 트리거",
+            render_decision_badge(trigger_status),
+        )
+        render_bold_value_block(
+            trigger_cols[1],
+            "45개 변수셋 확률",
+            format_percent(model_view.get("probability_speculative_45")),
+        )
+        render_text_card(
+            trigger_cols[2],
+            "검토 사유",
+            str(model_view.get("trigger_reason") or "추가 위원회 검토 트리거 없음"),
+        )
+        render_summary_banner("판단 차이 해석", summary_text, summary_color)
+
+    risk_items = _as_text_list(committee_view.get("key_risk_factors"))
+    mitigation_items = _as_text_list(committee_view.get("mitigating_factors"))
+    if selected_output_format == "brief":
+        risk_items = risk_items[:2]
+        mitigation_items = mitigation_items[:2]
+    risk_items = _friendly_committee_items(risk_items, feature_map)
+    mitigation_items = _friendly_committee_items(mitigation_items, feature_map)
+
+    st.subheader("2차 위원회가 이렇게 봤어요")
+    st.caption(
+        "모델 점수만으로 끝내지 않고, 재무 상태·산업 내 위치·외부 근거를 함께 보면서 "
+        "사용자가 먼저 확인하면 좋은 내용을 쉬운 말로 정리했습니다."
+    )
+    risk_col, mitigation_col = st.columns(2)
+    render_list_card(
+        risk_col,
+        "주의해서 볼 점",
+        risk_items,
+        COLOR_RISK,
+    )
+    render_list_card(
+        mitigation_col,
+        "긍정적으로 본 점",
+        mitigation_items,
+        COLOR_MITIGATE,
+    )
+
+    conflict_col, memo_col = st.columns(2)
+    render_text_card(
+        conflict_col,
+        "왜 이렇게 판단했나요?",
+        _friendly_committee_text(
+            committee_view.get("conflict_resolution")
+            or "1차 모델 판단과 2차 위원회 판단이 크게 다르지 않습니다.",
+            feature_map,
+        ),
+    )
+    render_text_card(
+        memo_col,
+        "최종 검토 의견",
+        _friendly_committee_text(
+            committee_view.get("final_review_memo")
+            or "현재 선택한 기업에 대해 추가로 표시할 검토 의견이 없습니다.",
+            feature_map,
+        ),
+    )
+
+    if selected_output_format in {"memo", "detailed"}:
+        st.subheader("판단에 참고한 근거")
+        evidence_frame = _committee_evidence_frame(committee_view.get("evidence_summary"))
+        if evidence_frame.empty:
+            st.info("아직 화면에 보여줄 근거 요약이 없습니다.")
+        else:
+            st.dataframe(evidence_frame, hide_index=True, width="stretch")
+
+    if selected_output_format == "detailed":
+        st.subheader("더 자세히 보기")
+        detail_col1, detail_col2, detail_col3 = st.columns(3)
+        render_list_card(
+            detail_col1,
+            "판단 규칙에서 확인한 점",
+            _as_text_list(rule_result.get("reasons")),
+            COLOR_NEUTRAL,
+        )
+        render_list_card(
+            detail_col2,
+            "즉시 주의가 필요한 신호",
+            _as_text_list(rule_result.get("blocking_flags")),
+            COLOR_RISK,
+        )
+        render_bold_value_block(
+            detail_col3,
+            "외부 근거 주의 후보",
+            f"{external_veto_candidate_count(evidence_snapshot)}건",
+        )
+        top_drivers = model_view.get("top_drivers")
+        if isinstance(top_drivers, list | tuple) and top_drivers:
+            driver_frame = pd.DataFrame(top_drivers).rename(
+                columns={
+                    "name": "변수",
+                    "value": "SHAP 값",
+                    "abs_value": "|SHAP|",
+                    "feature_value": "실제값",
+                }
+            )
+            st.dataframe(driver_frame, hide_index=True, width="stretch")
+
+    if selected_output_format in {"memo", "detailed"}:
+        with st.expander(
+            "에이전트별로 어떻게 봤는지 보기",
+            expanded=selected_output_format == "detailed",
+        ):
+            agents = _as_plain_dict(agent_summary.get("agents"))
+            if not agents:
+                st.info("에이전트별 요약이 아직 생성되지 않았습니다.")
+            for role, raw_agent in agents.items():
+                agent = _as_plain_dict(raw_agent)
+                role_label = STAGE2_AGENT_ROLE_LABELS.get(str(role), str(role))
+                st.markdown(f"**{role_label}**")
+                st.write(str(agent.get("summary") or "요약이 없습니다."))
+                findings = _as_text_list(agent.get("findings"))
+                if findings:
+                    st.markdown("\n".join(f"- {item}" for item in findings))
+                st.caption(f"검토 신뢰도: {format_percent(agent.get('confidence'))}")
+
+    if developer_mode:
+        with st.expander("개발자용 전체 위원회 판단 JSON", expanded=False):
+            st.json(committee_context)
+        with st.expander("개발자용 규칙 기반 판단 JSON", expanded=False):
+            st.json(rule_result)
+
+
 def render_llm_panel(
     *,
     selected_row: pd.Series,
@@ -3679,11 +4645,12 @@ def format_llm_error_message(error: Exception, provider_label: str) -> str:
 
 def main() -> None:
     """Run the credit risk Streamlit dashboard MVP."""
+    load_dotenv()
     st.set_page_config(page_title="기업 신용위험 분석 대시보드", layout="wide")
     st.title("기업 신용위험 분석 대시보드")
     st.caption(
-        "기업별 위험 진단, 동종업계 비교, 산업 집계, AI 심사 메모를 한 화면에서 확인할 수 있는 대시보드입니다. "
-        "앞으로 뉴스 리포트와 에이전트 협의 결과까지 함께 반영할 수 있도록 확장할 예정입니다."
+        "기업별 위험 진단, 위원회 검토, 동종업계 비교, 산업 집계를 한 화면에서 확인할 수 있는 대시보드입니다. "
+        "1차 모델 판단과 2차 에이전트 위원회 판단을 구분해 보여줍니다."
     )
     st.markdown(
         """
@@ -3727,53 +4694,6 @@ def main() -> None:
             st.caption("기본값은 현재 연결된 결과 폴더입니다.")
         else:
             st.caption("일반 사용 시에는 기본 설정 그대로 사용하면 됩니다.")
-    default_provider = os.environ.get("LLM_PROVIDER", "openai").strip().lower()
-    if default_provider not in LLM_PROVIDER_LABELS:
-        default_provider = "openai"
-    default_openai_api_key = os.environ.get("OPENAI_API_KEY", "")
-    default_claude_api_key = os.environ.get("ANTHROPIC_API_KEY", "")
-    default_openai_model = os.environ.get("OPENAI_MODEL", "gpt-5.5")
-    default_claude_model = os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-4-20250514")
-    with st.sidebar.expander("AI 메모 설정", expanded=False):
-        llm_provider = st.selectbox(
-            "AI 제공자",
-            options=list(LLM_PROVIDER_LABELS.keys()),
-            index=list(LLM_PROVIDER_LABELS.keys()).index(default_provider),
-            format_func=lambda value: LLM_PROVIDER_LABELS.get(value, value),
-            help="OpenAI와 Claude 중 사용할 제공자를 선택합니다.",
-        )
-        openai_api_key = st.text_input(
-            "OpenAI API 키",
-            value=default_openai_api_key,
-            type="password",
-            help="로컬 실행 시에만 사용되며 코드나 파일에는 저장하지 않습니다.",
-        )
-        claude_api_key = st.text_input(
-            "Claude API 키",
-            value=default_claude_api_key,
-            type="password",
-            help="Claude 메모 생성에 사용할 키입니다. 로컬 실행 시에만 사용됩니다.",
-        )
-        provider_models = RECOMMENDED_LLM_MODELS.get(llm_provider, RECOMMENDED_LLM_MODELS["openai"])
-        model_options = [item[0] for item in provider_models]
-        model_labels = {item[0]: item[1] for item in provider_models}
-        default_model = default_openai_model if llm_provider == "openai" else default_claude_model
-        default_model_value = default_model if default_model in model_options else model_options[0]
-        selected_model = st.selectbox(
-            "추천 모델",
-            options=model_options,
-            index=model_options.index(default_model_value),
-            format_func=lambda value: model_labels.get(value, value),
-        )
-        custom_model = st.text_input(
-            "직접 입력할 모델명 (선택)",
-            value="",
-            placeholder=selected_model if default_model in model_options else default_model,
-            help="필요할 때만 영문 모델 ID를 직접 입력합니다. 비워두면 위 추천 모델을 사용합니다.",
-        )
-        llm_api_key = openai_api_key if llm_provider == "openai" else claude_api_key
-        llm_model = custom_model.strip() or selected_model
-        st.caption("입력한 API 키는 세션 중 메모리에서만 사용하며 파일에는 저장하지 않습니다.")
 
     try:
         artifacts = cached_load_dashboard_artifacts(artifact_dir_input or None)
@@ -3787,18 +4707,22 @@ def main() -> None:
     feature_map = build_company_feature_map(selected_row, artifacts.feature_dictionary)
     local_shap = resolve_company_local_shap(selected_row, artifacts.local_shap)
     peer_slice = resolve_company_peer_slice(selected_row, artifacts.peer_percentiles)
-    industry_latest_row = resolve_industry_latest_row(
-        selected_row, artifacts.industry_latest_summary
-    )
 
-    overview_tab, drivers_tab, peers_tab, industry_tab, scenario_tab, report_tab = st.tabs(
+    (
+        overview_tab,
+        committee_tab,
+        drivers_tab,
+        peers_tab,
+        industry_tab,
+        scenario_tab,
+    ) = st.tabs(
         [
             "개요",
+            "위원회 검토",
             "주요 영향 요인",
             "시장/산업 비교",
             "산업 흐름 보기",
             "가정별 변화 보기",
-            "AI 심사 메모",
         ]
     )
 
@@ -3806,17 +4730,13 @@ def main() -> None:
         render_overview_tab(
             selected_row, prediction_row, artifacts.model_summary, feature_map, artifacts
         )
-    with report_tab:
-        render_llm_panel(
+    with committee_tab:
+        render_committee_view_tab(
             selected_row=selected_row,
             prediction_row=prediction_row,
             feature_map=feature_map,
             local_shap=local_shap,
             peer_slice=peer_slice,
-            industry_latest_row=industry_latest_row,
-            provider=llm_provider,
-            api_key=llm_api_key,
-            model=llm_model,
             developer_mode=developer_mode,
         )
     with drivers_tab:

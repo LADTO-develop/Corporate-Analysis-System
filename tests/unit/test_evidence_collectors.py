@@ -196,6 +196,43 @@ class _WideWebSession:
         )
 
 
+class _PreferredShareDelistingSession:
+    def get(
+        self,
+        url: str,
+        *,
+        params: Mapping[str, object] | None = None,
+        headers: Mapping[str, str] | None = None,
+        timeout: float | None = None,
+    ) -> _FakeResponse:
+        if "naver.com" in url:
+            return _FakeResponse({"items": []})
+        return _FakeResponse({"list": []})
+
+    def post(
+        self,
+        url: str,
+        *,
+        json: Mapping[str, object] | None = None,
+        timeout: float | None = None,
+    ) -> _FakeResponse:
+        return _FakeResponse(
+            {
+                "results": [
+                    {
+                        "title": "상장폐지 - 현대모비스 (012330) - KRX 공시",
+                        "content": (
+                            "상장폐지일 : '15.01.16 - 본 상장폐지 안내는 "
+                            "현대모비스1우선주에만 해당되는 사항이며, "
+                            "동 안내에 따른 조치사항은 현대모비스보통주에는 영향을 미치지 않습니다."
+                        ),
+                        "url": "https://kind.krx.co.kr/common/disclsviewer.do",
+                    }
+                ]
+            }
+        )
+
+
 class _OpenDartSession:
     def get(
         self,
@@ -367,6 +404,27 @@ def test_collect_external_evidence_prioritizes_direct_news_and_limits_weak_web()
     verification_summary = snapshot["verification_summary"]
     assert isinstance(verification_summary, dict)
     assert verification_summary["weak_web_item_count"] == 3
+
+
+def test_collect_external_evidence_does_not_veto_preferred_share_delisting() -> None:
+    snapshot = collect_external_evidence(
+        company_name="현대모비스(주)",
+        stock_code="012330",
+        env={
+            "CAS_ENABLE_EXTERNAL_EVIDENCE": "1",
+            "TAVILY_API_KEY": "dummy",
+        },
+        session=_PreferredShareDelistingSession(),
+    )
+
+    assert snapshot["status"] == "ready"
+    assert snapshot["veto_candidate_count"] == 0
+    assert snapshot["high_confidence_critical_count"] == 0
+    item = snapshot["items"][0]
+    assert item["company_match"] is True
+    assert item["critical_terms"] == ["상장폐지"]
+    assert item["critical_context_confirmed"] is False
+    assert item["veto_candidate"] is False
 
 
 def test_collect_external_evidence_resolves_corp_code_and_collects_opendart(

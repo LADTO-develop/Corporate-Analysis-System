@@ -5,7 +5,9 @@
 
 구성:
 - `feature_43_master.csv`: 기업 식별정보와 34개 원천 변수가 함께 들어 있는 기준 테이블
-- `feature_43_inference_2026.csv`: 2025 회계연도 원천 재무데이터로부터 생성한 2026 예측용 입력 테이블
+- `feature_43_inference_2026.csv`: 2025 회계연도 원천 재무데이터와
+  `data/raw/ts2000/feature_43_inference_2026_aux.csv` 보조 원천으로 보정한
+  2026 예측용 입력 테이블
 - `feature_43_list.json`: 원천 변수 34개와 one-hot 이후 모델 입력 43개 정의
 - `feature_43_dictionary_metadata.json`: 대시보드에서 쓰는 한글 지표명, 단위, 설명 사전
 - `xgb_train.csv`, `xgb_valid.csv`, `xgb_test.csv`: XGBoost 학습용 입력 매트릭스
@@ -25,6 +27,14 @@
 
 ```bash
 /opt/anaconda3/envs/aura/bin/python scripts/rebuild_feature_43_dataset.py
+```
+
+2026 추론 입력의 기업규모와 시장가치 변수 보조 원천을 갱신할 때는 아래 순서로
+실행합니다. CAS 실행 자체는 갱신된 내부 CSV만 읽습니다.
+
+```bash
+/opt/anaconda3/envs/aura/bin/python scripts/import_feature_43_inference_2026_aux.py
+/opt/anaconda3/envs/aura/bin/python scripts/build_feature_43_inference_2026.py
 ```
 
 이 폴더 자체는 대시보드가 직접 읽지 않습니다.

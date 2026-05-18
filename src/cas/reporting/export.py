@@ -70,6 +70,8 @@ def render_report(state: AgentState | dict[str, Any]) -> dict[str, Any]:
         "",
         f"- **Final Committee Label**: `{committee_view.get('final_committee_label', '보류')}`",
         f"- **Veto Triggered**: `{bool(committee_view.get('veto_triggered', False))}`",
+        f"- **Hidden Tail Risk Flag**: `{bool(committee_view.get('hidden_tail_risk_flag', False))}`",
+        f"- **Hidden Tail Risk Reason**: {committee_view.get('hidden_tail_risk_reason', '')}",
         f"- **Conflict Resolution**: {committee_view.get('conflict_resolution', '')}",
         f"- **Final Review Memo**: {committee_view.get('final_review_memo', '')}",
         "",
@@ -155,6 +157,8 @@ def _fallback_response(state: dict[str, Any]) -> dict[str, Any]:
         "committee_view": {
             "final_committee_label": "보류",
             "veto_triggered": False,
+            "hidden_tail_risk_flag": False,
+            "hidden_tail_risk_reason": "",
             "conflict_resolution": "No committee_view was generated.",
             "key_risk_factors": [],
             "mitigating_factors": [],

@@ -5,6 +5,52 @@ from __future__ import annotations
 from pathlib import Path
 
 
+def test_applies_platt_probability_calibration() -> None:
+    from cas.agents.nodes import base_prediction_node
+
+    calibrated = base_prediction_node._apply_probability_calibration(
+        0.8,
+        {
+            "method": "platt_sigmoid",
+            "coef": 0.75,
+            "intercept": -0.5,
+            "clip_epsilon": 1e-6,
+        },
+    )
+
+    assert round(calibrated, 4) == 0.6317
+
+
+def test_native_missing_model_frame_keeps_nan() -> None:
+    from cas.agents.nodes import base_prediction_node
+
+    frame = base_prediction_node._build_model_frame(
+        {"cash_ratio": 0.2, "market_to_book": float("nan")},
+        ["cash_ratio", "market_to_book", "current_ratio"],
+        {"market_to_book": 1.0, "current_ratio": 2.0},
+        missing_value_strategy="xgboost_native_missing",
+    )
+
+    assert frame.loc[0, "cash_ratio"] == 0.2
+    assert frame.loc[0, "market_to_book"] != frame.loc[0, "market_to_book"]
+    assert frame.loc[0, "current_ratio"] != frame.loc[0, "current_ratio"]
+
+
+def test_median_imputation_model_frame_uses_fill_values() -> None:
+    from cas.agents.nodes import base_prediction_node
+
+    frame = base_prediction_node._build_model_frame(
+        {"cash_ratio": 0.2, "market_to_book": float("nan")},
+        ["cash_ratio", "market_to_book", "current_ratio"],
+        {"market_to_book": 1.0, "current_ratio": 2.0},
+        missing_value_strategy="median_imputation",
+    )
+
+    assert frame.loc[0, "cash_ratio"] == 0.2
+    assert frame.loc[0, "market_to_book"] == 1.0
+    assert frame.loc[0, "current_ratio"] == 2.0
+
+
 def test_falls_back_when_model_artifact_is_missing(monkeypatch) -> None:
     from cas.agents.nodes import base_prediction_node
 

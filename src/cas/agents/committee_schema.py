@@ -26,6 +26,8 @@ class CommitteeViewPayload(_StrictModel):
 
     final_committee_label: CommitteeLabel
     veto_triggered: bool
+    hidden_tail_risk_flag: bool = False
+    hidden_tail_risk_reason: str = ""
     conflict_resolution: str
     key_risk_factors: list[str]
     mitigating_factors: list[str]

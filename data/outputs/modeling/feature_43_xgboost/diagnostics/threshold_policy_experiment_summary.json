@@ -1,0 +1,44 @@
+{
+  "generated_at": "2026-05-17T10:43:33.381914+00:00",
+  "selection_split": "valid",
+  "evaluation_split": "test",
+  "threshold_grid": {
+    "min": 0.05,
+    "max": 0.95,
+    "step": 0.005
+  },
+  "segment_threshold_minimums": {
+    "rows": 30,
+    "positive_rows": 5
+  },
+  "global_best_f1_valid": {
+    "threshold": 0.285,
+    "accuracy": 0.8476331360946746,
+    "balanced_accuracy": 0.8583409090909091,
+    "precision": 0.6540084388185654,
+    "recall": 0.8806818181818182,
+    "f1": 0.7506053268765135,
+    "true_negative": 418.0,
+    "false_positive": 82.0,
+    "false_negative": 21.0,
+    "true_positive": 155.0
+  },
+  "current_test": {
+    "policy_name": "current_artifact_threshold",
+    "threshold_detail": "0.315000",
+    "precision": 0.64,
+    "recall": 0.8622754491017964,
+    "f1": 0.7346938775510203,
+    "false_positive": 81,
+    "false_negative": 23
+  },
+  "best_test_f1_policy": {
+    "policy_name": "industry_valid_best_f1_by_segment",
+    "threshold_detail": "it_services:0.310; manufacturing:0.335; wholesale_retail:0.500; fallback:0.285",
+    "precision": 0.660377358490566,
+    "recall": 0.8383233532934131,
+    "f1": 0.7387862796833772,
+    "false_positive": 72,
+    "false_negative": 27
+  }
+}

@@ -1,0 +1,260 @@
+{
+  "generated_at": "2026-05-17T10:57:19.944120+00:00",
+  "threshold": 0.315,
+  "false_positive_count": 81,
+  "false_negative_count": 23,
+  "segment_summary": [
+    {
+      "dimension": "market",
+      "segment": "KOSDAQ",
+      "rows": 384,
+      "positive_rows": 138,
+      "negative_rows": 246,
+      "false_positive": 70,
+      "false_negative": 19,
+      "fp_rate_among_negative": 0.2845528455284553,
+      "fn_rate_among_positive": 0.13768115942028986
+    },
+    {
+      "dimension": "industry_macro_category",
+      "segment": "manufacturing",
+      "rows": 449,
+      "positive_rows": 132,
+      "negative_rows": 317,
+      "false_positive": 58,
+      "false_negative": 19,
+      "fp_rate_among_negative": 0.1829652996845426,
+      "fn_rate_among_positive": 0.14393939393939395
+    },
+    {
+      "dimension": "industry_macro_category",
+      "segment": "it_services",
+      "rows": 131,
+      "positive_rows": 21,
+      "negative_rows": 110,
+      "false_positive": 16,
+      "false_negative": 3,
+      "fp_rate_among_negative": 0.14545454545454545,
+      "fn_rate_among_positive": 0.14285714285714285
+    },
+    {
+      "dimension": "market",
+      "segment": "KOSPI",
+      "rows": 288,
+      "positive_rows": 29,
+      "negative_rows": 259,
+      "false_positive": 11,
+      "false_negative": 4,
+      "fp_rate_among_negative": 0.04247104247104247,
+      "fn_rate_among_positive": 0.13793103448275862
+    },
+    {
+      "dimension": "industry_macro_category",
+      "segment": "wholesale_retail",
+      "rows": 38,
+      "positive_rows": 10,
+      "negative_rows": 28,
+      "false_positive": 4,
+      "false_negative": 1,
+      "fp_rate_among_negative": 0.14285714285714285,
+      "fn_rate_among_positive": 0.1
+    },
+    {
+      "dimension": "industry_macro_category",
+      "segment": "construction",
+      "rows": 31,
+      "positive_rows": 4,
+      "negative_rows": 27,
+      "false_positive": 2,
+      "false_negative": 0,
+      "fp_rate_among_negative": 0.07407407407407407,
+      "fn_rate_among_positive": 0.0
+    },
+    {
+      "dimension": "industry_macro_category",
+      "segment": "other",
+      "rows": 12,
+      "positive_rows": 0,
+      "negative_rows": 12,
+      "false_positive": 1,
+      "false_negative": 0,
+      "fp_rate_among_negative": 0.08333333333333333,
+      "fn_rate_among_positive": null
+    },
+    {
+      "dimension": "industry_macro_category",
+      "segment": "transport_storage",
+      "rows": 11,
+      "positive_rows": 0,
+      "negative_rows": 11,
+      "false_positive": 0,
+      "false_negative": 0,
+      "fp_rate_among_negative": 0.0,
+      "fn_rate_among_positive": null
+    }
+  ],
+  "false_positive_top_increase_risk_features": [
+    {
+      "feature": "gross_profit",
+      "korean_name": "매출총이익",
+      "case_count": 72,
+      "case_share": 0.8888888888888888,
+      "mean_shap_value": 0.39617074508633876,
+      "median_rank": 4.0
+    },
+    {
+      "feature": "dividend_payer",
+      "korean_name": "배당금 지급 여부",
+      "case_count": 58,
+      "case_share": 0.7160493827160493,
+      "mean_shap_value": 0.25173607751213267,
+      "median_rank": 7.0
+    },
+    {
+      "feature": "firm_size_group",
+      "korean_name": "기업규모 그룹",
+      "case_count": 51,
+      "case_share": 0.6296296296296297,
+      "mean_shap_value": 0.2933852225542068,
+      "median_rank": 6.0
+    },
+    {
+      "feature": "depreciation",
+      "korean_name": "감가상각비",
+      "case_count": 48,
+      "case_share": 0.5925925925925926,
+      "mean_shap_value": 0.1969227869994938,
+      "median_rank": 8.5
+    },
+    {
+      "feature": "assets_total",
+      "korean_name": "자산총계",
+      "case_count": 47,
+      "case_share": 0.5802469135802469,
+      "mean_shap_value": 0.2824506746961715,
+      "median_rank": 5.0
+    },
+    {
+      "feature": "interest_coverage_ratio",
+      "korean_name": "이자보상배율",
+      "case_count": 44,
+      "case_share": 0.5432098765432098,
+      "mean_shap_value": 0.43662101233547385,
+      "median_rank": 3.0
+    },
+    {
+      "feature": "capital_impairment_ratio",
+      "korean_name": "자본잠식률",
+      "case_count": 41,
+      "case_share": 0.5061728395061729,
+      "mean_shap_value": 0.28522756186927234,
+      "median_rank": 5.0
+    },
+    {
+      "feature": "listed_year",
+      "korean_name": "상장연도",
+      "case_count": 39,
+      "case_share": 0.48148148148148145,
+      "mean_shap_value": 0.49736776298437363,
+      "median_rank": 2.0
+    },
+    {
+      "feature": "cashflow_coverage_ratio",
+      "korean_name": "현금흐름 커버리지",
+      "case_count": 27,
+      "case_share": 0.3333333333333333,
+      "mean_shap_value": 0.2533681359555986,
+      "median_rank": 7.0
+    },
+    {
+      "feature": "net_margin",
+      "korean_name": "순이익률",
+      "case_count": 26,
+      "case_share": 0.32098765432098764,
+      "mean_shap_value": 0.4873640634692632,
+      "median_rank": 3.0
+    }
+  ],
+  "false_negative_top_decrease_risk_features": [
+    {
+      "feature": "capital_impairment_ratio",
+      "korean_name": "자본잠식률",
+      "case_count": 16,
+      "case_share": 0.6956521739130435,
+      "mean_shap_value": -0.4048071838915348,
+      "median_rank": 4.5
+    },
+    {
+      "feature": "dividend_payer",
+      "korean_name": "배당금 지급 여부",
+      "case_count": 15,
+      "case_share": 0.6521739130434783,
+      "mean_shap_value": -0.38529444734255475,
+      "median_rank": 4.0
+    },
+    {
+      "feature": "equity_ratio",
+      "korean_name": "자기자본비율",
+      "case_count": 14,
+      "case_share": 0.6086956521739131,
+      "mean_shap_value": -0.2672407595174653,
+      "median_rank": 7.5
+    },
+    {
+      "feature": "total_debt_turnover",
+      "korean_name": "총부채회전율",
+      "case_count": 10,
+      "case_share": 0.43478260869565216,
+      "mean_shap_value": -0.30549116507172586,
+      "median_rank": 7.0
+    },
+    {
+      "feature": "assets_total",
+      "korean_name": "자산총계",
+      "case_count": 9,
+      "case_share": 0.391304347826087,
+      "mean_shap_value": -0.5775468250115713,
+      "median_rank": 5.0
+    },
+    {
+      "feature": "gross_profit",
+      "korean_name": "매출총이익",
+      "case_count": 8,
+      "case_share": 0.34782608695652173,
+      "mean_shap_value": -0.7944984082132578,
+      "median_rank": 1.5
+    },
+    {
+      "feature": "net_margin",
+      "korean_name": "순이익률",
+      "case_count": 8,
+      "case_share": 0.34782608695652173,
+      "mean_shap_value": -0.39477771893143654,
+      "median_rank": 4.5
+    },
+    {
+      "feature": "cashflow_coverage_ratio",
+      "korean_name": "현금흐름 커버리지",
+      "case_count": 8,
+      "case_share": 0.34782608695652173,
+      "mean_shap_value": -0.3077402152121067,
+      "median_rank": 7.0
+    },
+    {
+      "feature": "listed_year",
+      "korean_name": "상장연도",
+      "case_count": 7,
+      "case_share": 0.30434782608695654,
+      "mean_shap_value": -0.27348757854529787,
+      "median_rank": 5.0
+    },
+    {
+      "feature": "depreciation",
+      "korean_name": "감가상각비",
+      "case_count": 6,
+      "case_share": 0.2608695652173913,
+      "mean_shap_value": -0.8669644494851431,
+      "median_rank": 2.5
+    }
+  ]
+}

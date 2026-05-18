@@ -152,6 +152,129 @@ def test_committee_view_does_not_treat_neutral_audit_conclusion_as_mitigation() 
     ]
 
 
+def test_committee_view_does_not_escalate_on_unconfirmed_external_risk() -> None:
+    state: AgentState = {
+        "xgboost_result": {"prediction_label": "투자적격"},
+        "news_cache_snapshot": {"status": "not_requested"},
+    }
+    agents = [
+        AgentOutput(role="quant_credit", summary="정량 결과", findings=[], confidence=0.8),
+        AgentOutput(
+            role="evidence_audit",
+            summary="외부근거 검토",
+            findings=[
+                "외부근거 강도: none",
+                "EvidenceAudit 검토 결론: 외부 치명 리스크는 확정되지 않았지만 부채·유동성 측면에서 보류 의견을 강화합니다.",
+                "외부근거 점검: 수집 상태가 `not_requested`라서 확인 가능한 외부 근거가 제한적입니다.",
+            ],
+            confidence=0.6,
+        ),
+        AgentOutput(role="chair_report", summary="종합", findings=[], confidence=0.7),
+    ]
+
+    committee_view = build_committee_view(
+        bundle=build_stage2_input_bundle(state),
+        recommendation="priority",
+        agents=agents,
+    )
+
+    assert committee_view["final_committee_label"] == "적격"
+    assert committee_view["key_risk_factors"] == [
+        "현재 scaffold 기준 추가 위험 요인은 제한적입니다."
+    ]
+
+
+def test_committee_view_flags_hidden_tail_risk_from_direct_external_adverse_evidence() -> None:
+    state: AgentState = {
+        "company_id": "096770",
+        "company_name": "에스케이이노베이션(주)",
+        "source_feature_row": {"stock_code": "096770"},
+        "xgboost_result": {
+            "prediction_label": "투자적격",
+            "probability_speculative": 0.015,
+            "threshold": 0.315,
+        },
+        "news_cache_snapshot": {
+            "status": "ready",
+            "items": [
+                {
+                    "source": "opendart",
+                    "title": "에스케이이노베이션(주) 자본잠식 관련 주요사항보고",
+                    "summary": "에스케이이노베이션(주) 직접 관련 공시입니다.",
+                    "reliability": "high",
+                    "company_match": True,
+                    "provider_relevance": "risk",
+                    "critical_terms": ["자본잠식"],
+                    "evidence_quality": "high",
+                    "evidence_score": 0.91,
+                }
+            ],
+        },
+    }
+    agents = [
+        AgentOutput(role="quant_credit", summary="정량 결과", findings=[], confidence=0.8),
+        AgentOutput(role="evidence_audit", summary="근거 검토", findings=[], confidence=0.6),
+        AgentOutput(role="chair_report", summary="종합", findings=[], confidence=0.7),
+    ]
+
+    committee_view = build_committee_view(
+        bundle=build_stage2_input_bundle(state),
+        recommendation="priority",
+        agents=agents,
+    )
+
+    assert committee_view["final_committee_label"] == "보류"
+    assert committee_view["veto_triggered"] is False
+    assert committee_view["hidden_tail_risk_flag"] is True
+    assert "숨은 꼬리위험 보완 플래그" in committee_view["hidden_tail_risk_reason"]
+    assert "숨은 꼬리위험 보완 플래그" in committee_view["key_risk_factors"][0]
+    assert "숨은 꼬리위험" in committee_view["conflict_resolution"]
+
+
+def test_committee_view_does_not_flag_hidden_tail_risk_for_routine_external_context() -> None:
+    state: AgentState = {
+        "company_id": "000250",
+        "company_name": "삼천당제약(주)",
+        "source_feature_row": {"stock_code": "000250"},
+        "xgboost_result": {
+            "prediction_label": "투자적격",
+            "probability_speculative": 0.04,
+            "threshold": 0.315,
+        },
+        "news_cache_snapshot": {
+            "status": "ready",
+            "items": [
+                {
+                    "source": "opendart",
+                    "title": "삼천당제약(주) 사업보고서",
+                    "summary": "정기 사업보고서 공시입니다.",
+                    "reliability": "high",
+                    "company_match": True,
+                    "provider_relevance": "routine",
+                    "critical_terms": [],
+                    "evidence_quality": "high",
+                    "evidence_score": 0.86,
+                }
+            ],
+        },
+    }
+    agents = [
+        AgentOutput(role="quant_credit", summary="정량 결과", findings=[], confidence=0.8),
+        AgentOutput(role="evidence_audit", summary="근거 검토", findings=[], confidence=0.6),
+        AgentOutput(role="chair_report", summary="종합", findings=[], confidence=0.7),
+    ]
+
+    committee_view = build_committee_view(
+        bundle=build_stage2_input_bundle(state),
+        recommendation="priority",
+        agents=agents,
+    )
+
+    assert committee_view["final_committee_label"] == "적격"
+    assert committee_view["hidden_tail_risk_flag"] is False
+    assert committee_view["hidden_tail_risk_reason"] == ""
+
+
 def test_committee_view_model_validates_strict_payload() -> None:
     state: AgentState = {
         "xgboost_result": {"prediction_label": "투자적격"},

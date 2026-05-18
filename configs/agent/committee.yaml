@@ -55,6 +55,7 @@ agents:
     output_focus:
       - evidence_reliability
       - hidden_tail_risk
+      - fn_supplement_flag
       - macro_industry_sensitivity
       - debt_liquidity_cross_check
   - kind: "chair_report"
