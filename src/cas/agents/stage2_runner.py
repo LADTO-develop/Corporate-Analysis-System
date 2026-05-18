@@ -7,7 +7,6 @@ outputs without changing committee_node orchestration.
 
 from __future__ import annotations
 
-import json
 from collections.abc import Callable
 from dataclasses import dataclass
 from importlib import import_module
@@ -30,7 +29,7 @@ Stage2RunnerOutputs = tuple[QuantCreditOutput, EvidenceAuditOutput, ChairReportO
 
 
 class Stage2LLMResponse(BaseModel):
-    """Single structured response expected from an Agno-backed Stage 2 run."""
+    """Structured response expected from an LLM-backed Stage 2 run."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -70,6 +69,21 @@ class Stage2AgentRunner(Protocol):
         """Run the three Stage 2 agents and return structured outputs."""
 
 
+class _TripletAgentModule(Protocol):
+    """Protocol for the lazily imported Agno triplet package."""
+
+    def run_triplet_agents(
+        self,
+        *,
+        bundle: Stage2InputBundle,
+        recommendation: Recommendation,
+        confidence: float,
+        model_name: str,
+        max_tokens: int,
+    ) -> Stage2RunnerOutputs:
+        """Run the Agno Stage 2 triplet agents."""
+
+
 @dataclass(frozen=True)
 class DeterministicStage2AgentRunner:
     """Deterministic Stage 2 runner used by local tests and CI."""
@@ -100,7 +114,8 @@ class AgnoStage2AgentRunner:
 
     This path is intentionally opt-in. If the ``agno`` package is unavailable,
     install the optional LLM dependencies or inject a ``Stage2LLMClient`` in
-    tests/local experiments.
+    tests/local experiments. Without an injected client, the runner executes
+    the three Agno triplet agents in sequence.
     """
 
     deterministic_runner: DeterministicStage2AgentRunner | None = None
@@ -119,22 +134,27 @@ class AgnoStage2AgentRunner:
         recommendation: Recommendation,
         confidence: float,
     ) -> Stage2RunnerOutputs:
-        """Run Stage 2 through Agno or an injected structured LLM client."""
-        prompt_payload = _build_prompt_payload(
-            bundle=bundle,
-            recommendation=recommendation,
-            confidence=confidence,
-            draft_outputs=self._draft_outputs(bundle, recommendation, confidence),
-        )
+        """Run Stage 2 through the Agno triplet agents or an injected LLM client."""
         try:
-            raw_response = (
-                self.llm_client.run_structured(
+            if self.llm_client is not None:
+                prompt_payload = _build_prompt_payload(
+                    bundle=bundle,
+                    recommendation=recommendation,
+                    confidence=confidence,
+                    draft_outputs=self._draft_outputs(bundle, recommendation, confidence),
+                )
+                raw_response = self.llm_client.run_structured(
                     prompt_payload=prompt_payload,
                     output_schema=Stage2LLMResponse,
                 )
-                if self.llm_client is not None
-                else self._run_with_agno(prompt_payload=prompt_payload)
-            )
+            else:
+                raw_response = _run_triplet_agents_with_agno(
+                    bundle=bundle,
+                    recommendation=recommendation,
+                    confidence=confidence,
+                    model_name=self.model_name,
+                    max_tokens=self.max_tokens,
+                )
             outputs = _coerce_llm_response(raw_response).as_outputs()
             self.last_run_backend_name = self.backend_name
             self.last_error_message = ""
@@ -168,32 +188,6 @@ class AgnoStage2AgentRunner:
             "evidence_audit": outputs[1].model_dump(mode="json"),
             "chair_report": outputs[2].model_dump(mode="json"),
         }
-
-    def _run_with_agno(self, *, prompt_payload: dict[str, Any]) -> object:
-        try:
-            agent_module = import_module("agno.agent")
-            anthropic_module = import_module("agno.models.anthropic")
-        except ImportError as error:
-            raise RuntimeError(
-                "CAS_STAGE2_RUNNER=agno requires the optional Agno/Anthropic runtime. "
-                "Install Agno and configure ANTHROPIC_API_KEY, or keep "
-                "CAS_STAGE2_RUNNER=deterministic for offline runs."
-            ) from error
-
-        agent_cls = cast(Any, agent_module).Agent
-        claude_cls = cast(Any, anthropic_module).Claude
-        model = claude_cls(
-            id=self.model_name,
-            max_tokens=self.max_tokens,
-            temperature=0,
-        )
-        agent = agent_cls(
-            model=model,
-            description=_AGNO_STAGE2_DESCRIPTION,
-            output_schema=Stage2LLMResponse,
-        )
-        response = agent.run(_prompt_text(prompt_payload))
-        return getattr(response, "content", response)
 
 
 def _build_prompt_payload(
@@ -229,6 +223,40 @@ def _build_prompt_payload(
     }
 
 
+def _run_triplet_agents_with_agno(
+    *,
+    bundle: Stage2InputBundle,
+    recommendation: Recommendation,
+    confidence: float,
+    model_name: str,
+    max_tokens: int,
+) -> Stage2LLMResponse:
+    try:
+        triplet_module = cast(
+            _TripletAgentModule,
+            import_module("cas.agents.nodes.tripletagents"),
+        )
+    except ImportError as error:
+        raise RuntimeError(
+            "CAS_STAGE2_RUNNER=agno could not import the Agno triplet agents."
+        ) from error
+
+    raw_outputs = triplet_module.run_triplet_agents(
+        bundle=bundle,
+        recommendation=recommendation,
+        confidence=confidence,
+        model_name=model_name,
+        max_tokens=max_tokens,
+    )
+    if not isinstance(raw_outputs, tuple) or len(raw_outputs) != 3:
+        raise TypeError("Agno triplet agents must return exactly three Stage 2 outputs.")
+    return Stage2LLMResponse(
+        quant_credit=QuantCreditOutput.model_validate(raw_outputs[0]),
+        evidence_audit=EvidenceAuditOutput.model_validate(raw_outputs[1]),
+        chair_report=ChairReportOutput.model_validate(raw_outputs[2]),
+    )
+
+
 def _coerce_llm_response(raw_response: object) -> Stage2LLMResponse:
     if isinstance(raw_response, Stage2LLMResponse):
         return raw_response
@@ -248,24 +276,6 @@ def _coerce_llm_response(raw_response: object) -> Stage2LLMResponse:
     raise TypeError(
         f"Agno Stage 2 runner returned an unsupported response type: {type(raw_response).__name__}"
     )
-
-
-def _prompt_text(prompt_payload: dict[str, Any]) -> str:
-    return (
-        "Return a valid Stage2LLMResponse object that satisfies the provided "
-        "Pydantic output_schema. Use the following CAS Stage 2 input payload:\n\n"
-        f"{json.dumps(prompt_payload, ensure_ascii=False, indent=2, default=str)}"
-    )
-
-
-_AGNO_STAGE2_DESCRIPTION = """
-You are the Stage 2 credit review committee for CAS.
-Produce three structured agent outputs:
-1. quant_credit: explain model_view, SHAP drivers, and peer context.
-2. evidence_audit: audit external evidence, debt/liquidity, and macro/industry signals.
-3. chair_report: synthesize without overwriting the Stage 1 model decision.
-Use Korean business review language and avoid unsupported claims.
-""".strip()
 
 
 __all__ = [

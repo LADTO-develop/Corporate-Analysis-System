@@ -32,6 +32,11 @@ from cas.dashboard.evidence_panel import (
     render_external_evidence_judgment,
 )
 from cas.dashboard.llm import generate_llm_explanation
+from cas.dashboard.streamlit_compat import (
+    stretch_altair_chart,
+    stretch_dataframe,
+    stretch_download_button,
+)
 from cas.evidence import collect_external_evidence
 
 MARKET_LABELS = {
@@ -288,7 +293,7 @@ def pick_selected_company(artifacts: DashboardArtifacts) -> pd.Series:
         if matched:
             default_index = int(options.index.get_loc(matched[0]))
             break
-    selected_label = st.sidebar.selectbox("기업 선택", labels, index=default_index)
+    selected_label: str = st.sidebar.selectbox("기업 선택", labels, index=default_index)
     return options.loc[options["label"] == selected_label].iloc[0]
 
 
@@ -911,9 +916,16 @@ def build_dashboard_committee_context(
 
 
 def _run_dashboard_stage2(state: AgentState) -> dict[str, object]:
-    """Run Stage 2 deterministically so the dashboard never triggers paid API calls."""
+    """Run Stage 2 using the dashboard-selected runner."""
     previous_runner = os.environ.get("CAS_STAGE2_RUNNER")
-    os.environ["CAS_STAGE2_RUNNER"] = "deterministic"
+    dashboard_runner = (
+        os.environ.get("CAS_DASHBOARD_STAGE2_RUNNER")
+        or os.environ.get("CAS_STAGE2_RUNNER")
+        or "deterministic"
+    ).strip()
+    if not dashboard_runner:
+        dashboard_runner = "deterministic"
+    os.environ["CAS_STAGE2_RUNNER"] = dashboard_runner
     try:
         return cast(dict[str, object], committee_node.run(state))
     finally:
@@ -2890,7 +2902,7 @@ def render_overview_tab(
                 float(prediction_row["prob_speculative"]),
                 float(prediction_row["threshold"]),
             )
-            st.altair_chart(probability_chart, width="stretch")
+            stretch_altair_chart(probability_chart)
         with text_col:
             st.markdown("**심사 메모**")
             st.markdown(
@@ -2988,7 +3000,7 @@ def render_overview_tab(
                 .properties(height=260)
             )
             st.markdown("**핵심 지표가 산업 안에서 어느 수준인지**")
-            st.altair_chart(percentile_chart, width="stretch")
+            stretch_altair_chart(percentile_chart)
 
 
 def render_committee_view_tab(
@@ -3241,7 +3253,7 @@ def render_committee_view_tab(
         if evidence_frame.empty:
             st.info("아직 화면에 보여줄 근거 요약이 없습니다.")
         else:
-            st.dataframe(evidence_frame, hide_index=True, width="stretch")
+            stretch_dataframe(evidence_frame, hide_index=True)
 
     if selected_output_format == "detailed":
         st.subheader("더 자세히 보기")
@@ -3273,7 +3285,7 @@ def render_committee_view_tab(
                     "feature_value": "실제값",
                 }
             )
-            st.dataframe(driver_frame, hide_index=True, width="stretch")
+            stretch_dataframe(driver_frame, hide_index=True)
 
     if selected_output_format in {"memo", "detailed"}:
         with st.expander(
@@ -3471,7 +3483,7 @@ def render_llm_panel(
         )
         html_col1, html_col2 = st.columns([1, 1])
         with html_col1:
-            st.download_button(
+            stretch_download_button(
                 "보고서형 HTML 다운로드",
                 data=html_report,
                 file_name=(
@@ -3479,10 +3491,9 @@ def render_llm_panel(
                     f"{selected_row['fiscal_year']}.html"
                 ),
                 mime="text/html",
-                width="stretch",
             )
         with html_col2:
-            st.download_button(
+            stretch_download_button(
                 "원페이지 HTML 다운로드",
                 data=onepage_html,
                 file_name=(
@@ -3490,11 +3501,10 @@ def render_llm_panel(
                     f"{selected_row['fiscal_year']}.html"
                 ),
                 mime="text/html",
-                width="stretch",
             )
         utility_col1, utility_col2 = st.columns([1, 1])
         with utility_col1:
-            st.download_button(
+            stretch_download_button(
                 "상세 보고서형 다운로드 (.md)",
                 data=export_text,
                 file_name=(
@@ -3502,10 +3512,9 @@ def render_llm_panel(
                     f"{selected_row['fiscal_year']}.md"
                 ),
                 mime="text/markdown",
-                width="stretch",
             )
         with utility_col2:
-            st.download_button(
+            stretch_download_button(
                 "원페이지 요약 다운로드 (.md)",
                 data=onepage_text,
                 file_name=(
@@ -3513,7 +3522,6 @@ def render_llm_panel(
                     f"{selected_row['fiscal_year']}.md"
                 ),
                 mime="text/markdown",
-                width="stretch",
             )
         preview_tab1, preview_tab2, preview_tab3, preview_tab4 = st.tabs(
             ["보고서형 HTML", "원페이지 HTML", "보고서형 미리보기", "원페이지 미리보기"]
@@ -3656,7 +3664,7 @@ def render_drivers_tab(
                 )
                 .properties(height=360)
             )
-            st.altair_chart(chart, width="stretch")
+            stretch_altair_chart(chart)
             local_table = local_view.loc[
                 :,
                 [
@@ -3681,7 +3689,7 @@ def render_drivers_tab(
                 .set_properties(subset=["일반 해석 방향"], **{"text-align": "center"})
                 .hide(axis="index")
             )
-            st.dataframe(styled_local, width="stretch", hide_index=True)
+            stretch_dataframe(styled_local, hide_index=True)
             return
 
     st.info(
@@ -3741,7 +3749,7 @@ def render_drivers_tab(
         )
         .properties(height=360)
     )
-    st.altair_chart(chart, width="stretch")
+    stretch_altair_chart(chart)
     global_table = top_features.loc[
         :,
         ["rank", "표시명", "feature_group", "일반 해석 방향", "mean_abs_shap", "실제값"],
@@ -3758,7 +3766,7 @@ def render_drivers_tab(
         .set_properties(subset=["일반 해석 방향"], **{"text-align": "center"})
         .hide(axis="index")
     )
-    st.dataframe(styled_global, width="stretch", hide_index=True)
+    stretch_dataframe(styled_global, hide_index=True)
 
 
 def render_peer_tab(
@@ -4015,7 +4023,7 @@ def render_peer_tab(
             )
             .properties(height=360)
         )
-        st.altair_chart(compare_chart, width="stretch")
+        stretch_altair_chart(compare_chart)
     else:
         st.caption("선택한 변수의 단위가 섞여 있어 변수별 비교 카드로 나누어 표시합니다.")
         detail_cols = st.columns(2)
@@ -4064,7 +4072,7 @@ def render_peer_tab(
                     )
                     .properties(height=150)
                 )
-                st.altair_chart(mini_chart, width="stretch")
+                stretch_altair_chart(mini_chart)
 
     table["산업 대비 차이"] = table.apply(
         lambda row: format_delta_with_unit(
@@ -4169,13 +4177,13 @@ def render_peer_tab(
     with col_gap:
         st.markdown("**비교 기준 대비 차이**")
         if len(table_units) <= 1:
-            st.altair_chart(gap_chart, width="stretch")
+            stretch_altair_chart(gap_chart)
         else:
             st.caption("단위가 섞여 있어 차이는 표에서 변수별로 읽는 것이 더 적절합니다.")
         st.caption("0보다 크면 선택 기업 값이 비교 기준보다 높고, 0보다 작으면 낮습니다.")
     with col_percentile:
         st.markdown("**산업/시장 내 백분위 위치**")
-        st.altair_chart(percentile_chart, width="stretch")
+        stretch_altair_chart(percentile_chart)
         st.caption("50백분위 점선을 기준으로, 오른쪽일수록 상대적으로 높은 수준입니다.")
 
     table_view = table.loc[
@@ -4197,9 +4205,8 @@ def render_peer_tab(
         .set_properties(subset=["일반 해석 방향"], **{"text-align": "center"})
         .hide(axis="index")
     )
-    st.dataframe(
+    stretch_dataframe(
         styled_table,
-        width="stretch",
         hide_index=True,
     )
     st.caption(
@@ -4343,7 +4350,7 @@ def render_industry_tab(
             )
             .properties(height=320)
         )
-        st.altair_chart(trend_chart, width="stretch")
+        stretch_altair_chart(trend_chart)
         year_summary_view = year_summary.copy()
         for column in [
             "positive_rate",
@@ -4369,7 +4376,7 @@ def render_industry_tab(
         )
         year_summary_view["시장"] = year_summary_view["시장"].map(to_market_label)
         year_summary_view["산업"] = year_summary_view["산업"].map(to_industry_label)
-        st.dataframe(
+        stretch_dataframe(
             year_summary_view.loc[
                 :,
                 [
@@ -4385,7 +4392,6 @@ def render_industry_tab(
                     tuned_share_label,
                 ],
             ],
-            width="stretch",
             hide_index=True,
         )
 
@@ -4412,7 +4418,7 @@ def render_industry_tab(
             )
             .properties(height=320)
         )
-        st.altair_chart(chart, width="stretch")
+        stretch_altair_chart(chart)
         top_shap_view = top_shap.loc[
             :,
             ["rank_within_group", "표시명", "일반 해석 방향", "mean_abs_shap", "mean_signed_shap"],
@@ -4429,7 +4435,7 @@ def render_industry_tab(
             .set_properties(subset=["일반 해석 방향"], **{"text-align": "center"})
             .hide(axis="index")
         )
-        st.dataframe(styled_industry, width="stretch", hide_index=True)
+        stretch_dataframe(styled_industry, hide_index=True)
 
 
 def render_scenario_tab(
@@ -4608,7 +4614,7 @@ def render_scenario_tab(
             )
             .properties(height=max(160, len(unit_frame) * 56))
         )
-        st.altair_chart(scenario_chart, width="stretch")
+        stretch_altair_chart(scenario_chart)
     scenario_table = scenario_frame.loc[
         :,
         [
@@ -4630,9 +4636,8 @@ def render_scenario_tab(
         .set_properties(subset=["일반 해석 방향"], **{"text-align": "center"})
         .hide(axis="index")
     )
-    st.dataframe(
+    stretch_dataframe(
         styled_scenario,
-        width="stretch",
         hide_index=True,
     )
     st.warning(
@@ -4685,7 +4690,9 @@ def main() -> None:
     )
 
     preset_info = ARTIFACT_PRESETS["team_43"]
-    artifact_dir_input = str(cast(Path, preset_info["path"]))
+    artifact_dir_input = os.environ.get("CAS_DASHBOARD_ARTIFACT_DIR") or str(
+        cast(Path, preset_info["path"])
+    )
 
     st.sidebar.selectbox(
         "금액 표시 방식",
