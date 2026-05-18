@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 
 def test_applies_platt_probability_calibration() -> None:
     from cas.agents.nodes import base_prediction_node
@@ -51,7 +53,7 @@ def test_median_imputation_model_frame_uses_fill_values() -> None:
     assert frame.loc[0, "current_ratio"] == 2.0
 
 
-def test_falls_back_when_model_artifact_is_missing(monkeypatch) -> None:
+def test_falls_back_when_model_artifact_is_missing(monkeypatch: pytest.MonkeyPatch) -> None:
     from cas.agents.nodes import base_prediction_node
 
     base_prediction_node._load_model_bundle.cache_clear()

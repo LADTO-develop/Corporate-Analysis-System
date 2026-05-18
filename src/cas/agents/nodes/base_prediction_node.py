@@ -276,6 +276,11 @@ def _lens_scores(
 def _load_model_bundle() -> dict[str, Any]:
     import xgboost as xgb
 
+    if not _MODEL_METADATA_PATH.exists():
+        raise FileNotFoundError(_MODEL_METADATA_PATH)
+    if not _MODEL_ARTIFACT_PATH.exists():
+        raise FileNotFoundError(_MODEL_ARTIFACT_PATH)
+
     metadata = cast(dict[str, Any], read_json(_MODEL_METADATA_PATH))
     booster = xgb.Booster()
     booster.load_model(_MODEL_ARTIFACT_PATH)

@@ -260,9 +260,12 @@ def pick_selected_company(artifacts: DashboardArtifacts) -> pd.Series:
         help="기업명이나 종목코드 일부를 입력하면 선택 목록을 좁힐 수 있습니다.",
     ).strip()
     if search_query:
+        stock_code_query = search_query.zfill(6) if search_query.isdigit() else search_query
         mask = latest["corp_name"].astype(str).str.contains(
             search_query, case=False, na=False
-        ) | latest["stock_code"].astype(str).str.contains(search_query, case=False, na=False)
+        ) | latest["stock_code"].map(_stock_code_text).str.contains(
+            stock_code_query, case=False, na=False
+        )
         latest = latest.loc[mask]
 
     if latest.empty:
@@ -273,7 +276,7 @@ def pick_selected_company(artifacts: DashboardArtifacts) -> pd.Series:
         label=lambda frame: (
             frame["corp_name"]
             + " | "
-            + frame["stock_code"].astype(str)
+            + frame["stock_code"].map(_stock_code_text)
             + " | FY"
             + frame["fiscal_year"].astype(int).astype(str)
         )
@@ -317,8 +320,9 @@ def resolve_company_local_shap(
     """Return local SHAP rows for the selected company-year if available."""
     if local_shap is None:
         return pd.DataFrame()
+    stock_code = _stock_code_text(selected_row["stock_code"])
     matched = local_shap.loc[
-        (local_shap["stock_code"].astype(str) == str(selected_row["stock_code"]))
+        (local_shap["stock_code"].map(_stock_code_text) == stock_code)
         & (local_shap["fiscal_year"] == selected_row["fiscal_year"])
     ].copy()
     return matched.sort_values("abs_shap", ascending=False)
@@ -329,8 +333,9 @@ def resolve_company_peer_slice(
     peer_percentiles: pd.DataFrame,
 ) -> pd.DataFrame:
     """Return peer comparison rows for the selected company-year."""
+    stock_code = _stock_code_text(selected_row["stock_code"])
     return peer_percentiles.loc[
-        (peer_percentiles["stock_code"].astype(str) == str(selected_row["stock_code"]))
+        (peer_percentiles["stock_code"].map(_stock_code_text) == stock_code)
         & (peer_percentiles["fiscal_year"] == selected_row["fiscal_year"])
     ].copy()
 
@@ -372,8 +377,9 @@ def resolve_company_prediction(
     """Return the optional per-company prediction row if available."""
     if prediction_scores is None:
         return None
+    stock_code = _stock_code_text(selected_row["stock_code"])
     matched = prediction_scores.loc[
-        (prediction_scores["stock_code"].astype(str) == str(selected_row["stock_code"]))
+        (prediction_scores["stock_code"].map(_stock_code_text) == stock_code)
         & (prediction_scores["fiscal_year"] == selected_row["fiscal_year"])
     ]
     if matched.empty:
@@ -1476,7 +1482,7 @@ def build_exportable_llm_report(
         "# AI 심사 메모",
         "",
         f"- 기업명: {selected_row.get('corp_name')}",
-        f"- 종목코드: {selected_row.get('stock_code')}",
+        f"- 종목코드: {_stock_code_text(selected_row.get('stock_code'))}",
         f"- 시장: {to_market_label(selected_row.get('market'))}",
         f"- 산업: {to_industry_label(selected_row.get('industry_macro_category'))}",
         f"- 규모: {to_size_label(selected_row.get('firm_size_group'))}",
@@ -1579,7 +1585,7 @@ def build_onepage_llm_report(
         "",
         "## 기업 개요",
         f"- 기업명: {selected_row.get('corp_name')}",
-        f"- 종목코드: {selected_row.get('stock_code')}",
+        f"- 종목코드: {_stock_code_text(selected_row.get('stock_code'))}",
         f"- 시장/산업: {to_market_label(selected_row.get('market'))} / {to_industry_label(selected_row.get('industry_macro_category'))}",
         f"- 규모/회계연도: {to_size_label(selected_row.get('firm_size_group'))} / {format_scalar(selected_row.get('fiscal_year'))}",
         f"- 사용 모델: {model}",
@@ -2085,7 +2091,7 @@ def build_html_report(
       <div class="summary">{escape(headline)}</div>
     </div>
     <div class="meta-grid">
-      <div class="meta-card"><div class="meta-label">종목코드</div><div class="meta-value">{escape(str(selected_row.get("stock_code")))}</div></div>
+      <div class="meta-card"><div class="meta-label">종목코드</div><div class="meta-value">{escape(_stock_code_text(selected_row.get("stock_code")))}</div></div>
       <div class="meta-card"><div class="meta-label">시장</div><div class="meta-value">{escape(to_market_label(selected_row.get("market")))}</div></div>
       <div class="meta-card"><div class="meta-label">산업</div><div class="meta-value">{escape(to_industry_label(selected_row.get("industry_macro_category")))}</div></div>
       <div class="meta-card"><div class="meta-label">규모</div><div class="meta-value">{escape(to_size_label(selected_row.get("firm_size_group")))}</div></div>
@@ -2443,7 +2449,7 @@ def build_onepage_html_report(
       <div class="meta-card"><div class="meta-label">투기등급 확률</div><div class="meta-value">{escape(probability)}</div></div>
       <div class="meta-card"><div class="meta-label">예측 라벨</div><div class="meta-value">{escape(predicted_label)} ({escape(risk_band)})</div></div>
       <div class="meta-card"><div class="meta-label">판정 기준선</div><div class="meta-value">{escape(threshold)}</div></div>
-      <div class="meta-card"><div class="meta-label">종목코드</div><div class="meta-value">{escape(str(selected_row.get("stock_code")))}</div></div>
+      <div class="meta-card"><div class="meta-label">종목코드</div><div class="meta-value">{escape(_stock_code_text(selected_row.get("stock_code")))}</div></div>
       <div class="meta-card"><div class="meta-label">사용 모델</div><div class="meta-value">{escape(model)}</div></div>
       <div class="meta-card"><div class="meta-label">출력 형식</div><div class="meta-value">{escape(output_format_label)}</div></div>
     </div>
@@ -2750,7 +2756,7 @@ def build_llm_payload(
     return {
         "company_profile": {
             "corp_name": selected_row.get("corp_name"),
-            "stock_code": selected_row.get("stock_code"),
+            "stock_code": _stock_code_text(selected_row.get("stock_code")),
             "market": to_market_label(selected_row.get("market")),
             "industry_macro_category": to_industry_label(
                 selected_row.get("industry_macro_category")
@@ -2944,8 +2950,8 @@ def render_overview_tab(
     if artifacts.peer_percentiles is not None:
         peer_slice = artifacts.peer_percentiles.loc[
             (
-                artifacts.peer_percentiles["stock_code"].astype(str)
-                == str(selected_row["stock_code"])
+                artifacts.peer_percentiles["stock_code"].map(_stock_code_text)
+                == _stock_code_text(selected_row["stock_code"])
             )
             & (artifacts.peer_percentiles["fiscal_year"] == selected_row["fiscal_year"])
             & (artifacts.peer_percentiles["feature"].isin(overview_features))
@@ -3355,7 +3361,7 @@ def render_llm_panel(
     )
 
     cache_key = (
-        f"{selected_row['stock_code']}-{selected_row['fiscal_year']}-"
+        f"{_stock_code_text(selected_row['stock_code'])}-{selected_row['fiscal_year']}-"
         f"{provider}-{model}-{selected_output_format}"
     )
     if st.button("AI 심사 메모 생성", type="primary"):
@@ -3468,7 +3474,10 @@ def render_llm_panel(
             st.download_button(
                 "보고서형 HTML 다운로드",
                 data=html_report,
-                file_name=f"credit_report_{selected_row['stock_code']}_{selected_row['fiscal_year']}.html",
+                file_name=(
+                    f"credit_report_{_stock_code_text(selected_row['stock_code'])}_"
+                    f"{selected_row['fiscal_year']}.html"
+                ),
                 mime="text/html",
                 width="stretch",
             )
@@ -3476,7 +3485,10 @@ def render_llm_panel(
             st.download_button(
                 "원페이지 HTML 다운로드",
                 data=onepage_html,
-                file_name=f"credit_onepage_{selected_row['stock_code']}_{selected_row['fiscal_year']}.html",
+                file_name=(
+                    f"credit_onepage_{_stock_code_text(selected_row['stock_code'])}_"
+                    f"{selected_row['fiscal_year']}.html"
+                ),
                 mime="text/html",
                 width="stretch",
             )
@@ -3485,7 +3497,10 @@ def render_llm_panel(
             st.download_button(
                 "상세 보고서형 다운로드 (.md)",
                 data=export_text,
-                file_name=f"credit_report_{selected_row['stock_code']}_{selected_row['fiscal_year']}.md",
+                file_name=(
+                    f"credit_report_{_stock_code_text(selected_row['stock_code'])}_"
+                    f"{selected_row['fiscal_year']}.md"
+                ),
                 mime="text/markdown",
                 width="stretch",
             )
@@ -3493,7 +3508,10 @@ def render_llm_panel(
             st.download_button(
                 "원페이지 요약 다운로드 (.md)",
                 data=onepage_text,
-                file_name=f"credit_onepage_{selected_row['stock_code']}_{selected_row['fiscal_year']}.md",
+                file_name=(
+                    f"credit_onepage_{_stock_code_text(selected_row['stock_code'])}_"
+                    f"{selected_row['fiscal_year']}.md"
+                ),
                 mime="text/markdown",
                 width="stretch",
             )
@@ -4677,6 +4695,36 @@ def main() -> None:
         key="money_display_mode",
         help="상세 표기(억·만·원)와 단순 표기(억 원) 중 원하는 방식을 선택합니다.",
     )
+    with st.sidebar.expander("AI 메모 설정", expanded=False):
+        llm_provider = str(
+            st.selectbox(
+                "LLM 제공자",
+                options=list(LLM_PROVIDER_LABELS.keys()),
+                format_func=lambda value: LLM_PROVIDER_LABELS.get(value, value),
+                key="llm_provider",
+                help="AI 심사 메모 탭에서 사용할 LLM 제공자를 선택합니다.",
+            )
+        )
+        model_options: list[tuple[str, str]] = RECOMMENDED_LLM_MODELS[llm_provider]
+        model_labels = dict(model_options)
+        model_ids = [model for model, _label in model_options]
+        llm_model = str(
+            st.selectbox(
+                "LLM 모델",
+                options=model_ids,
+                format_func=lambda value: model_labels.get(str(value), str(value)),
+                key="llm_model",
+                help="추천 모델 중 하나를 선택합니다.",
+            )
+        )
+        api_key_env_var = "OPENAI_API_KEY" if llm_provider == "openai" else "ANTHROPIC_API_KEY"
+        llm_api_key = st.text_input(
+            f"{LLM_PROVIDER_LABELS.get(llm_provider, llm_provider)} API 키",
+            value=os.environ.get(api_key_env_var, ""),
+            type="password",
+            key=f"llm_api_key_{llm_provider}",
+            help=f".env 또는 현재 환경변수의 {api_key_env_var} 값을 기본으로 사용합니다.",
+        )
     with st.sidebar.expander("고급 설정", expanded=False):
         developer_mode = st.checkbox(
             "개발자 모드",
@@ -4715,6 +4763,7 @@ def main() -> None:
         peers_tab,
         industry_tab,
         scenario_tab,
+        llm_tab,
     ) = st.tabs(
         [
             "개요",
@@ -4723,6 +4772,7 @@ def main() -> None:
             "시장/산업 비교",
             "산업 흐름 보기",
             "가정별 변화 보기",
+            "AI 심사 메모",
         ]
     )
 
@@ -4747,6 +4797,23 @@ def main() -> None:
         render_industry_tab(selected_row, artifacts)
     with scenario_tab:
         render_scenario_tab(selected_row, artifacts)
+    with llm_tab:
+        industry_latest_row = resolve_industry_latest_row(
+            selected_row,
+            artifacts.industry_latest_summary,
+        )
+        render_llm_panel(
+            selected_row=selected_row,
+            prediction_row=prediction_row,
+            feature_map=feature_map,
+            local_shap=local_shap,
+            peer_slice=peer_slice,
+            industry_latest_row=industry_latest_row,
+            provider=llm_provider,
+            api_key=llm_api_key,
+            model=llm_model,
+            developer_mode=developer_mode,
+        )
 
     render_footer(artifacts, developer_mode=developer_mode)
 
