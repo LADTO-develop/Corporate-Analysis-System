@@ -19,7 +19,7 @@ class AgnoAgentLike(Protocol):
         """Run an agent prompt and return the provider response."""
 
 
-def build_agno_agent(  # noqa: UP047
+def build_agno_agent(  # noqa: UP047, RUF100
     *,
     name: str,
     model_name: str,
@@ -61,7 +61,7 @@ def build_agno_agent(  # noqa: UP047
     )
 
 
-def run_structured_agent(  # noqa: UP047
+def run_structured_agent(  # noqa: UP047, RUF100
     *,
     agent: AgnoAgentLike,
     query: str,
@@ -73,7 +73,7 @@ def run_structured_agent(  # noqa: UP047
     return coerce_model_response(content, response_model)
 
 
-def coerce_model_response(raw_response: object, response_model: type[ModelT]) -> ModelT:  # noqa: UP047
+def coerce_model_response(raw_response: object, response_model: type[ModelT]) -> ModelT:  # noqa: UP047, RUF100
     """Coerce common Agno response shapes into the requested response model."""
     if isinstance(raw_response, response_model):
         return raw_response
@@ -119,3 +119,5 @@ def _anthropic_api_key() -> str:
             "Set it in your local .env or environment before running live Agno Stage 2."
         )
     return api_key
+
+    
