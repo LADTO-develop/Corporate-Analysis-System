@@ -119,4 +119,3 @@ def _anthropic_api_key() -> str:
             "Set it in your local .env or environment before running live Agno Stage 2."
         )
     return api_key
-
