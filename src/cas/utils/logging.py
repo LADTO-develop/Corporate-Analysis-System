@@ -11,8 +11,8 @@ try:
     import structlog
     from structlog.typing import Processor
 except ImportError:  # pragma: no cover
-    structlog = None  
-    Processor = Any  
+    structlog = None
+    Processor = Any
 
 
 def _env(primary: str, legacy: str, default: str) -> str:
