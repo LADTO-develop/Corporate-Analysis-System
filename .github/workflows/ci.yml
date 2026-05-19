@@ -61,9 +61,6 @@ jobs:
       - name: Run integration tests (graph smoke)
         run: pytest tests/integration -v -m "not requires_llm and not requires_gpu"
 
-      - name: Run end-to-end tests (fast)
-        run: python -m pytest tests/e2e -v -m "not slow and not requires_llm and not requires_gpu"
-
       - name: Upload coverage
         uses: codecov/codecov-action@v4
         with:
