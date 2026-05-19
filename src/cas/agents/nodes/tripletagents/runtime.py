@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 from importlib import import_module
 from typing import Protocol, TypeVar, cast
 
@@ -68,9 +69,18 @@ def run_structured_agent(  # noqa: UP047, RUF100
     response_model: type[ModelT],
 ) -> ModelT:
     """Run an Agno agent and coerce the response into a Pydantic model."""
-    response = agent.run(query)
-    content = getattr(response, "content", response)
-    return coerce_model_response(content, response_model)
+    attempts = _stage2_agent_retry_attempts()
+    for attempt in range(1, attempts + 1):
+        try:
+            response = agent.run(query)
+            content = getattr(response, "content", response)
+            return coerce_model_response(content, response_model)
+        except Exception:
+            if attempt >= attempts:
+                raise
+            time.sleep(_stage2_agent_retry_delay_seconds() * attempt)
+
+    raise RuntimeError("Agno agent retry loop exited unexpectedly.")
 
 
 def coerce_model_response(raw_response: object, response_model: type[ModelT]) -> ModelT:  # noqa: UP047, RUF100
@@ -119,3 +129,21 @@ def _anthropic_api_key() -> str:
             "Set it in your local .env or environment before running live Agno Stage 2."
         )
     return api_key
+
+
+def _stage2_agent_retry_attempts() -> int:
+    raw_value = os.environ.get("CAS_STAGE2_AGENT_RETRIES", "2").strip()
+    try:
+        attempts = int(raw_value)
+    except ValueError:
+        attempts = 2
+    return min(max(attempts, 1), 5)
+
+
+def _stage2_agent_retry_delay_seconds() -> float:
+    raw_value = os.environ.get("CAS_STAGE2_AGENT_RETRY_DELAY_SECONDS", "1.5").strip()
+    try:
+        delay = float(raw_value)
+    except ValueError:
+        delay = 1.5
+    return min(max(delay, 0.0), 10.0)
