@@ -46,7 +46,7 @@ Rebuild dashboard/model artifacts from the 43-feature input tables:
 
 ## Current Baseline Checks
 
-- Canonical TS2000 Model V1 rows: 5,199
-- `feature_43_master.csv` rows: 5,199
+- Canonical TS2000 Model V1 rows: 5,451
+- `feature_43_master.csv` rows: 5,451
 - 삼성전자(주): 10 company-year rows
 - (주)토마토시스템: 1 company-year row (`2023 -> 2024`)

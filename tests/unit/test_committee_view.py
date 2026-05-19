@@ -275,6 +275,244 @@ def test_committee_view_does_not_flag_hidden_tail_risk_for_routine_external_cont
     assert committee_view["hidden_tail_risk_reason"] == ""
 
 
+def test_committee_view_softens_near_threshold_overwarning_to_hold() -> None:
+    state: AgentState = {
+        "company_id": "000250",
+        "company_name": "삼천당제약(주)",
+        "source_feature_row": {"stock_code": "000250"},
+        "model_view": {
+            "prediction_label": "부적격",
+            "probability_speculative": 0.34,
+            "threshold": 0.315,
+            "risk_band": "watch",
+        },
+        "xgboost_result": {
+            "prediction_label": "부적격",
+            "probability_speculative": 0.34,
+            "threshold": 0.315,
+            "risk_band": "watch",
+        },
+        "news_cache_snapshot": {
+            "status": "ready",
+            "items": [
+                {
+                    "source": "opendart",
+                    "title": "삼천당제약(주) 사업보고서",
+                    "summary": "정기 사업보고서 공시입니다.",
+                    "reliability": "high",
+                    "company_match": True,
+                    "provider_relevance": "context",
+                    "critical_terms": [],
+                    "evidence_quality": "high",
+                    "evidence_score": 0.86,
+                }
+            ],
+        },
+    }
+    agents = [
+        AgentOutput(
+            role="quant_credit",
+            summary="정량 결과",
+            findings=["완화 요인: 현금비율이 산업 대비 양호합니다."],
+            confidence=0.8,
+        ),
+        AgentOutput(role="evidence_audit", summary="근거 검토", findings=[], confidence=0.6),
+        AgentOutput(role="chair_report", summary="종합", findings=[], confidence=0.7),
+    ]
+
+    committee_view = build_committee_view(
+        bundle=build_stage2_input_bundle(state),
+        recommendation="defer",
+        agents=agents,
+    )
+
+    assert committee_view["final_committee_label"] == "보류"
+    assert committee_view["veto_triggered"] is False
+    assert "과민 경고" in committee_view["mitigating_factors"][0]
+
+
+def test_committee_view_keeps_high_probability_risk_as_reject() -> None:
+    state: AgentState = {
+        "company_id": "000250",
+        "company_name": "삼천당제약(주)",
+        "source_feature_row": {"stock_code": "000250"},
+        "model_view": {
+            "prediction_label": "부적격",
+            "probability_speculative": 0.91,
+            "threshold": 0.315,
+            "risk_band": "high_risk",
+        },
+        "xgboost_result": {
+            "prediction_label": "부적격",
+            "probability_speculative": 0.91,
+            "threshold": 0.315,
+            "risk_band": "high_risk",
+        },
+        "news_cache_snapshot": {"status": "ready", "items": []},
+    }
+    agents = [
+        AgentOutput(
+            role="quant_credit",
+            summary="정량 결과",
+            findings=["완화 요인: 일부 현금성 자산이 확인됩니다."],
+            confidence=0.8,
+        ),
+        AgentOutput(role="evidence_audit", summary="근거 검토", findings=[], confidence=0.6),
+        AgentOutput(role="chair_report", summary="종합", findings=[], confidence=0.7),
+    ]
+
+    committee_view = build_committee_view(
+        bundle=build_stage2_input_bundle(state),
+        recommendation="defer",
+        agents=agents,
+    )
+
+    assert committee_view["final_committee_label"] == "부적격"
+
+
+def test_committee_view_softens_high_probability_risk_with_financial_resilience() -> None:
+    state: AgentState = {
+        "company_id": "196700",
+        "company_name": "(주)웹스",
+        "source_feature_row": {
+            "stock_code": "196700",
+            "current_ratio": 1.52,
+            "cash_ratio": 0.29,
+            "equity_ratio": 0.51,
+            "debt_ratio": 0.98,
+            "total_borrowings_ratio": 0.44,
+            "capital_impairment_ratio": -3.75,
+            "interest_coverage_ratio": 1.79,
+            "net_margin": 0.03,
+            "ocf_to_sales": -0.15,
+            "is_2y_consecutive_operating_loss": 0,
+            "is_2y_consecutive_ocf_deficit": 0,
+            "icr_under_1": 0,
+            "short_term_borrowings_share": 0.79,
+        },
+        "model_view": {
+            "prediction_label": "부적격",
+            "probability_speculative": 0.81,
+            "threshold": 0.315,
+            "risk_band": "high_risk",
+        },
+        "xgboost_result": {
+            "prediction_label": "부적격",
+            "probability_speculative": 0.81,
+            "threshold": 0.315,
+            "risk_band": "high_risk",
+        },
+        "news_cache_snapshot": {"status": "ready", "items": []},
+    }
+    agents = [
+        AgentOutput(role="quant_credit", summary="정량 결과", findings=[], confidence=0.8),
+        AgentOutput(role="evidence_audit", summary="근거 검토", findings=[], confidence=0.6),
+        AgentOutput(role="chair_report", summary="종합", findings=[], confidence=0.7),
+    ]
+
+    committee_view = build_committee_view(
+        bundle=build_stage2_input_bundle(state),
+        recommendation="defer",
+        agents=agents,
+    )
+
+    assert committee_view["final_committee_label"] == "보류"
+    assert "고확률 과민 경고 방어 신호" in committee_view["mitigating_factors"][0]
+
+
+def test_committee_view_keeps_high_probability_risk_when_blockers_exist() -> None:
+    state: AgentState = {
+        "company_id": "317120",
+        "company_name": "(주)라닉스",
+        "source_feature_row": {
+            "stock_code": "317120",
+            "current_ratio": 1.90,
+            "cash_ratio": 0.25,
+            "equity_ratio": 0.36,
+            "debt_ratio": 1.75,
+            "total_borrowings_ratio": 0.62,
+            "capital_impairment_ratio": -1.17,
+            "interest_coverage_ratio": -1.92,
+            "net_margin": -0.47,
+            "ocf_to_sales": -0.11,
+            "is_2y_consecutive_operating_loss": 1,
+            "is_2y_consecutive_ocf_deficit": 1,
+            "icr_under_1": 1,
+            "short_term_borrowings_share": 0.28,
+        },
+        "model_view": {
+            "prediction_label": "부적격",
+            "probability_speculative": 0.95,
+            "threshold": 0.315,
+            "risk_band": "high_risk",
+        },
+        "xgboost_result": {
+            "prediction_label": "부적격",
+            "probability_speculative": 0.95,
+            "threshold": 0.315,
+            "risk_band": "high_risk",
+        },
+        "news_cache_snapshot": {"status": "ready", "items": []},
+    }
+    agents = [
+        AgentOutput(
+            role="quant_credit",
+            summary="정량 결과",
+            findings=["완화 요인: 유동비율은 단기 방어력을 일부 제공합니다."],
+            confidence=0.8,
+        ),
+        AgentOutput(role="evidence_audit", summary="근거 검토", findings=[], confidence=0.6),
+        AgentOutput(role="chair_report", summary="종합", findings=[], confidence=0.7),
+    ]
+
+    committee_view = build_committee_view(
+        bundle=build_stage2_input_bundle(state),
+        recommendation="defer",
+        agents=agents,
+    )
+
+    assert committee_view["final_committee_label"] == "부적격"
+
+
+def test_committee_view_limits_investment_model_rule_defer_to_hold_without_veto() -> None:
+    state: AgentState = {
+        "company_id": "014470",
+        "company_name": "(주)부방",
+        "source_feature_row": {
+            "stock_code": "014470",
+            "interest_coverage_ratio": -0.10,
+            "icr_under_1": 1,
+        },
+        "model_view": {
+            "prediction_label": "투자적격",
+            "probability_speculative": 0.2923,
+            "threshold": 0.315,
+            "risk_band": "high_risk",
+        },
+        "xgboost_result": {
+            "prediction_label": "투자적격",
+            "probability_speculative": 0.2923,
+            "threshold": 0.315,
+            "risk_band": "high_risk",
+        },
+        "news_cache_snapshot": {"status": "ready", "items": []},
+    }
+    agents = [
+        AgentOutput(role="quant_credit", summary="정량 결과", findings=[], confidence=0.8),
+        AgentOutput(role="evidence_audit", summary="근거 검토", findings=[], confidence=0.6),
+        AgentOutput(role="chair_report", summary="종합", findings=[], confidence=0.7),
+    ]
+
+    committee_view = build_committee_view(
+        bundle=build_stage2_input_bundle(state),
+        recommendation="defer",
+        agents=agents,
+    )
+
+    assert committee_view["final_committee_label"] == "보류"
+    assert committee_view["veto_triggered"] is False
+
+
 def test_committee_view_model_validates_strict_payload() -> None:
     state: AgentState = {
         "xgboost_result": {"prediction_label": "투자적격"},

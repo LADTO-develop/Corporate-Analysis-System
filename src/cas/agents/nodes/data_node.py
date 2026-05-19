@@ -21,9 +21,9 @@ from cas.utils.logging import get_logger
 logger = get_logger(__name__)
 
 _PROFILE_ROOT = Path("data/input/companies")
-_FEATURE_MASTER_PATH = Path("data/input/credit_44_features/feature_44_master.csv")
-_FEATURE_INFERENCE_2026_PATH = Path("data/input/credit_44_features/feature_44_inference_2026.csv")
-_PEER_PERCENTILES_PATH = Path("data/outputs/dashboard/feature_44_mvp/peer_percentiles.csv")
+_FEATURE_MASTER_PATH = Path("data/input/credit_43_features/feature_43_master.csv")
+_FEATURE_INFERENCE_2026_PATH = Path("data/input/credit_43_features/feature_43_inference_2026.csv")
+_PEER_PERCENTILES_PATH = Path("data/outputs/dashboard/feature_43_mvp/peer_percentiles.csv")
 _REQUIRED_FINANCIALS = {
     "revenue_growth_pct",
     "operating_margin_pct",
@@ -254,7 +254,7 @@ def _resolve_feature_row_for_selection(
         return None, "ambiguous_snapshot"
 
     row = matches.iloc[0]
-    if int(row["eval_year"]) > selection.as_of_date.year:
+    if int(row["fiscal_year"]) > selection.as_of_date.year:
         return None, "as_of_date_violation"
     return {key: (None if pd.isna(value) else value) for key, value in row.to_dict().items()}, None
 

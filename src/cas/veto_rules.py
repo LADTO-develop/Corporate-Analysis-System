@@ -136,6 +136,11 @@ def _external_veto_candidates(
     for item in raw_items:
         if not isinstance(item, dict):
             continue
+        severity = str(item.get("disclosure_severity", "")).lower()
+        if severity in {"routine", "caution"}:
+            continue
+        if item.get("critical_context_confirmed") is False:
+            continue
         text = _external_item_text(item)
         terms = _critical_terms_from_item(item, text=text, rules=rules)
         if not terms:

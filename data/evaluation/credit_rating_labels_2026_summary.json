@@ -1,35 +1,84 @@
 {
   "dataset": "credit_rating_labels_2026",
-  "source_agency": "한국기업평가",
-  "source_period": "2026-01-01~2026-03-31",
+  "source_agencies": [
+    "NICE신용평가",
+    "한국기업평가",
+    "한국신용평가"
+  ],
+  "source_periods": [
+    "2026-01-01~2026-03-31",
+    "2026-01-01~2026-05-19",
+    "2026-04-01~2026-05-19"
+  ],
   "source_targets": [
     "기업신용평가",
     "회사채"
   ],
-  "raw_matched_rows": 60,
-  "representative_label_rows": 49,
-  "speculative_rows": 1,
-  "investment_grade_rows": 48,
+  "last_added_source_files": [
+    "%EC%9D%BC%EC%9D%BC%EB%93%B1%EA%B8%89%EC%86%8D%EB%B3%B4_20260519.xls",
+    "%EC%9D%BC%EC%9D%BC%EB%93%B1%EA%B8%89%EC%86%8D%EB%B3%B4_20260519-2.xls"
+  ],
+  "last_added_source_agency": "NICE신용평가",
+  "last_added_company_bond_rows": 131,
+  "last_added_issuer_rating_rows": 16,
+  "source_level_matched_rows": 399,
+  "representative_label_rows": 141,
+  "speculative_rows": 15,
+  "investment_grade_rows": 126,
+  "rating_agency_counts_raw": {
+    "NICE신용평가": 147,
+    "한국기업평가": 150,
+    "한국신용평가": 102
+  },
   "rating_target_counts_raw": {
-    "기업신용평가": 5,
-    "회사채": 55
+    "기업신용평가": 38,
+    "회사채": 361
   },
   "market_counts_final": {
-    "KOSDAQ": 2,
-    "KOSPI": 47
+    "KOSDAQ": 20,
+    "KOSPI": 121
   },
   "rating_counts_final": {
-    "A": 8,
-    "A+": 9,
-    "A-": 1,
-    "AA": 5,
-    "AA+": 2,
-    "AA-": 16,
-    "AAA": 3,
-    "BB-": 1,
-    "BBB+": 3,
-    "BBB-": 1
+    "A": 18,
+    "A+": 23,
+    "A-": 9,
+    "AA": 12,
+    "AA+": 8,
+    "AA-": 26,
+    "AAA": 5,
+    "B": 1,
+    "B-": 1,
+    "BB": 7,
+    "BB+": 2,
+    "BB-": 2,
+    "BBB": 9,
+    "BBB+": 12,
+    "BBB-": 4,
+    "CCC": 1,
+    "D": 1
   },
-  "input_universe": "data/input/credit_44_features/feature_44_inference_2026.csv",
-  "selection_rule": "CAS 2026 inference universe exact company-name match; cancelled disclosures removed; one representative row per company-year using worst credit_rating_rank, then latest rating_date."
+  "input_universe": "data/input/credit_43_features/feature_43_inference_2026.csv",
+  "selection_rule": "CAS 2026 inference universe exact company-name match; cancelled disclosures removed; one representative row per company-year using worst credit_rating_rank, then latest rating_date.",
+  "final_columns": [
+    "market",
+    "stock_code",
+    "corp_name",
+    "fiscal_year",
+    "eval_year",
+    "is_speculative",
+    "credit_rating",
+    "credit_rating_rank",
+    "rating_agency",
+    "rating_agency_code",
+    "rating_target",
+    "rating_date",
+    "current_outlook"
+  ],
+  "final_schema_note": "Final evaluation labels keep Model_V1 key columns plus representative credit-rating fields only.",
+  "retained_files": [
+    "data/evaluation/credit_rating_labels_2026.csv",
+    "data/evaluation/credit_rating_labels_2026_summary.json",
+    "data/evaluation/README.md"
+  ],
+  "cleanup_note": "Source-level staging CSVs were removed after their rows were reflected in the final representative 2026 evaluation labels."
 }

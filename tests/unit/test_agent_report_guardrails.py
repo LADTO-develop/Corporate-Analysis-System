@@ -74,7 +74,7 @@ def test_render_report_uses_korean_headings_and_softens_official_rating_language
                     "summary": "",
                 },
                 "model_result": {
-                    "model_name": "credit_44_features",
+                    "model_name": "credit_43_features",
                     "model_version": "test",
                     "prediction_label": "투자적격",
                     "risk_band": "stable",

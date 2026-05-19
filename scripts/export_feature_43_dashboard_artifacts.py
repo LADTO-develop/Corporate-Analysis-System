@@ -25,6 +25,39 @@ THRESHOLD_GRID = np.round(np.arange(0.05, 0.951, 0.005), 6)
 JOIN_KEYS = ["market", "stock_code", "corp_name", "fiscal_year", "eval_year"]
 STAGE2_REVIEW_FEATURES = ["delta_accruals_ratio", "is_3y_consecutive_operating_loss"]
 STAGE2_IT_SERVICES_RECALL_FLOOR = 0.90
+STAGE2_OVERWARNING_FILTER_FEATURES = [
+    "cashflow_debt_stress_score",
+    "working_capital_shock_score",
+    "liquidity_buffer_gap_score",
+    "profit_quality_deterioration_score",
+    "industry_relative_stress_score",
+]
+STAGE2_OVERWARNING_COMPONENT_COLUMNS = [
+    "interest_burden_ratio",
+    "total_borrowings_ratio",
+    "rolling_3y_cv_ocf_to_total_borrowings",
+    "short_term_borrowings_share",
+    "ocf_to_total_borrowings",
+    "ocf_to_total_liabilities",
+    "cashflow_coverage_ratio",
+    "ar_days_diff",
+    "inventory_days_diff",
+    "ap_days_diff",
+    "current_ratio",
+    "cash_ratio",
+    "current_ratio_diff",
+    "cash_ratio_diff",
+    "accruals_ratio",
+    "delta_accruals_ratio",
+    "ocf_to_sales",
+    "net_margin_diff",
+    "operating_margin_diff",
+    "equity_ratio",
+    "debt_ratio",
+    "capital_impairment_ratio",
+    "net_margin",
+    "interest_coverage_ratio",
+]
 
 SCENARIO_PRESETS: dict[str, dict[str, float]] = {
     "base": {},
@@ -432,6 +465,234 @@ def attach_stage2_review_features(
     return output
 
 
+def _stage2_risk_percentile(
+    frame: pd.DataFrame,
+    column: str,
+    *,
+    high_value_is_risk: bool = True,
+    absolute_value: bool = False,
+) -> pd.Series:
+    values = pd.to_numeric(frame[column], errors="coerce")
+    if absolute_value:
+        values = values.abs()
+    ranks = values.groupby([frame["fiscal_year"], frame["industry_macro_category"]]).rank(
+        pct=True,
+        method="average",
+    )
+    if high_value_is_risk:
+        return ranks
+    return 1.0 - ranks
+
+
+def _stage2_mean_score(frame: pd.DataFrame, columns: list[str]) -> pd.Series:
+    return frame.loc[:, columns].mean(axis=1, skipna=True)
+
+
+def add_stage2_overwarning_filter_scores(raw: pd.DataFrame) -> pd.DataFrame:
+    """Create composite scores used only as Stage 2 over-warning review signals."""
+    missing_columns = [
+        column for column in STAGE2_OVERWARNING_COMPONENT_COLUMNS if column not in raw.columns
+    ]
+    if missing_columns:
+        raise KeyError(
+            f"Stage 2 over-warning component columns are missing from raw data: {missing_columns}"
+        )
+
+    output = raw.copy()
+    output["_risk_interest_burden"] = _stage2_risk_percentile(output, "interest_burden_ratio")
+    output["_risk_total_borrowings"] = _stage2_risk_percentile(output, "total_borrowings_ratio")
+    output["_risk_ocf_borrowing_volatility"] = _stage2_risk_percentile(
+        output,
+        "rolling_3y_cv_ocf_to_total_borrowings",
+    )
+    output["_risk_short_term_borrowing_share"] = _stage2_risk_percentile(
+        output,
+        "short_term_borrowings_share",
+    )
+    output["_risk_low_ocf_to_borrowings"] = _stage2_risk_percentile(
+        output,
+        "ocf_to_total_borrowings",
+        high_value_is_risk=False,
+    )
+    output["_risk_low_ocf_to_liabilities"] = _stage2_risk_percentile(
+        output,
+        "ocf_to_total_liabilities",
+        high_value_is_risk=False,
+    )
+    output["_risk_low_cashflow_coverage"] = _stage2_risk_percentile(
+        output,
+        "cashflow_coverage_ratio",
+        high_value_is_risk=False,
+    )
+    output["cashflow_debt_stress_score"] = _stage2_mean_score(
+        output,
+        [
+            "_risk_interest_burden",
+            "_risk_total_borrowings",
+            "_risk_ocf_borrowing_volatility",
+            "_risk_short_term_borrowing_share",
+            "_risk_low_ocf_to_borrowings",
+            "_risk_low_ocf_to_liabilities",
+            "_risk_low_cashflow_coverage",
+        ],
+    )
+
+    output["_risk_ar_days_shock"] = _stage2_risk_percentile(
+        output,
+        "ar_days_diff",
+        absolute_value=True,
+    )
+    output["_risk_inventory_days_shock"] = _stage2_risk_percentile(
+        output,
+        "inventory_days_diff",
+        absolute_value=True,
+    )
+    output["_risk_ap_days_shock"] = _stage2_risk_percentile(
+        output,
+        "ap_days_diff",
+        absolute_value=True,
+    )
+    output["working_capital_shock_score"] = _stage2_mean_score(
+        output,
+        ["_risk_ar_days_shock", "_risk_inventory_days_shock", "_risk_ap_days_shock"],
+    )
+
+    output["_risk_low_current_ratio"] = _stage2_risk_percentile(
+        output,
+        "current_ratio",
+        high_value_is_risk=False,
+    )
+    output["_risk_low_cash_ratio"] = _stage2_risk_percentile(
+        output,
+        "cash_ratio",
+        high_value_is_risk=False,
+    )
+    output["_risk_current_ratio_drop"] = _stage2_risk_percentile(
+        output,
+        "current_ratio_diff",
+        high_value_is_risk=False,
+    )
+    output["_risk_cash_ratio_drop"] = _stage2_risk_percentile(
+        output,
+        "cash_ratio_diff",
+        high_value_is_risk=False,
+    )
+    output["liquidity_buffer_gap_score"] = _stage2_mean_score(
+        output,
+        [
+            "_risk_low_current_ratio",
+            "_risk_low_cash_ratio",
+            "_risk_current_ratio_drop",
+            "_risk_cash_ratio_drop",
+            "_risk_short_term_borrowing_share",
+        ],
+    )
+
+    output["_risk_accruals"] = _stage2_risk_percentile(output, "accruals_ratio")
+    output["_risk_delta_accruals_abs"] = _stage2_risk_percentile(
+        output,
+        "delta_accruals_ratio",
+        absolute_value=True,
+    )
+    output["_risk_low_ocf_to_sales"] = _stage2_risk_percentile(
+        output,
+        "ocf_to_sales",
+        high_value_is_risk=False,
+    )
+    output["_risk_net_margin_drop"] = _stage2_risk_percentile(
+        output,
+        "net_margin_diff",
+        high_value_is_risk=False,
+    )
+    output["_risk_operating_margin_drop"] = _stage2_risk_percentile(
+        output,
+        "operating_margin_diff",
+        high_value_is_risk=False,
+    )
+    output["profit_quality_deterioration_score"] = _stage2_mean_score(
+        output,
+        [
+            "_risk_accruals",
+            "_risk_delta_accruals_abs",
+            "_risk_low_ocf_to_sales",
+            "_risk_net_margin_drop",
+            "_risk_operating_margin_drop",
+        ],
+    )
+
+    output["_risk_low_equity_ratio"] = _stage2_risk_percentile(
+        output,
+        "equity_ratio",
+        high_value_is_risk=False,
+    )
+    output["_risk_debt_ratio"] = _stage2_risk_percentile(output, "debt_ratio")
+    output["_risk_capital_impairment"] = _stage2_risk_percentile(
+        output,
+        "capital_impairment_ratio",
+    )
+    output["_risk_low_net_margin"] = _stage2_risk_percentile(
+        output,
+        "net_margin",
+        high_value_is_risk=False,
+    )
+    output["_risk_low_interest_coverage"] = _stage2_risk_percentile(
+        output,
+        "interest_coverage_ratio",
+        high_value_is_risk=False,
+    )
+    output["industry_relative_stress_score"] = _stage2_mean_score(
+        output,
+        [
+            "_risk_low_equity_ratio",
+            "_risk_debt_ratio",
+            "_risk_capital_impairment",
+            "_risk_low_net_margin",
+            "_risk_low_interest_coverage",
+            "_risk_low_current_ratio",
+            "_risk_low_cash_ratio",
+        ],
+    )
+    return output
+
+
+def attach_stage2_overwarning_filter_features(
+    *,
+    frames: dict[str, pd.DataFrame],
+    id_frames: dict[str, pd.DataFrame],
+    raw_path: Path,
+) -> dict[str, pd.DataFrame]:
+    raw = pd.read_csv(raw_path, encoding="utf-8-sig", dtype={"stock_code": str})
+    duplicates = raw.duplicated(JOIN_KEYS).sum()
+    if duplicates:
+        raise ValueError(f"Raw Model V1 has duplicate rows for join keys: {duplicates}")
+
+    raw_with_scores = add_stage2_overwarning_filter_scores(raw)
+    raw_subset = raw_with_scores.loc[
+        :,
+        [*JOIN_KEYS, *STAGE2_OVERWARNING_FILTER_FEATURES],
+    ].copy()
+    raw_subset["stock_code"] = raw_subset["stock_code"].astype(str)
+    for column in ["fiscal_year", "eval_year"]:
+        raw_subset[column] = pd.to_numeric(raw_subset[column], errors="raise").astype(int)
+    for column in STAGE2_OVERWARNING_FILTER_FEATURES:
+        raw_subset[column] = pd.to_numeric(raw_subset[column], errors="coerce")
+
+    output: dict[str, pd.DataFrame] = {}
+    for split, frame in frames.items():
+        join_keys = _normalized_join_frame(id_frames[split].reset_index(drop=True))
+        joined = join_keys.merge(raw_subset, on=JOIN_KEYS, how="left", indicator=True)
+        unmatched = int(joined["_merge"].ne("both").sum())
+        if unmatched:
+            raise ValueError(
+                f"{split} split has unmatched Stage 2 over-warning feature rows: {unmatched}"
+            )
+        split_frame = frame.reset_index(drop=True).copy()
+        for column in STAGE2_OVERWARNING_FILTER_FEATURES:
+            split_frame[column] = joined[column]
+        output[split] = split_frame
+    return output
+
+
 def build_stage2_review_probabilities(
     *,
     frames: dict[str, pd.DataFrame],
@@ -507,6 +768,70 @@ def build_stage2_review_probabilities(
     }
 
 
+def build_stage2_overwarning_filter_probabilities(
+    *,
+    frames: dict[str, pd.DataFrame],
+    id_frames: dict[str, pd.DataFrame],
+    raw_path: Path,
+    base_model_features: list[str],
+    seed: int,
+) -> dict[str, object]:
+    from xgboost import XGBClassifier
+
+    filter_frames = attach_stage2_overwarning_filter_features(
+        frames=frames,
+        id_frames=id_frames,
+        raw_path=raw_path,
+    )
+    filter_features = [*base_model_features, *STAGE2_OVERWARNING_FILTER_FEATURES]
+    y_train = filter_frames["train"]["is_speculative"].astype(int)
+    y_valid = filter_frames["valid"]["is_speculative"].astype(int)
+
+    pos = int(y_train.sum())
+    neg = int(len(y_train) - pos)
+    scale_pos_weight = float(neg / pos) if pos else 1.0
+    model = XGBClassifier(
+        objective="binary:logistic",
+        eval_metric="aucpr",
+        n_estimators=400,
+        learning_rate=0.05,
+        max_depth=4,
+        min_child_weight=3,
+        subsample=0.9,
+        colsample_bytree=0.9,
+        reg_alpha=0.0,
+        reg_lambda=1.0,
+        random_state=seed,
+        n_jobs=4,
+        tree_method="hist",
+        scale_pos_weight=scale_pos_weight,
+        early_stopping_rounds=50,
+    )
+    model.fit(
+        filter_frames["train"].loc[:, filter_features],
+        y_train,
+        eval_set=[(filter_frames["valid"].loc[:, filter_features], y_valid)],
+        verbose=False,
+    )
+    raw_probabilities = {
+        split: model.predict_proba(filter_frames[split].loc[:, filter_features])[:, 1]
+        for split in ["train", "valid", "test"]
+    }
+    calibration = fit_platt_calibration(y_valid, raw_probabilities["valid"])
+    probabilities = {
+        split: apply_probability_calibration(raw_probabilities[split], calibration)
+        for split in ["train", "valid", "test"]
+    }
+    threshold = choose_tuned_threshold(y_valid, probabilities["valid"])
+    return {
+        "probabilities": probabilities,
+        "raw_probabilities": raw_probabilities,
+        "threshold": threshold,
+        "feature_columns": filter_features,
+        "calibration_method": calibration["method"],
+    }
+
+
 def add_stage2_review_signals(
     prediction_scores: pd.DataFrame,
     *,
@@ -577,6 +902,50 @@ def add_stage2_review_signals(
     return output
 
 
+def add_stage2_overwarning_filter_signals(
+    prediction_scores: pd.DataFrame,
+    *,
+    filter_probabilities: dict[str, np.ndarray],
+    filter_raw_probabilities: dict[str, np.ndarray],
+    filter_threshold: float,
+    filter_calibration_method: str,
+) -> pd.DataFrame:
+    output = prediction_scores.copy()
+    for split, split_probabilities in filter_probabilities.items():
+        split_mask = output["split"].eq(split)
+        output.loc[split_mask, "prob_speculative_overwarning_filter"] = split_probabilities
+        output.loc[split_mask, "prob_speculative_overwarning_filter_raw"] = (
+            filter_raw_probabilities[split]
+        )
+
+    stage1_risk = output["pred_label_tuned"].astype(int).eq(1)
+    filter_risk = output["prob_speculative_overwarning_filter"].astype(float).ge(
+        filter_threshold
+    )
+    overwarning_candidate = stage1_risk & (~filter_risk)
+    output["probability_overwarning_filter_calibration_method"] = filter_calibration_method
+    output["threshold_overwarning_filter"] = filter_threshold
+    output["pred_label_overwarning_filter_tuned"] = filter_risk.astype(int)
+    output["stage2_overwarning_filter_candidate"] = overwarning_candidate
+    output["overwarning_filter_reason_code"] = np.where(
+        overwarning_candidate,
+        "stage1_risk_but_composite_filter_normal",
+        "none",
+    )
+    output["overwarning_filter_reason"] = np.where(
+        overwarning_candidate,
+        (
+            "1차 모델은 위험으로 판단했지만 조합형 재무 스트레스 필터는 기준선 미만입니다. "
+            "2차 위원회에서 과민 경고 가능성과 완화 요인을 함께 검토합니다."
+        ),
+        "과민 경고 보조필터 특이 신호 없음",
+    )
+    output["overwarning_filter_policy"] = (
+        "stage1_risk_and_composite_filter_below_threshold_for_committee_mitigation_review"
+    )
+    return output
+
+
 def build_stage2_review_signal_summary(prediction_scores: pd.DataFrame) -> dict[str, object]:
     summary: dict[str, object] = {}
     for split, split_frame in prediction_scores.groupby("split"):
@@ -599,6 +968,32 @@ def build_stage2_review_signal_summary(prediction_scores: pd.DataFrame) -> dict[
             else 0.0,
             "trigger_recall": true_positive / recall_denominator if recall_denominator else 0.0,
             "trigger_reason_counts": split_frame["trigger_reason_code"].value_counts().to_dict(),
+        }
+    return summary
+
+
+def build_stage2_overwarning_filter_summary(prediction_scores: pd.DataFrame) -> dict[str, object]:
+    summary: dict[str, object] = {}
+    for split, split_frame in prediction_scores.groupby("split"):
+        y_true = split_frame["is_speculative"].astype(int)
+        stage1_risk = split_frame["pred_label_tuned"].astype(int).eq(1)
+        candidate = split_frame["stage2_overwarning_filter_candidate"].astype(bool)
+        stage1_risk_count = int(stage1_risk.sum())
+        candidate_count = int(candidate.sum())
+        candidate_false_positive = int((candidate & y_true.eq(0)).sum())
+        candidate_true_positive = int((candidate & y_true.eq(1)).sum())
+        summary[str(split)] = {
+            "rows": len(split_frame),
+            "stage1_risk_count": stage1_risk_count,
+            "overwarning_filter_candidate_count": candidate_count,
+            "candidate_false_positive_count": candidate_false_positive,
+            "candidate_true_positive_count": candidate_true_positive,
+            "candidate_share_among_stage1_risk": candidate_count / stage1_risk_count
+            if stage1_risk_count
+            else 0.0,
+            "candidate_precision_for_overwarning": candidate_false_positive / candidate_count
+            if candidate_count
+            else 0.0,
         }
     return summary
 
@@ -1179,6 +1574,20 @@ def main() -> None:
         review_it_services_threshold=float(stage2_review_model["it_services_threshold"]),
         review_calibration_method=str(stage2_review_model["calibration_method"]),
     )
+    stage2_overwarning_filter_model = build_stage2_overwarning_filter_probabilities(
+        frames={"train": train_ready, "valid": valid_ready, "test": test_ready},
+        id_frames=id_frames,
+        raw_path=args.raw_path,
+        base_model_features=model_features,
+        seed=args.seed,
+    )
+    prediction_scores = add_stage2_overwarning_filter_signals(
+        prediction_scores,
+        filter_probabilities=stage2_overwarning_filter_model["probabilities"],
+        filter_raw_probabilities=stage2_overwarning_filter_model["raw_probabilities"],
+        filter_threshold=float(stage2_overwarning_filter_model["threshold"]),
+        filter_calibration_method=str(stage2_overwarning_filter_model["calibration_method"]),
+    )
 
     explainer = shap.TreeExplainer(model)
     shap_values_by_split = {}
@@ -1238,6 +1647,24 @@ def main() -> None:
         ],
         "summary": build_stage2_review_signal_summary(prediction_scores),
     }
+    model_summary["stage2_overwarning_filter_policy"] = {
+        "purpose": (
+            "43개 모델 원판단은 유지하고, 조합형 점수 모델은 1차 위험 경고가 "
+            "과민할 수 있는지 2차 위원회가 확인하는 완화 검토 필터로 사용합니다."
+        ),
+        "base_model": "feature_43_xgboost",
+        "filter_feature_set": "feature_43_plus_composite_scores",
+        "filter_features": STAGE2_OVERWARNING_FILTER_FEATURES,
+        "threshold": float(stage2_overwarning_filter_model["threshold"]),
+        "trigger_columns": [
+            "prob_speculative_overwarning_filter",
+            "pred_label_overwarning_filter_tuned",
+            "stage2_overwarning_filter_candidate",
+            "overwarning_filter_reason_code",
+            "overwarning_filter_reason",
+        ],
+        "summary": build_stage2_overwarning_filter_summary(prediction_scores),
+    }
 
     scenario_presets = {
         name: {feature: value for feature, value in preset.items() if feature in source_features}
@@ -1280,6 +1707,12 @@ def main() -> None:
         "stage2_review_priority",
         "trigger_reason_code",
         "trigger_reason",
+        "prob_speculative_overwarning_filter",
+        "pred_label_overwarning_filter_tuned",
+        "threshold_overwarning_filter",
+        "stage2_overwarning_filter_candidate",
+        "overwarning_filter_reason_code",
+        "overwarning_filter_reason",
     ]
     prediction_scores.loc[:, stage2_review_columns].to_csv(
         output_dir / "stage2_review_signals.csv",

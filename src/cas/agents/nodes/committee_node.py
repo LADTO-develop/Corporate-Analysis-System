@@ -35,7 +35,7 @@ from cas.agents.state import (
 )
 from cas.utils.io import read_json
 
-_FEATURE_METADATA_PATH = Path("data/input/credit_44_features/feature_44_dictionary_metadata.json")
+_FEATURE_METADATA_PATH = Path("data/input/credit_43_features/feature_43_dictionary_metadata.json")
 
 _INDUSTRY_LABELS = {
     "manufacturing": "제조업",
@@ -95,6 +95,8 @@ class _EvidenceProfile(TypedDict):
     direct_count: int
     verified_count: int
     weak_count: int
+    adverse_count: int
+    verified_adverse_count: int
     veto_candidate_count: int
     high_confidence_critical_count: int
     critical_terms: list[str]
@@ -379,6 +381,8 @@ def _quant_credit_agent(bundle: Stage2InputBundle) -> QuantCreditOutput:
     secondary_triggered = bool(bundle.model_view.get("stage2_secondary_trigger"))
     review_priority = str(bundle.model_view.get("stage2_review_priority") or "none")
     trigger_reason = str(bundle.model_view.get("trigger_reason") or "")
+    overwarning_candidate = bool(bundle.model_view.get("stage2_overwarning_filter_candidate"))
+    overwarning_reason = str(bundle.model_view.get("overwarning_filter_reason") or "")
 
     if risk_items:
         primary_risk = f"{risk_items[0]['feature']}이(가) 위험을 높이는 요인으로 해석됩니다."
@@ -398,12 +402,22 @@ def _quant_credit_agent(bundle: Stage2InputBundle) -> QuantCreditOutput:
     )
     if secondary_triggered:
         summary += (
-            f" 다만 46개 보조 변수셋 신호가 `{review_priority}` 우선순위의 "
+            f" 다만 45개 보조 변수셋 신호가 `{review_priority}` 우선순위의 "
             f"추가 위원회 검토 대상으로 표시했습니다."
+        )
+    if overwarning_candidate:
+        summary += (
+            " 한편 조합형 재무 스트레스 필터는 1차 위험 경고가 과민할 가능성을 "
+            "완화 요인으로 재확인하라고 표시했습니다."
         )
     key_risk_factors = [str(item.get("detail", "")) for item in risk_items if item.get("detail")]
     if secondary_triggered and trigger_reason:
-        key_risk_factors.insert(0, f"46개 보조 변수셋 검토 신호: {trigger_reason}")
+        key_risk_factors.insert(0, f"45개 보조 변수셋 검토 신호: {trigger_reason}")
+    mitigating_factors = [
+        str(item.get("detail", "")) for item in support_items if item.get("detail")
+    ]
+    if overwarning_candidate and overwarning_reason:
+        mitigating_factors.insert(0, f"과민 경고 가능성 검토 신호: {overwarning_reason}")
 
     return QuantCreditOutput(
         quant_summary=summary,
@@ -411,9 +425,7 @@ def _quant_credit_agent(bundle: Stage2InputBundle) -> QuantCreditOutput:
             f"상위 SHAP 변수 {min(len(driver_details), 3)}개를 기준으로 모델 판단의 근거를 정리했습니다."
         ),
         key_risk_factors=key_risk_factors,
-        mitigating_factors=[
-            str(item.get("detail", "")) for item in support_items if item.get("detail")
-        ],
+        mitigating_factors=mitigating_factors,
         confidence=0.82 if bundle.xgboost_result else 0.35,
     )
 
@@ -478,6 +490,9 @@ def _external_evidence_profile(news_cache: dict[str, Any]) -> _EvidenceProfile:
     verified_count = _safe_int(news_cache.get("verified_item_count"))
     if verified_count == 0:
         verified_count = sum(1 for item in items if _is_verified_evidence_item(item))
+    adverse_items = [item for item in items if _is_adverse_evidence_item(item)]
+    adverse_count = len(adverse_items)
+    verified_adverse_count = sum(1 for item in adverse_items if _is_verified_evidence_item(item))
     veto_candidate_count = _safe_int(news_cache.get("veto_candidate_count"))
     if veto_candidate_count == 0:
         veto_candidate_count = sum(1 for item in items if item.get("veto_candidate") is True)
@@ -492,6 +507,8 @@ def _external_evidence_profile(news_cache: dict[str, Any]) -> _EvidenceProfile:
         item_count=item_count,
         direct_count=direct_count,
         verified_count=verified_count,
+        adverse_count=adverse_count,
+        verified_adverse_count=verified_adverse_count,
         veto_candidate_count=veto_candidate_count,
         high_confidence_critical_count=high_confidence_critical_count,
     )
@@ -506,6 +523,8 @@ def _external_evidence_profile(news_cache: dict[str, Any]) -> _EvidenceProfile:
             direct_count=direct_count,
             verified_count=verified_count,
             weak_count=weak_count,
+            adverse_count=adverse_count,
+            verified_adverse_count=verified_adverse_count,
             veto_candidate_count=veto_candidate_count,
             critical_terms=critical_terms,
         ),
@@ -513,6 +532,8 @@ def _external_evidence_profile(news_cache: dict[str, Any]) -> _EvidenceProfile:
         "direct_count": direct_count,
         "verified_count": verified_count,
         "weak_count": weak_count,
+        "adverse_count": adverse_count,
+        "verified_adverse_count": verified_adverse_count,
         "veto_candidate_count": veto_candidate_count,
         "high_confidence_critical_count": high_confidence_critical_count,
         "critical_terms": critical_terms,
@@ -525,12 +546,31 @@ def _is_verified_evidence_item(item: dict[str, Any]) -> bool:
     return score is not None and score >= 0.55
 
 
+def _is_adverse_evidence_item(item: dict[str, Any]) -> bool:
+    if item.get("veto_candidate") is True:
+        return True
+    severity = str(item.get("disclosure_severity", "")).lower()
+    if severity in {"veto", "adverse"}:
+        if str(item.get("source", "")).lower() == "opendart":
+            return True
+        return item.get("critical_context_confirmed") is True
+    if severity in {"routine", "caution"}:
+        return False
+    if item.get("critical_context_confirmed") is True:
+        return True
+    if str(item.get("provider_relevance", "")).lower() == "risk":
+        return True
+    return bool(item.get("critical_terms") or [])
+
+
 def _evidence_strength(
     *,
     status: str,
     item_count: int,
     direct_count: int,
     verified_count: int,
+    adverse_count: int,
+    verified_adverse_count: int,
     veto_candidate_count: int,
     high_confidence_critical_count: int,
 ) -> _EvidenceStrength:
@@ -542,8 +582,12 @@ def _evidence_strength(
         return "critical"
     if veto_candidate_count >= 1 or high_confidence_critical_count >= 1:
         return "strong"
-    if direct_count >= 1 and verified_count >= 1:
+    if verified_adverse_count >= 1:
+        return "strong"
+    if adverse_count >= 1:
         return "moderate"
+    if direct_count >= 1 and verified_count >= 1:
+        return "weak"
     return "weak"
 
 
@@ -565,6 +609,8 @@ def _evidence_profile_finding(
     direct_count: int,
     verified_count: int,
     weak_count: int,
+    adverse_count: int,
+    verified_adverse_count: int,
     veto_candidate_count: int,
     critical_terms: list[str],
 ) -> str:
@@ -576,6 +622,7 @@ def _evidence_profile_finding(
     terms = ", ".join(critical_terms[:4]) if critical_terms else "configured critical terms"
     counts = (
         f"총 {item_count}건 중 직접 관련 {direct_count}건, 검증 가능 {verified_count}건, "
+        f"위험 후보 {adverse_count}건, 검증된 위험 후보 {verified_adverse_count}건, "
         f"약한/간접 근거 {weak_count}건"
     )
     if strength in {"critical", "strong"}:
@@ -589,8 +636,8 @@ def _evidence_profile_finding(
             "모델 판단을 보완할 참고 근거로 활용합니다."
         )
     return (
-        f"외부근거 점검: {counts}입니다. 현재 근거는 약하거나 간접적이므로 "
-        "모델 판단을 뒤집는 근거로 쓰지 않습니다."
+        f"외부근거 점검: {counts}입니다. 현재 확인된 항목은 routine/context 성격이거나 "
+        "약한 근거이므로 모델 판단을 뒤집는 근거로 쓰지 않습니다."
     )
 
 

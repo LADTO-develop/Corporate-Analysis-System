@@ -77,6 +77,26 @@ def test_build_company_selection_from_row_matches_dashboard_shape() -> None:
     assert payload["analysis"] == {"fiscal_year": 2023, "eval_year": 2024}
 
 
+def test_historical_replay_allows_next_year_label_with_fiscal_year_cutoff() -> None:
+    selection = normalize_company_selection(
+        {
+            "request_id": "req-historical-replay",
+            "source": "web_listing",
+            "selected_at": "2026-05-11T04:30:00Z",
+            "as_of_date": "2023-12-31",
+            "company": {
+                "market": "KOSDAQ",
+                "stock_code": "250",
+                "corp_name": "삼천당제약(주)",
+            },
+            "analysis": {"fiscal_year": 2023, "eval_year": 2024},
+        }
+    )
+
+    assert selection.analysis.fiscal_year == 2023
+    assert selection.analysis.eval_year == 2024
+
+
 def test_invalid_year_pair_raises_stable_error_code() -> None:
     with pytest.raises(CompanySelectionError) as error:
         normalize_company_selection(

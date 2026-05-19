@@ -1,5 +1,0 @@
-﻿policy,precision,recall,f1,true_negative,false_positive,false_negative,true_positive,candidate_only_review_cases,candidate_only_true_risk,candidate_only_normal,baseline_only_review_cases,baseline_only_true_risk,baseline_only_normal
-43_baseline,0.64,0.8622754491017964,0.7346938775510204,424,81,23,144,12,4,8,5,2,3
-45_feature_set,0.6293103448275862,0.874251497005988,0.731829573934837,419,86,21,146,12,4,8,5,2,3
-union_43_or_45_review_trigger,0.6244725738396625,0.8862275449101796,0.7326732673267327,416,89,19,148,12,4,8,5,2,3
-intersection_43_and_45_strict,0.6454545454545455,0.8502994011976048,0.7338501291989664,427,78,25,142,12,4,8,5,2,3

@@ -1,0 +1,88 @@
+{
+  "generated_at_utc": "2026-05-19T13:05:37.266541+00:00",
+  "purpose": "Diagnostic label reference for model evaluation. Credit-rating fields are not used as model inputs.",
+  "rows": 5443,
+  "model_v1_rows": 5451,
+  "rows_by_eval_year": {
+    "2015": 333,
+    "2016": 335,
+    "2017": 389,
+    "2018": 433,
+    "2019": 511,
+    "2020": 574,
+    "2021": 603,
+    "2022": 673,
+    "2023": 676,
+    "2024": 637,
+    "2025": 279
+  },
+  "model_rows_by_eval_year": {
+    "2015": 333,
+    "2016": 335,
+    "2017": 389,
+    "2018": 433,
+    "2019": 511,
+    "2020": 574,
+    "2021": 603,
+    "2022": 673,
+    "2023": 676,
+    "2024": 637,
+    "2025": 287
+  },
+  "missing_label_rows_by_eval_year": {
+    "2015": 0,
+    "2016": 0,
+    "2017": 0,
+    "2018": 0,
+    "2019": 0,
+    "2020": 0,
+    "2021": 0,
+    "2022": 0,
+    "2023": 0,
+    "2024": 0,
+    "2025": 8
+  },
+  "speculative_rows_by_eval_year": {
+    "2015": 74,
+    "2016": 66,
+    "2017": 83,
+    "2018": 86,
+    "2019": 113,
+    "2020": 140,
+    "2021": 151,
+    "2022": 165,
+    "2023": 176,
+    "2024": 161,
+    "2025": 45
+  },
+  "rating_agency_group_counts": {
+    "OTHER": 3100,
+    "BIG3": 2321,
+    "FOREIGN": 22
+  },
+  "source_label_set_counts": {
+    "legacy_target_processed_audit": 5181,
+    "recent_2025_disclosures": 262
+  },
+  "columns": [
+    "market",
+    "stock_code",
+    "corp_name",
+    "fiscal_year",
+    "eval_year",
+    "is_speculative",
+    "credit_rating",
+    "credit_rating_rank",
+    "rating_agency",
+    "rating_agency_group",
+    "rating_target",
+    "rating_date",
+    "selection_scope",
+    "selection_rule",
+    "candidate_count_in_year",
+    "big3_candidate_count_in_year",
+    "other_domestic_candidate_count_in_year",
+    "foreign_candidate_count_in_year",
+    "source_label_set"
+  ]
+}
