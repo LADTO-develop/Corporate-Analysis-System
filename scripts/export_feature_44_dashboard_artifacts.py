@@ -1247,8 +1247,8 @@ def main() -> None:
         {
             "dataset_name": "credit_44_features",
             "dataset_note": (
-                f"{len(source_features)}媛??먯쿇 蹂??/ ?먰빂 ??{len(model_features)}媛??낅젰 蹂?섏뀑??"
-                "??쒕낫?쒖슜 ?뺤떇?쇰줈 蹂?섑븳 寃곌낵?낅땲??"
+                f"{len(source_features)}개 원천 변수에서 {len(model_features)}개 모델 입력 변수로 "
+                "확장한 44-feature 대시보드용 산출물입니다."
             ),
             "generated_files": sorted(
                 [path.name for path in output_dir.iterdir() if path.is_file()]

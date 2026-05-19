@@ -98,7 +98,6 @@
       "feature_group": "context",
       "source_feature": "market",
       "model_features": [
-        "market_to_book",
         "market_KOSDAQ",
         "market_KOSPI"
       ]
