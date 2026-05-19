@@ -6,7 +6,8 @@ import json
 import os
 import time
 from importlib import import_module
-from typing import Protocol, TypeVar, cast
+# [수정됨] Mypy 방어를 위해 Any 추가
+from typing import Any, Protocol, TypeVar, cast
 
 from pydantic import BaseModel
 
@@ -20,6 +21,65 @@ class AgnoAgentLike(Protocol):
         """Run an agent prompt and return the provider response."""
 
 
+def _get_api_key(provider: str) -> str:
+    """Retrieve the correct API key based on the LLM provider."""
+    key_map = {
+        "openai": "OPENAI_API_KEY",
+        "anthropic": "ANTHROPIC_API_KEY",
+        "gemini": "GEMINI_API_KEY"
+    }
+    env_var = key_map.get(provider)
+    if not env_var:
+        raise ValueError(f"🚨 지원하지 않는 LLM 제공자입니다: {provider}")
+    
+    api_key = os.environ.get(env_var, "").strip()
+    if not api_key:
+        raise RuntimeError(
+            f"CAS_STAGE2_RUNNER 에러: '{provider}' 모델을 사용하려면 "
+            f"환경 변수에 {env_var} 가 설정되어 있어야 합니다."
+        )
+    return api_key
+
+
+# [수정됨] 반환 타입을 -> Any 로 명시하여 Mypy의 동적 타입 추론 에러 원천 차단
+def _create_model(model_config: str, max_tokens: int) -> Any:
+    """Parse 'provider:model_name' string and return the Agno Model instance."""
+    if ":" not in model_config:
+        raise ValueError(
+            f"🚨 잘못된 모델 설정 포맷입니다: '{model_config}'. "
+            f"반드시 'provider:model_name' 형식이어야 합니다. (예: 'openai:gpt-4o')"
+        )
+        
+    provider, model_id = model_config.split(":", 1)
+    provider = provider.lower()
+    api_key = _get_api_key(provider)
+
+    try:
+        if provider == "openai":
+            openai_module = import_module("agno.models.openai")
+            return openai_module.OpenAIChat(
+                id=model_id, max_tokens=max_tokens, temperature=0, api_key=api_key
+            )
+        elif provider == "anthropic":
+            anthropic_module = import_module("agno.models.anthropic")
+            return anthropic_module.Claude(
+                id=model_id, max_tokens=max_tokens, temperature=0, api_key=api_key
+            )
+        elif provider == "gemini":
+            google_module = import_module("agno.models.google")
+            return google_module.Gemini(
+                id=model_id, max_tokens=max_tokens, temperature=0, api_key=api_key
+            )
+        else:
+            raise ValueError(f"🚨 지원하지 않는 LLM 제공자입니다: {provider}")
+            
+    except ImportError as error:
+        raise RuntimeError(
+            f"{provider} 관련 패키지를 찾을 수 없습니다. "
+            f"해당 제공자의 SDK가 설치되어 있는지 확인하세요."
+        ) from error
+
+
 def build_agno_agent(  # noqa: UP047, RUF100
     *,
     name: str,
@@ -28,25 +88,19 @@ def build_agno_agent(  # noqa: UP047, RUF100
     response_model: type[ModelT],
     instructions: list[str],
 ) -> AgnoAgentLike:
-    """Create an Agno Agent lazily so importing CAS does not require Agno."""
-    api_key = _anthropic_api_key()
+    """Create an Agno Agent dynamically based on the requested LLM provider."""
     try:
         agent_module = import_module("agno.agent")
-        anthropic_module = import_module("agno.models.anthropic")
     except ImportError as error:
         raise RuntimeError(
-            "CAS_STAGE2_RUNNER=agno requires the optional Agno/Anthropic runtime. "
-            "Install this project with the 'agent' extra and configure ANTHROPIC_API_KEY."
+            "CAS_STAGE2_RUNNER=agno requires the optional Agno runtime. "
+            "Install this project with the 'agent' extra."
         ) from error
 
     agent_cls = agent_module.Agent
-    claude_cls = anthropic_module.Claude
-    model = claude_cls(
-        id=model_name,
-        max_tokens=max_tokens,
-        temperature=0,
-        api_key=api_key,
-    )
+    
+    # 모델 조립 공장 호출
+    model = _create_model(model_name, max_tokens)
 
     return cast(
         AgnoAgentLike,
@@ -119,16 +173,6 @@ def _strip_json_fence(value: str) -> str:
         return stripped
     lines = [line for line in stripped.splitlines() if not line.strip().startswith("```")]
     return "\n".join(lines).strip()
-
-
-def _anthropic_api_key() -> str:
-    api_key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
-    if not api_key:
-        raise RuntimeError(
-            "CAS_STAGE2_RUNNER=agno requires ANTHROPIC_API_KEY. "
-            "Set it in your local .env or environment before running live Agno Stage 2."
-        )
-    return api_key
 
 
 def _stage2_agent_retry_attempts() -> int:
