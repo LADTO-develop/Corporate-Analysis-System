@@ -35,7 +35,7 @@ from cas.agents.state import (
 )
 from cas.utils.io import read_json
 
-_FEATURE_METADATA_PATH = Path("data/input/credit_43_features/feature_43_dictionary_metadata.json")
+_FEATURE_METADATA_PATH = Path("data/input/credit_44_features/feature_44_dictionary_metadata.json")
 
 _INDUSTRY_LABELS = {
     "manufacturing": "제조업",
@@ -398,12 +398,12 @@ def _quant_credit_agent(bundle: Stage2InputBundle) -> QuantCreditOutput:
     )
     if secondary_triggered:
         summary += (
-            f" 다만 45개 변수셋 보조 신호가 `{review_priority}` 우선순위의 "
+            f" 다만 46개 보조 변수셋 신호가 `{review_priority}` 우선순위의 "
             f"추가 위원회 검토 대상으로 표시했습니다."
         )
     key_risk_factors = [str(item.get("detail", "")) for item in risk_items if item.get("detail")]
     if secondary_triggered and trigger_reason:
-        key_risk_factors.insert(0, f"45개 변수셋 보조 검토 신호: {trigger_reason}")
+        key_risk_factors.insert(0, f"46개 보조 변수셋 검토 신호: {trigger_reason}")
 
     return QuantCreditOutput(
         quant_summary=summary,
@@ -624,8 +624,16 @@ def _model_evidence_challenge(
         return (
             "정량상 투자적격이지만 직접 관련 외부 위험 근거가 있어 위원회 보수 검토가 필요합니다."
         )
-    if prediction_label == "투자적격" and has_debt_risk:
+    has_offsetting_support = (
+        has_debt_support and strength in {"none", "weak"} and bundle.probability_speculative < 0.10
+    )
+    if prediction_label == "투자적격" and has_debt_risk and not has_offsetting_support:
         return "정량상 투자적격이지만 유동성·상환여력 신호가 일부 충돌해 추가 점검이 필요합니다."
+    if prediction_label == "투자적격" and has_debt_risk and has_offsetting_support:
+        return (
+            "일부 부채·유동성 경고 신호가 있으나 현금흐름과 상환여력 완화 요인이 더 커 "
+            "현재 모델 원판단을 뒤집을 수준은 아닙니다."
+        )
     if prediction_label == "부적격" and has_debt_support and strength in {"none", "weak"}:
         return "정량상 부적격 판단은 유지하되, 부채·현금흐름 일부 지표는 완화 근거로 재검토할 수 있습니다."
     return "정량 모델 판단과 외부/유동성 검증 사이의 중대한 충돌은 제한적입니다."
@@ -643,6 +651,14 @@ def _evidence_audit_conclusion(
     if strength == "strong":
         return "외부 근거가 강하므로 모델 원판단보다 보수적인 보류 또는 부적격 검토가 필요합니다."
     if _contains_any(debt_findings, ("추가 경계", "차환 리스크", "상환 재원", "1배 미만")):
+        if strength in {"none", "weak"} and _contains_any(
+            debt_findings,
+            ("완충 근거", "완화 신호", "현금 여력", "상환 방어력", "양호", "확보", "여력"),
+        ):
+            return (
+                "부채·유동성 일부 경고는 있으나 현금흐름과 상환여력 완화 요인이 함께 확인되어 "
+                "모델 원판단을 뒤집기보다 참고 점검 포인트로 처리합니다."
+            )
         return "외부 치명 리스크는 확정되지 않았지만 부채·유동성 측면에서 보류 의견을 강화합니다."
     if bundle.prediction_label == "부적격" and _contains_any(
         debt_findings,
@@ -743,7 +759,7 @@ def _feature_point_text(
     peer_row: dict[str, Any] | None,
 ) -> str:
     direction = _driver_direction(feature_key, shap_value)
-    value_text = _format_feature_value(raw_value, unit)
+    value_text = _format_driver_value(feature_key=feature_key, raw_value=raw_value, unit=unit)
     comparison_text = _peer_comparison_text(peer_row=peer_row, unit=unit)
     if direction == "risk":
         return (
@@ -754,6 +770,18 @@ def _feature_point_text(
         f"{feature_name}({value_text})이(가) 현재 모델에서 위험을 낮추는 방향으로 작용했습니다."
         f"{comparison_text}"
     )
+
+
+def _format_driver_value(*, feature_key: str, raw_value: object, unit: str) -> str:
+    if unit == "category":
+        if feature_key == "firm_size_group":
+            return _humanize_category(raw_value, mapping=_SIZE_LABELS, fallback="규모 정보 미확인")
+        if feature_key == "industry_macro_category":
+            return _humanize_category(
+                raw_value, mapping=_INDUSTRY_LABELS, fallback="업종 정보 미확인"
+            )
+        return _humanize_category(raw_value, fallback="범주 정보 미확인")
+    return _format_feature_value(raw_value, unit)
 
 
 def _driver_direction(feature_key: str, shap_value: float) -> Literal["risk", "support"]:

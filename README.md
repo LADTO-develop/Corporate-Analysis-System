@@ -31,8 +31,8 @@ Stage 2는 `model_view`와 구분되는 `committee_view`를 생성하는 후속 
 | 관측 단위 | 기업-회계연도 |
 | 기준 원본 | `data/raw/ts2000/TS2000_Credit_Model_Dataset_Model_V1.csv` |
 | 라벨 데이터 | 5,199개 기업-연도 |
-| 학습 입력 | `data/input/credit_43_features/` |
-| 2026 예측 입력 | `feature_43_inference_2026.csv`, 2,427개 기업-연도 |
+| 학습 입력 | `data/input/credit_44_features/` |
+| 2026 예측 입력 | `feature_44_inference_2026.csv`, 2,427개 기업-연도 |
 | 타겟 | `is_speculative` |
 | 라벨 정의 | `0 = 투자적격(AAA~BBB-)`, `1 = 투기등급(BB+ 이하)` |
 | 시점 정렬 | `fiscal_year=t` 재무/거시 정보로 `eval_year=t+1` 신용위험 예측 |
@@ -65,7 +65,7 @@ Model V1 전체 5,199개 행은 전체 라벨 데이터입니다. 모델 학습�
 
 ## 4. 모델 입력과 성능
 
-현재 대시보드의 기본 모델은 `credit_43_features` 기반 XGBoost입니다.
+현재 대시보드의 기본 모델은 `credit_44_features` 기반 XGBoost입니다.
 대시보드에 표시되는 투기등급 확률은 XGBoost raw 확률에 검증셋 기준
 Platt scaling을 적용한 보정 확률입니다. Raw 확률은 산출물에
 `prob_speculative_raw`로 함께 보존해 비교할 수 있습니다.
@@ -73,9 +73,9 @@ Platt scaling을 적용한 보정 확률입니다. Raw 확률은 산출물에
 
 | 구분 | 개수 | 설명 |
 |---|---:|---|
-| 선택 원천 변수 | 34개 | 재무비율, 원천 재무값, 시장/규모/산업 맥락 변수, 거시 변수 |
+| 선택 원천 변수 | 35개 | 재무비율, 원천 재무값, 시장/규모/산업 맥락 변수, 거시 변수, 산업 내 유동성 백분위 |
 | 원-핫 대상 | 3개 | `market`, `firm_size_group`, `industry_macro_category` |
-| 최종 모델 입력 | 43개 | XGBoost 학습 및 추론 입력 |
+| 최종 모델 입력 | 44개 | XGBoost 학습 및 추론 입력 |
 
 최신 동일 split 기준 test 성능은 다음과 같습니다.
 
@@ -83,18 +83,18 @@ Platt scaling을 적용한 보정 확률입니다. Raw 확률은 산출물에
 |---|---:|---:|---:|---:|---:|
 | Dummy | 0.2485 | 0.5000 | 0.0000 | 0.0000 | 0.0000 |
 | 43-feature Weighted Logistic Regression | 0.6903 | 0.8822 | 0.5560 | 0.8323 | 0.6667 |
-| 38-input XGBoost | 0.7804 | 0.9098 | 0.5911 | 0.8743 | 0.7053 |
-| 43-input XGBoost (native missing) | 0.7744 | 0.9110 | 0.6092 | 0.8683 | 0.7160 |
+| 43-feature XGBoost baseline | 0.7689 | 0.9057 | 0.6211 | 0.8443 | 0.7157 |
+| 44-feature XGBoost current | 0.7742 | 0.9102 | 0.6542 | 0.8383 | 0.7349 |
 
-43-input XGBoost는 PR-AUC 기준으로 38-input XGBoost와 거의 유사하며,
-Precision과 F1은 더 높게 나타났습니다. 현재 대시보드는 해석 가능성,
-확장성, 변수 사전과의 연결성을 고려해 43-feature 입력셋을 기본으로 사용합니다.
+44-feature XGBoost는 43-feature baseline 대비 Recall은 거의 유지하면서
+false positive를 줄이고 Precision과 F1을 개선한 현재 운영 후보입니다. 기존
+43-feature 산출물은 기준선 비교와 회귀 검증용으로 유지합니다.
 
 ## 5. 시스템 흐름
 
 ```mermaid
 flowchart TD
-    A["CAS 내부 Model V1 원본"] --> B["43-feature 입력셋 생성"]
+    A["CAS 내부 Model V1 원본"] --> B["44-feature 입력셋 생성"]
     B --> C["Train / Valid / Test 시간순 분할"]
     C --> D["Stage 1 XGBoost 학습"]
     D --> E["model_view"]
@@ -148,7 +148,8 @@ Agno/Claude 호출을 붙인 로컬 데모에서는 optional dependency를 설�
 │   ├── raw/
 │   │   └── ts2000/              # CAS 기준 Model V1 원본
 │   ├── input/
-│   │   └── credit_43_features/  # 43개 모델 입력셋, split, 2026 추론 입력
+│   │   ├── credit_43_features/  # 43개 baseline 입력셋
+│   │   └── credit_44_features/  # 현재 44개 모델 입력셋, split, 2026 추론 입력
 │   └── outputs/
 │       ├── dashboard/           # 대시보드용 예측/SHAP/요약 산출물
 │       ├── modeling/            # Stage 1 모델 artifact와 성능 진단 산출물
@@ -158,15 +159,11 @@ Agno/Claude 호출을 붙인 로컬 데모에서는 optional dependency를 설�
 │   ├── three_agent_credit_review_design_ko.md
 │   └── pipeline/
 ├── scripts/
-│   ├── rebuild_feature_43_dataset.py
-│   ├── build_feature_43_inference_2026.py
-│   ├── export_feature_43_dashboard_artifacts.py
-│   ├── export_feature_43_model_diagnostics.py
-│   ├── export_feature_43_threshold_policy_experiments.py
-│   ├── export_feature_43_error_shap_analysis.py
-│   ├── export_feature_43_error_case_review.py
-│   ├── export_feature_43_shap_feature_experiments.py
-│   ├── export_feature_43_xgboost_tuning_experiments.py
+│   ├── rebuild_feature_44_dataset.py
+│   ├── build_feature_44_inference_2026.py
+│   ├── export_feature_44_dashboard_artifacts.py
+│   ├── export_feature_44_model_diagnostics.py
+│   ├── export_feature_44_threshold_policy_experiments.py
 │   └── run_credit_dashboard.py
 ├── src/cas/
 │   ├── agents/                  # LangGraph 상태, 노드, 입력 계약
@@ -180,7 +177,7 @@ Agno/Claude 호출을 붙인 로컬 데모에서는 optional dependency를 설�
 
 | 문서 | 내용 |
 |---|---|
-| [docs/preprocessing_rules_ko.md](docs/preprocessing_rules_ko.md) | 신용등급 타겟, 재무/거시 결합, 43개 입력셋 전처리 기준 |
+| [docs/preprocessing_rules_ko.md](docs/preprocessing_rules_ko.md) | 신용등급 타겟, 재무/거시 결합, 모델 입력셋 전처리 기준 |
 | [docs/three_agent_credit_review_design_ko.md](docs/three_agent_credit_review_design_ko.md) | 3에이전트 기반 Stage 2 정성 검토 구조 |
 | [docs/credit_dashboard_quickstart_ko.md](docs/credit_dashboard_quickstart_ko.md) | Streamlit 대시보드 실행 안내 |
 | [docs/pipeline/data_pipeline.md](docs/pipeline/data_pipeline.md) | 웹 리스팅 입력과 `company_selection` 계약 |
@@ -194,17 +191,17 @@ Python 3.12 환경을 사용합니다. 팀 로컬 기준으로는 `aura` 환경�
 /opt/anaconda3/envs/aura/bin/python -m pip install -e ".[dev,ml,viz,dashboard]"
 ```
 
-43개 입력셋 재생성:
+44개 입력셋 재생성:
 
 ```bash
-/opt/anaconda3/envs/aura/bin/python scripts/rebuild_feature_43_dataset.py
+/opt/anaconda3/envs/aura/bin/python scripts/rebuild_feature_44_dataset.py
 ```
 
 2026 추론 입력 보정/검증:
 
 ```bash
 /opt/anaconda3/envs/aura/bin/python scripts/import_feature_43_inference_2026_aux.py
-/opt/anaconda3/envs/aura/bin/python scripts/build_feature_43_inference_2026.py
+/opt/anaconda3/envs/aura/bin/python scripts/build_feature_44_inference_2026.py
 ```
 
 `import_feature_43_inference_2026_aux.py`는 2026 추론 입력의 기업규모와
@@ -214,41 +211,30 @@ Python 3.12 환경을 사용합니다. 팀 로컬 기준으로는 `aura` 환경�
 대시보드/모델 artifact 재생성:
 
 ```bash
-/opt/anaconda3/envs/aura/bin/python scripts/export_feature_43_dashboard_artifacts.py
+/opt/anaconda3/envs/aura/bin/python scripts/export_feature_44_dashboard_artifacts.py
 ```
 
 이 스크립트는 Stage 1 런타임과 팀 공유가 함께 사용하는 모델 artifact를
-`data/outputs/modeling/feature_43_xgboost/`에 저장합니다.
+`data/outputs/modeling/feature_44_xgboost/`에 저장합니다.
 
 모델 성능 진단 리포트 재생성:
 
 ```bash
-/opt/anaconda3/envs/aura/bin/python scripts/export_feature_43_model_diagnostics.py
+/opt/anaconda3/envs/aura/bin/python scripts/export_feature_44_model_diagnostics.py
 ```
 
 이 스크립트는 기존 예측 결과를 다시 학습하지 않고 연도/시장/산업별 성능,
 threshold trade-off, 확률 보정, 대표 오류 사례를
-`data/outputs/modeling/feature_43_xgboost/diagnostics/`에 저장합니다.
+`data/outputs/modeling/feature_44_xgboost/diagnostics/`에 저장합니다.
 
-SHAP 기반 변수 개선 후보 실험 재생성:
-
-```bash
-/opt/anaconda3/envs/aura/bin/python scripts/export_feature_43_shap_feature_experiments.py
-```
-
-이 스크립트는 오류 사례 SHAP 분석에서 나온 절대금액, 기업규모, 산업 내 위치,
-전년 대비 악화 신호를 후보 변수로 만들어 현재 운영 기준인 XGBoost native
-missing, Platt scaling, recall 0.85 이상 threshold 정책으로 비교합니다.
-
-XGBoost 하이퍼파라미터 튜닝 실험 재생성:
+Threshold 정책 실험 재생성:
 
 ```bash
-/opt/anaconda3/envs/aura/bin/python scripts/export_feature_43_xgboost_tuning_experiments.py
+/opt/anaconda3/envs/aura/bin/python scripts/export_feature_44_threshold_policy_experiments.py
 ```
 
-이 스크립트는 `max_depth`, `min_child_weight`, `reg_lambda`, `subsample`,
-`colsample_bytree`, `scale_pos_weight` 후보를 OOT validation 기준으로 탐색하고,
-test는 사후 확인용으로만 사용합니다.
+이 스크립트는 validation 기준으로 선택한 threshold 정책을 test에서 사후 확인하고,
+시장/산업별 trade-off를 정리합니다.
 
 대시보드 실행:
 
@@ -287,7 +273,8 @@ cas-agent --company-id sample-company
 ## 11. 운영 원칙
 
 - CAS 기준 데이터와 실행 파일은 저장소 내부 경로만 참조합니다.
-- Model V1은 CAS의 기준 원본이며, 43-feature 입력셋은 이 파일에서 재생성합니다.
+- Model V1은 CAS의 기준 원본이며, 44-feature 입력셋은 이 파일에서 재생성합니다.
+- 43-feature 입력셋과 artifact는 기준선 비교용으로 유지합니다.
 - `model_view`와 `committee_view`는 분리합니다.
 - 모델 예측은 LLM이나 Agent가 직접 수정하지 않습니다.
 - 모든 성능 평가는 시간순 OOT split 기준으로 해석합니다.

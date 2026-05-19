@@ -12,7 +12,7 @@ from cas.dashboard.data_loader import DEFAULT_ARTIFACT_DIR
 
 ROOT = Path(__file__).resolve().parents[3]
 APP_PATH = ROOT / "src" / "cas" / "dashboard" / "credit_app.py"
-EXPORT_SCRIPT_PATH = ROOT / "scripts" / "export_feature_43_dashboard_artifacts.py"
+EXPORT_SCRIPT_PATH = ROOT / "scripts" / "export_feature_44_dashboard_artifacts.py"
 
 REQUIRED_DASHBOARD_ARTIFACTS = (
     "company_universe.csv",

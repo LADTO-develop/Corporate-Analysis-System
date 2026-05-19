@@ -60,7 +60,7 @@ def test_falls_back_when_model_artifact_is_missing(monkeypatch: pytest.MonkeyPat
     monkeypatch.setattr(
         base_prediction_node,
         "_MODEL_ARTIFACT_PATH",
-        Path("data/outputs/modeling/feature_43_xgboost/missing_model.json"),
+        Path("data/outputs/modeling/feature_44_xgboost/missing_model.json"),
     )
 
     state = {

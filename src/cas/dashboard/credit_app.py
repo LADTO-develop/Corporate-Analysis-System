@@ -1,4 +1,4 @@
-"""Streamlit dashboard for 43-feature credit risk model exploration."""
+"""Streamlit dashboard for 44-feature credit risk model exploration."""
 
 from __future__ import annotations
 
@@ -828,7 +828,7 @@ def build_dashboard_model_view(
     model_label = to_stage2_model_label(prediction_row.get("predicted_label"))
     return {
         "source": "dashboard_prediction_scores",
-        "model_name": "feature_43_xgboost",
+        "model_name": "feature_44_xgboost",
         "model_version": "dashboard_artifacts",
         "prediction_label": model_label,
         "probability_speculative": probability,
@@ -837,10 +837,10 @@ def build_dashboard_model_view(
         "risk_band": risk_band,
         "risk_band_display": format_stage2_risk_band(risk_band),
         "top_drivers": _dashboard_top_drivers(local_shap),
-        "probability_speculative_45": _optional_float(prediction_row.get("prob_speculative_45")),
-        "threshold_45": _optional_float(prediction_row.get("threshold_45")),
-        "threshold_45_it_services_review": _optional_float(
-            prediction_row.get("threshold_45_it_services_review")
+        "probability_speculative_46": _optional_float(prediction_row.get("prob_speculative_46")),
+        "threshold_46": _optional_float(prediction_row.get("threshold_46")),
+        "threshold_46_it_services_review": _optional_float(
+            prediction_row.get("threshold_46_it_services_review")
         ),
         "stage2_review_trigger": _optional_bool(prediction_row.get("stage2_review_trigger")),
         "stage2_secondary_trigger": _optional_bool(prediction_row.get("stage2_secondary_trigger")),
@@ -3199,8 +3199,8 @@ def render_committee_view_tab(
         )
         render_bold_value_block(
             trigger_cols[1],
-            "45개 변수셋 확률",
-            format_percent(model_view.get("probability_speculative_45")),
+            "46개 보조 변수셋 확률",
+            format_percent(model_view.get("probability_speculative_46")),
         )
         render_text_card(
             trigger_cols[2],

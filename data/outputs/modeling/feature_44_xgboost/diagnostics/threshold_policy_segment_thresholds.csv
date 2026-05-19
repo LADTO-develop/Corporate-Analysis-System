@@ -1,0 +1,17 @@
+﻿policy_name,dimension,segment,threshold,fallback_used,valid_rows,valid_positive_rows,valid_precision,valid_recall,valid_f1,target_recall_floor
+market_valid_best_f1_by_segment,market,KOSDAQ,0.34,False,403,143,0.6853932584269663,0.8531468531468531,0.7601246105919003,
+market_valid_best_f1_by_segment,market,KOSPI,0.225,False,273,33,0.6888888888888889,0.9393939393939394,0.7948717948717948,
+industry_valid_best_f1_by_segment,industry_macro_category,construction,0.34,True,34,4,0.6666666666666666,0.5,0.5714285714285715,
+industry_valid_best_f1_by_segment,industry_macro_category,it_services,0.35,False,129,23,0.625,0.8695652173913043,0.7272727272727273,
+industry_valid_best_f1_by_segment,industry_macro_category,manufacturing,0.34,False,450,136,0.7169811320754716,0.8382352941176471,0.7728813559322033,
+industry_valid_best_f1_by_segment,industry_macro_category,other,0.34,True,11,0,0.0,0.0,0.0,
+industry_valid_best_f1_by_segment,industry_macro_category,transport_storage,0.34,True,11,1,1.0,1.0,1.0,
+industry_valid_best_f1_by_segment,industry_macro_category,wholesale_retail,0.455,False,41,12,1.0,0.9166666666666666,0.9565217391304348,
+kosdaq_conservative_recall_0.85,market,KOSDAQ,0.34,False,403,143,0.6853932584269663,0.8531468531468531,0.7601246105919003,0.85
+targeted_kosdaq_it_mfg_conservative_recall_0.85,market,KOSDAQ,0.34,False,403,143,0.6853932584269663,0.8531468531468531,0.7601246105919003,0.85
+targeted_kosdaq_it_mfg_conservative_recall_0.85,industry_macro_category,it_services,0.35,False,129,23,0.625,0.8695652173913043,0.7272727272727273,0.85
+targeted_kosdaq_it_mfg_conservative_recall_0.85,industry_macro_category,manufacturing,0.315,False,450,136,0.6783625730994152,0.8529411764705882,0.755700325732899,0.85
+kosdaq_conservative_recall_0.80,market,KOSDAQ,0.36,False,403,143,0.7073170731707317,0.8111888111888111,0.755700325732899,0.8
+targeted_kosdaq_it_mfg_conservative_recall_0.80,market,KOSDAQ,0.36,False,403,143,0.7073170731707317,0.8111888111888111,0.755700325732899,0.8
+targeted_kosdaq_it_mfg_conservative_recall_0.80,industry_macro_category,it_services,0.35,False,129,23,0.625,0.8695652173913043,0.7272727272727273,0.8
+targeted_kosdaq_it_mfg_conservative_recall_0.80,industry_macro_category,manufacturing,0.36,False,450,136,0.7364864864864865,0.8014705882352942,0.7676056338028169,0.8
