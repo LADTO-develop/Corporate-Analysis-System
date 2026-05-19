@@ -127,23 +127,24 @@ Moody's 계열 등급처럼 표기 체계가 다른 경우에는 국내 등급 �
 | 추세/위험 플래그 | 총자산증가율, 순이익률 변화, 2년 연속 영업손실 여부, 이자보상배율 1 미만 여부 |
 | 거시 | 기준금리, 환율, 회사채 스프레드 등 |
 
-## 5. 43개 모델 입력셋 생성 기준
+## 5. 모델 입력셋 생성 기준
 
-현재 대시보드와 Stage 1 XGBoost의 기본 입력은 `credit_43_features`이다.
-이 입력셋은 34개 원천 변수를 선택한 뒤, 범주형 변수 3개를 원-핫 인코딩하여
-최종 43개 모델 입력 변수로 만든다.
+현재 대시보드와 Stage 1 XGBoost의 기본 입력은 `credit_44_features`이다.
+기존 `credit_43_features`는 기준선 비교용으로 유지한다. 44개 입력셋은
+35개 원천 변수를 선택한 뒤, 범주형 변수 3개를 원-핫 인코딩하고
+산업 내 유동성 백분위 변수를 포함하여 최종 44개 모델 입력 변수로 만든다.
 
 | 구분 | 개수 | 설명 |
 |---|---:|---|
-| 선택 원천 변수 | 34개 | 재무비율, 원천 재무값, 시장/규모/산업 맥락 변수, 거시 변수 포함 |
+| 선택 원천 변수 | 35개 | 재무비율, 원천 재무값, 시장/규모/산업 맥락 변수, 거시 변수, 산업 내 유동성 백분위 포함 |
 | 원-핫 대상 | 3개 | `market`, `firm_size_group`, `industry_macro_category` |
-| 최종 모델 입력 | 43개 | XGBoost 학습 및 추론에 사용하는 실제 입력 변수 |
+| 최종 모델 입력 | 44개 | XGBoost 학습 및 추론에 사용하는 실제 입력 변수 |
 
-43개 입력셋은 다음 파일로 저장된다.
+44개 입력셋은 다음 파일로 저장된다.
 
 | 파일 | 설명 |
 |---|---|
-| `feature_43_master.csv` | 전체 5,199개 라벨 기업-연도 기준 테이블 |
+| `feature_44_master.csv` | 전체 5,451개 라벨 기업-연도 기준 테이블 |
 | `xgb_train.csv` | 학습용 입력 |
 | `xgb_valid.csv` | 검증용 입력 |
 | `xgb_test.csv` | 테스트용 입력 |
@@ -165,7 +166,7 @@ Moody's 계열 등급처럼 표기 체계가 다른 경우에는 국내 등급 �
 |---|---:|---:|---:|
 | Train | 3,851 | 878 | 22.80% |
 | Validation | 676 | 176 | 26.04% |
-| Test | 672 | 167 | 24.85% |
+| Test | 924 | 203 | 21.97% |
 
 누수 방지 원칙은 다음과 같다.
 
@@ -183,7 +184,7 @@ Moody's 계열 등급처럼 표기 체계가 다른 경우에는 국내 등급 �
 | 항목 | 현재 값 |
 |---|---|
 | 기준 원본 | `data/raw/ts2000/TS2000_Credit_Model_Dataset_Model_V1.csv` |
-| 라벨 데이터 행 수 | 5,199개 기업-연도 |
+| 라벨 데이터 행 수 | 5,451개 기업-연도 |
 | 삼성전자 포함 여부 | 포함 |
 | 삼성전자 라벨 행 수 | 10행 |
 | 토마토시스템 포함 여부 | 포함 |
@@ -198,25 +199,25 @@ Corporate Analysis System은 상위 작업공간이나 외부 로컬 폴더를 �
 
 | 내부 경로 | 역할 |
 |---|---|
-| `data/raw/ts2000/TS2000_Credit_Model_Dataset_Model_V1.csv` | 43개 라벨 입력셋을 재생성하는 CAS 기준 원본 |
+| `data/raw/ts2000/TS2000_Credit_Model_Dataset_Model_V1.csv` | 43/44개 라벨 입력셋을 재생성하는 CAS 기준 원본 |
 | `data/raw/ts2000/feature_43_inference_2026_aux.csv` | 2026 추론 입력의 기업규모와 `market_to_book` 보정을 위한 최소 2025 보조 원천 |
-| `data/input/credit_43_features/feature_43_master.csv` | 전체 라벨 기업-연도 기준 입력 테이블 |
-| `data/input/credit_43_features/feature_43_inference_2026.csv` | 2026 예측용 CAS 내부 추론 입력 테이블 |
-| `data/outputs/modeling/feature_43_xgboost/` | Stage 1 XGBoost 모델 artifact 및 팀 공유용 모델링 산출물 |
-| `data/outputs/modeling/feature_43_xgboost/diagnostics/` | Stage 1 성능 진단 리포트, segment/threshold/calibration/error-case 테이블 |
-| `data/outputs/dashboard/feature_43_mvp/` | 대시보드용 예측, SHAP, 요약 산출물 |
+| `data/input/credit_44_features/feature_44_master.csv` | 전체 라벨 기업-연도 기준 입력 테이블 |
+| `data/input/credit_44_features/feature_44_inference_2026.csv` | 2026 예측용 CAS 내부 추론 입력 테이블 |
+| `data/outputs/modeling/feature_44_xgboost/` | Stage 1 XGBoost 모델 artifact 및 팀 공유용 모델링 산출물 |
+| `data/outputs/modeling/feature_44_xgboost/diagnostics/` | Stage 1 성능 진단 리포트, segment/threshold/calibration/error-case 테이블 |
+| `data/outputs/dashboard/feature_44_mvp/` | 대시보드용 예측, SHAP, 요약 산출물 |
 
 신용등급 타겟 전처리 규칙은 본 문서에 고정하고, CAS 실행 기준은 아래 내부
 스크립트와 내부 데이터 파일만 사용한다.
 
 | 스크립트 | 역할 |
 |---|---|
-| `scripts/rebuild_feature_43_dataset.py` | Corporate Analysis System의 43개 입력셋 재생성 |
+| `scripts/rebuild_feature_44_dataset.py` | Corporate Analysis System의 44개 입력셋 재생성 |
 | `scripts/import_feature_43_inference_2026_aux.py` | 2026 추론 입력 보정을 위한 최소 2025 보조 원천 생성 |
-| `scripts/build_feature_43_inference_2026.py` | CAS 내부 2026 추론 입력 테이블 보정, 검증 및 정렬 |
-| `scripts/export_feature_43_dashboard_artifacts.py` | XGBoost 학습, Platt scaling 확률 보정, SHAP, 대시보드 산출물 생성 |
-| `scripts/export_feature_43_model_diagnostics.py` | 기존 예측 결과 기준 모델 성능 진단 산출물 생성 |
-| `scripts/export_feature_43_threshold_policy_experiments.py` | global/segment threshold 정책별 성능 비교 실험 |
+| `scripts/build_feature_44_inference_2026.py` | CAS 내부 2026 추론 입력 테이블 보정, 검증 및 정렬 |
+| `scripts/export_feature_44_dashboard_artifacts.py` | XGBoost 학습, Platt scaling 확률 보정, SHAP, 대시보드 산출물 생성 |
+| `scripts/export_feature_44_model_diagnostics.py` | 기존 예측 결과 기준 모델 성능 진단 산출물 생성 |
+| `scripts/export_feature_44_threshold_policy_experiments.py` | global/segment threshold 정책별 성능 비교 실험 |
 | `scripts/export_feature_43_error_shap_analysis.py` | FP/FN 오류 사례의 SHAP 패턴 분석 |
 | `scripts/export_feature_43_error_case_review.py` | FP/FN 오류 사례의 유형, 모델 오해 가설, 개선 액션 리뷰 테이블 생성 |
 | `scripts/export_feature_43_shap_feature_experiments.py` | SHAP 오류 패턴 기반 변수 개선 후보 비교 실험 |
