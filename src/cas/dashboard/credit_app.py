@@ -3310,7 +3310,6 @@ def render_committee_view_tab(
                 "evidence_audit": "RESEARCH_AGENT_MODEL",
                 "chair_report": "MANAGER_AGENT_MODEL",
             }
-            
             for role, raw_agent in agents.items():
                 agent = _as_plain_dict(raw_agent)
                 role_label = STAGE2_AGENT_ROLE_LABELS.get(str(role), str(role))
@@ -3320,10 +3319,11 @@ def render_committee_view_tab(
                 
                 st.markdown(
                     f"**{role_label}** "
-                    f"<span style='background-color:#eef2f7; color:#4a4f57; padding:0.2rem 0.5rem; border-radius:0.5rem; font-size:0.8rem; margin-left:0.5rem;'>🧠 {used_model}</span>", 
+                    f"<span style='background-color:#f0f2f6; color:#31333f; padding:0.2rem 0.5rem; "
+                    f"border-radius:0.4rem; font-size:0.75rem; margin-left:0.5rem;'>"
+                    f"사용 모델: {used_model}</span>", 
                     unsafe_allow_html=True
                 )
-                
                 st.write(str(agent.get("summary") or "요약이 없습니다."))
                 findings = _as_text_list(agent.get("findings"))
                 if findings:
@@ -4748,9 +4748,9 @@ def main() -> None:
         help="상세 표기(억·만·원)와 단순 표기(억 원) 중 원하는 방식을 선택합니다.",
     )
 
-    with st.sidebar.expander(" 에이전트별 모델 설정", expanded=True):
+    with st.sidebar.expander("에이전트별 모델 설정", expanded=True):
         st.caption("각 에이전트의 LLM을 실시간으로 교체합니다.")
-        
+
         agent_model_options = [
             "openai:gpt-4o",
             "openai:gpt-4o-mini",
@@ -4759,29 +4759,27 @@ def main() -> None:
             "gemini:gemini-2.5-flash",
             "gemini:gemini-2.0-flash",
         ]
-        
+
         def get_model_index(env_key: str, default_val: str) -> int:
-            """.env에 설정된 기본값을 읽어와 드롭다운 초기값으로 매핑합니다."""
             val = os.environ.get(env_key, default_val)
             return agent_model_options.index(val) if val in agent_model_options else 0
-        
+
         quant_sel = st.selectbox(
-            "재무 분석 (Quant)", 
-            options=agent_model_options, 
-            index=get_model_index("QUANT_AGENT_MODEL", "openai:gpt-4o")
+            "재무 분석 (Quant)",
+            options=agent_model_options,
+            index=get_model_index("QUANT_AGENT_MODEL", "openai:gpt-4o"),
         )
         research_sel = st.selectbox(
-            "리서치 (Research/Macro)", 
-            options=agent_model_options, 
-            index=get_model_index("RESEARCH_AGENT_MODEL", "anthropic:claude-3-5-sonnet-latest")
+            "리서치 (Research/Macro)",
+            options=agent_model_options,
+            index=get_model_index("RESEARCH_AGENT_MODEL", "anthropic:claude-3-5-sonnet-latest"),
         )
         manager_sel = st.selectbox(
-            "의장 (Manager)", 
-            options=agent_model_options, 
-            index=get_model_index("MANAGER_AGENT_MODEL", "gemini:gemini-2.5-flash")
+            "의장 (Manager)",
+            options=agent_model_options,
+            index=get_model_index("MANAGER_AGENT_MODEL", "gemini:gemini-2.5-flash"),
         )
-        
-        # 선택된 값을 즉시 환경변수에 덮어씌워 백엔드(runtime.py)로 전달합니다.
+
         os.environ["QUANT_AGENT_MODEL"] = quant_sel
         os.environ["RESEARCH_AGENT_MODEL"] = research_sel
         os.environ["MACRO_AGENT_MODEL"] = research_sel

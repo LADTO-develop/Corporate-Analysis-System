@@ -6,9 +6,9 @@ import json
 import os
 import time
 from importlib import import_module
-# [수정됨] Mypy 방어를 위해 Any 추가
 from typing import Any, Protocol, TypeVar, cast
 
+from agno.models import Model
 from pydantic import BaseModel
 
 ModelT = TypeVar("ModelT", bound=BaseModel)
@@ -26,12 +26,12 @@ def _get_api_key(provider: str) -> str:
     key_map = {
         "openai": "OPENAI_API_KEY",
         "anthropic": "ANTHROPIC_API_KEY",
-        "gemini": "GEMINI_API_KEY"
+        "gemini": "GEMINI_API_KEY",
     }
     env_var = key_map.get(provider)
     if not env_var:
-        raise ValueError(f"🚨 지원하지 않는 LLM 제공자입니다: {provider}")
-    
+        raise ValueError(f"지원하지 않는 LLM 제공자입니다: {provider}")
+
     api_key = os.environ.get(env_var, "").strip()
     if not api_key:
         raise RuntimeError(
@@ -41,46 +41,34 @@ def _get_api_key(provider: str) -> str:
     return api_key
 
 
-# [수정됨] 반환 타입을 -> Any 로 명시하여 Mypy의 동적 타입 추론 에러 원천 차단
-def _create_model(model_config: str, max_tokens: int) -> Any:
+def _create_model(model_config: str, max_tokens: int) -> Model:
     """Parse 'provider:model_name' string and return the Agno Model instance."""
     if ":" not in model_config:
         raise ValueError(
-            f"🚨 잘못된 모델 설정 포맷입니다: '{model_config}'. "
-            f"반드시 'provider:model_name' 형식이어야 합니다. (예: 'openai:gpt-4o')"
+            f"잘못된 모델 설정 포맷입니다: '{model_config}'. "
+            "반드시 'provider:model_name' 형식이어야 합니다."
         )
-        
+
     provider, model_id = model_config.split(":", 1)
     provider = provider.lower()
     api_key = _get_api_key(provider)
 
     try:
         if provider == "openai":
-            openai_module = import_module("agno.models.openai")
-            return openai_module.OpenAIChat(
-                id=model_id, max_tokens=max_tokens, temperature=0, api_key=api_key
-            )
-        elif provider == "anthropic":
-            anthropic_module = import_module("agno.models.anthropic")
-            return anthropic_module.Claude(
-                id=model_id, max_tokens=max_tokens, temperature=0, api_key=api_key
-            )
-        elif provider == "gemini":
-            google_module = import_module("agno.models.google")
-            return google_module.Gemini(
-                id=model_id, max_tokens=max_tokens, temperature=0, api_key=api_key
-            )
-        else:
-            raise ValueError(f"🚨 지원하지 않는 LLM 제공자입니다: {provider}")
-            
+            from agno.models.openai import OpenAIChat
+            return OpenAIChat(id=model_id, max_tokens=max_tokens, temperature=0, api_key=api_key)
+        if provider == "anthropic":
+            from agno.models.anthropic import Claude
+            return Claude(id=model_id, max_tokens=max_tokens, temperature=0, api_key=api_key)
+        if provider == "gemini":
+            from agno.models.google import GeminiModel
+            return GeminiModel(id=model_id, max_tokens=max_tokens, temperature=0, api_key=api_key)
+        raise ValueError(f"지원하지 않는 LLM 제공자입니다: {provider}")
     except ImportError as error:
-        raise RuntimeError(
-            f"{provider} 관련 패키지를 찾을 수 없습니다. "
-            f"해당 제공자의 SDK가 설치되어 있는지 확인하세요."
-        ) from error
+        raise RuntimeError(f"{provider} 관련 패키지를 찾을 수 없습니다.") from error
 
 
-def build_agno_agent(  # noqa: UP047, RUF100
+def build_agno_agent(
     *,
     name: str,
     model_name: str,
@@ -93,13 +81,10 @@ def build_agno_agent(  # noqa: UP047, RUF100
         agent_module = import_module("agno.agent")
     except ImportError as error:
         raise RuntimeError(
-            "CAS_STAGE2_RUNNER=agno requires the optional Agno runtime. "
-            "Install this project with the 'agent' extra."
+            "CAS_STAGE2_RUNNER=agno requires the optional Agno runtime."
         ) from error
 
     agent_cls = agent_module.Agent
-    
-    # 모델 조립 공장 호출
     model = _create_model(model_name, max_tokens)
 
     return cast(
@@ -116,7 +101,7 @@ def build_agno_agent(  # noqa: UP047, RUF100
     )
 
 
-def run_structured_agent(  # noqa: UP047, RUF100
+def run_structured_agent(
     *,
     agent: AgnoAgentLike,
     query: str,
@@ -133,11 +118,10 @@ def run_structured_agent(  # noqa: UP047, RUF100
             if attempt >= attempts:
                 raise
             time.sleep(_stage2_agent_retry_delay_seconds() * attempt)
-
     raise RuntimeError("Agno agent retry loop exited unexpectedly.")
 
 
-def coerce_model_response(raw_response: object, response_model: type[ModelT]) -> ModelT:  # noqa: UP047, RUF100
+def coerce_model_response(raw_response: object, response_model: type[ModelT]) -> ModelT:
     """Coerce common Agno response shapes into the requested response model."""
     if isinstance(raw_response, response_model):
         return raw_response
@@ -147,9 +131,7 @@ def coerce_model_response(raw_response: object, response_model: type[ModelT]) ->
         return response_model.model_validate(raw_response)
     if isinstance(raw_response, str):
         return response_model.model_validate_json(_strip_json_fence(raw_response))
-    raise TypeError(
-        f"Agno agent returned an unsupported response type: {type(raw_response).__name__}"
-    )
+    raise TypeError(f"지원하지 않는 응답 타입입니다: {type(raw_response).__name__}")
 
 
 def json_payload(value: object) -> str:
