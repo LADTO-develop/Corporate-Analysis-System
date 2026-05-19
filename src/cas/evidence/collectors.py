@@ -27,6 +27,7 @@ _OPENDART_DEFAULT_CORP_CODE_CACHE = Path("data/external/opendart/corp_codes.csv"
 _DEFAULT_TIMEOUT_SECONDS = 8.0
 _DEFAULT_MAX_ITEMS = 3
 _WEB_SEARCH_MAX_ITEMS = 5
+_NAVER_RESULTS_PER_QUERY = 3
 _MAX_COMBINED_ITEMS = 12
 _MAX_WEAK_WEB_ITEMS = 3
 _OPENDART_LOOKBACK_DAYS = 730
@@ -50,6 +51,16 @@ _OPENDART_RISK_TERMS = (
     "관리종목",
     "불성실공시",
     "자본잠식",
+)
+_NAVER_RISK_KEYWORDS = (
+    "소송",
+    "횡령",
+    "배임",
+    "감사의견",
+    "상장폐지",
+    "유동성",
+    "차입금",
+    "회사채",
 )
 _DIRECT_EVIDENCE_SCORE_FLOOR = 0.55
 
@@ -129,8 +140,9 @@ def collect_external_evidence(
 
     http = session or cast(HttpClient, requests.Session())
     query = _risk_query(company_name=company_name, stock_code=stock_code)
+    naver_queries = _naver_news_queries(company_name=company_name)
     providers = {
-        "naver_news": _collect_naver_news(query=query, env=source, session=http),
+        "naver_news": _collect_naver_news(queries=naver_queries, env=source, session=http),
         "tavily": _collect_tavily(query=query, env=source, session=http),
         "opendart": _collect_opendart(
             company_name=company_name,
@@ -170,6 +182,7 @@ def collect_external_evidence(
         "corp_code": str(dict(providers.get("opendart") or {}).get("corp_code") or corp_code or ""),
         "as_of_date": _collection_end_date(as_of_date).isoformat(),
         "query": query,
+        "naver_queries": naver_queries,
         "fetched_at": _now(),
         "items": items,
         "providers": providers,
@@ -186,7 +199,7 @@ def collect_external_evidence(
 
 def _collect_naver_news(
     *,
-    query: str,
+    queries: list[str],
     env: Mapping[str, str],
     session: HttpClient,
 ) -> dict[str, object]:
@@ -195,25 +208,29 @@ def _collect_naver_news(
     if not client_id or not client_secret:
         return _provider_result("missing_key", "NAVER_CLIENT_ID/NAVER_CLIENT_SECRET not set.")
 
-    try:
-        response = session.get(
-            _NAVER_NEWS_URL,
-            params={"query": query, "display": _WEB_SEARCH_MAX_ITEMS, "sort": "date"},
-            headers={
-                "X-Naver-Client-Id": client_id,
-                "X-Naver-Client-Secret": client_secret,
-            },
-            timeout=_DEFAULT_TIMEOUT_SECONDS,
-        )
-        response.raise_for_status()
-        payload = response.json()
-    except Exception as error:
-        return _provider_result("error", str(error))
-
-    raw_items = _mapping_value(payload, "items")
     items: list[dict[str, str]] = []
-    if isinstance(raw_items, list):
-        for item in raw_items[:_WEB_SEARCH_MAX_ITEMS]:
+    errors: list[str] = []
+    for query in queries:
+        try:
+            response = session.get(
+                _NAVER_NEWS_URL,
+                params={"query": query, "display": _NAVER_RESULTS_PER_QUERY, "sort": "date"},
+                headers={
+                    "X-Naver-Client-Id": client_id,
+                    "X-Naver-Client-Secret": client_secret,
+                },
+                timeout=_DEFAULT_TIMEOUT_SECONDS,
+            )
+            response.raise_for_status()
+            payload = response.json()
+        except Exception as error:
+            errors.append(f"{query}: {error}")
+            continue
+
+        raw_items = _mapping_value(payload, "items")
+        if not isinstance(raw_items, list):
+            continue
+        for item in raw_items[:_NAVER_RESULTS_PER_QUERY]:
             if not isinstance(item, dict):
                 continue
             title = _strip_html(str(item.get("title", "")))
@@ -228,7 +245,31 @@ def _collect_naver_news(
                     "reliability": "medium",
                 }
             )
-    return {"status": "ready" if items else "no_results", "items": items}
+    items = _dedupe_raw_provider_items(items)
+    if items:
+        return {"status": "ready", "items": items, "queries": queries, "errors": errors}
+    if errors:
+        return {"status": "error", "message": "; ".join(errors), "items": [], "queries": queries}
+    return {"status": "no_results", "items": [], "queries": queries}
+
+
+def _dedupe_raw_provider_items(items: list[dict[str, str]]) -> list[dict[str, str]]:
+    by_key: dict[str, dict[str, str]] = {}
+    ordered: list[str] = []
+    for item in items:
+        key = _raw_provider_item_key(item)
+        if key not in by_key:
+            by_key[key] = item
+            ordered.append(key)
+    return [by_key[key] for key in ordered]
+
+
+def _raw_provider_item_key(item: dict[str, str]) -> str:
+    canonical_url = _canonical_url(item.get("url", ""))
+    if canonical_url:
+        return f"url:{canonical_url}"
+    title = _normalize_entity_text(item.get("title", ""))
+    return f"title:{title}" if title else f"item:{id(item)}"
 
 
 def _collect_tavily(
@@ -956,6 +997,11 @@ def _risk_query(*, company_name: str, stock_code: str | None) -> str:
         f"{company_name}{alias}{identifier} 신용위험 횡령 배임 소송 감사의견 "
         "상장폐지 유동성 차입금 회사채"
     )
+
+
+def _naver_news_queries(*, company_name: str) -> list[str]:
+    normalized_name = _searchable_company_name(company_name) or company_name
+    return [f"{normalized_name} {keyword}" for keyword in _NAVER_RISK_KEYWORDS]
 
 
 def _searchable_company_name(company_name: str) -> str:
