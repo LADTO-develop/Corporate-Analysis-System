@@ -37,6 +37,11 @@ jobs:
       - name: Mypy
         run: mypy src
 
+      - name: Install dev dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev,agent]"
+
   test:
     name: Test (Python 3.12)
     runs-on: ubuntu-latest
@@ -65,3 +70,12 @@ jobs:
         with:
           files: ./coverage.xml
           fail_ci_if_error: false
+
+      - name: Install package with dev + viz extras
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev,viz,agent]"
+
+      - name: Run end-to-end tests (fast)
+        run: |
+          python -m pytest tests/e2e -v -m "not slow and not requires_llm and not requires_gpu"
