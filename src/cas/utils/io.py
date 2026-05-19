@@ -11,8 +11,16 @@ import yaml
 
 
 def read_yaml(path: str | Path) -> dict[str, Any]:
-    """Load a YAML file into a dict."""
-    with open(path, encoding="utf-8") as f:
+    """Load a YAML file into a dict. (절대 경로 보정 완료)."""
+    target_path = Path(path)
+
+    # 만약 입력된 경로가 상대 경로라면, 프로젝트 최상위(git_36_v2)를 기준으로 절대 경로를 강제 생성합니다.
+    if not target_path.is_absolute():
+        # io.py 파일의 위치(src/cas/utils)를 역추적하여 부모의 부모의 부모인 최상위 폴더를 찾습니다.
+        project_root = Path(__file__).resolve().parents[3]
+        target_path = project_root / path
+
+    with open(target_path, encoding="utf-8") as f:
         return yaml.safe_load(f) or {}
 
 
@@ -23,10 +31,17 @@ def write_yaml(data: dict[str, Any], path: str | Path) -> None:
         yaml.safe_dump(data, f, allow_unicode=True, sort_keys=False)
 
 
-def read_json(path: str | Path) -> Any:
-    """Load a JSON file."""
-    with open(path, encoding="utf-8") as f:
-        return json.load(f)
+def read_json(path: str | Path) -> dict[str, Any]:
+    """Load a JSON file into a dict. (절대 경로 보정 완료)."""
+    target_path = Path(path)
+
+    # 입력된 경로가 상대 경로라면, 프로젝트 최상위(git_36_v2)를 기준으로 절대 경로 강제 생성
+    if not target_path.is_absolute():
+        project_root = Path(__file__).resolve().parents[3]
+        target_path = project_root / path
+
+    with open(target_path, encoding="utf-8") as f:
+        return json.load(f)  # type: ignore[no-any-return]
 
 
 def write_json(data: Any, path: str | Path, *, indent: int = 2) -> None:
