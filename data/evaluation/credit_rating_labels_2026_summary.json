@@ -1,0 +1,35 @@
+{
+  "dataset": "credit_rating_labels_2026",
+  "source_agency": "한국기업평가",
+  "source_period": "2026-01-01~2026-03-31",
+  "source_targets": [
+    "기업신용평가",
+    "회사채"
+  ],
+  "raw_matched_rows": 60,
+  "representative_label_rows": 49,
+  "speculative_rows": 1,
+  "investment_grade_rows": 48,
+  "rating_target_counts_raw": {
+    "기업신용평가": 5,
+    "회사채": 55
+  },
+  "market_counts_final": {
+    "KOSDAQ": 2,
+    "KOSPI": 47
+  },
+  "rating_counts_final": {
+    "A": 8,
+    "A+": 9,
+    "A-": 1,
+    "AA": 5,
+    "AA+": 2,
+    "AA-": 16,
+    "AAA": 3,
+    "BB-": 1,
+    "BBB+": 3,
+    "BBB-": 1
+  },
+  "input_universe": "data/input/credit_44_features/feature_44_inference_2026.csv",
+  "selection_rule": "CAS 2026 inference universe exact company-name match; cancelled disclosures removed; one representative row per company-year using worst credit_rating_rank, then latest rating_date."
+}
