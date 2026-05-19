@@ -9,7 +9,7 @@ from typing import Any
 from cas.agents.state import AgentState, AuditEntry
 from cas.utils.io import read_json, read_yaml
 
-_FEATURE_LIST_PATH = Path("data/input/credit_43_features/feature_43_list.json")
+_FEATURE_LIST_PATH = Path("data/input/credit_44_features/feature_44_list.json")
 
 
 def run(state: AgentState) -> dict[str, Any]:
@@ -139,7 +139,7 @@ def _run_dataset_backed_feature_store(
         "normalized_features": normalized_features,
         "model_features": model_features,
         "feature_store_snapshot": {
-            "store_name": "credit_43_feature_store",
+            "store_name": "credit_44_feature_store",
             "company_id": state.get("company_id"),
             "analysis_year": state.get("analysis_year", 0),
             "source_path": str(_FEATURE_LIST_PATH),

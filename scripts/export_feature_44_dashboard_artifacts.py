@@ -13,11 +13,11 @@ import numpy as np
 import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[1]
-INPUT_DIR = ROOT / "data" / "input" / "credit_43_features"
-METADATA_PATH = INPUT_DIR / "feature_43_dictionary_metadata.json"
+INPUT_DIR = ROOT / "data" / "input" / "credit_44_features"
+METADATA_PATH = INPUT_DIR / "feature_44_dictionary_metadata.json"
 RAW_PATH = ROOT / "data" / "raw" / "ts2000" / "TS2000_Credit_Model_Dataset_Model_V1.csv"
-OUTPUT_DIR = ROOT / "data" / "outputs" / "dashboard" / "feature_43_mvp"
-MODEL_OUTPUT_DIR = ROOT / "data" / "outputs" / "modeling" / "feature_43_xgboost"
+OUTPUT_DIR = ROOT / "data" / "outputs" / "dashboard" / "feature_44_mvp"
+MODEL_OUTPUT_DIR = ROOT / "data" / "outputs" / "modeling" / "feature_44_xgboost"
 PROBABILITY_CLIP_EPSILON = 1e-6
 TUNED_THRESHOLD_RECALL_FLOOR = 0.85
 TUNED_THRESHOLD_SELECTION_RULE = "valid_max_precision_with_recall_ge_0.85"
@@ -45,7 +45,7 @@ SCENARIO_PRESETS: dict[str, dict[str, float]] = {
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Export 43-feature model artifacts for the dashboard."
+        description="Export 44-feature model artifacts for the dashboard."
     )
     parser.add_argument("--input-dir", type=Path, default=INPUT_DIR)
     parser.add_argument("--metadata-path", type=Path, default=METADATA_PATH)
@@ -58,7 +58,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def read_json(path: Path) -> object:
-    return json.loads(path.read_text(encoding="utf-8"))
+    return json.loads(path.read_text(encoding="utf-8-sig"))
 
 
 def write_json(path: Path, payload: object) -> None:
@@ -191,7 +191,7 @@ def build_feature_dictionary(
                 "description": info.get("description", ""),
                 "formula_or_logic": info.get("formula_or_logic", ""),
                 "unit": info.get("unit", ""),
-                "source": info.get("source", "credit_43_features"),
+                "source": info.get("source", "credit_44_features"),
                 "note": info.get("note", ""),
             }
         )
@@ -204,10 +204,10 @@ def sanitize_feature_name(name: str, mapping: dict[str, str]) -> str:
 
 def risk_band(probability: float) -> str:
     if probability < 0.35:
-        return "안정"
+        return "stable"
     if probability < 0.65:
-        return "관찰"
-    return "고위험"
+        return "watch"
+    return "high_risk"
 
 
 def metrics(y_true: pd.Series, probabilities: np.ndarray, threshold: float) -> dict[str, float]:
@@ -519,25 +519,25 @@ def add_stage2_review_signals(
     output = prediction_scores.copy()
     for split, split_probabilities in review_probabilities.items():
         split_mask = output["split"].eq(split)
-        output.loc[split_mask, "prob_speculative_45"] = split_probabilities
-        output.loc[split_mask, "prob_speculative_45_raw"] = review_raw_probabilities[split]
+        output.loc[split_mask, "prob_speculative_46"] = split_probabilities
+        output.loc[split_mask, "prob_speculative_46_raw"] = review_raw_probabilities[split]
 
     stage1_risk = output["pred_label_tuned"].astype(int).eq(1)
-    feature45_risk = output["prob_speculative_45"].astype(float).ge(review_default_threshold)
+    feature46_risk = output["prob_speculative_46"].astype(float).ge(review_default_threshold)
     it_services_review = output["industry_macro_category"].astype(str).eq("it_services") & output[
-        "prob_speculative_45"
+        "prob_speculative_46"
     ].astype(float).ge(review_it_services_threshold)
-    secondary_trigger = (~stage1_risk) & (feature45_risk | it_services_review)
-    output["probability_45_calibration_method"] = review_calibration_method
-    output["threshold_45"] = review_default_threshold
-    output["threshold_45_it_services_review"] = review_it_services_threshold
-    output["pred_label_45_tuned"] = feature45_risk.astype(int)
+    secondary_trigger = (~stage1_risk) & (feature46_risk | it_services_review)
+    output["probability_46_calibration_method"] = review_calibration_method
+    output["threshold_46"] = review_default_threshold
+    output["threshold_46_it_services_review"] = review_it_services_threshold
+    output["pred_label_46_tuned"] = feature46_risk.astype(int)
     output["stage2_review_trigger"] = stage1_risk | secondary_trigger
     output["stage2_secondary_trigger"] = secondary_trigger
     output["stage2_review_priority"] = np.select(
         [
             stage1_risk,
-            (~stage1_risk) & feature45_risk,
+            (~stage1_risk) & feature46_risk,
             (~stage1_risk) & it_services_review,
         ],
         ["high", "medium", "watch"],
@@ -545,35 +545,35 @@ def add_stage2_review_signals(
     )
     output["trigger_reason_code"] = np.select(
         [
-            stage1_risk & feature45_risk,
+            stage1_risk & feature46_risk,
             stage1_risk,
-            (~stage1_risk) & feature45_risk,
+            (~stage1_risk) & feature46_risk,
             (~stage1_risk) & it_services_review,
         ],
         [
-            "stage1_and_45_risk",
+            "stage1_and_46_risk",
             "stage1_model_risk",
-            "45_feature_set_only",
+            "46_feature_set_only",
             "it_services_low_threshold",
         ],
         default="none",
     )
     output["trigger_reason"] = np.select(
         [
-            stage1_risk & feature45_risk,
+            stage1_risk & feature46_risk,
             stage1_risk,
-            (~stage1_risk) & feature45_risk,
+            (~stage1_risk) & feature46_risk,
             (~stage1_risk) & it_services_review,
         ],
         [
-            "1차 모델과 45개 변수셋이 모두 위험 기준선을 넘겨 위원회 검토 대상으로 분류했습니다.",
-            "1차 모델이 위험 기준선을 넘겨 위원회 검토 대상으로 분류했습니다.",
-            "43개 모델은 투자적격이나 45개 변수셋이 위험 기준선을 넘어 추가 검토 대상으로 올렸습니다.",
-            "IT서비스 업종 보조 기준선을 넘어 45개 변수셋 기반 추가 검토 대상으로 올렸습니다.",
+            "1차 모델과 46개 보조 변수셋이 모두 위험 기준을 넘어 위원회 검토 대상으로 분류했습니다.",
+            "1차 모델이 위험 기준을 넘어 위원회 검토 대상으로 분류했습니다.",
+            "44개 모델은 투자적격이나 46개 보조 변수셋이 위험 기준을 넘어 추가 검토 대상으로 올렸습니다.",
+            "IT서비스 업종 보조 기준을 넘어 46개 보조 변수셋 기반 추가 검토 대상으로 올렸습니다.",
         ],
         default="추가 위원회 검토 트리거 없음",
     )
-    output["trigger_policy"] = "43_model_default_or_45_feature_set_or_it_services_review_threshold"
+    output["trigger_policy"] = "44_model_default_or_46_feature_set_or_it_services_review_threshold"
     return output
 
 
@@ -798,11 +798,11 @@ def build_model_summary(
     test_raw_prob: np.ndarray,
 ) -> dict[str, object]:
     return {
-        "selected_model": "feature_43_xgboost",
-        "dataset_name": "credit_43_features",
+        "selected_model": "feature_44_xgboost",
+        "dataset_name": "credit_44_features",
         "test_overall_models": [
             {
-                "model": "feature_43_xgboost",
+                "model": "feature_44_xgboost",
                 "rows": len(test_y),
                 "positive_rows": int(test_y.sum()),
                 "positive_rate": float(test_y.mean()),
@@ -837,7 +837,7 @@ def build_model_summary(
         "prediction_artifacts_ready": True,
         "prediction_artifacts_note": (
             "Per-company prediction probabilities, local SHAP, and industry summaries are "
-            "exported from the credit_43_features split."
+            "exported from the credit_44_features split."
         ),
         "probability_calibration": calibration_summary,
         "split_summary": {
@@ -874,10 +874,10 @@ def build_llm_payload_template(source_features: list[str]) -> dict[str, object]:
             "firm_size_group": "<규모>",
         },
         "model_output": {
-            "prob_speculative": "<확률>",
-            "predicted_label": "<투자적격/투기등급>",
-            "threshold": "<기준선>",
-            "risk_band": "<안정/관찰/고위험>",
+            "prob_speculative": "<투기등급 확률>",
+            "predicted_label": "<투자적격/부적격>",
+            "threshold": "<판정 기준>",
+            "risk_band": "<stable/watch/high_risk>",
         },
         "key_metrics": key_metrics,
         "top_shap": "<local_shap.csv의 상위 요인 5~10개>",
@@ -902,7 +902,7 @@ def save_model_artifacts(
     write_json(
         model_output_dir / "model_artifact_metadata.json",
         {
-            "dataset_name": "credit_43_features",
+            "dataset_name": "credit_44_features",
             "model_type": "xgboost_classifier",
             "feature_count": len(model_features),
             "feature_columns": model_features,
@@ -926,133 +926,66 @@ def save_model_artifacts(
 
 
 def write_model_readme(model_output_dir: Path) -> None:
-    content = """# 43-Feature XGBoost Model Artifacts
+    content = """# 44-Feature XGBoost Model Artifacts
 
-이 폴더는 `credit_43_features` 데이터를 기준으로 다시 학습한
-XGBoost 모델링 산출물을 저장한 결과입니다. CAS 기준 원본은
-`data/raw/ts2000/TS2000_Credit_Model_Dataset_Model_V1.csv`이고,
-전체 5,451개 라벨 기업-연도 중 train 3,851개 행으로 학습합니다.
+이 폴더는 `credit_44_features` 입력 데이터셋으로 학습한 Stage 1 XGBoost 모델 artifact입니다.
+기존 `feature_43_xgboost`는 기준선으로 남겨두고, 이 폴더를 현재 운영 후보로 사용합니다.
 
-구성:
-- `xgboost_model.json`: XGBoost 원본 모델 파일
-- `model_artifact_metadata.json`: 사용 변수, 결측 처리 전략, 기준선 등 메타데이터
-- `diagnostics/`: 연도/시장/산업별 성능, threshold trade-off, calibration,
-  대표 오류 사례, threshold 정책, FP 집중 구간, SHAP 기반 변수 개선 후보
-  실험을 정리한 모델 진단 산출물
+## 포함 파일
 
-이 경로는 팀 공유용 모델링 산출물이자 Stage 1 런타임이 직접 참조하는 기준
-모델 artifact 위치입니다.
+- `xgboost_model.json`: XGBoost 모델 파일
+- `model_artifact_metadata.json`: feature 목록, threshold, calibration, split 성능, model version 정보
+- `diagnostics/`: calibration, threshold, segment, 오류 사례 분석 산출물
 
-`prob_speculative`는 검증셋 기준 Platt scaling을 적용한 보정 확률입니다.
-결측값은 XGBoost native missing 방향 학습을 사용하며, metadata의
-`fill_values`는 진단/후속 비교용 참고값으로만 보존합니다.
-`threshold_tuned`는 validation 기준 Recall 0.85 이상을 유지하는 후보 중
-Precision이 가장 높은 기준선을 사용합니다.
+## 현재 모델 기준
 
-Rolling validation은 단일 1년 validation에 대한 과신을 줄이기 위해 사용합니다.
-특정 경기/시장 국면에 우연히 잘 맞은 후보 변수를 바로 채택하지 않고, 여러
-평가연도에서 반복적으로 안정적인지 확인한 뒤 final test는 마지막 확인용으로만
-사용합니다.
+- Dataset: `credit_44_features`
+- Model: `feature_44_xgboost`
+- Model version: `ts2000_44_xgboost_mvp`
+- 추가 feature: `industry_current_ratio_percentile`
+- 결측 처리: XGBoost native missing
 
-진단 산출물은 모델을 다시 학습하지 않고 아래 명령으로 재생성할 수 있습니다.
+## 재생성 방법
 
 ```bash
-/opt/anaconda3/envs/aura/bin/python scripts/export_feature_43_model_diagnostics.py
+python scripts/rebuild_feature_44_dataset.py
+python scripts/build_feature_44_inference_2026.py
+python scripts/export_feature_44_dashboard_artifacts.py
+python scripts/export_feature_44_model_diagnostics.py
+python scripts/export_feature_44_threshold_policy_experiments.py
 ```
 
-threshold 정책별 valid/test 성능 실험은 아래 명령으로 재생성할 수 있습니다.
+## 보조 검토 신호
 
-```bash
-/opt/anaconda3/envs/aura/bin/python scripts/export_feature_43_threshold_policy_experiments.py
-```
-
-오류 사례별 SHAP 패턴 분석은 아래 명령으로 재생성할 수 있습니다.
-
-```bash
-/opt/anaconda3/envs/aura/bin/python scripts/export_feature_43_error_shap_analysis.py
-```
-
-오류 사례별 리뷰 테이블은 아래 명령으로 재생성할 수 있습니다.
-
-```bash
-/opt/anaconda3/envs/aura/bin/python scripts/export_feature_43_error_case_review.py
-```
-
-SHAP 오류 패턴 기반 변수 개선 후보 실험은 아래 명령으로 재생성할 수 있습니다.
-
-```bash
-/opt/anaconda3/envs/aura/bin/python scripts/export_feature_43_shap_feature_experiments.py
-```
-
-원본 Model V1의 미사용 후보 변수를 묶음별로 추가하는 실험은 아래 명령으로 재생성할 수 있습니다.
-
-```bash
-/opt/anaconda3/envs/aura/bin/python scripts/export_feature_43_candidate_feature_pack_experiments.py
-```
-
-단일 후보 변수와 2개 조합 기반 forward selection 실험은 아래 명령으로 재생성할 수 있습니다.
-
-```bash
-/opt/anaconda3/envs/aura/bin/python scripts/export_feature_43_forward_selection_experiments.py
-```
-
-여러 연도 walk-forward rolling OOT validation 실험은 아래 명령으로 재생성할 수 있습니다.
-
-```bash
-/opt/anaconda3/envs/aura/bin/python scripts/export_feature_43_rolling_validation_experiments.py
-```
-
-rolling validation으로 전체 후보를 선별한 뒤 final test 성능을 확인하는 실험은 아래 명령으로 재생성할 수 있습니다.
-
-```bash
-/opt/anaconda3/envs/aura/bin/python scripts/export_feature_43_rolling_selection_test_experiments.py
-```
-
-43개 기준 모델과 45개 변수셋(`delta_accruals_ratio`,
-`is_3y_consecutive_operating_loss` 추가)을 직접 비교하는 실험은 아래 명령으로
-재생성할 수 있습니다. 이 산출물은 운영 모델 교체가 아니라 Recall 우선 후보
-검토용입니다.
-
-```bash
-/opt/anaconda3/envs/aura/bin/python scripts/export_feature_45_experiment.py
-```
-
-45개 변수셋 기준으로 하이퍼파라미터, threshold 정책, Stage 2 보조 트리거 가능성을
-비교하는 실험은 아래 명령으로 재생성할 수 있습니다.
-
-```bash
-/opt/anaconda3/envs/aura/bin/python scripts/export_feature_45_improvement_experiments.py
-```
-
-XGBoost 하이퍼파라미터 튜닝 실험은 아래 명령으로 재생성할 수 있습니다.
-
-```bash
-/opt/anaconda3/envs/aura/bin/python scripts/export_feature_43_xgboost_tuning_experiments.py
-```
+대시보드 산출물에는 Stage 2 검토 대상을 넓히기 위한 보조 신호가 포함됩니다.
+기준 모델은 44개 feature를 사용하고, 보조 검토 신호는 `delta_accruals_ratio`,
+`is_3y_consecutive_operating_loss`를 추가한 46개 feature 조합으로 계산합니다.
+이 보조 신호는 최종 라벨을 직접 바꾸는 모델이 아니라, 에이전트 위원회 검토 대상을 넓히는 참고 신호입니다.
 """
     (model_output_dir / "README.md").write_text(content, encoding="utf-8")
 
 
 def write_readme(output_dir: Path) -> None:
-    content = """# 43-Feature Dashboard Artifacts
+    content = """# 44-feature Dashboard Artifacts
 
-이 폴더는 `credit_43_features` 입력 파일을
+이 폴더는 `credit_44_features` 입력 파일과 `feature_44_xgboost` 모델을
 대시보드가 바로 읽을 수 있는 형식으로 변환한 결과입니다.
 
-핵심 파일:
+## 포함 파일
+
 - `company_universe.csv`: 기업-연도 전체 기본값
 - `company_latest.csv`: 기업별 최신 행
-- `peer_percentiles.csv`: 산업/시장 비교용 백분위
+- `peer_percentiles.csv`: 산업/시장 비교 백분위
 - `feature_dictionary.csv`: 지표 설명 사전
-- `prediction_scores.csv`: 기업별 예측확률/판정
-- `stage2_review_signals.csv`: 45개 변수셋 기반 2차 위원회 추가 검토 트리거
+- `prediction_scores.csv`: 기업별 예측확률, threshold, 라벨
+- `stage2_review_signals.csv`: 46개 보조 변수셋 기반 2차 위원회 검토 트리거
 - `local_shap.csv`: 기업별 주요 영향 요인
 - `industry_*`: 산업 집계 요약
-- `model_summary.json`: 성능/기준선 요약
+- `model_summary.json`: 성능, threshold, calibration 요약
 
-`stage2_review_trigger`는 1차 43개 모델 판단을 덮어쓰지 않습니다.
-43개 모델이 위험으로 본 기업 또는 45개 변수셋/IT서비스 보조 기준선이 추가로
-감지한 기업을 2차 위원회 검토 대상으로 표시하는 보조 신호입니다.
+`stage2_review_trigger`는 1차 44개 모델 판단을 덮어쓰지 않습니다.
+44개 모델이 위험으로 본 기업 또는 46개 보조 변수셋/IT서비스 보조 기준이 추가로 감지한 기업을
+2차 위원회 검토 대상으로 표시하는 보조 신호입니다.
 """
     (output_dir / "README.md").write_text(content, encoding="utf-8")
 
@@ -1070,8 +1003,8 @@ def main() -> None:
         ) from error
 
     input_dir = args.input_dir
-    master = pd.read_csv(input_dir / "feature_43_master.csv", encoding="utf-8-sig")
-    feature_json = read_json(input_dir / "feature_43_list.json")
+    master = pd.read_csv(input_dir / "feature_44_master.csv", encoding="utf-8-sig")
+    feature_json = read_json(input_dir / "feature_44_list.json")
     metadata_json = read_json(args.metadata_path)
     metadata_columns = metadata_json.get("columns", [])
 
@@ -1220,13 +1153,13 @@ def main() -> None:
     )
     model_summary["stage2_review_trigger_policy"] = {
         "purpose": (
-            "43개 모델 원판단은 유지하고, 45개 변수셋은 2차 위원회 검토 대상을 "
-            "넓히는 보조 레이더로 사용합니다."
+            "44개 모델 원판단은 보존하고, 46개 보조 변수셋은 2차 위원회 검토 대상을 "
+            "넓히는 보조 레이어로 사용합니다."
         ),
-        "base_model": "feature_43_xgboost",
-        "secondary_feature_set": "feature_45",
+        "base_model": "feature_44_xgboost",
+        "secondary_feature_set": "feature_46",
         "secondary_features": STAGE2_REVIEW_FEATURES,
-        "default_45_threshold": float(stage2_review_model["default_threshold"]),
+        "default_46_threshold": float(stage2_review_model["default_threshold"]),
         "it_services_review_threshold": float(stage2_review_model["it_services_threshold"]),
         "it_services_recall_floor": STAGE2_IT_SERVICES_RECALL_FLOOR,
         "trigger_columns": [
@@ -1270,11 +1203,11 @@ def main() -> None:
         "is_speculative",
         "prob_speculative",
         "pred_label_tuned",
-        "prob_speculative_45",
-        "pred_label_45_tuned",
+        "prob_speculative_46",
+        "pred_label_46_tuned",
         "threshold",
-        "threshold_45",
-        "threshold_45_it_services_review",
+        "threshold_46",
+        "threshold_46_it_services_review",
         "stage2_review_trigger",
         "stage2_secondary_trigger",
         "stage2_review_priority",
@@ -1312,9 +1245,10 @@ def main() -> None:
     write_json(
         output_dir / "dashboard_export_manifest.json",
         {
-            "dataset_name": "credit_43_features",
+            "dataset_name": "credit_44_features",
             "dataset_note": (
-                "34개 원천 변수 / 원핫 후 43개 입력 변수셋을 대시보드용 형식으로 변환한 결과입니다."
+                f"{len(source_features)}개 원천 변수에서 {len(model_features)}개 모델 입력 변수로 "
+                "확장한 44-feature 대시보드용 산출물입니다."
             ),
             "generated_files": sorted(
                 [path.name for path in output_dir.iterdir() if path.is_file()]
@@ -1322,7 +1256,7 @@ def main() -> None:
             "prediction_artifacts_ready": True,
             "prediction_artifacts_note": (
                 "Per-company prediction probabilities, local SHAP, and industry summaries are "
-                "generated from the credit_43_features split."
+                "generated from the credit_44_features split."
             ),
             "model_artifacts_ready": True,
             "model_artifacts_path": str(args.model_output_dir.relative_to(ROOT)),
@@ -1330,7 +1264,7 @@ def main() -> None:
     )
     write_readme(output_dir)
     write_model_readme(args.model_output_dir)
-    print(f"feature_43 dashboard artifacts written to: {output_dir}")
+    print(f"feature_44 dashboard artifacts written to: {output_dir}")
 
 
 if __name__ == "__main__":

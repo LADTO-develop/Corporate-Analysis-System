@@ -7,5 +7,6 @@ Current contents:
 - `ts2000/`: canonical TS2000 model source dataset for rebuilding
   `data/input/credit_43_features/`, plus a minimal 2025 auxiliary source for
   repairing the 2026 inference feature table.
-- `dart/`, `ecos/`, `ratings/`, `news/`: reserved raw-source folders for
-  future ingestion.
+
+PDF/XLS disclosure downloads and intermediate rating-staging CSVs are not kept
+after their usable labels are reflected in the canonical TS2000 dataset.
