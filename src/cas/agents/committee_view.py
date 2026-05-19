@@ -85,6 +85,11 @@ def build_committee_view_model(
         risk_factors=risk_factors,
         mitigating_factors=mitigating_factors,
     )
+    risk_factors = _clean_text_items(risk_factors)
+    mitigating_factors = _clean_text_items(mitigating_factors)
+    evidence_summary = _clean_evidence_summary_items(evidence_summary)
+    conflict_resolution = _clean_korean_review_text(conflict_resolution)
+    final_review_memo = _clean_korean_review_text(final_review_memo)
 
     return CommitteeViewPayload(
         final_committee_label=committee_label,
@@ -288,6 +293,11 @@ def _committee_factor_value(text: str, *, target: Literal["risk", "mitigation"])
 def _non_escalating_risk_text(text: str) -> bool:
     """Keep missing or unconfirmed evidence from escalating an eligible company to hold."""
     neutral_markers = (
+        "외부근거 미수집",
+        "외부 뉴스·공시 근거 수집이 비활성화",
+        "확인된 외부 뉴스·공시 항목 없음",
+        "외부근거가 제공되지 않아",
+        "외부 교차검증은 보류",
         "확정되지 않았",
         "중대한 충돌은 제한적",
         "현재 연결된 뉴스/공시 항목은 없습니다",
@@ -466,6 +476,42 @@ def _safe_float(value: object) -> float | None:
         return float(value)
     except (TypeError, ValueError):
         return None
+
+
+def _clean_text_items(items: list[str]) -> list[str]:
+    return [_clean_korean_review_text(item) for item in items]
+
+
+def _clean_evidence_summary_items(items: list[dict[str, str]]) -> list[dict[str, str]]:
+    return [
+        {
+            **item,
+            "summary": _clean_korean_review_text(str(item.get("summary", ""))),
+        }
+        for item in items
+    ]
+
+
+def _clean_korean_review_text(text: str) -> str:
+    """Clean committee prose for Korean report output."""
+    cleaned = str(text).strip()
+    replacements = {
+        "적격로": "적격으로",
+        "부적격로": "부적격으로",
+        "투자적격 등급을 확정합니다": "투자적격 검토 의견을 제시합니다",
+        "부적격 등급을 확정합니다": "부적격 검토 의견을 제시합니다",
+        "신용등급을 확정합니다": "신용위험 검토 의견을 제시합니다",
+        "등급을 확정합니다": "검토 의견을 제시합니다",
+        "최종 승인합니다": "검토 의견으로 정리합니다",
+        "최종 승인": "검토 의견",
+        "확정합니다": "검토 의견을 제시합니다",
+        "승인합니다": "의견을 제시합니다",
+    }
+    for old, new in replacements.items():
+        cleaned = cleaned.replace(old, new)
+    while ".." in cleaned:
+        cleaned = cleaned.replace("..", ".")
+    return cleaned
 
 
 __all__ = ["build_committee_view", "build_committee_view_model"]

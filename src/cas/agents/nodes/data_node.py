@@ -35,6 +35,20 @@ _REQUIRED_FINANCIALS = {
 _REQUIRED_QUALITATIVE = {"governance_score", "product_momentum_score"}
 
 
+def _looks_like_stock_code(value: object) -> bool:
+    """Return whether the value can be treated as a Korean stock code."""
+    text = str(value).strip()
+    return text.isdigit() and len(text) <= 6
+
+
+def _normalize_stock_code(value: object) -> str:
+    """Normalize listed-company stock codes to the six-digit display format."""
+    text = str(value).strip()
+    if _looks_like_stock_code(text):
+        return text.zfill(6)
+    return text
+
+
 def run(state: AgentState) -> dict[str, Any]:
     """Load the selected company profile from the processed-company list."""
     selection_payload = state.get("company_selection")
@@ -202,7 +216,9 @@ def _resolve_feature_row(company_id: str, analysis_year: int) -> dict[str, Any] 
                 matches = fiscal_matches
 
     row = matches.sort_values(["fiscal_year", "eval_year"]).iloc[-1]
-    return {key: (None if pd.isna(value) else value) for key, value in row.to_dict().items()}
+    payload = {key: (None if pd.isna(value) else value) for key, value in row.to_dict().items()}
+    payload["__requested_company_id"] = normalized_company_id
+    return payload
 
 
 def _resolve_feature_row_for_selection(
@@ -248,11 +264,17 @@ def _dataset_backed_payload(
     *,
     company_selection: CompanySelectionRequest | None = None,
 ) -> dict[str, Any]:
+    dataset_row = dict(dataset_row)
     company_name = str(dataset_row.get("corp_name") or dataset_row.get("stock_code") or "unknown")
     market = str(dataset_row.get("market") or "UNKNOWN")
-    stock_code = str(dataset_row.get("stock_code") or "unknown")
+    requested_company_id = str(dataset_row.get("__requested_company_id") or "").strip()
+    stock_code = _normalize_stock_code(dataset_row.get("stock_code") or "unknown")
     normalized_stock_code = (
-        company_selection.company.stock_code if company_selection is not None else stock_code
+        company_selection.company.stock_code
+        if company_selection is not None
+        else _normalize_stock_code(
+            requested_company_id if _looks_like_stock_code(requested_company_id) else stock_code
+        )
     )
     fiscal_year = int(dataset_row.get("fiscal_year") or 0)
     analysis_year = int(dataset_row.get("eval_year") or fiscal_year)
@@ -266,8 +288,12 @@ def _dataset_backed_payload(
             fiscal_year=fiscal_year,
         )
         if company_selection is not None
-        else stock_code
+        else normalized_stock_code
     )
+    dataset_row["stock_code"] = normalized_stock_code
+    dataset_row["company_id"] = company_id
+    dataset_row["company_name"] = company_name
+    dataset_row.pop("__requested_company_id", None)
     # 대시보드에서 미리 계산한 peer percentile 결과를 같이 실어 두면,
     # Stage 2 에이전트가 산업/시장 비교 문장을 별도 재계산 없이 바로 만들 수 있다.
     peer_rows = _resolve_peer_rows(stock_code=normalized_stock_code, fiscal_year=fiscal_year)

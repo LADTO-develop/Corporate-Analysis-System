@@ -12,6 +12,13 @@ from cas.agents.stage2_outputs import EvidenceAuditOutput
 from .runtime import build_agno_agent, clamp, compact_items, json_payload, run_structured_agent
 
 _EvidenceStrength = Literal["none", "weak", "moderate", "strong", "critical"]
+_UNAVAILABLE_EVIDENCE_STATUSES = {
+    "disabled",
+    "missing_credentials",
+    "not_implemented",
+    "not_requested",
+    "placeholder",
+}
 
 
 class AgnoEvidenceAuditResponse(BaseModel):
@@ -40,6 +47,9 @@ def run_evidence_audit_agent(
     max_tokens: int,
 ) -> EvidenceAuditOutput:
     """Run the Agno EvidenceAuditAgent and map it to the CAS Stage 2 schema."""
+    if _external_evidence_unavailable(bundle.news_status):
+        return _unavailable_evidence_output(bundle)
+
     agent = build_agno_agent(
         name="EvidenceAudit_Agent",
         model_name=model_name,
@@ -48,8 +58,11 @@ def run_evidence_audit_agent(
         instructions=[
             "You are the CAS EvidenceAuditAgent.",
             "Audit external evidence, debt/liquidity context, macro risk, and tail-risk indicators.",
-            "Do not invent external evidence; if evidence is missing, say the evidence is pending.",
-            "Return concise Korean business review prose in the structured response fields only.",
+            "Use only the provided news_cache_snapshot and source_feature_row as evidence.",
+            "Do not use general market knowledge as confirmed company-specific evidence.",
+            "If direct external evidence is missing, state that evidence is unavailable and do not infer events.",
+            "Write in Korean business-report language. Do not say a credit decision is confirmed or approved.",
+            "Return concise Korean review prose in the structured response fields only.",
         ],
     )
     result = run_structured_agent(
@@ -61,8 +74,8 @@ def run_evidence_audit_agent(
     model_challenge = _model_challenge(result=result, bundle=bundle, strength=strength)
     return EvidenceAuditOutput(
         evidence_summary=(
-            "Agno EvidenceAuditAgent reviewed external evidence and tail-risk context. "
-            f"External risk level: {result.external_risk_level}. "
+            "Agno EvidenceAuditAgent가 외부근거와 꼬리위험 맥락을 검토했습니다. "
+            f"외부위험 수준: {result.external_risk_level}. "
             f"{result.macro_environmental_impact}"
         ),
         evidence_status=bundle.news_status,
@@ -94,6 +107,14 @@ def _query(bundle: Stage2InputBundle) -> str:
         },
         "source_feature_row": bundle.source_feature_row,
         "news_cache_snapshot": bundle.news_cache_snapshot,
+        "evidence_guardrail": {
+            "news_status": bundle.news_status,
+            "external_evidence_available": not _external_evidence_unavailable(bundle.news_status),
+            "rule_kr": (
+                "외부근거가 없거나 비활성화된 상태라면 특정 뉴스, 공시, 업황 사건을 "
+                "확인 사실처럼 쓰지 말고 '외부근거 미수집'으로만 판단한다."
+            ),
+        },
     }
     return (
         "Run EvidenceAuditAgent for CAS Stage 2. "
@@ -108,7 +129,7 @@ def _evidence_strength(
     result: AgnoEvidenceAuditResponse,
     status: str,
 ) -> _EvidenceStrength:
-    if status in {"disabled", "not_implemented", "placeholder", "missing_credentials"}:
+    if _external_evidence_unavailable(status):
         return "critical" if result.has_critical_risk else "none"
     if result.has_critical_risk:
         return "critical"
@@ -128,13 +149,13 @@ def _model_challenge(
 ) -> str:
     if strength in {"critical", "strong"}:
         return (
-            "External evidence may challenge the Stage 1 model view. "
-            f"Model label preserved: {bundle.prediction_label}. "
+            "외부근거가 Stage 1 모델 판단에 보수적 재검토 신호를 줄 수 있습니다. "
+            f"모델 라벨은 {bundle.prediction_label}으로 보존합니다. "
             f"{result.critical_off_balance_risk}"
         )
     return (
-        "External evidence does not materially overturn the Stage 1 model view at this stage. "
-        f"Model label preserved: {bundle.prediction_label}."
+        "현재 확인된 외부근거만으로는 Stage 1 모델 판단을 실질적으로 뒤집기 어렵습니다. "
+        f"모델 라벨은 {bundle.prediction_label}으로 보존합니다."
     )
 
 
@@ -144,10 +165,10 @@ def _audit_conclusion(
     strength: _EvidenceStrength,
 ) -> str:
     if strength == "critical":
-        return f"Critical external evidence requires chair-level review: {result.critical_off_balance_risk}"
+        return f"치명적 외부근거가 있어 위원장 단계 검토가 필요합니다: {result.critical_off_balance_risk}"
     if strength == "strong":
-        return f"Strong external evidence should be reflected in committee qualification: {result.critical_off_balance_risk}"
-    return "External evidence should be treated as contextual support until stronger direct evidence is available."
+        return f"강한 외부근거를 위원회 보수 의견에 반영해야 합니다: {result.critical_off_balance_risk}"
+    return "더 강한 직접 외부근거가 확보되기 전까지는 참고 맥락으로만 처리합니다."
 
 
 def _evidence_reliability(*, result: AgnoEvidenceAuditResponse, status: str) -> str:
@@ -168,6 +189,39 @@ def _confidence_for_strength(strength: _EvidenceStrength) -> float:
         }[strength],
         minimum=0.35,
         maximum=0.88,
+    )
+
+
+def _external_evidence_unavailable(status: str) -> bool:
+    """Return whether no external evidence was collected for this run."""
+    return status.strip().lower() in _UNAVAILABLE_EVIDENCE_STATUSES
+
+
+def _unavailable_evidence_output(bundle: Stage2InputBundle) -> EvidenceAuditOutput:
+    """Return a guarded output when news/DART evidence collection is not active."""
+    status = bundle.news_status
+    summary = (
+        "외부 뉴스·공시 근거 수집이 비활성화되어 확인된 외부 사건 기반 판단은 수행하지 "
+        f"않았습니다. 현재 news_status는 `{status}`입니다."
+    )
+    return EvidenceAuditOutput(
+        evidence_summary=summary,
+        evidence_status=status,
+        evidence_reliability=f"status={status}; 외부근거 미수집",
+        evidence_strength="none",
+        model_challenge=(
+            "외부근거 미수집 상태이므로 Stage 1 모델 판단을 뒤집을 확인 근거는 없습니다. "
+            f"모델 라벨은 {bundle.prediction_label}으로 보존합니다."
+        ),
+        audit_conclusion="뉴스·공시·DART 수집을 활성화한 뒤 외부 리스크를 재검토해야 합니다.",
+        debt_liquidity_cross_check=[
+            "외부근거 미수집으로 부채·유동성 관련 외부 교차검증은 보류합니다."
+        ],
+        macro_industry_sensitivity=[
+            "거시·산업 관련 외부근거가 제공되지 않아 정성 판단은 제한적입니다."
+        ],
+        external_evidence_findings=["확인된 외부 뉴스·공시 항목 없음"],
+        confidence=0.45,
     )
 
 

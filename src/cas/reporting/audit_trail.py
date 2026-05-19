@@ -24,18 +24,55 @@ def to_markdown(entries: list[AuditEntry] | list[dict[str, Any]]) -> str:
     """Render the audit trail as a markdown table ordered by timestamp."""
     df = to_dataframe(entries)
     if df.empty:
-        return "_(No audit entries)_"
+        return "_(감사 추적 항목이 없습니다)_"
     df = df.sort_values("timestamp").reset_index(drop=True)
 
-    lines = ["| Timestamp | Node | Summary | Metrics |", "|---|---|---|---|"]
+    lines = ["| 시각 | 노드 | 요약 | 지표 |", "|---|---|---|---|"]
     for _, row in df.iterrows():
         metrics = row.get("metrics", {}) or {}
         metrics_s = ", ".join(
             f"`{k}={v:.3f}`" for k, v in metrics.items() if isinstance(v, int | float)
         )
-        summary = str(row.get("summary", "")).replace("|", r"\|")
+        summary = _localize_summary(str(row.get("summary", ""))).replace("|", r"\|")
         lines.append(f"| {row['timestamp']} | `{row['node']}` | {summary} | {metrics_s} |")
     return "\n".join(lines)
+
+
+def _localize_summary(summary: str) -> str:
+    """Translate common pipeline audit messages for the Korean report."""
+    localized = summary
+    replacements = {
+        "External evidence collection is disabled; set CAS_ENABLE_EXTERNAL_EVIDENCE=1 to enable it.": (
+            "외부근거 수집이 비활성화되어 있습니다. 활성화하려면 CAS_ENABLE_EXTERNAL_EVIDENCE=1로 설정하세요."
+        ),
+        "Dashboard response JSON validated against strict schema.": (
+            "대시보드 응답 JSON이 엄격한 스키마 검증을 통과했습니다."
+        ),
+    }
+    for old, new in replacements.items():
+        localized = localized.replace(old, new)
+    if localized.startswith("Loaded feature-master row for "):
+        return localized.replace(
+            "Loaded feature-master row for ", "feature-master 행을 불러왔습니다: "
+        )
+    if localized.startswith("Loaded dataset-backed feature snapshot with "):
+        return localized.replace(
+            "Loaded dataset-backed feature snapshot with ",
+            "데이터셋 기반 feature snapshot을 불러왔습니다: ",
+        )
+    if localized.startswith("Stage 1 XGBoost inference completed: "):
+        return localized.replace(
+            "Stage 1 XGBoost inference completed: ",
+            "Stage 1 XGBoost 추론 완료: ",
+        )
+    if localized.startswith("Rule engine assigned "):
+        return localized.replace("Rule engine assigned ", "규칙엔진 판단 완료: ")
+    if localized.startswith("Three-agent Stage 2 scaffold completed via "):
+        return localized.replace(
+            "Three-agent Stage 2 scaffold completed via ",
+            "3개 에이전트 Stage 2 실행 완료: ",
+        )
+    return localized
 
 
 def export(
