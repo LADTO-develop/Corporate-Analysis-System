@@ -149,7 +149,7 @@ class _WideWebSession:
     ) -> _FakeResponse:
         if "naver.com" in url:
             assert params is not None
-            assert params["display"] == 5
+            assert params["display"] == 3
             return _FakeResponse(
                 {
                     "items": [
@@ -194,6 +194,34 @@ class _WideWebSession:
                 ]
             }
         )
+
+
+class _NaverQueryCaptureSession:
+    def __init__(self) -> None:
+        self.naver_queries: list[str] = []
+
+    def get(
+        self,
+        url: str,
+        *,
+        params: Mapping[str, object] | None = None,
+        headers: Mapping[str, str] | None = None,
+        timeout: float | None = None,
+    ) -> _FakeResponse:
+        if "naver.com" in url:
+            assert params is not None
+            self.naver_queries.append(str(params["query"]))
+            return _FakeResponse({"items": []})
+        return _FakeResponse({"list": []})
+
+    def post(
+        self,
+        url: str,
+        *,
+        json: Mapping[str, object] | None = None,
+        timeout: float | None = None,
+    ) -> _FakeResponse:
+        return _FakeResponse({"results": []})
 
 
 class _PreferredShareDelistingSession:
@@ -404,6 +432,31 @@ def test_collect_external_evidence_prioritizes_direct_news_and_limits_weak_web()
     verification_summary = snapshot["verification_summary"]
     assert isinstance(verification_summary, dict)
     assert verification_summary["weak_web_item_count"] == 3
+
+
+def test_collect_external_evidence_uses_short_naver_keyword_queries() -> None:
+    session = _NaverQueryCaptureSession()
+
+    snapshot = collect_external_evidence(
+        company_name="삼성전자(주)",
+        stock_code="005930",
+        env={
+            "CAS_ENABLE_EXTERNAL_EVIDENCE": "1",
+            "NAVER_CLIENT_ID": "dummy",
+            "NAVER_CLIENT_SECRET": "dummy",
+        },
+        session=session,
+    )
+
+    assert snapshot["status"] == "no_results"
+    assert session.naver_queries
+    assert "삼성전자 소송" in session.naver_queries
+    assert "삼성전자 회사채" in session.naver_queries
+    assert all("005930" not in query for query in session.naver_queries)
+    assert snapshot["naver_queries"] == session.naver_queries
+    provider = snapshot["providers"]["naver_news"]
+    assert isinstance(provider, dict)
+    assert provider["queries"] == session.naver_queries
 
 
 def test_collect_external_evidence_does_not_veto_preferred_share_delisting() -> None:
