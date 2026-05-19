@@ -23,10 +23,11 @@ jobs:
           python-version: "3.12"
           cache: "pip"
 
-      - name: Install dev dependencies
+      - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev]"
+          # Linting에 필요한 모든 것(dev + agno)을 한 번에 설치합니다.
+          pip install -e ".[dev,agent]"
 
       - name: Ruff — lint
         run: ruff check .
@@ -36,11 +37,6 @@ jobs:
 
       - name: Mypy
         run: mypy src
-
-      - name: Install dev dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -e ".[dev,agent]"
 
   test:
     name: Test (Python 3.12)
@@ -54,10 +50,10 @@ jobs:
           python-version: "3.12"
           cache: "pip"
 
-      - name: Install package with dev + viz extras
+      - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev,viz]"
+          pip install -e ".[dev,viz,agent]"
 
       - name: Run unit tests (fast)
         run: pytest tests/unit -v --cov=cas --cov-report=xml -m "not slow and not requires_llm and not requires_gpu"
@@ -65,17 +61,11 @@ jobs:
       - name: Run integration tests (graph smoke)
         run: pytest tests/integration -v -m "not requires_llm and not requires_gpu"
 
+      - name: Run end-to-end tests (fast)
+        run: python -m pytest tests/e2e -v -m "not slow and not requires_llm and not requires_gpu"
+
       - name: Upload coverage
         uses: codecov/codecov-action@v4
         with:
           files: ./coverage.xml
           fail_ci_if_error: false
-
-      - name: Install package with dev + viz extras
-        run: |
-          python -m pip install --upgrade pip
-          pip install -e ".[dev,viz,agent]"
-
-      - name: Run end-to-end tests (fast)
-        run: |
-          python -m pytest tests/e2e -v -m "not slow and not requires_llm and not requires_gpu"

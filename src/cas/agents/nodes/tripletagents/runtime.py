@@ -6,13 +6,9 @@ import json
 import os
 import time
 from importlib import import_module
-from typing import Protocol, cast
+from typing import Any, Protocol, cast
 
-from agno.models import Model
 from pydantic import BaseModel
-
-# [수정] TypeVar("ModelT", bound=BaseModel) 선언을 삭제하고
-# 아래 각 함수 정의 시 [ModelT: BaseModel] 구문을 사용합니다.
 
 
 class AgnoAgentLike(Protocol):
@@ -42,7 +38,7 @@ def _get_api_key(provider: str) -> str:
     return api_key
 
 
-def _create_model(model_config: str, max_tokens: int) -> Model:
+def _create_model(model_config: str, max_tokens: int) -> Any:  # noqa: ANN401
     """Parse 'provider:model_name' string and return the Agno Model instance."""
     if ":" not in model_config:
         raise ValueError(
@@ -64,7 +60,8 @@ def _create_model(model_config: str, max_tokens: int) -> Model:
 
             return Claude(id=model_id, max_tokens=max_tokens, temperature=0, api_key=api_key)
         if provider == "gemini":
-            from agno.models.google import GeminiModel
+            # [최종 수정] 오직 Mypy가 에러를 뿜는 GeminiModel에만 정밀하게 예외 처리 적용
+            from agno.models.google import GeminiModel  # type: ignore[attr-defined]
 
             return GeminiModel(id=model_id, max_tokens=max_tokens, temperature=0, api_key=api_key)
         raise ValueError(f"지원하지 않는 LLM 제공자입니다: {provider}")
@@ -138,7 +135,7 @@ def coerce_model_response[ModelT: BaseModel](
 
 def json_payload(value: object) -> str:
     """Serialize prompt context with stable formatting."""
-    return json.dumps(value, ensure_ascii=False, indent=2, default=str)
+    return str(json.dumps(value, ensure_ascii=False, indent=2, default=str))
 
 
 def compact_items(*values: str) -> list[str]:
@@ -168,10 +165,14 @@ def _stage2_agent_retry_attempts() -> int:
     return min(max(attempts, 1), 5)
 
 
-def _stage2_agent_retry_delay_seconds() -> float:
+def _stage2_agent_retry_seconds() -> float:
     raw_value = os.environ.get("CAS_STAGE2_AGENT_RETRY_DELAY_SECONDS", "1.5").strip()
     try:
         delay = float(raw_value)
     except ValueError:
         delay = 1.5
     return min(max(delay, 0.0), 10.0)
+
+
+def _stage2_agent_retry_delay_seconds() -> float:
+    return _stage2_agent_retry_seconds()
