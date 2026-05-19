@@ -3493,7 +3493,7 @@ def render_llm_panel(
         html_col1, html_col2 = st.columns([1, 1])
         with html_col1:
             stretch_download_button(
-                "보고서형 HTML 다운로드",
+                label="보고서형 HTML 다운로드",
                 data=html_report,
                 file_name=(
                     f"credit_report_{_stock_code_text(selected_row['stock_code'])}_"
@@ -3503,7 +3503,7 @@ def render_llm_panel(
             )
         with html_col2:
             stretch_download_button(
-                "원페이지 HTML 다운로드",
+                label="원페이지 HTML 다운로드",
                 data=onepage_html,
                 file_name=(
                     f"credit_onepage_{_stock_code_text(selected_row['stock_code'])}_"
@@ -3514,7 +3514,7 @@ def render_llm_panel(
         utility_col1, utility_col2 = st.columns([1, 1])
         with utility_col1:
             stretch_download_button(
-                "상세 보고서형 다운로드 (.md)",
+                label="상세 보고서형 다운로드 (.md)",
                 data=export_text,
                 file_name=(
                     f"credit_report_{_stock_code_text(selected_row['stock_code'])}_"
@@ -3524,7 +3524,7 @@ def render_llm_panel(
             )
         with utility_col2:
             stretch_download_button(
-                "원페이지 요약 다운로드 (.md)",
+                label="원페이지 요약 다운로드 (.md)",
                 data=onepage_text,
                 file_name=(
                     f"credit_onepage_{_stock_code_text(selected_row['stock_code'])}_"
