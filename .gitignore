@@ -39,7 +39,6 @@ poetry.lock
 # --- Environment variables -------------------------------------------------
 .env
 .env.*
-!.env.example
 
 # --- Jupyter ---------------------------------------------------------------
 .ipynb_checkpoints/
@@ -51,13 +50,13 @@ notebooks/**/*_files/
 data/raw/**/
 data/interim/**/
 data/processed/**/
-!data/**/.gitkeep
 !data/**/README.md
 !data/raw/ts2000/
 !data/raw/ts2000/README.md
 !data/raw/ts2000/TS2000_Credit_Model_Dataset_Model_V1.csv
 # External mapping tables ARE tracked (small, versioned reference data).
 !data/external/**
+data/external/opendart/**
 
 # --- Model artifacts -------------------------------------------------------
 *.ckpt
@@ -86,6 +85,7 @@ data/outputs/**
 !data/outputs/modeling/feature_43_xgboost/diagnostics/*.md
 multirun/
 .hydra/
+logs/
 
 # --- TabPFN model cache ---------------------------------------------------
 # Default location; TABPFN_MODEL_CACHE_DIR env var can override.
@@ -95,6 +95,7 @@ multirun/
 .DS_Store
 Thumbs.db
 Desktop.ini
+~$*
 
 # --- IDE -------------------------------------------------------------------
 .idea/

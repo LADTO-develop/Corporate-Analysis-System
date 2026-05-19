@@ -41,7 +41,3 @@ conditional_edges:
     mapping:
       "enough": "feature_store"
       "insufficient": "json_schema"
-
-checkpointer:
-  kind: "memory"
-  sqlite_path: "./data/interim/langgraph_checkpoints.db"

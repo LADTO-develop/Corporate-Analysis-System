@@ -42,34 +42,6 @@ overall_weights:
   resilience: 0.35
   execution: 0.20
 
-overlays:
-  market:
-    demand_outlook:
-      positive: 0.03
-      neutral: 0.00
-      negative: -0.03
-    cost_pressure:
-      low: 0.02
-      moderate: 0.00
-      high: -0.03
-    regulatory_pressure:
-      low: 0.01
-      moderate: 0.00
-      high: -0.02
-  qualitative:
-    controversy_level:
-      low: 0.01
-      moderate: -0.03
-      high: -0.08
-    execution_risk:
-      low: 0.02
-      moderate: 0.00
-      high: -0.04
-
-score_caps:
-  market_adjustment: 0.05
-  qualitative_adjustment: 0.08
-
 model_registry:
   registry_name: "local_model_registry"
   active_model: "xgboost_realtime"

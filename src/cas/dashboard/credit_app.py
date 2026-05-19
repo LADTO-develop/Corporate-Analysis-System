@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import re
 from collections.abc import Callable
@@ -31,6 +32,7 @@ from cas.dashboard.evidence_panel import (
     render_external_evidence_items,
     render_external_evidence_judgment,
 )
+from cas.dashboard.formatting import format_ratio_value
 from cas.dashboard.llm import generate_llm_explanation
 from cas.dashboard.streamlit_compat import (
     stretch_altair_chart,
@@ -38,6 +40,8 @@ from cas.dashboard.streamlit_compat import (
     stretch_download_button,
 )
 from cas.evidence import collect_external_evidence
+
+LOGGER = logging.getLogger(__name__)
 
 MARKET_LABELS = {
     "KOSPI": "코스피",
@@ -1052,7 +1056,7 @@ def format_value_with_unit(value: object, unit: object, feature: str | None = No
         return str(value)
 
     if unit_text == "ratio":
-        return f"{number * 100:.2f}%"
+        return cast(str, format_ratio_value(number, feature))
     if unit_text == "%p":
         return f"{number:.2f}%p"
     if unit_text == "KRW thousand":
@@ -1071,7 +1075,7 @@ def format_value_with_unit(value: object, unit: object, feature: str | None = No
     return format_scalar(value)
 
 
-def format_delta_with_unit(value: object, unit: object) -> str:
+def format_delta_with_unit(value: object, unit: object, feature: str | None = None) -> str:
     """Format a signed delta using the feature unit for comparison views."""
     if pd.isna(value):
         return "-"
@@ -1084,7 +1088,7 @@ def format_delta_with_unit(value: object, unit: object) -> str:
 
     sign = "+" if number > 0 else ""
     if unit_text == "ratio":
-        return f"{sign}{number * 100:.2f}%p"
+        return cast(str, format_ratio_value(number, feature, signed=True))
     if unit_text == "%p":
         return f"{sign}{number:.2f}%p"
     if unit_text == "KRW thousand":
@@ -1588,6 +1592,7 @@ def build_onepage_llm_report(
             lambda row: format_delta_with_unit(
                 row["value"] - row["industry_median"],
                 get_feature_unit(str(row["feature"]), feature_map),
+                str(row["feature"]),
             ),
             axis=1,
         )
@@ -2210,6 +2215,7 @@ def build_onepage_html_report(
             lambda row: format_delta_with_unit(
                 row["value"] - row["industry_median"],
                 get_feature_unit(str(row["feature"]), feature_map),
+                str(row["feature"]),
             ),
             axis=1,
         )
@@ -2720,6 +2726,7 @@ def build_llm_payload(
             lambda row: format_delta_with_unit(
                 row["value"] - row["industry_median"],
                 get_feature_unit(str(row["feature"]), feature_map),
+                str(row["feature"]),
             ),
             axis=1,
         )
@@ -3056,8 +3063,10 @@ def render_committee_view_tab(
             peer_slice=peer_slice,
             external_evidence_snapshot=evidence_snapshot,
         )
-    except (KeyError, TypeError, ValueError, RuntimeError) as error:
+    except Exception as error:
+        LOGGER.exception("dashboard_stage2_committee_context_failed")
         st.error("2차 에이전트 위원회 판단을 생성하는 중 문제가 발생했습니다.")
+        st.caption(f"오류 상세: {format_stage2_error_detail(error)}")
         if developer_mode:
             st.exception(error)
         return
@@ -3860,7 +3869,7 @@ def render_peer_tab(
 
     def build_peer_memo_line(row: pd.Series) -> str:
         industry_gap = float(row["industry_gap"])
-        gap_text = format_delta_with_unit(abs(industry_gap), str(row["unit"]))
+        gap_text = format_delta_with_unit(abs(industry_gap), str(row["unit"]), str(row["feature"]))
         percentile_text = format_percentile_label(row["industry_percentile"])
         shap_label = (
             "위험을 높이는 쪽" if row["direction"] == "increase_risk" else "위험을 낮추는 쪽"
@@ -4078,6 +4087,7 @@ def render_peer_tab(
         lambda row: format_delta_with_unit(
             row["industry_gap"],
             str(row["unit"]),
+            str(row["feature"]),
         ),
         axis=1,
     )
@@ -4085,6 +4095,7 @@ def render_peer_tab(
         lambda row: format_delta_with_unit(
             row["market_gap"],
             str(row["unit"]),
+            str(row["feature"]),
         ),
         axis=1,
     )
@@ -4110,13 +4121,15 @@ def render_peer_tab(
                     "구분": label,
                     "비교": "산업 대비 차이",
                     "값": industry_gap_value,
-                    "값_표시": format_delta_with_unit(row["industry_gap"], unit),
+                    "값_표시": format_delta_with_unit(
+                        row["industry_gap"], unit, str(row["feature"])
+                    ),
                 },
                 {
                     "구분": label,
                     "비교": "시장 대비 차이",
                     "값": market_gap_value,
-                    "값_표시": format_delta_with_unit(row["market_gap"], unit),
+                    "값_표시": format_delta_with_unit(row["market_gap"], unit, str(row["feature"])),
                 },
             ]
         )
@@ -4552,7 +4565,11 @@ def render_scenario_tab(
         summary_col2,
         "가장 크게 바꾼 지표",
         str(strongest_change["변수"]) if strongest_change is not None else "없음",
-        format_delta_with_unit(strongest_change["변화량"], strongest_change["unit"])
+        format_delta_with_unit(
+            strongest_change["변화량"],
+            strongest_change["unit"],
+            str(strongest_change["feature"]),
+        )
         if strongest_change is not None
         else "-",
         COLOR_RISK,
@@ -4664,6 +4681,18 @@ def format_llm_error_message(error: Exception, provider_label: str) -> str:
         f"{provider_label} 메모를 불러오지 못했습니다. {message}"
         " 입력한 API 키와 모델명을 다시 확인한 뒤 한 번 더 시도해 주세요."
     )
+
+
+def format_stage2_error_detail(error: Exception) -> str:
+    """Return a short dashboard-safe Stage 2 error detail."""
+    message = str(error).strip() or type(error).__name__
+    message = re.sub(
+        r"(?i)(api[_-]?key\s*[:=]\s*)[^\s,;]+",
+        r"\1[redacted]",
+        message,
+    )
+    message = re.sub(r"(sk-[A-Za-z0-9_-]{8})[A-Za-z0-9_-]+", r"\1...[redacted]", message)
+    return message[:500]
 
 
 def main() -> None:
