@@ -3304,7 +3304,7 @@ def render_committee_view_tab(
             agents = _as_plain_dict(agent_summary.get("agents"))
             if not agents:
                 st.info("에이전트별 요약이 아직 생성되지 않았습니다.")
-            
+
             role_env_mapping = {
                 "quant_credit": "QUANT_AGENT_MODEL",
                 "evidence_audit": "RESEARCH_AGENT_MODEL",
@@ -3313,16 +3313,16 @@ def render_committee_view_tab(
             for role, raw_agent in agents.items():
                 agent = _as_plain_dict(raw_agent)
                 role_label = STAGE2_AGENT_ROLE_LABELS.get(str(role), str(role))
-                
+
                 env_key = role_env_mapping.get(str(role))
                 used_model = os.environ.get(env_key, "기본 모델") if env_key else "기본 모델"
-                
+
                 st.markdown(
                     f"**{role_label}** "
                     f"<span style='background-color:#f0f2f6; color:#31333f; padding:0.2rem 0.5rem; "
                     f"border-radius:0.4rem; font-size:0.75rem; margin-left:0.5rem;'>"
-                    f"사용 모델: {used_model}</span>", 
-                    unsafe_allow_html=True
+                    f"사용 모델: {used_model}</span>",
+                    unsafe_allow_html=True,
                 )
                 st.write(str(agent.get("summary") or "요약이 없습니다."))
                 findings = _as_text_list(agent.get("findings"))

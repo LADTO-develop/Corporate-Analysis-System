@@ -6,12 +6,13 @@ import json
 import os
 import time
 from importlib import import_module
-from typing import Any, Protocol, TypeVar, cast
+from typing import Protocol, cast
 
 from agno.models import Model
 from pydantic import BaseModel
 
-ModelT = TypeVar("ModelT", bound=BaseModel)
+# [수정] TypeVar("ModelT", bound=BaseModel) 선언을 삭제하고
+# 아래 각 함수 정의 시 [ModelT: BaseModel] 구문을 사용합니다.
 
 
 class AgnoAgentLike(Protocol):
@@ -56,19 +57,22 @@ def _create_model(model_config: str, max_tokens: int) -> Model:
     try:
         if provider == "openai":
             from agno.models.openai import OpenAIChat
+
             return OpenAIChat(id=model_id, max_tokens=max_tokens, temperature=0, api_key=api_key)
         if provider == "anthropic":
             from agno.models.anthropic import Claude
+
             return Claude(id=model_id, max_tokens=max_tokens, temperature=0, api_key=api_key)
         if provider == "gemini":
             from agno.models.google import GeminiModel
+
             return GeminiModel(id=model_id, max_tokens=max_tokens, temperature=0, api_key=api_key)
         raise ValueError(f"지원하지 않는 LLM 제공자입니다: {provider}")
     except ImportError as error:
         raise RuntimeError(f"{provider} 관련 패키지를 찾을 수 없습니다.") from error
 
 
-def build_agno_agent(
+def build_agno_agent[ModelT: BaseModel](
     *,
     name: str,
     model_name: str,
@@ -80,18 +84,14 @@ def build_agno_agent(
     try:
         agent_module = import_module("agno.agent")
     except ImportError as error:
-        raise RuntimeError(
-            "CAS_STAGE2_RUNNER=agno requires the optional Agno runtime."
-        ) from error
+        raise RuntimeError("CAS_STAGE2_RUNNER=agno requires the optional Agno runtime.") from error
 
     agent_cls = agent_module.Agent
-    model = _create_model(model_name, max_tokens)
-
     return cast(
         AgnoAgentLike,
         agent_cls(
             name=name,
-            model=model,
+            model=_create_model(model_name, max_tokens),
             instructions=instructions,
             output_schema=response_model,
             parse_response=True,
@@ -101,7 +101,7 @@ def build_agno_agent(
     )
 
 
-def run_structured_agent(
+def run_structured_agent[ModelT: BaseModel](
     *,
     agent: AgnoAgentLike,
     query: str,
@@ -121,7 +121,9 @@ def run_structured_agent(
     raise RuntimeError("Agno agent retry loop exited unexpectedly.")
 
 
-def coerce_model_response(raw_response: object, response_model: type[ModelT]) -> ModelT:
+def coerce_model_response[ModelT: BaseModel](
+    raw_response: object, response_model: type[ModelT]
+) -> ModelT:
     """Coerce common Agno response shapes into the requested response model."""
     if isinstance(raw_response, response_model):
         return raw_response
