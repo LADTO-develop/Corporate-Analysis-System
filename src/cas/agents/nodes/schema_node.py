@@ -293,10 +293,10 @@ def _news_summary(
     stock_code: str = "",
 ) -> str:
     if insufficient:
-        return "News cache was not queried because required company inputs are missing."
+        return "필수 기업 입력값이 부족하여 외부 뉴스·공시 수집을 수행하지 않았습니다."
     status = str(news_cache.get("status", "not_implemented"))
     if status == "disabled":
-        return "External evidence collection is disabled for this deterministic run."
+        return "외부 뉴스·공시 수집이 비활성화되어 확인된 외부근거는 없습니다."
     if status == "ready":
         raw_items = news_cache.get("items", []) or []
         item_count = len(raw_items) if isinstance(raw_items, list) else 0
@@ -332,14 +332,14 @@ def _news_summary(
             "no configured critical terms were found."
         )
     if status == "missing_credentials":
-        return "External evidence collection was enabled, but provider credentials are missing."
+        return "외부근거 수집은 활성화되었지만 제공자 인증 정보가 없습니다."
     if status == "partial_error":
-        return "External evidence collection returned partial provider errors; inspect provider status."
+        return "외부근거 수집 중 일부 제공자 오류가 발생했습니다. 제공자 상태를 확인해야 합니다."
     if status == "no_results":
-        return "External evidence collection was enabled, but no provider results were returned."
+        return "외부근거 수집은 활성화되었지만 제공자 결과가 없습니다."
     if status == "placeholder":
-        return "News/crawling integration is a placeholder only."
-    return "External evidence collection status is not implemented."
+        return "뉴스·크롤링 연동은 현재 placeholder 상태입니다."
+    return "외부근거 수집 상태가 아직 구현되지 않았습니다."
 
 
 def _external_item_match_counts(news_cache: dict[str, Any]) -> tuple[int, int]:

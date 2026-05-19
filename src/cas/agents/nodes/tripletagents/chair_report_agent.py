@@ -48,7 +48,12 @@ def run_chair_report_agent(
             "You are the CAS ChairReportAgent.",
             "Synthesize QuantCreditAgent and EvidenceAuditAgent outputs into committee-ready language.",
             "Preserve the Stage 1 model label and explain any committee qualification separately.",
-            "Return concise Korean business review prose in the structured response fields only.",
+            "Write in Korean business-report language for a decision-support report.",
+            "Do not say the system confirms, approves, assigns, or finalizes an official credit rating.",
+            "Treat rule_engine_confidence as a rule-engine review confidence, not as model confidence.",
+            "Do not invent external news, DART filings, macro events, or industry events not present in the evidence input.",
+            "If external evidence is unavailable, clearly state that the external review is limited.",
+            "Return concise Korean review prose in the structured response fields only.",
         ],
     )
     result = run_structured_agent(
@@ -62,17 +67,19 @@ def run_chair_report_agent(
         ),
         response_model=AgnoChairReportResponse,
     )
+    report_summary = _safe_committee_text(result.executive_summary)
+    conflict_resolution = _safe_committee_text(result.conflict_resolution)
     return ChairReportOutput(
-        report_summary=result.executive_summary,
+        report_summary=report_summary,
         model_preservation_note=(
-            f"Stage 1 model label is preserved as {bundle.prediction_label}; "
-            "committee qualification is recorded separately."
+            f"Stage 1 모델 라벨은 {bundle.prediction_label}으로 보존하며, "
+            "위원회 검토 의견은 별도로 기록합니다."
         ),
         committee_scope_note=(
             f"Agno chair label={result.final_committee_label}; "
             f"veto_triggered={result.veto_triggered}; recommendation={recommendation}."
         ),
-        final_review_memo_seed=result.conflict_resolution,
+        final_review_memo_seed=conflict_resolution,
         confidence=_chair_confidence(
             base_confidence=confidence,
             quant_confidence=quant_credit.confidence,
@@ -100,8 +107,14 @@ def _query(
         "stage1_model": {
             "prediction_label": bundle.prediction_label,
             "probability_speculative": bundle.probability_speculative,
+        },
+        "rule_engine": {
             "recommendation": recommendation,
-            "confidence": confidence,
+            "rule_engine_confidence": confidence,
+            "confidence_explanation_kr": (
+                "이 값은 규칙엔진/위원회 검토 보조 신뢰도이며, XGBoost 모델 확률이나 "
+                "공식 신용등급 신뢰도가 아니다."
+            ),
         },
         "quant_credit": quant_credit.model_dump(mode="json"),
         "evidence_audit": evidence_audit.model_dump(mode="json"),
@@ -112,6 +125,28 @@ def _query(
         "Return only the AgnoChairReportResponse fields.\n\n"
         f"{json_payload(prompt_payload)}"
     )
+
+
+def _safe_committee_text(text: str) -> str:
+    """Soften official-rating language and clean common Korean josa/punctuation issues."""
+    cleaned = text.strip()
+    replacements = {
+        "투자적격 등급을 확정합니다": "투자적격 검토 의견을 제시합니다",
+        "부적격 등급을 확정합니다": "부적격 검토 의견을 제시합니다",
+        "신용등급을 확정합니다": "신용위험 검토 의견을 제시합니다",
+        "등급을 확정합니다": "검토 의견을 제시합니다",
+        "최종 승인합니다": "검토 의견으로 정리합니다",
+        "최종 승인": "검토 의견",
+        "확정합니다": "검토 의견을 제시합니다",
+        "승인합니다": "의견을 제시합니다",
+        "적격로": "적격으로",
+        "부적격로": "부적격으로",
+    }
+    for old, new in replacements.items():
+        cleaned = cleaned.replace(old, new)
+    while ".." in cleaned:
+        cleaned = cleaned.replace("..", ".")
+    return cleaned
 
 
 def _chair_confidence(
