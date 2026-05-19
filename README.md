@@ -30,14 +30,14 @@ Stage 2는 `model_view`와 구분되는 `committee_view`를 생성하는 후속 
 | 분석 범위 | KOSPI, KOSDAQ 상장기업 |
 | 관측 단위 | 기업-회계연도 |
 | 기준 원본 | `data/raw/ts2000/TS2000_Credit_Model_Dataset_Model_V1.csv` |
-| 라벨 데이터 | 5,199개 기업-연도 |
+| 라벨 데이터 | 5,451개 기업-연도 |
 | 학습 입력 | `data/input/credit_44_features/` |
 | 2026 예측 입력 | `feature_44_inference_2026.csv`, 2,427개 기업-연도 |
 | 타겟 | `is_speculative` |
 | 라벨 정의 | `0 = 투자적격(AAA~BBB-)`, `1 = 투기등급(BB+ 이하)` |
 | 시점 정렬 | `fiscal_year=t` 재무/거시 정보로 `eval_year=t+1` 신용위험 예측 |
 
-Model V1 전체 5,199개 행은 전체 라벨 데이터입니다. 모델 학습에는 시간순 분할
+Model V1 전체 5,451개 행은 전체 라벨 데이터입니다. 모델 학습에는 시간순 분할
 후 train 구간 3,851개 행을 사용하고, 나머지는 validation/test 성능 검증에
 사용합니다.
 
@@ -45,7 +45,7 @@ Model V1 전체 5,199개 행은 전체 라벨 데이터입니다. 모델 학습�
 |---|---|---:|---:|---:|
 | Train | `fiscal_year <= 2021` | 3,851 | 878 | 22.80% |
 | Validation | `fiscal_year == 2022` | 676 | 176 | 26.04% |
-| Test | `fiscal_year >= 2023` | 672 | 167 | 24.85% |
+| Test | `fiscal_year >= 2023` | 924 | 203 | 21.97% |
 
 ## 3. 전처리 기준
 
@@ -77,18 +77,15 @@ Platt scaling을 적용한 보정 확률입니다. Raw 확률은 산출물에
 | 원-핫 대상 | 3개 | `market`, `firm_size_group`, `industry_macro_category` |
 | 최종 모델 입력 | 44개 | XGBoost 학습 및 추론 입력 |
 
-최신 동일 split 기준 test 성능은 다음과 같습니다.
+2025년 신용평가 공시 라벨을 Model V1에 통합한 뒤, 현재 44-feature XGBoost
+artifact 기준 test 성능은 다음과 같습니다.
 
 | 모델 | PR-AUC | ROC-AUC | Precision | Recall | F1 |
 |---|---:|---:|---:|---:|---:|
-| Dummy | 0.2485 | 0.5000 | 0.0000 | 0.0000 | 0.0000 |
-| 43-feature Weighted Logistic Regression | 0.6903 | 0.8822 | 0.5560 | 0.8323 | 0.6667 |
-| 43-feature XGBoost baseline | 0.7689 | 0.9057 | 0.6211 | 0.8443 | 0.7157 |
-| 44-feature XGBoost current | 0.7742 | 0.9102 | 0.6542 | 0.8383 | 0.7349 |
+| 44-feature XGBoost current | 0.7912 | 0.9250 | 0.6196 | 0.8424 | 0.7140 |
 
-44-feature XGBoost는 43-feature baseline 대비 Recall은 거의 유지하면서
-false positive를 줄이고 Precision과 F1을 개선한 현재 운영 후보입니다. 기존
-43-feature 산출물은 기준선 비교와 회귀 검증용으로 유지합니다.
+44-feature XGBoost는 현재 운영 후보입니다. 기존 43-feature 산출물은 기준선
+비교와 회귀 검증용으로 유지합니다.
 
 ## 5. 시스템 흐름
 

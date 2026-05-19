@@ -16,6 +16,12 @@ CAS XGBoost 운영 후보 입력 데이터셋입니다.
 - `xgb_train.csv`, `xgb_valid.csv`, `xgb_test.csv`: XGBoost 학습 입력 행렬
 - `xgb_id_train.csv`, `xgb_id_valid.csv`, `xgb_id_test.csv`: 각 split의 기업 식별 정보
 
+현재 기준:
+- `feature_44_master.csv`: 5,451행
+- test split: 924행 (`fiscal_year >= 2023`)
+- 2025년 신용평가 공시 라벨은 `TS2000_Credit_Model_Dataset_Model_V1.csv`에
+  통합되어 있으며, 별도 recent test 파일로 분리하지 않습니다.
+
 ## 분할 규칙
 
 - train: `fiscal_year <= 2021`

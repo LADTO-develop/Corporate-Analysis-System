@@ -19,7 +19,8 @@
 - test: `fiscal_year >= 2023`
 
 현재 기준 확인:
-- `feature_43_master.csv`: 5,199행
+- `feature_43_master.csv`: 5,451행
+- test split: 924행 (`fiscal_year >= 2023`)
 - 삼성전자(주): 10행
 - (주)토마토시스템: 1행 (`2023 -> 2024`)
 
