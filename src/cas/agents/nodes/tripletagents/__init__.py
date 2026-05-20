@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import os
+from concurrent.futures import ThreadPoolExecutor
+
 from cas.agents.stage2_bundle import Stage2InputBundle
 from cas.agents.stage2_outputs import ChairReportOutput, EvidenceAuditOutput, QuantCreditOutput
 from cas.agents.state import Recommendation
@@ -27,18 +30,37 @@ def run_triplet_agents(
     max_tokens: int,
 ) -> tuple[QuantCreditOutput, EvidenceAuditOutput, ChairReportOutput]:
     """Run QuantCredit, EvidenceAudit, and ChairReport Agno agents in order."""
-    quant_credit = run_quant_credit_agent(
-        bundle=bundle,
-        model_provider=quant_model_provider or model_provider,
-        model_name=quant_model_name or model_name,
-        max_tokens=max_tokens,
-    )
-    evidence_audit = run_evidence_audit_agent(
-        bundle=bundle,
-        model_provider=evidence_model_provider or model_provider,
-        model_name=evidence_model_name or model_name,
-        max_tokens=max_tokens,
-    )
+    if _parallel_independent_agents_enabled():
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            quant_future = executor.submit(
+                run_quant_credit_agent,
+                bundle=bundle,
+                model_provider=quant_model_provider or model_provider,
+                model_name=quant_model_name or model_name,
+                max_tokens=max_tokens,
+            )
+            evidence_future = executor.submit(
+                run_evidence_audit_agent,
+                bundle=bundle,
+                model_provider=evidence_model_provider or model_provider,
+                model_name=evidence_model_name or model_name,
+                max_tokens=max_tokens,
+            )
+            quant_credit = quant_future.result()
+            evidence_audit = evidence_future.result()
+    else:
+        quant_credit = run_quant_credit_agent(
+            bundle=bundle,
+            model_provider=quant_model_provider or model_provider,
+            model_name=quant_model_name or model_name,
+            max_tokens=max_tokens,
+        )
+        evidence_audit = run_evidence_audit_agent(
+            bundle=bundle,
+            model_provider=evidence_model_provider or model_provider,
+            model_name=evidence_model_name or model_name,
+            max_tokens=max_tokens,
+        )
     chair_report = run_chair_report_agent(
         bundle=bundle,
         recommendation=recommendation,
@@ -50,6 +72,11 @@ def run_triplet_agents(
         max_tokens=max_tokens,
     )
     return quant_credit, evidence_audit, chair_report
+
+
+def _parallel_independent_agents_enabled() -> bool:
+    value = os.environ.get("CAS_STAGE2_PARALLEL_INDEPENDENT_AGENTS", "1").strip().lower()
+    return value not in {"0", "false", "no", "off"}
 
 
 __all__ = [

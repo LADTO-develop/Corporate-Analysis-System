@@ -17,6 +17,7 @@ from xml.etree import ElementTree
 
 import requests
 
+from cas.utils.live_cache import read_json_cache, stable_cache_key, write_json_cache
 from cas.veto_rules import critical_terms_in_text
 
 _NAVER_NEWS_URL = "https://openapi.naver.com/v1/search/news.json"
@@ -185,6 +186,18 @@ def collect_external_evidence(
     http = session or cast(HttpClient, requests.Session())
     query = _risk_query(company_name=company_name, stock_code=stock_code)
     naver_queries = _naver_news_queries(company_name=company_name)
+    cache_key = _external_evidence_cache_key(
+        company_name=company_name,
+        stock_code=stock_code,
+        corp_code=corp_code,
+        as_of_date=as_of_date,
+        env=source,
+    )
+    if session is None or _cache_custom_session_enabled(source):
+        cached_snapshot = _read_external_evidence_cache(cache_key, env=source)
+        if cached_snapshot is not None:
+            return cached_snapshot
+
     providers = {
         "naver_news": _collect_naver_news(
             queries=naver_queries,
@@ -227,7 +240,7 @@ def collect_external_evidence(
     else:
         status = "no_results"
 
-    return {
+    snapshot = {
         "status": status,
         "source": "external_evidence",
         "enabled": True,
@@ -248,7 +261,72 @@ def collect_external_evidence(
         "veto_candidate_count": veto_candidate_count,
         "high_confidence_critical_count": high_confidence_critical_count,
         "verification_summary": _verification_summary(items),
+        "cache_hit": False,
+        "cache_key": cache_key,
     }
+    if session is None or _cache_custom_session_enabled(source):
+        cache_path = write_json_cache(
+            "external_evidence",
+            cache_key,
+            snapshot,
+            env_var="CAS_EXTERNAL_EVIDENCE_CACHE_ENABLED",
+            default=True,
+            env=source,
+        )
+        if cache_path is not None:
+            snapshot["cache_path"] = str(cache_path)
+    return snapshot
+
+
+def _external_evidence_cache_key(
+    *,
+    company_name: str,
+    stock_code: str | None,
+    corp_code: str | None,
+    as_of_date: date | str | None,
+    env: Mapping[str, str],
+) -> str:
+    return stable_cache_key(
+        {
+            "cache_version": "external_evidence_v1",
+            "company_name": company_name,
+            "stock_code": stock_code or "",
+            "corp_code": corp_code or "",
+            "as_of_date": _collection_end_date(as_of_date).isoformat(),
+            "providers": {
+                "naver_news": bool(
+                    env.get("NAVER_CLIENT_ID") and env.get("NAVER_CLIENT_SECRET")
+                ),
+                "tavily": bool(env.get("TAVILY_API_KEY")),
+                "opendart": bool(env.get("OPENDART_API_KEY")),
+            },
+        }
+    )
+
+
+def _read_external_evidence_cache(
+    cache_key: str,
+    *,
+    env: Mapping[str, str],
+) -> dict[str, object] | None:
+    cached_snapshot = read_json_cache(
+        "external_evidence",
+        cache_key,
+        env_var="CAS_EXTERNAL_EVIDENCE_CACHE_ENABLED",
+        default=True,
+        env=env,
+    )
+    if cached_snapshot is None:
+        return None
+    snapshot = dict(cached_snapshot)
+    snapshot["cache_hit"] = True
+    snapshot["cache_key"] = cache_key
+    return snapshot
+
+
+def _cache_custom_session_enabled(env: Mapping[str, str]) -> bool:
+    value = env.get("CAS_EXTERNAL_EVIDENCE_CACHE_SESSION", "")
+    return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
 def _collect_naver_news(

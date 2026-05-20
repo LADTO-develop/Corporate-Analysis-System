@@ -60,6 +60,33 @@ class _FakeSession:
         return _FakeResponse({"results": []})
 
 
+class _CountingFakeSession(_FakeSession):
+    def __init__(self) -> None:
+        self.get_count = 0
+        self.post_count = 0
+
+    def get(
+        self,
+        url: str,
+        *,
+        params: Mapping[str, object] | None = None,
+        headers: Mapping[str, str] | None = None,
+        timeout: float | None = None,
+    ) -> _FakeResponse:
+        self.get_count += 1
+        return super().get(url, params=params, headers=headers, timeout=timeout)
+
+    def post(
+        self,
+        url: str,
+        *,
+        json: Mapping[str, object] | None = None,
+        timeout: float | None = None,
+    ) -> _FakeResponse:
+        self.post_count += 1
+        return super().post(url, json=json, timeout=timeout)
+
+
 class _WeakKeywordSession:
     def get(
         self,
@@ -524,6 +551,37 @@ def test_collect_external_evidence_merges_provider_items() -> None:
     assert float(first_item["evidence_score"]) >= 0.75
     assert "횡령" in first_item["critical_terms"]
     assert snapshot["verified_item_count"] == 1
+
+
+def test_collect_external_evidence_reuses_cached_snapshot(tmp_path: Path) -> None:
+    session = _CountingFakeSession()
+    env = {
+        "CAS_ENABLE_EXTERNAL_EVIDENCE": "1",
+        "CAS_EXTERNAL_EVIDENCE_CACHE_ENABLED": "1",
+        "CAS_EXTERNAL_EVIDENCE_CACHE_SESSION": "1",
+        "CAS_STAGE2_CACHE_DIR": str(tmp_path),
+        "NAVER_CLIENT_ID": "dummy",
+        "NAVER_CLIENT_SECRET": "dummy",
+    }
+
+    first_snapshot = collect_external_evidence(
+        company_name="테스트기업",
+        stock_code="000001",
+        env=env,
+        session=session,
+    )
+    first_get_count = session.get_count
+    second_snapshot = collect_external_evidence(
+        company_name="테스트기업",
+        stock_code="000001",
+        env=env,
+        session=session,
+    )
+
+    assert first_snapshot["cache_hit"] is False
+    assert second_snapshot["cache_hit"] is True
+    assert session.get_count == first_get_count
+    assert second_snapshot["items"]
 
 
 def test_collect_external_evidence_marks_keyword_only_results_as_weak() -> None:
