@@ -348,7 +348,9 @@ def _adverse_external_items(news_cache: dict[str, Any]) -> list[dict[str, Any]]:
 
 def _verified_adverse_external_items(news_cache: dict[str, Any]) -> list[dict[str, Any]]:
     return [
-        item for item in _adverse_external_items(news_cache) if _is_verified_adverse_external_item(item)
+        item
+        for item in _adverse_external_items(news_cache)
+        if _is_verified_adverse_external_item(item)
     ]
 
 

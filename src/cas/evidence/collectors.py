@@ -665,8 +665,7 @@ def _contains_any_term(text: str, terms: tuple[str, ...]) -> bool:
     lowered = str(text).lower()
     compact_text = "".join(lowered.split())
     return any(
-        term.lower() in lowered or "".join(term.lower().split()) in compact_text
-        for term in terms
+        term.lower() in lowered or "".join(term.lower().split()) in compact_text for term in terms
     )
 
 

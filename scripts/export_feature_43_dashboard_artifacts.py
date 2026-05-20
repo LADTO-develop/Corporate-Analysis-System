@@ -919,9 +919,7 @@ def add_stage2_overwarning_filter_signals(
         )
 
     stage1_risk = output["pred_label_tuned"].astype(int).eq(1)
-    filter_risk = output["prob_speculative_overwarning_filter"].astype(float).ge(
-        filter_threshold
-    )
+    filter_risk = output["prob_speculative_overwarning_filter"].astype(float).ge(filter_threshold)
     overwarning_candidate = stage1_risk & (~filter_risk)
     output["probability_overwarning_filter_calibration_method"] = filter_calibration_method
     output["threshold_overwarning_filter"] = filter_threshold

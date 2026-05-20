@@ -8,7 +8,7 @@ from cas.agents.stage2_bundle import Stage2InputBundle
 from cas.agents.stage2_outputs import ChairReportOutput, EvidenceAuditOutput, QuantCreditOutput
 from cas.agents.state import Recommendation
 
-from .runtime import build_agno_agent, clamp, json_payload, run_structured_agent
+from .runtime import build_agno_agent, clamp, json_payload, provider_label, run_structured_agent
 
 
 class AgnoChairReportResponse(BaseModel):
@@ -36,17 +36,21 @@ def run_chair_report_agent(
     quant_credit: QuantCreditOutput,
     evidence_audit: EvidenceAuditOutput,
     model_name: str,
+    model_provider: str = "anthropic",
     max_tokens: int,
 ) -> ChairReportOutput:
     """Run the Agno ChairReportAgent and map it to the CAS Stage 2 schema."""
+    model_label = provider_label(model_provider)
     agent = build_agno_agent(
-        name="ChairReport_Agent",
+        name=f"{model_label}_ChairReport_Agent",
+        model_provider=model_provider,
         model_name=model_name,
         max_tokens=max_tokens,
         response_model=AgnoChairReportResponse,
         instructions=[
-            "You are the CAS ChairReportAgent.",
+            f"You are the CAS ChairReportAgent speaking from the {model_label} perspective.",
             "Synthesize QuantCreditAgent and EvidenceAuditAgent outputs into committee-ready language.",
+            "Treat the QuantCredit and EvidenceAudit outputs as the Claude/GPT committee discussion to summarize.",
             "Preserve the Stage 1 model label and explain any committee qualification separately.",
             "Write in Korean business-report language for a decision-support report.",
             "Do not say the system confirms, approves, assigns, or finalizes an official credit rating.",
@@ -76,7 +80,7 @@ def run_chair_report_agent(
             "위원회 검토 의견은 별도로 기록합니다."
         ),
         committee_scope_note=(
-            f"Agno chair label={result.final_committee_label}; "
+            f"Agno {model_label} chair label={result.final_committee_label}; "
             f"veto_triggered={result.veto_triggered}; recommendation={recommendation}."
         ),
         final_review_memo_seed=conflict_resolution,

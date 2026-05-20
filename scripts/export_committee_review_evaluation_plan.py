@@ -348,7 +348,9 @@ def build_2026_candidates(labels_path: Path, inference_path: Path) -> pd.DataFra
         "debt_ratio",
     ]
     merged = labels.merge(
-        inference.loc[:, [column for column in [*KEY_COLUMNS, *feature_columns] if column in inference]],
+        inference.loc[
+            :, [column for column in [*KEY_COLUMNS, *feature_columns] if column in inference]
+        ],
         on=KEY_COLUMNS,
         how="left",
         validate="many_to_one",
@@ -356,7 +358,9 @@ def build_2026_candidates(labels_path: Path, inference_path: Path) -> pd.DataFra
     merged = add_rating_segments(merged)
     merged["evaluation_mode"] = "current_2026_external_validation"
     merged["as_of_date"] = date.today().isoformat()
-    merged["actual_label_name"] = np.where(merged["is_speculative"].astype(int).eq(1), "투기등급", "투자적격")
+    merged["actual_label_name"] = np.where(
+        merged["is_speculative"].astype(int).eq(1), "투기등급", "투자적격"
+    )
     merged["model_score_status"] = np.where(
         merged["industry_macro_category"].notna(),
         "feature_row_ready_score_not_exported",
@@ -432,7 +436,9 @@ def markdown_table(frame: pd.DataFrame, max_rows: int = 20) -> str:
     return "\n".join([header, separator, *body])
 
 
-def build_report(historical: pd.DataFrame, current_2026: pd.DataFrame, summary: dict[str, object]) -> str:
+def build_report(
+    historical: pd.DataFrame, current_2026: pd.DataFrame, summary: dict[str, object]
+) -> str:
     historical_counts = pd.DataFrame(summary["historical_counts"])
     current_counts = pd.DataFrame(summary["current_2026_counts"])
     return "\n".join(

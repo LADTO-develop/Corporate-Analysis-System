@@ -7,7 +7,14 @@ from pydantic import BaseModel, ConfigDict, Field
 from cas.agents.stage2_bundle import Stage2InputBundle
 from cas.agents.stage2_outputs import QuantCreditOutput
 
-from .runtime import build_agno_agent, clamp, compact_items, json_payload, run_structured_agent
+from .runtime import (
+    build_agno_agent,
+    clamp,
+    compact_items,
+    json_payload,
+    provider_label,
+    run_structured_agent,
+)
 
 
 class AgnoQuantCreditResponse(BaseModel):
@@ -33,18 +40,22 @@ def run_quant_credit_agent(
     *,
     bundle: Stage2InputBundle,
     model_name: str,
+    model_provider: str = "anthropic",
     max_tokens: int,
 ) -> QuantCreditOutput:
     """Run the Agno QuantCreditAgent and map it to the CAS Stage 2 schema."""
+    model_label = provider_label(model_provider)
     agent = build_agno_agent(
-        name="QuantCredit_Agent",
+        name=f"{model_label}_QuantCredit_Agent",
+        model_provider=model_provider,
         model_name=model_name,
         max_tokens=max_tokens,
         response_model=AgnoQuantCreditResponse,
         instructions=[
-            "You are the CAS QuantCreditAgent.",
+            f"You are the CAS QuantCreditAgent speaking from the {model_label} perspective.",
             "Review Stage 1 model outputs, SHAP drivers, source financial metrics, and peer context.",
             "Do not overwrite the Stage 1 model label; explain the quantitative rationale.",
+            "In the committee meeting, focus on what the numeric model and financial indicators imply.",
             "Return concise Korean business review prose in the structured response fields only.",
         ],
     )
@@ -55,7 +66,7 @@ def run_quant_credit_agent(
     )
     return QuantCreditOutput(
         quant_summary=(
-            "Agno QuantCreditAgent reviewed the Stage 1 model view. "
+            f"Agno {model_label} QuantCreditAgent reviewed the Stage 1 model view. "
             f"Internal risk level: {result.internal_risk_level}. "
             f"{result.quantitative_interpretation}"
         ),

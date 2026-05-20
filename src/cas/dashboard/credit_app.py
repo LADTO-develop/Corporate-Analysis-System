@@ -867,8 +867,7 @@ def build_dashboard_model_view(
             prediction_row.get("stage2_overwarning_filter_candidate")
         ),
         "overwarning_filter_reason_code": str(
-            _clean_dashboard_value(prediction_row.get("overwarning_filter_reason_code"))
-            or "none"
+            _clean_dashboard_value(prediction_row.get("overwarning_filter_reason_code")) or "none"
         ),
         "overwarning_filter_reason": str(
             _clean_dashboard_value(prediction_row.get("overwarning_filter_reason"))
@@ -3209,9 +3208,7 @@ def render_committee_view_tab(
         trigger_cols = st.columns(4)
         secondary_triggered = bool(model_view.get("stage2_secondary_trigger", False))
         review_triggered = bool(model_view.get("stage2_review_trigger", False))
-        overwarning_candidate = bool(
-            model_view.get("stage2_overwarning_filter_candidate", False)
-        )
+        overwarning_candidate = bool(model_view.get("stage2_overwarning_filter_candidate", False))
         trigger_status = (
             "추가 검토" if secondary_triggered else "1차 위험 검토" if review_triggered else "일반"
         )

@@ -148,7 +148,9 @@ def read_scores(path: Path) -> pd.DataFrame:
         scores["market"].astype(str) + " / " + scores["firm_size_group"].astype(str)
     )
     scores["industry_x_firm_size"] = (
-        scores["industry_macro_category"].astype(str) + " / " + scores["firm_size_group"].astype(str)
+        scores["industry_macro_category"].astype(str)
+        + " / "
+        + scores["firm_size_group"].astype(str)
     )
     return scores
 
@@ -194,7 +196,11 @@ def read_target_labels(path: Path) -> pd.DataFrame:
         "other_domestic_candidate_count_in_year",
         "foreign_candidate_count_in_year",
     ]
-    keep_columns = [*KEY_COLUMNS, "credit_rating", *[c for c in optional_columns if c in labels.columns]]
+    keep_columns = [
+        *KEY_COLUMNS,
+        "credit_rating",
+        *[c for c in optional_columns if c in labels.columns],
+    ]
     output = labels.loc[:, keep_columns].copy()
     duplicates = output.duplicated(KEY_COLUMNS).sum()
     if duplicates:
@@ -255,7 +261,9 @@ def safe_probability_metrics(frame: pd.DataFrame) -> dict[str, float | None]:
     if frame["is_speculative"].nunique() < 2:
         return {"pr_auc": None, "roc_auc": None}
     return {
-        "pr_auc": float(average_precision_score(frame["is_speculative"], frame["prob_speculative"])),
+        "pr_auc": float(
+            average_precision_score(frame["is_speculative"], frame["prob_speculative"])
+        ),
         "roc_auc": float(roc_auc_score(frame["is_speculative"], frame["prob_speculative"])),
     }
 
@@ -330,7 +338,9 @@ def build_error_concentration(segment_metrics: pd.DataFrame) -> pd.DataFrame:
 
 
 def build_error_cases(test: pd.DataFrame) -> pd.DataFrame:
-    error_cases = test.loc[test["prediction_result"].isin(["false_positive", "false_negative"])].copy()
+    error_cases = test.loc[
+        test["prediction_result"].isin(["false_positive", "false_negative"])
+    ].copy()
     error_cases["confidence_error_score"] = np.where(
         error_cases["prediction_result"].eq("false_positive"),
         error_cases["prob_speculative"],
@@ -393,7 +403,9 @@ def feature_profile(
         median_error = error_values.median()
         median_reference = reference_values.median()
         raw_delta = median_error - median_reference
-        standardized_delta = raw_delta / denominator if pd.notna(denominator) and denominator else np.nan
+        standardized_delta = (
+            raw_delta / denominator if pd.notna(denominator) and denominator else np.nan
+        )
         rows.append(
             {
                 "comparison": f"{error_result}_vs_{reference_result}",
@@ -473,9 +485,13 @@ def format_int(value: object) -> str:
     return f"{int(value):,}"
 
 
-def markdown_table(frame: pd.DataFrame, columns: list[tuple[str, str, str]], max_rows: int = 20) -> str:
+def markdown_table(
+    frame: pd.DataFrame, columns: list[tuple[str, str, str]], max_rows: int = 20
+) -> str:
     header = "| " + " | ".join(label for label, _, _ in columns) + " |"
-    separator = "| " + " | ".join("---" if kind == "text" else "---:" for _, _, kind in columns) + " |"
+    separator = (
+        "| " + " | ".join("---" if kind == "text" else "---:" for _, _, kind in columns) + " |"
+    )
     rows = []
     for row in frame.head(max_rows).to_dict(orient="records"):
         values = []
@@ -886,8 +902,12 @@ def main() -> None:
         how="left",
         validate="one_to_one",
     )
-    grade_columns_available = "credit_rating" in test.columns and bool(test["credit_rating"].notna().any())
-    matched_rating_rows = int(test["credit_rating"].notna().sum()) if "credit_rating" in test.columns else 0
+    grade_columns_available = "credit_rating" in test.columns and bool(
+        test["credit_rating"].notna().any()
+    )
+    matched_rating_rows = (
+        int(test["credit_rating"].notna().sum()) if "credit_rating" in test.columns else 0
+    )
 
     segment_metrics = build_segment_metrics(test)
     concentration = build_error_concentration(segment_metrics)

@@ -78,7 +78,14 @@ class _TripletAgentModule(Protocol):
         bundle: Stage2InputBundle,
         recommendation: Recommendation,
         confidence: float,
+        model_provider: str,
         model_name: str,
+        quant_model_provider: str | None,
+        quant_model_name: str | None,
+        evidence_model_provider: str | None,
+        evidence_model_name: str | None,
+        chair_model_provider: str | None,
+        chair_model_name: str | None,
         max_tokens: int,
     ) -> Stage2RunnerOutputs:
         """Run the Agno Stage 2 triplet agents."""
@@ -110,17 +117,27 @@ class DeterministicStage2AgentRunner:
 
 @dataclass
 class AgnoStage2AgentRunner:
-    """Optional Agno/Claude-backed Stage 2 runner.
+    """Optional Agno-backed Stage 2 runner.
 
     This path is intentionally opt-in. If the ``agno`` package is unavailable,
     install the optional LLM dependencies or inject a ``Stage2LLMClient`` in
     tests/local experiments. Without an injected client, the runner executes
-    the three Agno triplet agents in sequence.
+    the three Agno triplet agents in sequence. The default routing remains a
+    single Claude model for backward compatibility; ``multi_llm_committee``
+    routes Claude/GPT/Gemini across the committee roles.
     """
 
     deterministic_runner: DeterministicStage2AgentRunner | None = None
     llm_client: Stage2LLMClient | None = None
+    routing_mode: str = "single"
+    model_provider: str = "anthropic"
     model_name: str = "claude-sonnet-4-5-20250929"
+    quant_model_provider: str | None = None
+    quant_model_name: str | None = None
+    evidence_model_provider: str | None = None
+    evidence_model_name: str | None = None
+    chair_model_provider: str | None = None
+    chair_model_name: str | None = None
     max_tokens: int = 6000
     backend_name: str = "agno"
     fallback_on_error: bool = True
@@ -152,7 +169,14 @@ class AgnoStage2AgentRunner:
                     bundle=bundle,
                     recommendation=recommendation,
                     confidence=confidence,
+                    model_provider=self.model_provider,
                     model_name=self.model_name,
+                    quant_model_provider=self._role_provider("quant_credit"),
+                    quant_model_name=self._role_model_name("quant_credit"),
+                    evidence_model_provider=self._role_provider("evidence_audit"),
+                    evidence_model_name=self._role_model_name("evidence_audit"),
+                    chair_model_provider=self._role_provider("chair_report"),
+                    chair_model_name=self._role_model_name("chair_report"),
                     max_tokens=self.max_tokens,
                 )
             outputs = _coerce_llm_response(raw_response).as_outputs()
@@ -188,6 +212,41 @@ class AgnoStage2AgentRunner:
             "evidence_audit": outputs[1].model_dump(mode="json"),
             "chair_report": outputs[2].model_dump(mode="json"),
         }
+
+    def _role_provider(self, role: str) -> str | None:
+        explicit = {
+            "quant_credit": self.quant_model_provider,
+            "evidence_audit": self.evidence_model_provider,
+            "chair_report": self.chair_model_provider,
+        }[role]
+        if explicit:
+            return explicit
+        if self._uses_multi_llm_committee():
+            return {
+                "quant_credit": "anthropic",
+                "evidence_audit": "openai",
+                "chair_report": "google",
+            }[role]
+        return None
+
+    def _role_model_name(self, role: str) -> str | None:
+        explicit = {
+            "quant_credit": self.quant_model_name,
+            "evidence_audit": self.evidence_model_name,
+            "chair_report": self.chair_model_name,
+        }[role]
+        if explicit:
+            return explicit
+        if self._uses_multi_llm_committee():
+            return {
+                "quant_credit": self.model_name,
+                "evidence_audit": "gpt-5.4-mini",
+                "chair_report": "gemini-flash-latest",
+            }[role]
+        return None
+
+    def _uses_multi_llm_committee(self) -> bool:
+        return self.routing_mode.strip().lower() in {"multi", "multi_llm", "multi_llm_committee"}
 
 
 def _build_prompt_payload(
@@ -231,7 +290,14 @@ def _run_triplet_agents_with_agno(
     bundle: Stage2InputBundle,
     recommendation: Recommendation,
     confidence: float,
+    model_provider: str,
     model_name: str,
+    quant_model_provider: str | None,
+    quant_model_name: str | None,
+    evidence_model_provider: str | None,
+    evidence_model_name: str | None,
+    chair_model_provider: str | None,
+    chair_model_name: str | None,
     max_tokens: int,
 ) -> Stage2LLMResponse:
     try:
@@ -248,7 +314,14 @@ def _run_triplet_agents_with_agno(
         bundle=bundle,
         recommendation=recommendation,
         confidence=confidence,
+        model_provider=model_provider,
         model_name=model_name,
+        quant_model_provider=quant_model_provider,
+        quant_model_name=quant_model_name,
+        evidence_model_provider=evidence_model_provider,
+        evidence_model_name=evidence_model_name,
+        chair_model_provider=chair_model_provider,
+        chair_model_name=chair_model_name,
         max_tokens=max_tokens,
     )
     if not isinstance(raw_outputs, tuple) or len(raw_outputs) != 3:

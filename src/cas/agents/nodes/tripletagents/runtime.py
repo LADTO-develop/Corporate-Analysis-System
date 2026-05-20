@@ -24,28 +24,25 @@ def build_agno_agent(  # noqa: UP047, RUF100
     *,
     name: str,
     model_name: str,
+    model_provider: str = "anthropic",
     max_tokens: int,
     response_model: type[ModelT],
     instructions: list[str],
 ) -> AgnoAgentLike:
     """Create an Agno Agent lazily so importing CAS does not require Agno."""
-    api_key = _anthropic_api_key()
     try:
         agent_module = import_module("agno.agent")
-        anthropic_module = import_module("agno.models.anthropic")
     except ImportError as error:
         raise RuntimeError(
-            "CAS_STAGE2_RUNNER=agno requires the optional Agno/Anthropic runtime. "
-            "Install this project with the 'agent' extra and configure ANTHROPIC_API_KEY."
+            "CAS_STAGE2_RUNNER=agno requires the optional Agno runtime. "
+            'Install this project with: python -m pip install -e ".[agent]".'
         ) from error
 
     agent_cls = agent_module.Agent
-    claude_cls = anthropic_module.Claude
-    model = claude_cls(
-        id=model_name,
+    model = _build_agno_model(
+        provider=model_provider,
+        model_name=model_name,
         max_tokens=max_tokens,
-        temperature=0,
-        api_key=api_key,
     )
 
     return cast(
@@ -59,6 +56,114 @@ def build_agno_agent(  # noqa: UP047, RUF100
             expected_output=f"Return only a valid {response_model.__name__} object.",
             markdown=False,
         ),
+    )
+
+
+def normalize_model_provider(provider: str) -> str:
+    """Normalize supported provider aliases used by Stage 2 model routing."""
+    normalized = provider.strip().lower().replace("-", "_")
+    aliases = {
+        "anthropic": "anthropic",
+        "claude": "anthropic",
+        "openai": "openai",
+        "gpt": "openai",
+        "google": "google",
+        "gemini": "google",
+    }
+    if normalized not in aliases:
+        raise ValueError(
+            "Unsupported CAS Stage 2 model provider. "
+            "Use one of: anthropic/claude, openai/gpt, google/gemini."
+        )
+    return aliases[normalized]
+
+
+def provider_label(provider: str) -> str:
+    """Return a human-readable provider label for prompts and diagnostics."""
+    labels = {
+        "anthropic": "Claude",
+        "openai": "GPT",
+        "google": "Gemini",
+    }
+    return labels[normalize_model_provider(provider)]
+
+
+def provider_env_var_names(provider: str) -> tuple[str, ...]:
+    """Return accepted API key environment variables for a provider."""
+    normalized = normalize_model_provider(provider)
+    if normalized == "anthropic":
+        return ("ANTHROPIC_API_KEY",)
+    if normalized == "openai":
+        return ("OPENAI_API_KEY",)
+    return ("GOOGLE_API_KEY", "GEMINI_API_KEY")
+
+
+def _build_agno_model(
+    *,
+    provider: str,
+    model_name: str,
+    max_tokens: int,
+) -> object:
+    normalized_provider = normalize_model_provider(provider)
+    api_key = _provider_api_key(normalized_provider)
+
+    if normalized_provider == "anthropic":
+        try:
+            anthropic_module = import_module("agno.models.anthropic")
+        except ImportError as error:
+            raise RuntimeError(
+                "CAS_STAGE2_RUNNER=agno with Claude requires agno[anthropic] and "
+                'the anthropic package. Install with: python -m pip install -e ".[agent]".'
+            ) from error
+        claude_cls = anthropic_module.Claude
+        return claude_cls(
+            id=model_name,
+            max_tokens=max_tokens,
+            temperature=0,
+            api_key=api_key,
+        )
+
+    if normalized_provider == "openai":
+        try:
+            openai_module = import_module("agno.models.openai")
+        except ImportError as error:
+            raise RuntimeError(
+                "CAS_STAGE2_RUNNER=agno with GPT requires agno[openai] and the openai "
+                'package. Install with: python -m pip install -e ".[agent]".'
+            ) from error
+        openai_cls = openai_module.OpenAIResponses
+        return openai_cls(
+            id=model_name,
+            max_output_tokens=max_tokens,
+            temperature=0,
+            api_key=api_key,
+        )
+
+    try:
+        google_module = import_module("agno.models.google")
+    except ImportError as error:
+        raise RuntimeError(
+            "CAS_STAGE2_RUNNER=agno with Gemini requires agno[google] and google-genai. "
+            'Install with: python -m pip install -e ".[agent]".'
+        ) from error
+    gemini_cls = google_module.Gemini
+    return gemini_cls(
+        id=model_name,
+        max_output_tokens=max_tokens,
+        temperature=0,
+        api_key=api_key,
+    )
+
+
+def _provider_api_key(provider: str) -> str:
+    for env_var_name in provider_env_var_names(provider):
+        api_key = os.environ.get(env_var_name, "").strip()
+        if api_key:
+            return api_key
+    env_var_text = " or ".join(provider_env_var_names(provider))
+    raise RuntimeError(
+        f"CAS_STAGE2_RUNNER=agno requires {env_var_text}. "
+        "Set it in your local .env or environment before running live Agno Stage 2."
     )
 
 
@@ -119,16 +224,6 @@ def _strip_json_fence(value: str) -> str:
         return stripped
     lines = [line for line in stripped.splitlines() if not line.strip().startswith("```")]
     return "\n".join(lines).strip()
-
-
-def _anthropic_api_key() -> str:
-    api_key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
-    if not api_key:
-        raise RuntimeError(
-            "CAS_STAGE2_RUNNER=agno requires ANTHROPIC_API_KEY. "
-            "Set it in your local .env or environment before running live Agno Stage 2."
-        )
-    return api_key
 
 
 def _stage2_agent_retry_attempts() -> int:

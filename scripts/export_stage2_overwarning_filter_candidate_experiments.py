@@ -225,12 +225,21 @@ def add_financial_signal_counts(frame: pd.DataFrame) -> None:
         "block_total_borrowings_gt_0_65",
         "block_short_term_borrowings_gt_0_90",
     ]
-    extended_blockers = [*v1_blockers, "block_current_ratio_lt_0_80", "block_cash_ratio_lt_0_05", "block_ocf_to_sales_lt_minus_0_20"]
+    extended_blockers = [
+        *v1_blockers,
+        "block_current_ratio_lt_0_80",
+        "block_cash_ratio_lt_0_05",
+        "block_ocf_to_sales_lt_minus_0_20",
+    ]
     support_columns = [column for column in support_flags if column != "support_dividend_payer"]
     frame["financial_support_count"] = frame.loc[:, support_columns].sum(axis=1).astype(int)
-    frame["financial_support_count_with_dividend"] = frame.loc[:, list(support_flags)].sum(axis=1).astype(int)
+    frame["financial_support_count_with_dividend"] = (
+        frame.loc[:, list(support_flags)].sum(axis=1).astype(int)
+    )
     frame["financial_blocker_count"] = frame.loc[:, v1_blockers].sum(axis=1).astype(int)
-    frame["financial_blocker_count_extended"] = frame.loc[:, extended_blockers].sum(axis=1).astype(int)
+    frame["financial_blocker_count_extended"] = (
+        frame.loc[:, extended_blockers].sum(axis=1).astype(int)
+    )
 
 
 def at_least(frame: pd.DataFrame, column: str, threshold: float) -> pd.Series:
@@ -551,7 +560,9 @@ def main() -> None:
     report_path = args.output_dir / "stage2_overwarning_filter_candidate_report.md"
     metrics.to_csv(metrics_path, index=False, encoding="utf-8-sig")
     cases.to_csv(cases_path, index=False, encoding="utf-8-sig")
-    summary_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    summary_path.write_text(
+        json.dumps(summary, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
     report_path.write_text(build_report(metrics, summary), encoding="utf-8")
 
     print(f"[Saved] {metrics_path}")

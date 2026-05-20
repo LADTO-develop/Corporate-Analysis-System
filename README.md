@@ -127,9 +127,13 @@ EvidenceAuditAgent의 부채/유동성, 거시환경, 외부 근거 신호는 `s
 강제 경고 기준은 `configs/agent/committee.yaml`의 `veto_rules`에서 관리합니다.
 
 Stage 2는 CI와 기본 로컬 실행에서 `CAS_STAGE2_RUNNER=deterministic`을 사용합니다.
-Agno/Claude 호출을 붙인 로컬 데모에서는 optional dependency를 설치한 뒤
-`CAS_STAGE2_RUNNER=agno`, `CAS_STAGE2_MODEL=claude-sonnet-4-5-20250929`,
-`ANTHROPIC_API_KEY`를 설정하면 됩니다.
+Agno 기반 로컬 데모에서는 optional dependency를 설치한 뒤 `CAS_STAGE2_RUNNER=agno`를
+설정합니다. 기본 Agno 모드는 `CAS_STAGE2_AGNO_MODE=multi_llm_committee`이며,
+Claude가 정량 관점(`QuantCreditAgent`), GPT가 외부근거/반론 관점(`EvidenceAuditAgent`),
+Gemini가 최종 종합(`ChairReportAgent`)을 맡습니다. 이 모드에는
+`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GOOGLE_API_KEY` 또는 `GEMINI_API_KEY`가 필요합니다.
+기존 Claude 단일 실행을 사용하려면 `CAS_STAGE2_AGNO_MODE=single`,
+`CAS_STAGE2_MODEL=claude-sonnet-4-5-20250929`, `ANTHROPIC_API_KEY`를 설정하면 됩니다.
 
 외부 근거 수집은 기본적으로 꺼져 있습니다. 로컬 데모에서만 `.env`에
 `CAS_ENABLE_EXTERNAL_EVIDENCE=1`과 `OPENDART_API_KEY`, `NAVER_CLIENT_ID`,

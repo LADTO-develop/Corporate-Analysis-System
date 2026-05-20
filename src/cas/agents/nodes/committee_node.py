@@ -326,7 +326,15 @@ def _stage2_runner() -> Stage2AgentRunner:
     if runner_name == "agno":
         return AgnoStage2AgentRunner(
             deterministic_runner=deterministic_runner,
+            routing_mode=os.environ.get("CAS_STAGE2_AGNO_MODE", "multi_llm_committee"),
+            model_provider=os.environ.get("CAS_STAGE2_MODEL_PROVIDER", "anthropic"),
             model_name=os.environ.get("CAS_STAGE2_MODEL", "claude-sonnet-4-5-20250929"),
+            quant_model_provider=os.environ.get("CAS_STAGE2_QUANT_PROVIDER") or None,
+            quant_model_name=os.environ.get("CAS_STAGE2_QUANT_MODEL") or None,
+            evidence_model_provider=os.environ.get("CAS_STAGE2_EVIDENCE_PROVIDER") or None,
+            evidence_model_name=os.environ.get("CAS_STAGE2_EVIDENCE_MODEL") or None,
+            chair_model_provider=os.environ.get("CAS_STAGE2_CHAIR_PROVIDER") or None,
+            chair_model_name=os.environ.get("CAS_STAGE2_CHAIR_MODEL") or None,
             max_tokens=_stage2_max_tokens(),
             fallback_on_error=_stage2_fallback_on_error(),
         )

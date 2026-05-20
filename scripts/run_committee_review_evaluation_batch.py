@@ -58,7 +58,9 @@ def read_samples(path: Path) -> pd.DataFrame:
     return samples
 
 
-def select_batch(samples: pd.DataFrame, *, policy: str, per_category: int, max_cases: int) -> pd.DataFrame:
+def select_batch(
+    samples: pd.DataFrame, *, policy: str, per_category: int, max_cases: int
+) -> pd.DataFrame:
     scoped = samples.loc[samples["committee_policy"].astype(str).eq(policy)].copy()
     if scoped.empty:
         raise ValueError(f"No samples found for committee_policy={policy!r}.")
@@ -83,7 +85,9 @@ def configure_runtime(*, live_external_evidence: bool, stage2_runner: str) -> No
     load_dotenv(ROOT / ".env")
     os.environ["CAS_STAGE2_RUNNER"] = stage2_runner
     os.environ.setdefault("CAS_STAGE2_FALLBACK_ON_ERROR", "1")
-    os.environ.setdefault("CAS_OPENDART_CORP_CODE_CACHE_PATH", "/private/tmp/cas_opendart_corp_codes.csv")
+    os.environ.setdefault(
+        "CAS_OPENDART_CORP_CODE_CACHE_PATH", "/private/tmp/cas_opendart_corp_codes.csv"
+    )
     if live_external_evidence:
         os.environ["CAS_ENABLE_EXTERNAL_EVIDENCE"] = "1"
     else:
@@ -110,7 +114,9 @@ def run_batch(batch: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def _result_row(sample: dict[str, Any], *, state: dict[str, Any], error_message: str) -> dict[str, Any]:
+def _result_row(
+    sample: dict[str, Any], *, state: dict[str, Any], error_message: str
+) -> dict[str, Any]:
     committee_view = _dict_value(state.get("committee_view"))
     evidence = _dict_value(state.get("news_cache_snapshot"))
     xgboost_result = _dict_value(state.get("xgboost_result"))
