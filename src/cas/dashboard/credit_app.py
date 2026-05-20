@@ -1681,9 +1681,7 @@ def _committee_evidence_frame(evidence_summary: object) -> pd.DataFrame:
                     source=item.get("source"),
                     summary=item.get("summary", "-"),
                 ),
-                "신뢰도": _humanize_committee_evidence_reliability(
-                    item.get("reliability", "-")
-                ),
+                "신뢰도": _humanize_committee_evidence_reliability(item.get("reliability", "-")),
             }
         )
     return pd.DataFrame(rows)

@@ -174,7 +174,9 @@ def score_inference(
     output["pred_label_tuned"] = output["prob_speculative"].ge(threshold).astype(int)
     output["prediction_label"] = np.where(output["pred_label_tuned"].eq(1), "부적격", "투자적격")
     output["risk_band"] = [
-        risk_band(probability, watch_threshold=watch_threshold, high_risk_threshold=high_risk_threshold)
+        risk_band(
+            probability, watch_threshold=watch_threshold, high_risk_threshold=high_risk_threshold
+        )
         for probability in output["prob_speculative"]
     ]
     output["_model_feature_frame"] = list(frame.to_dict(orient="records"))
@@ -320,7 +322,9 @@ def stage1_top_drivers(model_feature_frame: pd.DataFrame) -> list[dict[str, floa
         return []
 
 
-def stage1_model_payload(row: pd.Series, *, top_drivers: list[dict[str, float | str]]) -> dict[str, Any]:
+def stage1_model_payload(
+    row: pd.Series, *, top_drivers: list[dict[str, float | str]]
+) -> dict[str, Any]:
     return {
         "model_name": "credit_43_features",
         "model_version": "feature_43_xgboost",

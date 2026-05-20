@@ -412,9 +412,9 @@ def _external_evidence_date_filter_text(snapshot: dict[str, object] | None) -> s
             cutoff = str(date_filter.get("end_date") or "")
             if cutoff:
                 cutoff_dates.add(cutoff)
-            filtered_after_cutoff += _optional_int(
-                date_filter.get("filtered_after_cutoff_count")
-            ) or 0
+            filtered_after_cutoff += (
+                _optional_int(date_filter.get("filtered_after_cutoff_count")) or 0
+            )
             filtered_undated += _optional_int(date_filter.get("filtered_undated_count")) or 0
         query_window = provider.get("query_window")
         if isinstance(query_window, dict):
