@@ -1676,15 +1676,45 @@ def _committee_evidence_frame(evidence_summary: object) -> pd.DataFrame:
             continue
         rows.append(
             {
-                "근거 출처": item.get("source", "-"),
+                "근거 출처": _humanize_committee_evidence_source(item.get("source", "-")),
                 "요약": _humanize_evidence_summary(
                     source=item.get("source"),
                     summary=item.get("summary", "-"),
                 ),
-                "신뢰도": item.get("reliability", "-"),
+                "신뢰도": _humanize_committee_evidence_reliability(
+                    item.get("reliability", "-")
+                ),
             }
         )
     return pd.DataFrame(rows)
+
+
+def _humanize_committee_evidence_source(source: object) -> str:
+    labels = {
+        "model_view": "1차 모델 판단",
+        "feature_snapshot": "재무·산업 스냅샷",
+        "news_cache": "외부 근거 수집 상태",
+        "evidence_limitations": "근거 한계",
+        "opendart": "OpenDART 공시",
+        "naver_news": "네이버 뉴스",
+        "tavily": "웹 검색",
+    }
+    text = str(source or "-")
+    return labels.get(text, text)
+
+
+def _humanize_committee_evidence_reliability(reliability: object) -> str:
+    labels = {
+        "high": "높음",
+        "medium": "보통",
+        "low": "낮음",
+        "pending": "확인 중",
+        "context": "맥락",
+        "unknown": "미확인",
+        "low_relevance": "관련성 낮음",
+    }
+    text = str(reliability or "-")
+    return labels.get(text, text)
 
 
 def _humanize_evidence_summary(*, source: object, summary: object) -> str:

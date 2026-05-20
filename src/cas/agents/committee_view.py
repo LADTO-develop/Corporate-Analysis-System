@@ -518,6 +518,15 @@ def _evidence_summary_items(
             "reliability": "pending",
         },
     ]
+    evidence_limitations = _evidence_limitations_from_agents(agents)
+    if evidence_limitations:
+        items.append(
+            {
+                "source": "evidence_limitations",
+                "summary": " / ".join(evidence_limitations[:3]),
+                "reliability": "context",
+            }
+        )
     raw_items = bundle.news_cache_snapshot.get("items", [])
     if isinstance(raw_items, list):
         for item in raw_items[:3]:
@@ -544,6 +553,20 @@ def _evidence_summary_items(
                 }
             )
     return items
+
+
+def _evidence_limitations_from_agents(agents: list[AgentOutput]) -> list[str]:
+    evidence_agent = next((agent for agent in agents if agent.role == "evidence_audit"), None)
+    if evidence_agent is None:
+        return []
+    limitations: list[str] = []
+    for finding in evidence_agent.findings:
+        text = str(finding)
+        if text.startswith("근거 한계:"):
+            value = text.removeprefix("근거 한계:").strip()
+            if value:
+                limitations.append(value)
+    return limitations
 
 
 def _conflict_resolution(
