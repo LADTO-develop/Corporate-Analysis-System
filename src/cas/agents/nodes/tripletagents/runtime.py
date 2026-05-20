@@ -6,11 +6,9 @@ import json
 import os
 import time
 from importlib import import_module
-from typing import Protocol, TypeVar, cast
+from typing import Protocol, cast
 
 from pydantic import BaseModel
-
-ModelT = TypeVar("ModelT", bound=BaseModel)
 
 
 class AgnoAgentLike(Protocol):
@@ -20,7 +18,7 @@ class AgnoAgentLike(Protocol):
         """Run an agent prompt and return the provider response."""
 
 
-def build_agno_agent(  # noqa: UP047, RUF100
+def build_agno_agent[ModelT: BaseModel](
     *,
     name: str,
     model_name: str,
@@ -167,7 +165,7 @@ def _provider_api_key(provider: str) -> str:
     )
 
 
-def run_structured_agent(  # noqa: UP047, RUF100
+def run_structured_agent[ModelT: BaseModel](
     *,
     agent: AgnoAgentLike,
     query: str,
@@ -184,11 +182,12 @@ def run_structured_agent(  # noqa: UP047, RUF100
             if attempt >= attempts:
                 raise
             time.sleep(_stage2_agent_retry_delay_seconds() * attempt)
-
     raise RuntimeError("Agno agent retry loop exited unexpectedly.")
 
 
-def coerce_model_response(raw_response: object, response_model: type[ModelT]) -> ModelT:  # noqa: UP047, RUF100
+def coerce_model_response[ModelT: BaseModel](
+    raw_response: object, response_model: type[ModelT]
+) -> ModelT:
     """Coerce common Agno response shapes into the requested response model."""
     if isinstance(raw_response, response_model):
         return raw_response

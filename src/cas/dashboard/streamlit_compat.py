@@ -35,6 +35,8 @@ def stretch_dataframe(data: object, **kwargs: object) -> None:
     vars(st)["dataframe"](data, **kwargs, **_stretch_width_kwargs())
 
 
-def stretch_download_button(**kwargs: object) -> bool:
+def stretch_download_button(label: str | None = None, **kwargs: object) -> bool:
     """Render a download button at full container width."""
+    if label is not None and "label" not in kwargs:
+        kwargs["label"] = label
     return bool(vars(st)["download_button"](**kwargs, **_stretch_width_kwargs()))

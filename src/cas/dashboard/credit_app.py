@@ -95,15 +95,15 @@ COLOR_MITIGATE = "#2f9e5b"
 COLOR_NEUTRAL = "#4f6fad"
 COLOR_MUTED = "#9aa3b2"
 COLOR_SOFT_BLUE = "#7f93c9"
-COLOR_DARK = "#4a4f57"
+COLOR_DARK = "#344054"
 COLOR_COMPANY = "#1d4ed8"
 COLOR_INDUSTRY = "#d97706"
 COLOR_MARKET = "#6b7280"
-COLOR_CARD_BG = "#f7f8fb"
-COLOR_CARD_BORDER = "#e3e7ef"
-COLOR_CARD_LABEL = "#5c6473"
-COLOR_CARD_VALUE = "#1f2937"
-CARD_SHADOW = "0 4px 14px rgba(15, 23, 42, 0.04)"
+COLOR_CARD_BG = "#ffffff"
+COLOR_CARD_BORDER = "#d9e1ec"
+COLOR_CARD_LABEL = "#667085"
+COLOR_CARD_VALUE = "#111827"
+CARD_SHADOW = "0 1px 2px rgba(16, 24, 40, 0.05)"
 
 ARTIFACT_PRESETS = {
     "team_43": {
@@ -198,9 +198,399 @@ cached_load_dashboard_artifacts: Callable[[str | None], DashboardArtifacts] = st
 )(_load_dashboard_artifacts_cached)
 
 
+def inject_dashboard_theme() -> None:
+    """Apply shared dashboard styling for denser, more readable screens."""
+    st.markdown(
+        """
+        <style>
+        :root {
+          --cas-bg: #f5f7fb;
+          --cas-panel: #ffffff;
+          --cas-border: #d9e1ec;
+          --cas-border-soft: #e8edf5;
+          --cas-text: #111827;
+          --cas-muted: #667085;
+          --cas-blue: #1d4ed8;
+        }
+
+        .stApp {
+          background: var(--cas-bg);
+        }
+
+        .main .block-container {
+          max-width: 1480px;
+          padding-top: 1.25rem;
+          padding-bottom: 2rem;
+        }
+
+        .main .block-container, .main .block-container * {
+          letter-spacing: 0 !important;
+        }
+
+        h1 {
+          color: var(--cas-text);
+          font-size: 1.72rem !important;
+          line-height: 1.25 !important;
+          margin: 0 0 0.25rem 0 !important;
+        }
+
+        h2, h3 {
+          color: var(--cas-text);
+          line-height: 1.35 !important;
+        }
+
+        h2 {
+          border-top: 1px solid var(--cas-border-soft);
+          font-size: 1.12rem !important;
+          margin-top: 1.1rem !important;
+          padding-top: 0.8rem !important;
+        }
+
+        h3 {
+          font-size: 1rem !important;
+        }
+
+        div[data-testid="stCaptionContainer"] {
+          color: var(--cas-muted);
+          font-size: 0.9rem;
+          line-height: 1.58;
+          max-width: 1120px;
+        }
+
+        div[data-testid="stMarkdownContainer"] p,
+        div[data-testid="stMarkdownContainer"] li {
+          line-height: 1.62;
+        }
+
+        section[data-testid="stSidebar"] {
+          background: var(--cas-panel);
+          border-right: 1px solid var(--cas-border);
+        }
+
+        section[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p {
+          color: var(--cas-muted);
+          font-size: 0.88rem;
+          line-height: 1.5;
+        }
+
+        div[data-testid="stTabs"] [role="tablist"] {
+          align-items: center;
+          background: var(--cas-bg);
+          border-bottom: 1px solid var(--cas-border);
+          gap: 0.25rem;
+          padding: 0.35rem 0 0.45rem 0;
+          position: sticky;
+          top: 0;
+          z-index: 10;
+        }
+
+        button[role="tab"] {
+          border-radius: 8px 8px 0 0 !important;
+          color: #475467 !important;
+          font-size: 0.92rem !important;
+          font-weight: 700 !important;
+          min-height: 2.35rem;
+          padding: 0.45rem 0.75rem !important;
+        }
+
+        button[role="tab"][aria-selected="true"] {
+          background: var(--cas-panel) !important;
+          box-shadow: inset 0 -2px 0 var(--cas-blue);
+          color: var(--cas-blue) !important;
+        }
+
+        div[data-testid="stHorizontalBlock"] {
+          gap: 0.8rem;
+        }
+
+        div[data-testid="stExpander"] {
+          background: var(--cas-panel);
+          border: 1px solid var(--cas-border) !important;
+          border-radius: 8px !important;
+          box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+        }
+
+        div[data-testid="stDataFrame"] {
+          border: 1px solid var(--cas-border);
+          border-radius: 8px;
+          overflow: hidden;
+        }
+
+        div.stButton > button,
+        div.stDownloadButton > button {
+          border-radius: 8px !important;
+          font-weight: 700;
+          min-height: 2.6rem;
+          width: 100%;
+        }
+
+        div[data-testid="stAlert"] {
+          border-radius: 8px;
+        }
+
+        .market-search-panel {
+          background: #ffffff;
+          border: 1px solid var(--cas-border);
+          border-radius: 8px;
+          box-shadow: 0 1px 2px rgba(16, 24, 40, 0.05);
+          margin: 0.9rem 0 1rem 0;
+          padding: 1rem;
+        }
+
+        .market-search-panel h2 {
+          border-top: 0;
+          font-size: 1.08rem !important;
+          margin: 0 0 0.25rem 0 !important;
+          padding-top: 0 !important;
+        }
+
+        .market-search-panel p {
+          color: var(--cas-muted);
+          font-size: 0.9rem;
+          line-height: 1.55;
+          margin: 0;
+        }
+
+        .market-card {
+          background: #ffffff;
+          border: 1px solid var(--cas-border);
+          border-left: 5px solid #c85050;
+          border-radius: 8px;
+          box-shadow: 0 1px 2px rgba(16, 24, 40, 0.05);
+          min-height: 148px;
+          padding: 0.9rem 1rem;
+        }
+
+        .market-card-rank {
+          color: #c85050;
+          font-size: 0.78rem;
+          font-weight: 800;
+          margin-bottom: 0.3rem;
+          text-transform: uppercase;
+        }
+
+        .market-card-title {
+          color: var(--cas-text);
+          font-size: 1.02rem;
+          font-weight: 800;
+          line-height: 1.35;
+          margin-bottom: 0.45rem;
+          word-break: keep-all;
+        }
+
+        .market-card-meta {
+          color: var(--cas-muted);
+          display: flex;
+          flex-wrap: wrap;
+          font-size: 0.86rem;
+          gap: 0.35rem;
+          line-height: 1.45;
+        }
+
+        .market-card-risk {
+          color: #b42318;
+          font-size: 1.22rem;
+          font-weight: 800;
+          margin-top: 0.55rem;
+        }
+
+        .market-section-title {
+          color: var(--cas-text);
+          font-size: 1rem;
+          font-weight: 800;
+          margin: 0.2rem 0 0.45rem 0;
+        }
+
+        .selected-company-bar {
+          background: #ffffff;
+          border: 1px solid var(--cas-border);
+          border-radius: 8px;
+          box-shadow: 0 1px 2px rgba(16, 24, 40, 0.05);
+          margin: 0 0 0.8rem 0;
+          padding: 0.72rem 0.9rem;
+        }
+
+        .selected-company-title {
+          color: var(--cas-text);
+          font-size: 1rem;
+          font-weight: 800;
+          line-height: 1.35;
+        }
+
+        .selected-company-meta {
+          color: var(--cas-muted);
+          font-size: 0.86rem;
+          line-height: 1.45;
+          margin-top: 0.16rem;
+        }
+
+        .committee-decision-strip {
+          background: #ffffff;
+          border: 1px solid var(--cas-border);
+          border-left: 6px solid #2b6cb0;
+          border-radius: 8px;
+          box-shadow: 0 1px 2px rgba(16, 24, 40, 0.05);
+          margin: 0.4rem 0 0.75rem 0;
+          padding: 1rem;
+        }
+
+        .committee-decision-topline {
+          align-items: center;
+          display: flex;
+          flex-wrap: wrap;
+          gap: 0.65rem;
+          margin-bottom: 0.55rem;
+        }
+
+        .committee-decision-label {
+          color: var(--cas-muted);
+          font-size: 0.88rem;
+          font-weight: 800;
+        }
+
+        .committee-decision-summary {
+          color: var(--cas-text);
+          font-size: 1rem;
+          font-weight: 700;
+          line-height: 1.62;
+          margin: 0;
+          word-break: keep-all;
+        }
+
+        .committee-highlight-grid {
+          display: grid;
+          gap: 0.75rem;
+          grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+          margin: 0.2rem 0 0.95rem 0;
+        }
+
+        .committee-highlight-card {
+          background: #ffffff;
+          border: 1px solid var(--cas-border);
+          border-top: 4px solid #2b6cb0;
+          border-radius: 8px;
+          box-shadow: 0 1px 2px rgba(16, 24, 40, 0.05);
+          min-height: 132px;
+          padding: 0.9rem 1rem;
+        }
+
+        .committee-highlight-card.risk {
+          border-top-color: #c85050;
+        }
+
+        .committee-highlight-card.mitigate {
+          border-top-color: #3a8b5b;
+        }
+
+        .committee-highlight-card.warning {
+          border-top-color: #c0841a;
+        }
+
+        .committee-highlight-title {
+          color: var(--cas-muted);
+          font-size: 0.9rem;
+          font-weight: 800;
+          margin-bottom: 0.45rem;
+        }
+
+        .committee-highlight-body {
+          color: var(--cas-text);
+          font-size: 0.96rem;
+          font-weight: 700;
+          line-height: 1.6;
+          word-break: keep-all;
+        }
+
+        .committee-highlight-body ul {
+          margin: 0;
+          padding-left: 1.05rem;
+        }
+
+        .committee-highlight-body li {
+          margin-bottom: 0.35rem;
+        }
+
+        .committee-detail-flow {
+          background: #ffffff;
+          border: 1px solid var(--cas-border);
+          border-radius: 8px;
+          box-shadow: 0 1px 2px rgba(16, 24, 40, 0.05);
+          margin: 0.25rem 0 1rem 0;
+          padding: 1rem 1.05rem;
+        }
+
+        .committee-detail-title {
+          color: var(--cas-text);
+          font-size: 1rem;
+          font-weight: 800;
+          margin-bottom: 0.65rem;
+        }
+
+        .committee-detail-section {
+          border-top: 1px solid var(--cas-border);
+          padding: 0.75rem 0 0.1rem 0;
+        }
+
+        .committee-detail-section:first-of-type {
+          border-top: 0;
+          padding-top: 0;
+        }
+
+        .committee-detail-heading {
+          color: var(--cas-muted);
+          font-size: 0.9rem;
+          font-weight: 800;
+          margin-bottom: 0.28rem;
+        }
+
+        .committee-detail-text,
+        .committee-detail-section li {
+          color: var(--cas-text);
+          font-size: 0.97rem;
+          line-height: 1.68;
+          word-break: keep-all;
+        }
+
+        .committee-detail-section ul {
+          margin: 0.1rem 0 0 1.1rem;
+          padding: 0;
+        }
+
+        hr {
+          margin: 1rem 0;
+        }
+
+        @media (max-width: 900px) {
+          .main .block-container {
+            padding-left: 1rem;
+            padding-right: 1rem;
+          }
+
+          div[data-testid="column"] {
+            width: 100% !important;
+            flex: 1 1 100% !important;
+          }
+
+          div[data-testid="stTabs"] [role="tablist"] {
+            overflow-x: auto;
+            white-space: nowrap;
+          }
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def to_market_label(value: object) -> str:
     """Convert a market code into a Korean label."""
     return MARKET_LABELS.get(str(value), str(value))
+
+
+def to_market_display_label(value: object) -> str:
+    """Convert a market code into a readable label for the market selector."""
+    labels = {"KOSPI": "코스피", "KOSDAQ": "코스닥"}
+    return labels.get(str(value), to_market_label(value))
 
 
 def to_size_label(value: object) -> str:
@@ -211,6 +601,19 @@ def to_size_label(value: object) -> str:
 def to_industry_label(value: object) -> str:
     """Convert an industry code into a Korean label."""
     return INDUSTRY_LABELS.get(str(value), str(value))
+
+
+def to_industry_display_label(value: object) -> str:
+    """Convert an industry code into a readable label for the market selector."""
+    labels = {
+        "construction": "건설",
+        "it_services": "IT/서비스",
+        "manufacturing": "제조",
+        "other": "기타",
+        "transport_storage": "운수/창고",
+        "wholesale_retail": "도소매",
+    }
+    return labels.get(str(value), to_industry_label(value))
 
 
 def to_prediction_label(value: object) -> str:
@@ -243,6 +646,8 @@ def to_committee_base_label(model_label: object) -> str:
 
 def pick_selected_company(artifacts: DashboardArtifacts) -> pd.Series:
     """Render sidebar selectors and return the chosen company snapshot."""
+    return pick_selected_company_from_market_explorer(artifacts)
+
     latest = artifacts.company_latest.copy()
     markets = ["전체", *sorted(latest["market"].dropna().unique().tolist())]
     selected_market = st.sidebar.selectbox(
@@ -299,6 +704,309 @@ def pick_selected_company(artifacts: DashboardArtifacts) -> pd.Series:
             break
     selected_label: str = st.sidebar.selectbox("기업 선택", labels, index=default_index)
     return options.loc[options["label"] == selected_label].iloc[0]
+
+
+def pick_selected_company_from_market_explorer(artifacts: DashboardArtifacts) -> pd.Series:
+    """Render the market-style company selector and return the chosen company snapshot."""
+    explorer_frame = build_company_explorer_frame(artifacts)
+    if explorer_frame.empty:
+        st.warning("분석 가능한 종목 데이터가 없습니다. 대시보드 산출물을 다시 확인해주세요.")
+        st.stop()
+
+    current_key = str(st.session_state.get("selected_company_key", ""))
+    if current_key:
+        matched = explorer_frame.loc[explorer_frame["_company_key"] == current_key]
+        if not matched.empty:
+            selected_row = matched.iloc[0]
+            render_selected_company_detail_header(selected_row)
+            return selected_row
+        st.session_state.pop("selected_company_key", None)
+
+    selected_key = render_company_market_explorer(explorer_frame)
+    if not selected_key:
+        st.info("상단 검색창이나 시장별 목록에서 종목을 선택하면 상세 분석 화면이 열립니다.")
+        st.stop()
+
+    matched = explorer_frame.loc[explorer_frame["_company_key"] == selected_key]
+    if matched.empty:
+        st.session_state.pop("selected_company_key", None)
+        st.warning("선택한 종목을 현재 산출물에서 찾을 수 없습니다. 다시 선택해주세요.")
+        st.stop()
+    return matched.iloc[0]
+
+
+def render_selected_company_detail_header(selected_row: pd.Series) -> None:
+    """Render detail-page navigation once a company has been selected."""
+    nav_col, title_col = st.columns([0.16, 0.84])
+    with nav_col:
+        if st.button("← 종목 목록", use_container_width=True):
+            st.session_state.pop("selected_company_key", None)
+            st.rerun()
+
+    market = selected_row.get("_display_market") or to_market_display_label(
+        selected_row.get("market")
+    )
+    industry = selected_row.get("_display_industry") or to_industry_display_label(
+        selected_row.get("industry_macro_category")
+    )
+    probability = selected_row.get("_display_probability") or format_percent(
+        selected_row.get("prob_speculative")
+    )
+    stock_code = _stock_code_text(selected_row.get("stock_code"))
+    fiscal_year = format_scalar(selected_row.get("fiscal_year"))
+    risk_band = selected_row.get("risk_band") or "-"
+
+    with title_col:
+        st.markdown(
+            (
+                "<div class='selected-company-bar'>"
+                f"<div class='selected-company-title'>{escape(str(selected_row.get('corp_name') or '-'))}</div>"
+                "<div class='selected-company-meta'>"
+                f"{escape(str(market))} · {escape(stock_code)} · FY{escape(fiscal_year)} · "
+                f"{escape(str(industry))} · 부적합 가능성 {escape(str(probability))} · 위험 구간 {escape(str(risk_band))}"
+                "</div>"
+                "</div>"
+            ),
+            unsafe_allow_html=True,
+        )
+
+
+def build_company_explorer_frame(artifacts: DashboardArtifacts) -> pd.DataFrame:
+    """Build the selectable market overview frame for the dashboard landing area."""
+    latest = artifacts.company_latest.copy()
+    latest["_stock_code_text"] = latest["stock_code"].map(_stock_code_text)
+    latest["_company_key"] = latest.apply(_company_selection_key, axis=1)
+
+    if artifacts.prediction_scores is not None:
+        prediction_frame = artifacts.prediction_scores.copy()
+        prediction_frame["_stock_code_text"] = prediction_frame["stock_code"].map(_stock_code_text)
+        prediction_columns = [
+            "_stock_code_text",
+            "fiscal_year",
+            "prob_speculative",
+            "predicted_label",
+            "risk_band",
+            "stage2_review_priority",
+            "trigger_reason",
+        ]
+        available_columns = [
+            column for column in prediction_columns if column in prediction_frame.columns
+        ]
+        latest = latest.merge(
+            prediction_frame.loc[:, available_columns],
+            on=["_stock_code_text", "fiscal_year"],
+            how="left",
+        )
+
+    latest["_prob_speculative_number"] = pd.to_numeric(
+        latest.get("prob_speculative"),
+        errors="coerce",
+    )
+    latest["_display_market"] = latest["market"].map(to_market_display_label)
+    latest["_display_industry"] = latest["industry_macro_category"].map(to_industry_display_label)
+    latest["_display_size"] = latest["firm_size_group"].map(to_size_label)
+    latest["_display_probability"] = latest["prob_speculative"].map(format_percent)
+    latest["_display_label"] = latest["predicted_label"].map(to_prediction_label)
+    latest["_search_label"] = latest.apply(_company_search_label, axis=1)
+    return latest.sort_values(["market", "corp_name", "fiscal_year"]).reset_index(drop=True)
+
+
+def _company_selection_key(row: pd.Series) -> str:
+    """Build a stable selection key for one company-year row."""
+    fiscal_year = row.get("fiscal_year")
+    try:
+        fiscal_year_text = str(int(float(str(fiscal_year))))
+    except (TypeError, ValueError):
+        fiscal_year_text = str(fiscal_year)
+    return f"{row.get('market')}-{_stock_code_text(row.get('stock_code'))}-{fiscal_year_text}"
+
+
+def _company_search_label(row: pd.Series) -> str:
+    """Return the searchable option label shown in the top selectbox."""
+    probability = row.get("_display_probability") or "-"
+    risk_band = row.get("risk_band") or "-"
+    return (
+        f"{row.get('corp_name')} · {_stock_code_text(row.get('stock_code'))} · "
+        f"{row.get('_display_market')} · FY{format_scalar(row.get('fiscal_year'))} · "
+        f"부적합 가능성 {probability} · {risk_band}"
+    )
+
+
+def render_company_market_explorer(explorer_frame: pd.DataFrame) -> str | None:
+    """Render search, top unsuitable highlights, and KOSPI/KOSDAQ company lists."""
+    current_key = str(st.session_state.get("selected_company_key", ""))
+    valid_keys = explorer_frame["_company_key"].astype(str).tolist()
+    if current_key and current_key not in valid_keys:
+        current_key = ""
+        st.session_state.pop("selected_company_key", None)
+
+    st.markdown(
+        """
+        <div class="market-search-panel">
+          <h2>종목 검색</h2>
+          <p>이 프로젝트 산출물에 포함된 종목만 검색됩니다. 회사명, 종목코드, 시장을 입력해 분석할 기업을 고르세요.</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    option_labels = dict(
+        zip(
+            explorer_frame["_company_key"].astype(str),
+            explorer_frame["_search_label"].astype(str),
+            strict=False,
+        )
+    )
+    selected_index = valid_keys.index(current_key) if current_key in valid_keys else None
+    selected_from_search = st.selectbox(
+        "회사명 또는 종목코드",
+        options=valid_keys,
+        index=selected_index,
+        format_func=lambda value: option_labels.get(str(value), str(value)),
+        placeholder="예: 삼성전자, 005930, KOSDAQ",
+        label_visibility="collapsed",
+    )
+    if selected_from_search and selected_from_search != current_key:
+        st.session_state["selected_company_key"] = str(selected_from_search)
+        st.rerun()
+
+    render_top_unsuitable_companies(explorer_frame)
+    render_market_company_lists(explorer_frame)
+    return str(st.session_state.get("selected_company_key", ""))
+
+
+def render_top_unsuitable_companies(explorer_frame: pd.DataFrame) -> None:
+    """Render the three highest-risk companies as prominent cards."""
+    ranked = (
+        explorer_frame.dropna(subset=["_prob_speculative_number"])
+        .sort_values("_prob_speculative_number", ascending=False)
+        .head(3)
+    )
+    if ranked.empty:
+        return
+
+    st.markdown("### 부적합 가능성 상위 3개")
+    columns = st.columns(3)
+    for index, row in enumerate(ranked.to_dict(orient="records"), start=1):
+        container = columns[index - 1]
+        render_unsuitable_company_card(container, row, rank=index)
+        if container.button(
+            "분석 보기",
+            key=f"top_unsuitable_{row['_company_key']}",
+            use_container_width=True,
+        ):
+            st.session_state["selected_company_key"] = str(row["_company_key"])
+            st.rerun()
+
+
+def render_unsuitable_company_card(
+    container: st.delta_generator.DeltaGenerator,
+    row: dict[str, object],
+    *,
+    rank: int,
+) -> None:
+    """Render one high-risk company card in the market selector."""
+    container.markdown(
+        (
+            "<div class='market-card'>"
+            f"<div class='market-card-rank'>Rank {rank}</div>"
+            f"<div class='market-card-title'>{escape(str(row.get('corp_name') or '-'))}</div>"
+            "<div class='market-card-meta'>"
+            f"<span>{escape(str(row.get('_display_market') or '-'))}</span>"
+            f"<span>·</span><span>{escape(_stock_code_text(row.get('stock_code')))}</span>"
+            f"<span>·</span><span>FY{escape(format_scalar(row.get('fiscal_year')))}</span>"
+            f"<span>·</span><span>{escape(str(row.get('_display_industry') or '-'))}</span>"
+            "</div>"
+            f"<div class='market-card-risk'>{escape(str(row.get('_display_probability') or '-'))}</div>"
+            f"<div class='market-card-meta'>위험 구간 {escape(str(row.get('risk_band') or '-'))}</div>"
+            "</div>"
+        ),
+        unsafe_allow_html=True,
+    )
+
+
+def render_market_company_lists(explorer_frame: pd.DataFrame) -> None:
+    """Render separate selectable lists for KOSPI and KOSDAQ."""
+    st.markdown("### 시장별 종목")
+    kospi_col, kosdaq_col = st.columns(2)
+    render_market_company_table(kospi_col, explorer_frame, market="KOSPI")
+    render_market_company_table(kosdaq_col, explorer_frame, market="KOSDAQ")
+
+
+def render_market_company_table(
+    container: st.delta_generator.DeltaGenerator,
+    explorer_frame: pd.DataFrame,
+    *,
+    market: str,
+) -> None:
+    """Render one market table and handle row selection."""
+    market_frame = explorer_frame.loc[explorer_frame["market"].astype(str) == market].copy()
+    market_frame = market_frame.sort_values(
+        ["_prob_speculative_number", "corp_name"],
+        ascending=[False, True],
+        na_position="last",
+    ).reset_index(drop=True)
+
+    container.markdown(
+        f"<div class='market-section-title'>{escape(to_market_display_label(market))}</div>",
+        unsafe_allow_html=True,
+    )
+    if market_frame.empty:
+        container.info(f"{to_market_display_label(market)} 종목이 없습니다.")
+        return
+
+    display_frame = market_frame.loc[
+        :,
+        [
+            "corp_name",
+            "_stock_code_text",
+            "_display_probability",
+            "risk_band",
+            "_display_industry",
+            "fiscal_year",
+        ],
+    ].rename(
+        columns={
+            "corp_name": "기업",
+            "_stock_code_text": "종목코드",
+            "_display_probability": "부적합 가능성",
+            "risk_band": "위험 구간",
+            "_display_industry": "산업",
+            "fiscal_year": "회계연도",
+        }
+    )
+    event = container.dataframe(
+        display_frame,
+        hide_index=True,
+        height=360,
+        on_select="rerun",
+        selection_mode="single-row",
+        use_container_width=True,
+    )
+    selected_rows = _selected_dataframe_rows(event)
+    if selected_rows:
+        selected_row_index = int(selected_rows[0])
+        if 0 <= selected_row_index < len(market_frame):
+            selected_key = str(market_frame.iloc[selected_row_index]["_company_key"])
+            if selected_key != st.session_state.get("selected_company_key"):
+                st.session_state["selected_company_key"] = selected_key
+                st.rerun()
+
+
+def _selected_dataframe_rows(event: object) -> list[int]:
+    """Extract selected row indexes from a Streamlit dataframe selection event."""
+    selection = getattr(event, "selection", None)
+    if selection is None and isinstance(event, dict):
+        selection = event.get("selection")
+    if selection is None:
+        return []
+    if isinstance(selection, dict):
+        rows = selection.get("rows", [])
+    else:
+        rows = getattr(selection, "rows", [])
+    if not isinstance(rows, list):
+        return []
+    return [int(row) for row in rows]
 
 
 def build_company_feature_map(
@@ -1228,7 +1936,7 @@ def render_bold_value_block(
     """Render a bold label and value inside a consistent overview card."""
     container.markdown(
         (
-            f"<div style='min-height:104px;padding:0.9rem 1rem;border-radius:14px;"
+            f"<div style='min-height:104px;padding:0.9rem 1rem;border-radius:8px;"
             f"background:{COLOR_CARD_BG};border:1px solid {COLOR_CARD_BORDER};"
             "display:flex;flex-direction:column;justify-content:space-between;"
             f"margin-bottom:0.5rem;box-shadow:{CARD_SHADOW};'>"
@@ -1253,7 +1961,7 @@ def render_badge_value_block(
     """Render a bold label and badge inside the same overview card layout."""
     container.markdown(
         (
-            f"<div style='min-height:104px;padding:0.9rem 1rem;border-radius:14px;"
+            f"<div style='min-height:104px;padding:0.9rem 1rem;border-radius:8px;"
             f"background:{COLOR_CARD_BG};border:1px solid {COLOR_CARD_BORDER};"
             "display:flex;flex-direction:column;justify-content:space-between;"
             f"margin-bottom:0.5rem;box-shadow:{CARD_SHADOW};'>"
@@ -1289,7 +1997,7 @@ def render_value_detail_block(
 
     container.markdown(
         (
-            f"<div style='min-height:136px;padding:0.9rem 1rem;border-radius:14px;"
+            f"<div style='min-height:136px;padding:0.9rem 1rem;border-radius:8px;"
             f"background:{COLOR_CARD_BG};border:1px solid {COLOR_CARD_BORDER};"
             "display:flex;flex-direction:column;justify-content:space-between;"
             f"margin-bottom:0.5rem;box-shadow:{CARD_SHADOW};'>"
@@ -1316,7 +2024,7 @@ def render_text_card(
     """Render an explanatory gray card with bold label."""
     container.markdown(
         (
-            f"<div style='min-height:120px;padding:0.95rem 1rem;border-radius:14px;"
+            f"<div style='min-height:120px;padding:0.95rem 1rem;border-radius:8px;"
             f"background:{COLOR_CARD_BG};border:1px solid {COLOR_CARD_BORDER};"
             "display:flex;flex-direction:column;justify-content:space-between;"
             f"margin-bottom:0.5rem;box-shadow:{CARD_SHADOW};'>"
@@ -1360,7 +2068,7 @@ def render_bullet_card(
 
     container.markdown(
         (
-            f"<div style='min-height:168px;padding:0.95rem 1rem;border-radius:14px;"
+            f"<div style='min-height:168px;padding:0.95rem 1rem;border-radius:8px;"
             f"background:{COLOR_CARD_BG};border:1px solid {COLOR_CARD_BORDER};"
             f"border-left:6px solid {accent_color};"
             "display:flex;flex-direction:column;justify-content:flex-start;"
@@ -1383,7 +2091,7 @@ def render_summary_banner(
     """Render a wide summary banner for quick interpretation."""
     st.markdown(
         (
-            f"<div style='padding:0.95rem 1.05rem;border-radius:14px;"
+            f"<div style='padding:0.95rem 1.05rem;border-radius:8px;"
             f"background:{COLOR_CARD_BG};border:1px solid {COLOR_CARD_BORDER};"
             f"border-left:6px solid {accent_color};box-shadow:{CARD_SHADOW};"
             "margin:0.25rem 0 0.9rem 0;'>"
@@ -1397,6 +2105,200 @@ def render_summary_banner(
         ),
         unsafe_allow_html=True,
     )
+
+
+def _first_committee_text(items: list[str], fallback: str) -> str:
+    """Return the first non-empty committee sentence for highlight cards."""
+    for item in items:
+        text = str(item).strip()
+        if text:
+            return text
+    return fallback
+
+
+def _normalize_committee_text(text: object) -> str:
+    """Normalize committee text while preserving its full meaning."""
+    return re.sub(r"\s+", " ", str(text or "")).strip()
+
+
+def _split_committee_highlight_fragments(text: object) -> list[str]:
+    """Split dense numbered committee text into readable highlight fragments."""
+    normalized = _normalize_committee_text(text)
+    if not normalized:
+        return []
+
+    numbered_matches = re.findall(r"\(\d+\)\s*(.*?)(?=\s*\(\d+\)\s*|$)", normalized)
+    if numbered_matches:
+        return [match.strip(" ,;") for match in numbered_matches if match.strip()]
+
+    sentence_parts = re.split(r"(?<=[.!?。])\s+", normalized)
+    return [part.strip(" ,;") for part in sentence_parts if part.strip()]
+
+
+def _committee_highlight_items(
+    items: list[str],
+    fallback: str,
+    *,
+    max_items: int = 3,
+) -> list[str]:
+    """Build short highlight items without truncating text."""
+    highlights: list[str] = []
+    for item in items:
+        fragments = _split_committee_highlight_fragments(item)
+        if len(fragments) > 1:
+            highlights.extend(fragments)
+        elif fragments:
+            highlights.append(fragments[0])
+        if len(highlights) >= max_items:
+            break
+    return highlights[:max_items] or [fallback]
+
+
+def _committee_highlight_body_html(items: list[str]) -> str:
+    """Render highlight items without ellipses."""
+    clean_items = [item for item in (_normalize_committee_text(item) for item in items) if item]
+    if len(clean_items) == 1:
+        return escape(clean_items[0])
+    list_html = "".join(f"<li>{escape(item)}</li>" for item in clean_items)
+    return f"<ul>{list_html}</ul>"
+
+
+def render_committee_key_highlights(
+    *,
+    committee_label: str,
+    model_display_label: str,
+    decision_gap_label: str,
+    veto_label: str,
+    final_confidence: object,
+    summary_text: str,
+    conflict_text: str,
+    final_memo: str,
+    risk_items: list[str],
+    mitigation_items: list[str],
+) -> None:
+    """Render the committee result as a quick executive summary."""
+    top_risk_items = _committee_highlight_items(
+        risk_items,
+        "위원회가 별도로 강조한 위험 요인은 없습니다.",
+    )
+    top_mitigation_items = _committee_highlight_items(
+        mitigation_items,
+        "위원회가 별도로 강조한 완화 요인은 없습니다.",
+    )
+    checkpoint_text = final_memo or conflict_text or summary_text
+    decision_meta = (
+        f"1차 모델: {model_display_label} / 판단 차이: {decision_gap_label} / "
+        f"강제 경고: {veto_label} / 신뢰도: {format_percent(final_confidence)}"
+    )
+    cards = [
+        (
+            "",
+            "판단 상태",
+            decision_meta,
+        ),
+        (
+            "risk",
+            "가장 먼저 볼 위험",
+            _committee_highlight_body_html(top_risk_items),
+        ),
+        (
+            "mitigate",
+            "완화해서 본 근거",
+            _committee_highlight_body_html(top_mitigation_items),
+        ),
+        (
+            "warning",
+            "사용자 체크 포인트",
+            _committee_highlight_body_html(
+                _committee_highlight_items([checkpoint_text], checkpoint_text, max_items=2)
+            ),
+        ),
+    ]
+    card_html = "".join(
+        (
+            f"<div class='committee-highlight-card {escape(css_class)}'>"
+            f"<div class='committee-highlight-title'>{escape(title)}</div>"
+            f"<div class='committee-highlight-body'>{body}</div>"
+            "</div>"
+        )
+        for css_class, title, body in cards
+    )
+    st.markdown(
+        (
+            "<div class='committee-decision-strip'>"
+            "<div class='committee-decision-topline'>"
+            "<span class='committee-decision-label'>2차 위원회 최종 판단</span>"
+            f"{render_decision_badge(committee_label)}"
+            "</div>"
+            f"<p class='committee-decision-summary'>{escape(_normalize_committee_text(summary_text))}</p>"
+            "</div>"
+            f"<div class='committee-highlight-grid'>{card_html}</div>"
+        ),
+        unsafe_allow_html=True,
+    )
+
+
+def _committee_detail_section_html(title: str, body: str) -> str:
+    if not body.strip():
+        return ""
+    return (
+        "<div class='committee-detail-section'>"
+        f"<div class='committee-detail-heading'>{escape(title)}</div>"
+        f"<div class='committee-detail-text'>{escape(body)}</div>"
+        "</div>"
+    )
+
+
+def _committee_detail_list_html(title: str, items: list[str], empty_message: str) -> str:
+    clean_items = [str(item).strip() for item in items if str(item).strip()]
+    if clean_items:
+        list_html = "".join(f"<li>{escape(item)}</li>" for item in clean_items)
+    else:
+        list_html = f"<li>{escape(empty_message)}</li>"
+    return (
+        "<div class='committee-detail-section'>"
+        f"<div class='committee-detail-heading'>{escape(title)}</div>"
+        f"<ul>{list_html}</ul>"
+        "</div>"
+    )
+
+
+def render_committee_full_review(
+    *,
+    summary_text: str,
+    conflict_text: str,
+    final_memo: str,
+    risk_items: list[str],
+    mitigation_items: list[str],
+) -> None:
+    """Render the complete committee rationale below the highlighted summary."""
+    sections_html = "".join(
+        [
+            _committee_detail_section_html("판단 차이 해석", summary_text),
+            _committee_detail_section_html("왜 이렇게 판단했나", conflict_text),
+            _committee_detail_list_html(
+                "주의해서 볼 점",
+                risk_items,
+                "위원회가 별도로 강조한 위험 요인은 없습니다.",
+            ),
+            _committee_detail_list_html(
+                "긍정적으로 본 점",
+                mitigation_items,
+                "위원회가 별도로 강조한 완화 요인은 없습니다.",
+            ),
+            _committee_detail_section_html("최종 검토 의견", final_memo),
+        ]
+    )
+    with st.expander("상세 판단 전문", expanded=False):
+        st.markdown(
+            (
+                "<div class='committee-detail-flow'>"
+                "<div class='committee-detail-title'>전체 검토 내용</div>"
+                f"{sections_html}"
+                "</div>"
+            ),
+            unsafe_allow_html=True,
+        )
 
 
 def render_list_card(
@@ -1416,7 +2318,7 @@ def render_list_card(
 
     container.markdown(
         (
-            f"<div style='min-height:188px;padding:0.95rem 1rem;border-radius:14px;"
+            f"<div style='min-height:188px;padding:0.95rem 1rem;border-radius:8px;"
             f"background:{COLOR_CARD_BG};border:1px solid {COLOR_CARD_BORDER};"
             f"border-top:4px solid {accent_color};box-shadow:{CARD_SHADOW};"
             "margin-bottom:0.5rem;'>"
@@ -1460,7 +2362,7 @@ def render_badge_hint_card(
 
     container.markdown(
         (
-            f"<div style='min-height:112px;padding:0.85rem 0.95rem;border-radius:14px;"
+            f"<div style='min-height:112px;padding:0.85rem 0.95rem;border-radius:8px;"
             f"background:{COLOR_CARD_BG};border:1px solid {COLOR_CARD_BORDER};"
             f"border-top:4px solid {accent_color};box-shadow:{CARD_SHADOW};"
             "margin:-0.15rem 0 0.6rem 0;'>"
@@ -2529,7 +3431,7 @@ def render_legend_card(
     """Render a compact colored legend card for comparison views."""
     container.markdown(
         (
-            f"<div style='min-height:96px;padding:0.85rem 1rem;border-radius:14px;"
+            f"<div style='min-height:96px;padding:0.85rem 1rem;border-radius:8px;"
             f"background:{COLOR_CARD_BG};border:1px solid {COLOR_CARD_BORDER};"
             "display:flex;flex-direction:column;justify-content:space-between;"
             "margin-bottom:0.35rem;'>"
@@ -2554,7 +3456,7 @@ def render_accent_summary_card(
     """Render a compact summary card with a colored accent for quick scanning."""
     container.markdown(
         (
-            f"<div style='min-height:120px;padding:0.95rem 1rem;border-radius:14px;"
+            f"<div style='min-height:120px;padding:0.95rem 1rem;border-radius:8px;"
             f"background:{COLOR_CARD_BG};border:1px solid {COLOR_CARD_BORDER};"
             f"border-top:4px solid {color};box-shadow:{CARD_SHADOW};"
             "display:flex;flex-direction:column;justify-content:space-between;"
@@ -3239,51 +4141,53 @@ def render_committee_view_tab(
         )
         render_summary_banner("판단 차이 해석", summary_text, summary_color)
 
-    risk_items = _as_text_list(committee_view.get("key_risk_factors"))
-    mitigation_items = _as_text_list(committee_view.get("mitigating_factors"))
-    if selected_output_format == "brief":
-        risk_items = risk_items[:2]
-        mitigation_items = mitigation_items[:2]
-    risk_items = _friendly_committee_items(risk_items, feature_map)
-    mitigation_items = _friendly_committee_items(mitigation_items, feature_map)
+    full_risk_items = _friendly_committee_items(
+        _as_text_list(committee_view.get("key_risk_factors")),
+        feature_map,
+    )
+    full_mitigation_items = _friendly_committee_items(
+        _as_text_list(committee_view.get("mitigating_factors")),
+        feature_map,
+    )
+    highlight_risk_items = (
+        full_risk_items[:2] if selected_output_format == "brief" else full_risk_items
+    )
+    highlight_mitigation_items = (
+        full_mitigation_items[:2] if selected_output_format == "brief" else full_mitigation_items
+    )
+    conflict_text = _friendly_committee_text(
+        committee_view.get("conflict_resolution")
+        or "1차 모델 판단과 2차 위원회 판단이 크게 다르지 않습니다.",
+        feature_map,
+    )
+    final_memo = _friendly_committee_text(
+        committee_view.get("final_review_memo")
+        or "현재 선택한 기업에 대해 추가로 표시할 검토 의견이 없습니다.",
+        feature_map,
+    )
 
-    st.subheader("2차 위원회가 이렇게 봤어요")
+    st.subheader("2차 위원회 핵심 판단")
     st.caption(
-        "모델 점수만으로 끝내지 않고, 재무 상태·산업 내 위치·외부 근거를 함께 보면서 "
-        "사용자가 먼저 확인하면 좋은 내용을 쉬운 말로 정리했습니다."
+        "먼저 결론과 가장 중요한 위험·완화 요인을 짧게 확인하고, 아래에서 같은 내용을 상세 문장으로 이어서 볼 수 있습니다."
     )
-    risk_col, mitigation_col = st.columns(2)
-    render_list_card(
-        risk_col,
-        "주의해서 볼 점",
-        risk_items,
-        COLOR_RISK,
+    render_committee_key_highlights(
+        committee_label=committee_label,
+        model_display_label=model_display_label,
+        decision_gap_label=decision_gap_label,
+        veto_label=veto_label,
+        final_confidence=committee_context.get("final_confidence"),
+        summary_text=summary_text,
+        conflict_text=conflict_text,
+        final_memo=final_memo,
+        risk_items=highlight_risk_items,
+        mitigation_items=highlight_mitigation_items,
     )
-    render_list_card(
-        mitigation_col,
-        "긍정적으로 본 점",
-        mitigation_items,
-        COLOR_MITIGATE,
-    )
-
-    conflict_col, memo_col = st.columns(2)
-    render_text_card(
-        conflict_col,
-        "왜 이렇게 판단했나요?",
-        _friendly_committee_text(
-            committee_view.get("conflict_resolution")
-            or "1차 모델 판단과 2차 위원회 판단이 크게 다르지 않습니다.",
-            feature_map,
-        ),
-    )
-    render_text_card(
-        memo_col,
-        "최종 검토 의견",
-        _friendly_committee_text(
-            committee_view.get("final_review_memo")
-            or "현재 선택한 기업에 대해 추가로 표시할 검토 의견이 없습니다.",
-            feature_map,
-        ),
+    render_committee_full_review(
+        summary_text=summary_text,
+        conflict_text=conflict_text,
+        final_memo=final_memo,
+        risk_items=full_risk_items,
+        mitigation_items=full_mitigation_items,
     )
 
     if selected_output_format in {"memo", "detailed"}:
@@ -3334,10 +4238,26 @@ def render_committee_view_tab(
             agents = _as_plain_dict(agent_summary.get("agents"))
             if not agents:
                 st.info("에이전트별 요약이 아직 생성되지 않았습니다.")
+
+            role_env_mapping = {
+                "quant_credit": "QUANT_AGENT_MODEL",
+                "evidence_audit": "RESEARCH_AGENT_MODEL",
+                "chair_report": "MANAGER_AGENT_MODEL",
+            }
             for role, raw_agent in agents.items():
                 agent = _as_plain_dict(raw_agent)
                 role_label = STAGE2_AGENT_ROLE_LABELS.get(str(role), str(role))
-                st.markdown(f"**{role_label}**")
+
+                env_key = role_env_mapping.get(str(role))
+                used_model = os.environ.get(env_key, "기본 모델") if env_key else "기본 모델"
+
+                st.markdown(
+                    f"**{role_label}** "
+                    f"<span style='background-color:#f0f2f6; color:#31333f; padding:0.2rem 0.5rem; "
+                    f"border-radius:0.4rem; font-size:0.75rem; margin-left:0.5rem;'>"
+                    f"사용 모델: {used_model}</span>",
+                    unsafe_allow_html=True,
+                )
                 st.write(str(agent.get("summary") or "요약이 없습니다."))
                 findings = _as_text_list(agent.get("findings"))
                 if findings:
@@ -3586,7 +4506,7 @@ def render_llm_panel(
         with st.expander("원문 보기"):
             st.markdown(
                 (
-                    f"<div style='padding:1rem 1.05rem;border-radius:14px;"
+                    f"<div style='padding:1rem 1.05rem;border-radius:8px;"
                     f"background:{COLOR_CARD_BG};border:1px solid {COLOR_CARD_BORDER};"
                     f"border-left:6px solid {COLOR_NEUTRAL};box-shadow:{CARD_SHADOW};"
                     "margin-top:0.25rem;'>"
@@ -4734,19 +5654,7 @@ def main() -> None:
         "기업별 위험 진단, 위원회 검토, 동종업계 비교, 산업 집계를 한 화면에서 확인할 수 있는 대시보드입니다. "
         "1차 모델 판단과 2차 에이전트 위원회 판단을 구분해 보여줍니다."
     )
-    st.markdown(
-        """
-        <style>
-        @media (max-width: 900px) {
-          div[data-testid="column"] {
-            width: 100% !important;
-            flex: 1 1 100% !important;
-          }
-        }
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
+    inject_dashboard_theme()
 
     preset_info = ARTIFACT_PRESETS["team_43"]
     artifact_dir_input = os.environ.get("CAS_DASHBOARD_ARTIFACT_DIR") or str(
@@ -4761,6 +5669,44 @@ def main() -> None:
         key="money_display_mode",
         help="상세 표기(억·만·원)와 단순 표기(억 원) 중 원하는 방식을 선택합니다.",
     )
+
+    with st.sidebar.expander("에이전트별 모델 설정", expanded=True):
+        st.caption("각 에이전트의 LLM을 실시간으로 교체합니다.")
+
+        agent_model_options = [
+            "openai:gpt-4o",
+            "openai:gpt-4o-mini",
+            "anthropic:claude-3-5-sonnet-latest",
+            "anthropic:claude-3-haiku-20240307",
+            "gemini:gemini-2.5-flash",
+            "gemini:gemini-2.0-flash",
+        ]
+
+        def get_model_index(env_key: str, default_val: str) -> int:
+            val = os.environ.get(env_key, default_val)
+            return agent_model_options.index(val) if val in agent_model_options else 0
+
+        quant_sel = st.selectbox(
+            "재무 분석 (Quant)",
+            options=agent_model_options,
+            index=get_model_index("QUANT_AGENT_MODEL", "openai:gpt-4o"),
+        )
+        research_sel = st.selectbox(
+            "리서치 (Research/Macro)",
+            options=agent_model_options,
+            index=get_model_index("RESEARCH_AGENT_MODEL", "anthropic:claude-3-5-sonnet-latest"),
+        )
+        manager_sel = st.selectbox(
+            "의장 (Manager)",
+            options=agent_model_options,
+            index=get_model_index("MANAGER_AGENT_MODEL", "gemini:gemini-2.5-flash"),
+        )
+
+        os.environ["QUANT_AGENT_MODEL"] = quant_sel
+        os.environ["RESEARCH_AGENT_MODEL"] = research_sel
+        os.environ["MACRO_AGENT_MODEL"] = research_sel
+        os.environ["MANAGER_AGENT_MODEL"] = manager_sel
+
     with st.sidebar.expander("AI 메모 설정", expanded=False):
         llm_provider = str(
             st.selectbox(
