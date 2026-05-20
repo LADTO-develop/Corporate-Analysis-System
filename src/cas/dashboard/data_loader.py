@@ -10,9 +10,8 @@ import pandas as pd
 from cas.utils.io import read_json
 
 ROOT = Path(__file__).resolve().parents[3]
-FEATURE44_ARTIFACT_DIR = ROOT / "data" / "outputs" / "dashboard" / "feature_44_mvp"
-TEAM44_ARTIFACT_DIR = FEATURE44_ARTIFACT_DIR
-DEFAULT_ARTIFACT_DIR = FEATURE44_ARTIFACT_DIR
+FEATURE43_ARTIFACT_DIR = ROOT / "data" / "outputs" / "dashboard" / "feature_43_mvp"
+DEFAULT_ARTIFACT_DIR = FEATURE43_ARTIFACT_DIR
 
 
 @dataclass(slots=True)

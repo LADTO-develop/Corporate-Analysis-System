@@ -95,7 +95,7 @@ class TestGraphBuild:
             "committee_view",
         }
         assert state["json_schema_errors"] == []
-        assert state["response_json"]["model_result"]["model_name"] == "credit_44_features"
+        assert state["response_json"]["model_result"]["model_name"] == "credit_43_features"
         assert state["response_json"]["model_result"]["prediction_label"] in {"투자적격", "부적격"}
         assert "quant_credit" in state["response_json"]["agent_summary"]["agents"]
         assert state["response_json"]["committee_view"]["final_committee_label"] in {

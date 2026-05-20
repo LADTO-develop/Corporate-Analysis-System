@@ -6,7 +6,7 @@ import json
 import os
 import time
 from importlib import import_module
-from typing import Any, Protocol, cast
+from typing import Protocol, cast
 
 from pydantic import BaseModel
 
@@ -18,83 +18,150 @@ class AgnoAgentLike(Protocol):
         """Run an agent prompt and return the provider response."""
 
 
-def _get_api_key(provider: str) -> str:
-    """Retrieve the correct API key based on the LLM provider."""
-    key_map = {
-        "openai": "OPENAI_API_KEY",
-        "anthropic": "ANTHROPIC_API_KEY",
-        "gemini": "GEMINI_API_KEY",
-    }
-    env_var = key_map.get(provider)
-    if not env_var:
-        raise ValueError(f"지원하지 않는 LLM 제공자입니다: {provider}")
-
-    api_key = os.environ.get(env_var, "").strip()
-    if not api_key:
-        raise RuntimeError(
-            f"CAS_STAGE2_RUNNER 에러: '{provider}' 모델을 사용하려면 "
-            f"환경 변수에 {env_var} 가 설정되어 있어야 합니다."
-        )
-    return api_key
-
-
-def _create_model(model_config: str, max_tokens: int) -> Any:  # noqa: ANN401
-    """Parse 'provider:model_name' string and return the Agno Model instance."""
-    if ":" not in model_config:
-        raise ValueError(
-            f"잘못된 모델 설정 포맷입니다: '{model_config}'. "
-            "반드시 'provider:model_name' 형식이어야 합니다."
-        )
-
-    provider, model_id = model_config.split(":", 1)
-    provider = provider.lower()
-    api_key = _get_api_key(provider)
-
-    try:
-        if provider == "openai":
-            from agno.models.openai import OpenAIChat
-
-            return OpenAIChat(id=model_id, max_tokens=max_tokens, temperature=0, api_key=api_key)
-        if provider == "anthropic":
-            from agno.models.anthropic import Claude
-
-            return Claude(id=model_id, max_tokens=max_tokens, temperature=0, api_key=api_key)
-        if provider == "gemini":
-            # [최종 수정] 오직 Mypy가 에러를 뿜는 GeminiModel에만 정밀하게 예외 처리 적용
-            from agno.models.google import GeminiModel  # type: ignore[attr-defined]
-
-            return GeminiModel(id=model_id, max_tokens=max_tokens, temperature=0, api_key=api_key)
-        raise ValueError(f"지원하지 않는 LLM 제공자입니다: {provider}")
-    except ImportError as error:
-        raise RuntimeError(f"{provider} 관련 패키지를 찾을 수 없습니다.") from error
-
-
 def build_agno_agent[ModelT: BaseModel](
     *,
     name: str,
     model_name: str,
+    model_provider: str = "anthropic",
     max_tokens: int,
     response_model: type[ModelT],
     instructions: list[str],
 ) -> AgnoAgentLike:
-    """Create an Agno Agent dynamically based on the requested LLM provider."""
+    """Create an Agno Agent lazily so importing CAS does not require Agno."""
     try:
         agent_module = import_module("agno.agent")
     except ImportError as error:
-        raise RuntimeError("CAS_STAGE2_RUNNER=agno requires the optional Agno runtime.") from error
+        raise RuntimeError(
+            "CAS_STAGE2_RUNNER=agno requires the optional Agno runtime. "
+            'Install this project with: python -m pip install -e ".[agent]".'
+        ) from error
 
     agent_cls = agent_module.Agent
+    model = _build_agno_model(
+        provider=model_provider,
+        model_name=model_name,
+        max_tokens=max_tokens,
+    )
+
     return cast(
         AgnoAgentLike,
         agent_cls(
             name=name,
-            model=_create_model(model_name, max_tokens),
+            model=model,
             instructions=instructions,
             output_schema=response_model,
             parse_response=True,
             expected_output=f"Return only a valid {response_model.__name__} object.",
             markdown=False,
         ),
+    )
+
+
+def normalize_model_provider(provider: str) -> str:
+    """Normalize supported provider aliases used by Stage 2 model routing."""
+    normalized = provider.strip().lower().replace("-", "_")
+    aliases = {
+        "anthropic": "anthropic",
+        "claude": "anthropic",
+        "openai": "openai",
+        "gpt": "openai",
+        "google": "google",
+        "gemini": "google",
+    }
+    if normalized not in aliases:
+        raise ValueError(
+            "Unsupported CAS Stage 2 model provider. "
+            "Use one of: anthropic/claude, openai/gpt, google/gemini."
+        )
+    return aliases[normalized]
+
+
+def provider_label(provider: str) -> str:
+    """Return a human-readable provider label for prompts and diagnostics."""
+    labels = {
+        "anthropic": "Claude",
+        "openai": "GPT",
+        "google": "Gemini",
+    }
+    return labels[normalize_model_provider(provider)]
+
+
+def provider_env_var_names(provider: str) -> tuple[str, ...]:
+    """Return accepted API key environment variables for a provider."""
+    normalized = normalize_model_provider(provider)
+    if normalized == "anthropic":
+        return ("ANTHROPIC_API_KEY",)
+    if normalized == "openai":
+        return ("OPENAI_API_KEY",)
+    return ("GOOGLE_API_KEY", "GEMINI_API_KEY")
+
+
+def _build_agno_model(
+    *,
+    provider: str,
+    model_name: str,
+    max_tokens: int,
+) -> object:
+    normalized_provider = normalize_model_provider(provider)
+    api_key = _provider_api_key(normalized_provider)
+
+    if normalized_provider == "anthropic":
+        try:
+            anthropic_module = import_module("agno.models.anthropic")
+        except ImportError as error:
+            raise RuntimeError(
+                "CAS_STAGE2_RUNNER=agno with Claude requires agno[anthropic] and "
+                'the anthropic package. Install with: python -m pip install -e ".[agent]".'
+            ) from error
+        claude_cls = anthropic_module.Claude
+        return claude_cls(
+            id=model_name,
+            max_tokens=max_tokens,
+            temperature=0,
+            api_key=api_key,
+        )
+
+    if normalized_provider == "openai":
+        try:
+            openai_module = import_module("agno.models.openai")
+        except ImportError as error:
+            raise RuntimeError(
+                "CAS_STAGE2_RUNNER=agno with GPT requires agno[openai] and the openai "
+                'package. Install with: python -m pip install -e ".[agent]".'
+            ) from error
+        openai_cls = openai_module.OpenAIResponses
+        return openai_cls(
+            id=model_name,
+            max_output_tokens=max_tokens,
+            temperature=0,
+            api_key=api_key,
+        )
+
+    try:
+        google_module = import_module("agno.models.google")
+    except ImportError as error:
+        raise RuntimeError(
+            "CAS_STAGE2_RUNNER=agno with Gemini requires agno[google] and google-genai. "
+            'Install with: python -m pip install -e ".[agent]".'
+        ) from error
+    gemini_cls = google_module.Gemini
+    return gemini_cls(
+        id=model_name,
+        max_output_tokens=max_tokens,
+        temperature=0,
+        api_key=api_key,
+    )
+
+
+def _provider_api_key(provider: str) -> str:
+    for env_var_name in provider_env_var_names(provider):
+        api_key = os.environ.get(env_var_name, "").strip()
+        if api_key:
+            return api_key
+    env_var_text = " or ".join(provider_env_var_names(provider))
+    raise RuntimeError(
+        f"CAS_STAGE2_RUNNER=agno requires {env_var_text}. "
+        "Set it in your local .env or environment before running live Agno Stage 2."
     )
 
 
@@ -130,12 +197,14 @@ def coerce_model_response[ModelT: BaseModel](
         return response_model.model_validate(raw_response)
     if isinstance(raw_response, str):
         return response_model.model_validate_json(_strip_json_fence(raw_response))
-    raise TypeError(f"지원하지 않는 응답 타입입니다: {type(raw_response).__name__}")
+    raise TypeError(
+        f"Agno agent returned an unsupported response type: {type(raw_response).__name__}"
+    )
 
 
 def json_payload(value: object) -> str:
     """Serialize prompt context with stable formatting."""
-    return str(json.dumps(value, ensure_ascii=False, indent=2, default=str))
+    return json.dumps(value, ensure_ascii=False, indent=2, default=str)
 
 
 def compact_items(*values: str) -> list[str]:
@@ -165,14 +234,10 @@ def _stage2_agent_retry_attempts() -> int:
     return min(max(attempts, 1), 5)
 
 
-def _stage2_agent_retry_seconds() -> float:
+def _stage2_agent_retry_delay_seconds() -> float:
     raw_value = os.environ.get("CAS_STAGE2_AGENT_RETRY_DELAY_SECONDS", "1.5").strip()
     try:
         delay = float(raw_value)
     except ValueError:
         delay = 1.5
     return min(max(delay, 0.0), 10.0)
-
-
-def _stage2_agent_retry_delay_seconds() -> float:
-    return _stage2_agent_retry_seconds()

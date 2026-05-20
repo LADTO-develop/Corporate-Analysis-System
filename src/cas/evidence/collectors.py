@@ -52,6 +52,50 @@ _OPENDART_RISK_TERMS = (
     "불성실공시",
     "자본잠식",
 )
+_OPENDART_VETO_TERMS = (
+    "횡령",
+    "배임",
+    "감사의견거절",
+    "감사의견 거절",
+    "상장폐지",
+    "부도",
+    "회생절차",
+    "파산",
+)
+_OPENDART_ADVERSE_TERMS = (
+    "거래정지",
+    "관리종목",
+    "불성실공시",
+    "자본잠식",
+    "영업정지",
+    "채권은행등의관리절차개시",
+    "소송등의제기",
+    "소송등의판결",
+    "단일판매ㆍ공급계약해지",
+    "단일판매·공급계약해지",
+)
+_OPENDART_CAUTION_TERMS = (
+    "타인에대한채무보증",
+    "유상증자결정",
+    "전환사채권발행",
+    "신주인수권부사채",
+    "만기전사채취득",
+    "최대주주변경",
+    "감사보고서제출",
+    "감사보고서 제출",
+)
+_OPENDART_ROUTINE_TERMS = (
+    "사업보고서",
+    "분기보고서",
+    "반기보고서",
+    "주주명부폐쇄기간",
+    "기준일설정",
+    "주주총회소집결의",
+    "임시주주총회결과",
+    "정기주주총회결과",
+    "증권발행결과",
+    "자기주식취득신탁계약해지",
+)
 _NAVER_RISK_KEYWORDS = (
     "소송",
     "횡령",
@@ -142,8 +186,18 @@ def collect_external_evidence(
     query = _risk_query(company_name=company_name, stock_code=stock_code)
     naver_queries = _naver_news_queries(company_name=company_name)
     providers = {
-        "naver_news": _collect_naver_news(queries=naver_queries, env=source, session=http),
-        "tavily": _collect_tavily(query=query, env=source, session=http),
+        "naver_news": _collect_naver_news(
+            queries=naver_queries,
+            as_of_date=as_of_date,
+            env=source,
+            session=http,
+        ),
+        "tavily": _collect_tavily(
+            query=query,
+            as_of_date=as_of_date,
+            env=source,
+            session=http,
+        ),
         "opendart": _collect_opendart(
             company_name=company_name,
             stock_code=stock_code,
@@ -200,6 +254,7 @@ def collect_external_evidence(
 def _collect_naver_news(
     *,
     queries: list[str],
+    as_of_date: date | str | None,
     env: Mapping[str, str],
     session: HttpClient,
 ) -> dict[str, object]:
@@ -246,11 +301,29 @@ def _collect_naver_news(
                 }
             )
     items = _dedupe_raw_provider_items(items)
+    items, date_filter = _filter_provider_items_by_as_of_date(items, as_of_date=as_of_date)
     if items:
-        return {"status": "ready", "items": items, "queries": queries, "errors": errors}
+        return {
+            "status": "ready",
+            "items": items,
+            "queries": queries,
+            "errors": errors,
+            "as_of_date_filter": date_filter,
+        }
     if errors:
-        return {"status": "error", "message": "; ".join(errors), "items": [], "queries": queries}
-    return {"status": "no_results", "items": [], "queries": queries}
+        return {
+            "status": "error",
+            "message": "; ".join(errors),
+            "items": [],
+            "queries": queries,
+            "as_of_date_filter": date_filter,
+        }
+    return {
+        "status": "no_results",
+        "items": [],
+        "queries": queries,
+        "as_of_date_filter": date_filter,
+    }
 
 
 def _dedupe_raw_provider_items(items: list[dict[str, str]]) -> list[dict[str, str]]:
@@ -275,6 +348,7 @@ def _raw_provider_item_key(item: dict[str, str]) -> str:
 def _collect_tavily(
     *,
     query: str,
+    as_of_date: date | str | None,
     env: Mapping[str, str],
     session: HttpClient,
 ) -> dict[str, object]:
@@ -311,11 +385,21 @@ def _collect_tavily(
                     "title": str(item.get("title", "")),
                     "summary": str(item.get("content", "")),
                     "url": str(item.get("url", "")),
-                    "published_at": "",
+                    "published_at": str(
+                        item.get("published_date")
+                        or item.get("published_at")
+                        or item.get("date")
+                        or ""
+                    ),
                     "reliability": "medium",
                 }
             )
-    return {"status": "ready" if items else "no_results", "items": items}
+    items, date_filter = _filter_provider_items_by_as_of_date(items, as_of_date=as_of_date)
+    return {
+        "status": "ready" if items else "no_results",
+        "items": items,
+        "as_of_date_filter": date_filter,
+    }
 
 
 def _collect_opendart(
@@ -377,6 +461,7 @@ def _collect_opendart(
             report_name = str(item.get("report_nm", ""))
             receipt_no = str(item.get("rcept_no", ""))
             receipt_date = str(item.get("rcept_dt", ""))
+            severity = _opendart_disclosure_severity(report_name)
             relevance = _opendart_relevance(report_name)
             items.append(
                 {
@@ -393,6 +478,8 @@ def _collect_opendart(
                     "disclosure_type": disclosure_type,
                     "disclosure_type_label": disclosure_label,
                     "provider_relevance": relevance,
+                    "disclosure_severity": severity,
+                    "disclosure_severity_reason": _opendart_severity_reason(severity),
                 }
             )
     items = _prioritized_opendart_items(items)
@@ -514,9 +601,10 @@ def _corp_code_cache_path(env: Mapping[str, str]) -> Path:
 
 def _prioritized_opendart_items(items: list[dict[str, str]]) -> list[dict[str, str]]:
     unique = _dedupe_raw_opendart_items(items)
+    severity_order = {"veto": 4, "adverse": 3, "caution": 2, "routine": 1}
     unique.sort(
         key=lambda item: (
-            1 if item.get("provider_relevance") == "risk" else 0,
+            severity_order.get(str(item.get("disclosure_severity", "")), 0),
             item.get("published_at", ""),
         ),
         reverse=True,
@@ -536,13 +624,58 @@ def _dedupe_raw_opendart_items(items: list[dict[str, str]]) -> list[dict[str, st
 
 
 def _opendart_relevance(report_name: str) -> str:
-    if any(term in report_name for term in _OPENDART_RISK_TERMS):
+    severity = _opendart_disclosure_severity(report_name)
+    if severity in {"veto", "adverse"}:
         return "risk"
+    if severity == "caution":
+        return "caution"
+    if severity == "routine":
+        return "routine"
     if any(
         term in report_name for term in ("사업보고서", "반기보고서", "분기보고서", "감사보고서")
     ):
         return "context"
     return "routine"
+
+
+def _opendart_disclosure_severity(report_name: str) -> str:
+    return _disclosure_term_severity(report_name) or "routine"
+
+
+def _disclosure_like_severity(title: str, summary: str) -> str:
+    """Classify DART-like search snippets without treating every news item as a filing."""
+    return _disclosure_term_severity(f"{title} {summary}") or "unknown"
+
+
+def _disclosure_term_severity(text: str) -> str:
+    if _contains_any_term(text, _OPENDART_VETO_TERMS):
+        return "veto"
+    if _contains_any_term(text, _OPENDART_ADVERSE_TERMS):
+        return "adverse"
+    if _contains_any_term(text, _OPENDART_CAUTION_TERMS):
+        return "caution"
+    if _contains_any_term(text, _OPENDART_ROUTINE_TERMS):
+        return "routine"
+    if _contains_any_term(text, _OPENDART_RISK_TERMS):
+        return "adverse"
+    return ""
+
+
+def _contains_any_term(text: str, terms: tuple[str, ...]) -> bool:
+    lowered = str(text).lower()
+    compact_text = "".join(lowered.split())
+    return any(
+        term.lower() in lowered or "".join(term.lower().split()) in compact_text for term in terms
+    )
+
+
+def _opendart_severity_reason(severity: str) -> str:
+    return {
+        "veto": "강제 경고 후보 공시",
+        "adverse": "실질 위험 점검 공시",
+        "caution": "주의 관찰 공시",
+        "routine": "정기/일상 공시",
+    }.get(severity, "공시 성격 미분류")
 
 
 def _collection_end_date(as_of_date: date | str | None) -> date:
@@ -554,6 +687,37 @@ def _collection_end_date(as_of_date: date | str | None) -> date:
         except ValueError:
             return date.today()
     return date.today()
+
+
+def _filter_provider_items_by_as_of_date(
+    items: list[dict[str, str]],
+    *,
+    as_of_date: date | str | None,
+) -> tuple[list[dict[str, str]], dict[str, object]]:
+    """Remove evidence that would not have been visible at the evaluation cut-off."""
+    end_date = _collection_end_date(as_of_date)
+    historical_mode = end_date < date.today()
+    kept: list[dict[str, str]] = []
+    filtered_after_cutoff = 0
+    filtered_undated = 0
+    for item in items:
+        parsed = _parse_published_at(str(item.get("published_at", "")))
+        if parsed is None:
+            if historical_mode:
+                filtered_undated += 1
+                continue
+            kept.append(item)
+            continue
+        if parsed.date() <= end_date:
+            kept.append(item)
+        else:
+            filtered_after_cutoff += 1
+    return kept, {
+        "end_date": end_date.isoformat(),
+        "historical_mode": historical_mode,
+        "filtered_after_cutoff_count": filtered_after_cutoff,
+        "filtered_undated_count": filtered_undated,
+    }
 
 
 def _normalize_corp_code(value: object) -> str | None:
@@ -609,8 +773,13 @@ def _validated_item(
     published_at = str(item.get("published_at", ""))
     reliability = str(item.get("reliability", "unknown"))
     provider_relevance = str(item.get("provider_relevance", "unknown"))
+    disclosure_severity = str(item.get("disclosure_severity", "unknown")).lower()
+    if disclosure_severity in {"", "none", "unknown"}:
+        disclosure_severity = _disclosure_like_severity(title, summary)
     text = f"{title} {summary} {url}"
     critical_terms = critical_terms_in_text(text)
+    if disclosure_severity in {"routine", "caution"}:
+        critical_terms = []
     company_match_type = _company_match_type(
         text,
         company_name=company_name,
@@ -633,6 +802,7 @@ def _validated_item(
         critical_context_confirmed=critical_context_confirmed,
         published_at=published_at,
         provider_relevance=provider_relevance,
+        disclosure_severity=disclosure_severity,
         company_match_type=company_match_type,
     )
     validated = {
@@ -646,6 +816,8 @@ def _validated_item(
         "recency_bucket": _recency_bucket(published_at),
         "reliability": reliability,
         "provider_relevance": provider_relevance,
+        "disclosure_severity": disclosure_severity,
+        "disclosure_severity_reason": str(item.get("disclosure_severity_reason", "")),
         "company_match": company_match,
         "company_match_type": company_match_type,
         "evidence_relevance": _evidence_relevance(company_match_type, source=source),
@@ -669,6 +841,8 @@ def _validated_item(
         "rcept_no",
         "disclosure_type",
         "disclosure_type_label",
+        "disclosure_severity",
+        "disclosure_severity_reason",
     ):
         if item.get(key):
             validated[key] = str(item.get(key, ""))
@@ -769,6 +943,8 @@ def _merge_duplicate_item(existing: dict[str, object], incoming: dict[str, objec
             "evidence_score",
             "evidence_quality",
             "provider_relevance",
+            "disclosure_severity",
+            "disclosure_severity_reason",
             "corp_code",
             "rcept_no",
             "disclosure_type",
@@ -832,6 +1008,7 @@ def _evidence_score(
     critical_context_confirmed: bool,
     published_at: str,
     provider_relevance: str,
+    disclosure_severity: str,
 ) -> float:
     source_lower = source.lower()
     reliability_lower = reliability.lower()
@@ -860,7 +1037,15 @@ def _evidence_score(
     elif critical_terms:
         score -= 0.08
 
-    if provider_relevance == "risk":
+    if disclosure_severity == "veto":
+        score += 0.14
+    elif disclosure_severity == "adverse":
+        score += 0.08
+    elif disclosure_severity == "caution":
+        score -= 0.03
+    elif disclosure_severity == "routine":
+        score -= 0.12
+    elif provider_relevance == "risk":
         score += 0.06
     elif provider_relevance == "routine":
         score -= 0.04
@@ -870,6 +1055,12 @@ def _evidence_score(
         score -= 0.06
     elif recency_bucket == "unknown":
         score -= 0.03
+    if critical_terms and not critical_context_confirmed:
+        score = min(score, 0.54)
+    if disclosure_severity == "routine":
+        score = min(score, 0.54)
+    elif disclosure_severity == "caution":
+        score = min(score, 0.68)
     return min(max(score, 0.0), 1.0)
 
 
@@ -926,19 +1117,29 @@ def _critical_context_confirmed(
         return True
 
     normalized_text = _normalize_entity_text(text)
-    aliases = _entity_aliases(company_name=company_name, stock_code=stock_code)
     normalized_terms = [_normalize_entity_text(term) for term in critical_terms]
     if _critical_context_scope_excluded(normalized_text, normalized_terms):
         return False
-    for alias in aliases:
-        alias_index = normalized_text.find(alias)
-        if alias_index < 0:
+    for segment in _critical_context_segments(text):
+        if _company_match_type(segment, company_name=company_name, stock_code=stock_code) == "none":
             continue
-        for term in normalized_terms:
-            term_index = normalized_text.find(term)
-            if term_index >= 0 and abs(alias_index - term_index) <= 80:
-                return True
+        normalized_segment = _normalize_entity_text(segment)
+        for alias in _entity_aliases(company_name=company_name, stock_code=stock_code):
+            alias_index = normalized_segment.find(alias)
+            if alias_index < 0:
+                continue
+            for term in normalized_terms:
+                term_index = normalized_segment.find(term)
+                if term_index >= 0 and abs(alias_index - term_index) <= 80:
+                    return True
     return False
+
+
+def _critical_context_segments(text: str) -> list[str]:
+    """Split noisy snippets so unrelated company/news-list items do not share risk terms."""
+    pattern = "[\\n\\r.!?\\u3002\\uff01\\uff1f;\\uff1b]|\\u2026+|\\s[-\\u2013\\u2014]\\s|\\s/[ ]*|\\s\\u25b3|\\s\\u25b6"
+    segments = re.split(pattern, str(text))
+    return [segment.strip() for segment in segments if segment.strip()]
 
 
 def _critical_context_scope_excluded(normalized_text: str, normalized_terms: list[str]) -> bool:
@@ -985,8 +1186,18 @@ def _verification_summary(items: list[dict[str, object]]) -> dict[str, object]:
 
 
 def _critical_terms(items: list[dict[str, object]]) -> list[str]:
-    text = " ".join(f"{item.get('title', '')} {item.get('summary', '')}".lower() for item in items)
-    return cast(list[str], critical_terms_in_text(text))
+    terms: set[str] = set()
+    fallback_text_parts: list[str] = []
+    for item in items:
+        terms.update(_string_list(item.get("critical_terms")))
+        source = str(item.get("source", "")).lower()
+        severity = str(item.get("disclosure_severity", "")).lower()
+        if source == "opendart" and severity in {"routine", "caution"}:
+            continue
+        fallback_text_parts.append(f"{item.get('title', '')} {item.get('summary', '')}".lower())
+    if fallback_text_parts:
+        terms.update(cast(list[str], critical_terms_in_text(" ".join(fallback_text_parts))))
+    return sorted(terms)
 
 
 def _risk_query(*, company_name: str, stock_code: str | None) -> str:
@@ -1096,7 +1307,7 @@ def _direct_company_match(text: str, *, company_name: str, stock_code: str | Non
 
 def _company_match_type(text: str, *, company_name: str, stock_code: str | None) -> str:
     normalized_text = _normalize_entity_text(text)
-    if any(alias in normalized_text for alias in _company_name_aliases(company_name)):
+    if _contains_company_name_alias(text, company_name=company_name):
         return "name"
     normalized_stock = _stock_code_alias(stock_code)
     if normalized_stock and normalized_stock in normalized_text:
@@ -1125,6 +1336,27 @@ def _entity_aliases(company_name: str, stock_code: str | None) -> list[str]:
 def _company_name_aliases(company_name: str) -> list[str]:
     normalized_name = _normalize_entity_text(company_name)
     return [normalized_name] if normalized_name else []
+
+
+def _raw_company_name_aliases(company_name: str) -> list[str]:
+    cleaned = str(company_name).lower()
+    for token in ("주식회사", "(주)", "㈜", "주식", "회사"):
+        cleaned = cleaned.replace(token, "")
+    aliases = [cleaned.strip(), "".join(cleaned.split())]
+    return [alias for alias in dict.fromkeys(aliases) if alias]
+
+
+def _contains_company_name_alias(text: str, *, company_name: str) -> bool:
+    raw_text = str(text).lower()
+    particle_chars = "은는이가을를의와과도에로"
+    for alias in _raw_company_name_aliases(company_name):
+        pattern = (
+            rf"(?<![0-9A-Za-z가-힣]){re.escape(alias)}"
+            rf"(?=$|[^0-9A-Za-z가-힣]|[{particle_chars}])"
+        )
+        if re.search(pattern, raw_text):
+            return True
+    return False
 
 
 def _stock_code_alias(stock_code: str | None) -> str:

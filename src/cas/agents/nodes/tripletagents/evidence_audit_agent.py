@@ -9,7 +9,14 @@ from pydantic import BaseModel, ConfigDict, Field
 from cas.agents.stage2_bundle import Stage2InputBundle
 from cas.agents.stage2_outputs import EvidenceAuditOutput
 
-from .runtime import build_agno_agent, clamp, compact_items, json_payload, run_structured_agent
+from .runtime import (
+    build_agno_agent,
+    clamp,
+    compact_items,
+    json_payload,
+    provider_label,
+    run_structured_agent,
+)
 
 _EvidenceStrength = Literal["none", "weak", "moderate", "strong", "critical"]
 _UNAVAILABLE_EVIDENCE_STATUSES = {
@@ -44,23 +51,27 @@ def run_evidence_audit_agent(
     *,
     bundle: Stage2InputBundle,
     model_name: str,
+    model_provider: str = "anthropic",
     max_tokens: int,
 ) -> EvidenceAuditOutput:
     """Run the Agno EvidenceAuditAgent and map it to the CAS Stage 2 schema."""
     if _external_evidence_unavailable(bundle.news_status):
         return _unavailable_evidence_output(bundle)
 
+    model_label = provider_label(model_provider)
     agent = build_agno_agent(
-        name="EvidenceAudit_Agent",
+        name=f"{model_label}_EvidenceAudit_Agent",
+        model_provider=model_provider,
         model_name=model_name,
         max_tokens=max_tokens,
         response_model=AgnoEvidenceAuditResponse,
         instructions=[
-            "You are the CAS EvidenceAuditAgent.",
+            f"You are the CAS EvidenceAuditAgent speaking from the {model_label} perspective.",
             "Audit external evidence, debt/liquidity context, macro risk, and tail-risk indicators.",
             "Use only the provided news_cache_snapshot and source_feature_row as evidence.",
             "Do not use general market knowledge as confirmed company-specific evidence.",
             "If direct external evidence is missing, state that evidence is unavailable and do not infer events.",
+            "In the committee meeting, challenge or qualify the quantitative view only with supplied evidence.",
             "Write in Korean business-report language. Do not say a credit decision is confirmed or approved.",
             "Return concise Korean review prose in the structured response fields only.",
         ],

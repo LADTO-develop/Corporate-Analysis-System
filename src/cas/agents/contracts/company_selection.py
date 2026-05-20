@@ -122,10 +122,13 @@ class CompanySelectionRequest(BaseModel):
 
     @model_validator(mode="after")
     def validate_as_of_year(self) -> CompanySelectionRequest:
-        """Reject requests that explicitly point beyond the requested data cut-off year."""
+        """Reject feature snapshots that are not yet observable at the cut-off date."""
+        fiscal_year = self.analysis.fiscal_year
         eval_year = self.analysis.eval_year
-        if eval_year is not None and eval_year > self.as_of_date.year:
-            raise ValueError("eval_year cannot be later than as_of_date year")
+        if fiscal_year is not None and fiscal_year > self.as_of_date.year:
+            raise ValueError("fiscal_year cannot be later than as_of_date year")
+        if fiscal_year is None and eval_year is not None and eval_year > self.as_of_date.year + 1:
+            raise ValueError("eval_year cannot be more than one year after as_of_date year")
         return self
 
 
@@ -253,7 +256,7 @@ def _error_code(error: ValidationError) -> str:
         return "missing_required_field"
     if "stock_code" in text or "corp_code" in text:
         return "invalid_identifier"
-    if "eval_year cannot be later" in text:
+    if "fiscal_year cannot be later" in text or "eval_year cannot be more than" in text:
         return "as_of_date_violation"
     if "eval_year must equal" in text:
         return "invalid_analysis_year"

@@ -193,6 +193,68 @@ def test_agno_stage2_runner_uses_triplet_agents(
     assert outputs[2].report_summary == "Triplet chair summary"
 
 
+def test_agno_stage2_runner_routes_multi_llm_committee(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, Any] = {}
+
+    def fake_triplet_agents(**kwargs: Any) -> Stage2LLMResponse:
+        captured.update(kwargs)
+        return Stage2LLMResponse(
+            quant_credit=QuantCreditOutput(
+                quant_summary="Claude quant summary",
+                model_rationale="Claude model rationale",
+                key_risk_factors=["Claude risk"],
+                mitigating_factors=["Claude mitigation"],
+                confidence=0.77,
+            ),
+            evidence_audit=EvidenceAuditOutput(
+                evidence_summary="GPT evidence summary",
+                evidence_status="ready",
+                evidence_reliability="GPT reliability",
+                evidence_strength="moderate",
+                model_challenge="GPT challenge",
+                audit_conclusion="GPT conclusion",
+                debt_liquidity_cross_check=["GPT debt check"],
+                macro_industry_sensitivity=["GPT macro check"],
+                external_evidence_findings=["GPT evidence"],
+                confidence=0.72,
+            ),
+            chair_report=ChairReportOutput(
+                report_summary="Gemini chair summary",
+                model_preservation_note="Gemini model preservation",
+                committee_scope_note="Gemini scope",
+                final_review_memo_seed="Gemini memo",
+                confidence=0.74,
+            ),
+        )
+
+    monkeypatch.setattr(
+        stage2_runner_module,
+        "_run_triplet_agents_with_agno",
+        fake_triplet_agents,
+    )
+    runner = AgnoStage2AgentRunner(
+        deterministic_runner=_deterministic_runner(),
+        routing_mode="multi_llm_committee",
+        model_name="claude-sonnet",
+    )
+
+    outputs = runner.run(
+        bundle=build_stage2_input_bundle(_minimal_state()),
+        recommendation="review",
+        confidence=0.7,
+    )
+
+    assert captured["quant_model_provider"] == "anthropic"
+    assert captured["quant_model_name"] == "claude-sonnet"
+    assert captured["evidence_model_provider"] == "openai"
+    assert captured["evidence_model_name"] == "gpt-5.4-mini"
+    assert captured["chair_model_provider"] == "google"
+    assert captured["chair_model_name"] == "gemini-flash-latest"
+    assert outputs[2].report_summary == "Gemini chair summary"
+
+
 def test_agno_stage2_runner_falls_back_when_triplet_agents_fail(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

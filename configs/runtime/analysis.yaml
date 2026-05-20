@@ -45,7 +45,7 @@ overall_weights:
 model_registry:
   registry_name: "local_model_registry"
   active_model: "xgboost_realtime"
-  model_version: "ts2000_44_xgboost_mvp"
+  model_version: "ts2000_43_xgboost_mvp"
   threshold: 0.50
   watch_threshold: 0.40
   high_risk_threshold: 0.65

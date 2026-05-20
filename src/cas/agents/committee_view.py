@@ -30,6 +30,24 @@ class HiddenTailRiskAssessment:
     verified_adverse_item_count: int
 
 
+@dataclass(frozen=True)
+class OverwarningMitigationAssessment:
+    """Model-aware mitigation flag for likely false-positive review cases."""
+
+    triggered: bool
+    reason: str
+
+
+@dataclass(frozen=True)
+class FinancialResilienceAssessment:
+    """Financial-defense screen for high-probability over-warning cases."""
+
+    triggered: bool
+    reason: str
+    support_count: int
+    blocker_count: int
+
+
 def build_committee_view(
     *,
     bundle: Stage2InputBundle,
@@ -70,18 +88,36 @@ def build_committee_view_model(
             agents=agents,
             hidden_tail_risk=hidden_tail_risk,
         )
+    if prediction_label == "투자적격" and committee_label == "부적격" and not veto_triggered:
+        committee_label = "보류"
+    overwarning_mitigation = _overwarning_mitigation_assessment(
+        bundle,
+        veto_triggered=veto_triggered,
+        hidden_tail_risk=hidden_tail_risk,
+        mitigating_factors=mitigating_factors,
+    )
+    if (
+        not veto_triggered
+        and not hidden_tail_risk.triggered
+        and overwarning_mitigation.triggered
+        and committee_label == "부적격"
+    ):
+        committee_label = "보류"
+        mitigating_factors = [overwarning_mitigation.reason, *mitigating_factors]
     evidence_summary = _evidence_summary_items(bundle, agents)
     conflict_resolution = _conflict_resolution(
         prediction_label=prediction_label,
         committee_label=committee_label,
         veto_triggered=veto_triggered,
         hidden_tail_risk=hidden_tail_risk,
+        overwarning_mitigation=overwarning_mitigation,
     )
     final_review_memo = _final_review_memo(
         prediction_label=prediction_label,
         committee_label=committee_label,
         veto_triggered=veto_triggered,
         hidden_tail_risk=hidden_tail_risk,
+        overwarning_mitigation=overwarning_mitigation,
         risk_factors=risk_factors,
         mitigating_factors=mitigating_factors,
     )
@@ -198,6 +234,103 @@ def _hidden_tail_risk_assessment(bundle: Stage2InputBundle) -> HiddenTailRiskAss
     return HiddenTailRiskAssessment(True, reason, len(adverse_items), len(verified_items))
 
 
+def _overwarning_mitigation_assessment(
+    bundle: Stage2InputBundle,
+    *,
+    veto_triggered: bool,
+    hidden_tail_risk: HiddenTailRiskAssessment,
+    mitigating_factors: list[str],
+) -> OverwarningMitigationAssessment:
+    """Soften likely over-warning cases to hold, not eligible."""
+    if bundle.prediction_label != "부적격" or veto_triggered or hidden_tail_risk.triggered:
+        return OverwarningMitigationAssessment(False, "")
+    if _verified_adverse_external_items(bundle.news_cache_snapshot):
+        return OverwarningMitigationAssessment(False, "")
+
+    probability = bundle.probability_speculative
+    threshold = _model_threshold(bundle)
+    near_threshold = probability <= threshold + 0.10
+    watch_band = str(
+        bundle.model_view.get("risk_band")
+        or bundle.xgboost_result.get("risk_band")
+        or bundle.rule_result.get("risk_band")
+        or ""
+    ).lower() in {"watch", "관찰"}
+    explicit_overwarning = bool(bundle.model_view.get("stage2_overwarning_filter_candidate"))
+    financial_resilience = _financial_resilience_overwarning_assessment(bundle.source_feature_row)
+    if not (near_threshold or watch_band or explicit_overwarning or financial_resilience.triggered):
+        return OverwarningMitigationAssessment(False, "")
+    if not mitigating_factors and not explicit_overwarning and not financial_resilience.triggered:
+        return OverwarningMitigationAssessment(False, "")
+
+    reason_parts = [
+        "과민 경고 완화 검토: 1차 모델은 부적격이지만 강한 외부 위험 근거는 확인되지 않았습니다."
+    ]
+    if near_threshold:
+        reason_parts.append(
+            f"위험확률이 기준선 근처입니다({probability:.1%} vs 기준선 {threshold:.1%})."
+        )
+    if explicit_overwarning:
+        reason = str(bundle.model_view.get("overwarning_filter_reason") or "").strip()
+        if reason:
+            reason_parts.append(reason)
+    if financial_resilience.triggered:
+        reason_parts.append(financial_resilience.reason)
+    return OverwarningMitigationAssessment(True, " ".join(reason_parts))
+
+
+def _financial_resilience_overwarning_assessment(
+    row: dict[str, Any],
+) -> FinancialResilienceAssessment:
+    """Detect high-risk model calls that still show broad financial defense capacity."""
+    support_checks = [
+        ("유동비율 1.2배 이상", _metric_at_least(row, "current_ratio", 1.2)),
+        ("현금비율 15% 이상", _metric_at_least(row, "cash_ratio", 0.15)),
+        ("자기자본비율 40% 이상", _metric_at_least(row, "equity_ratio", 0.40)),
+        ("부채비율 150% 이하", _metric_at_most(row, "debt_ratio", 1.50)),
+        ("총차입금 비중 50% 이하", _metric_at_most(row, "total_borrowings_ratio", 0.50)),
+        ("자본잠식 신호 없음", _metric_at_most(row, "capital_impairment_ratio", 0.0)),
+        ("이자보상배율 1배 이상", _metric_at_least(row, "interest_coverage_ratio", 1.0)),
+        ("순이익률 흑자", _metric_at_least(row, "net_margin", 0.0)),
+        ("OCF/매출액 양수", _metric_at_least(row, "ocf_to_sales", 0.0)),
+        ("2년 연속 영업손실 아님", _flag_is_false(row.get("is_2y_consecutive_operating_loss"))),
+        ("2년 연속 OCF 적자 아님", _flag_is_false(row.get("is_2y_consecutive_ocf_deficit"))),
+        ("ICR 1 미만 플래그 없음", _flag_is_false(row.get("icr_under_1"))),
+        ("단기차입금 비중 80% 이하", _metric_at_most(row, "short_term_borrowings_share", 0.80)),
+    ]
+    blocker_checks = [
+        _flag_is_true(row.get("is_2y_consecutive_operating_loss")),
+        _flag_is_true(row.get("is_2y_consecutive_ocf_deficit")),
+        _flag_is_true(row.get("icr_under_1")),
+        _metric_below(row, "net_margin", -0.10),
+        _metric_below(row, "equity_ratio", 0.25),
+        _metric_above(row, "capital_impairment_ratio", 0.0),
+        _metric_above(row, "total_borrowings_ratio", 0.65),
+        _metric_above(row, "short_term_borrowings_share", 0.90),
+    ]
+    active_supports = [label for label, passed in support_checks if passed]
+    support_count = len(active_supports)
+    blocker_count = sum(1 for passed in blocker_checks if passed)
+    core_defense = (
+        _metric_at_least(row, "current_ratio", 1.2)
+        and _metric_at_least(row, "cash_ratio", 0.15)
+        and _metric_at_least(row, "equity_ratio", 0.40)
+        and _metric_at_most(row, "debt_ratio", 1.50)
+        and _metric_at_least(row, "interest_coverage_ratio", 1.0)
+        and _metric_at_least(row, "net_margin", 0.0)
+    )
+    triggered = core_defense and support_count >= 8 and blocker_count == 0
+    if not triggered:
+        return FinancialResilienceAssessment(False, "", support_count, blocker_count)
+    reason = (
+        f"고확률 과민 경고 방어 신호: 유동성·현금·자본·이자보상·순이익률 핵심 조건과 "
+        f"재무 방어 조건 {support_count}개가 충족되고 "
+        f"강한 차단 신호는 {blocker_count}개입니다. "
+        f"대표 완화 신호는 {', '.join(active_supports[:4])}입니다."
+    )
+    return FinancialResilienceAssessment(True, reason, support_count, blocker_count)
+
+
 def _adverse_external_items(news_cache: dict[str, Any]) -> list[dict[str, Any]]:
     raw_items = news_cache.get("items", [])
     if not isinstance(raw_items, list):
@@ -213,9 +346,24 @@ def _adverse_external_items(news_cache: dict[str, Any]) -> list[dict[str, Any]]:
     return adverse_items
 
 
+def _verified_adverse_external_items(news_cache: dict[str, Any]) -> list[dict[str, Any]]:
+    return [
+        item
+        for item in _adverse_external_items(news_cache)
+        if _is_verified_adverse_external_item(item)
+    ]
+
+
 def _is_adverse_external_item(item: dict[str, Any]) -> bool:
     if item.get("veto_candidate") is True:
         return True
+    severity = str(item.get("disclosure_severity", "")).lower()
+    if severity in {"veto", "adverse"}:
+        if str(item.get("source", "")).lower() == "opendart":
+            return True
+        return item.get("critical_context_confirmed") is True
+    if severity in {"routine", "caution"}:
+        return False
     if item.get("critical_context_confirmed") is True:
         return True
     if str(item.get("provider_relevance", "")).lower() in _ADVERSE_PROVIDER_RELEVANCE:
@@ -404,6 +552,7 @@ def _conflict_resolution(
     committee_label: str,
     veto_triggered: bool,
     hidden_tail_risk: HiddenTailRiskAssessment,
+    overwarning_mitigation: OverwarningMitigationAssessment,
 ) -> str:
     if veto_triggered:
         return (
@@ -414,6 +563,11 @@ def _conflict_resolution(
         return (
             f"모델 원판단은 {prediction_label}이지만, 직접 관련 외부 위험 근거가 "
             "모델이 놓칠 수 있는 숨은 꼬리위험을 보완해 위원회 의견은 보류로 정리했습니다."
+        )
+    if overwarning_mitigation.triggered:
+        return (
+            f"모델 원판단은 {prediction_label}이지만, 과민 경고 가능성과 완화 근거를 함께 보아 "
+            "위원회 의견은 부적격이 아닌 보류로 정리했습니다."
         )
     model_label = "적격" if prediction_label == "투자적격" else "부적격"
     if committee_label == "보류":
@@ -438,6 +592,7 @@ def _final_review_memo(
     committee_label: str,
     veto_triggered: bool,
     hidden_tail_risk: HiddenTailRiskAssessment,
+    overwarning_mitigation: OverwarningMitigationAssessment,
     risk_factors: list[str],
     mitigating_factors: list[str],
 ) -> str:
@@ -451,6 +606,12 @@ def _final_review_memo(
             f"모델 원판단은 {prediction_label}으로 보존합니다. 다만 직접 관련 외부 위험 "
             f"근거가 확인되어 재무제표 기반 모델이 놓칠 수 있는 FN 가능성을 보완했습니다. "
             f"위원회는 최종 의견을 {committee_label}로 정리했습니다. {hidden_tail_risk.reason}"
+        )
+    if overwarning_mitigation.triggered:
+        return (
+            f"모델 원판단은 {prediction_label}으로 보존합니다. 다만 강한 외부 위험 근거가 "
+            f"확인되지 않았고 완화 근거가 있어 위원회는 최종 의견을 {committee_label}로 "
+            f"낮춰 정리했습니다. {overwarning_mitigation.reason}"
         )
     risk_note = (
         f"주요 위험은 {risk_factors[0]}"
@@ -473,9 +634,50 @@ def _safe_float(value: object) -> float | None:
     try:
         if value is None or not isinstance(value, int | float | str):
             return None
-        return float(value)
+        numeric = float(value)
+        if numeric != numeric:
+            return None
+        return numeric
     except (TypeError, ValueError):
         return None
+
+
+def _metric_at_least(row: dict[str, Any], key: str, threshold: float) -> bool:
+    value = _safe_float(row.get(key))
+    return value is not None and value >= threshold
+
+
+def _metric_at_most(row: dict[str, Any], key: str, threshold: float) -> bool:
+    value = _safe_float(row.get(key))
+    return value is not None and value <= threshold
+
+
+def _metric_above(row: dict[str, Any], key: str, threshold: float) -> bool:
+    value = _safe_float(row.get(key))
+    return value is not None and value > threshold
+
+
+def _metric_below(row: dict[str, Any], key: str, threshold: float) -> bool:
+    value = _safe_float(row.get(key))
+    return value is not None and value < threshold
+
+
+def _flag_is_true(value: object) -> bool:
+    if isinstance(value, bool):
+        return value
+    numeric = _safe_float(value)
+    if numeric is not None:
+        return numeric >= 0.5
+    return str(value).strip().lower() in {"true", "yes", "y", "on"}
+
+
+def _flag_is_false(value: object) -> bool:
+    if isinstance(value, bool):
+        return not value
+    numeric = _safe_float(value)
+    if numeric is not None:
+        return numeric < 0.5
+    return str(value).strip().lower() in {"false", "no", "n", "off"}
 
 
 def _clean_text_items(items: list[str]) -> list[str]:

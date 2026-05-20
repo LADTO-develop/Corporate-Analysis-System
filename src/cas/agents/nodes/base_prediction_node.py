@@ -15,10 +15,10 @@ from cas.utils.io import read_json, read_yaml
 if TYPE_CHECKING:
     from xgboost import Booster
 
-_MODEL_ARTIFACT_DIR = Path("data/outputs/modeling/feature_44_xgboost")
+_MODEL_ARTIFACT_DIR = Path("data/outputs/modeling/feature_43_xgboost")
 _MODEL_ARTIFACT_PATH = _MODEL_ARTIFACT_DIR / "xgboost_model.json"
 _MODEL_METADATA_PATH = _MODEL_ARTIFACT_DIR / "model_artifact_metadata.json"
-_FEATURE_LIST_PATH = Path("data/input/credit_44_features/feature_44_list.json")
+_FEATURE_LIST_PATH = Path("data/input/credit_43_features/feature_43_list.json")
 _DEFAULT_MISSING_VALUE_STRATEGY = "xgboost_native_missing"
 
 
@@ -91,8 +91,8 @@ def run(state: AgentState) -> dict[str, Any]:
     top_drivers = _top_risk_drivers(model, frame)
 
     xgboost_result = ModelResult(
-        model_name=str(bundle.get("dataset_name", "feature_44_xgboost")),
-        model_version=str(model_registry.get("model_version", "feature_44_xgboost")),
+        model_name=str(bundle.get("dataset_name", "feature_43_xgboost")),
+        model_version=str(model_registry.get("model_version", "feature_43_xgboost")),
         probability_speculative=probability_speculative,
         prediction_label=prediction_label,
         risk_band=risk_band,
@@ -183,7 +183,7 @@ def _run_fallback_prediction(
     # artifact가 없거나 최소 기능만 필요한 환경에서도 파이프라인 전체는 끝까지 돌도록 둔다.
     top_drivers = _top_risk_drivers_from_scores(normalized_features)
     fallback_model_name = (
-        "credit_44_features"
+        "credit_43_features"
         if state.get("source_feature_row")
         else str(model_registry.get("active_model", "xgboost_realtime"))
     )
@@ -287,7 +287,7 @@ def _load_model_bundle() -> dict[str, Any]:
     # json artifact와 metadata를 한 번에 묶어 두면
     # 추론 시 feature column, 결측치 대치값, threshold를 같은 버전 기준으로 재사용할 수 있다.
     return {
-        "dataset_name": metadata.get("dataset_name", "credit_44_features"),
+        "dataset_name": metadata.get("dataset_name", "credit_43_features"),
         "model_type": metadata.get("model_type", "xgboost_booster_json"),
         "feature_columns": list(metadata.get("feature_columns", [])),
         "source_features": list(metadata.get("source_features", [])),

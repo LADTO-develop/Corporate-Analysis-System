@@ -1,4 +1,4 @@
-"""Streamlit dashboard for 44-feature credit risk model exploration."""
+"""Streamlit dashboard for 43-feature credit risk model exploration."""
 
 from __future__ import annotations
 
@@ -1431,6 +1431,9 @@ def _dashboard_evidence_key(selected_row: pd.Series) -> str:
 
 def _dashboard_evidence_as_of_date(selected_row: pd.Series) -> str:
     """Return the date cut-off for dashboard evidence collection."""
+    fiscal_year = _optional_int(selected_row.get("fiscal_year"))
+    if fiscal_year is not None:
+        return min(date(fiscal_year, 12, 31), date.today()).isoformat()
     eval_year = _optional_int(selected_row.get("eval_year"))
     if eval_year is None:
         return date.today().isoformat()
@@ -1536,7 +1539,7 @@ def build_dashboard_model_view(
     model_label = to_stage2_model_label(prediction_row.get("predicted_label"))
     return {
         "source": "dashboard_prediction_scores",
-        "model_name": "feature_44_xgboost",
+        "model_name": "feature_43_xgboost",
         "model_version": "dashboard_artifacts",
         "prediction_label": model_label,
         "probability_speculative": probability,
@@ -1545,10 +1548,10 @@ def build_dashboard_model_view(
         "risk_band": risk_band,
         "risk_band_display": format_stage2_risk_band(risk_band),
         "top_drivers": _dashboard_top_drivers(local_shap),
-        "probability_speculative_46": _optional_float(prediction_row.get("prob_speculative_46")),
-        "threshold_46": _optional_float(prediction_row.get("threshold_46")),
-        "threshold_46_it_services_review": _optional_float(
-            prediction_row.get("threshold_46_it_services_review")
+        "probability_speculative_45": _optional_float(prediction_row.get("prob_speculative_45")),
+        "threshold_45": _optional_float(prediction_row.get("threshold_45")),
+        "threshold_45_it_services_review": _optional_float(
+            prediction_row.get("threshold_45_it_services_review")
         ),
         "stage2_review_trigger": _optional_bool(prediction_row.get("stage2_review_trigger")),
         "stage2_secondary_trigger": _optional_bool(prediction_row.get("stage2_secondary_trigger")),
@@ -1561,6 +1564,22 @@ def build_dashboard_model_view(
         "trigger_reason": str(
             _clean_dashboard_value(prediction_row.get("trigger_reason"))
             or "추가 위원회 검토 트리거 없음"
+        ),
+        "probability_speculative_overwarning_filter": _optional_float(
+            prediction_row.get("prob_speculative_overwarning_filter")
+        ),
+        "threshold_overwarning_filter": _optional_float(
+            prediction_row.get("threshold_overwarning_filter")
+        ),
+        "stage2_overwarning_filter_candidate": _optional_bool(
+            prediction_row.get("stage2_overwarning_filter_candidate")
+        ),
+        "overwarning_filter_reason_code": str(
+            _clean_dashboard_value(prediction_row.get("overwarning_filter_reason_code")) or "none"
+        ),
+        "overwarning_filter_reason": str(
+            _clean_dashboard_value(prediction_row.get("overwarning_filter_reason"))
+            or "과민 경고 보조필터 특이 신호 없음"
         ),
     }
 
@@ -4088,12 +4107,14 @@ def render_committee_view_tab(
             "위원회 신뢰도",
             format_percent(committee_context.get("final_confidence")),
         )
-        trigger_cols = st.columns(3)
+        trigger_cols = st.columns(4)
         secondary_triggered = bool(model_view.get("stage2_secondary_trigger", False))
         review_triggered = bool(model_view.get("stage2_review_trigger", False))
+        overwarning_candidate = bool(model_view.get("stage2_overwarning_filter_candidate", False))
         trigger_status = (
             "추가 검토" if secondary_triggered else "1차 위험 검토" if review_triggered else "일반"
         )
+        overwarning_status = "완화 검토" if overwarning_candidate else "특이 없음"
         render_badge_value_block(
             trigger_cols[0],
             "2차 검토 트리거",
@@ -4101,13 +4122,22 @@ def render_committee_view_tab(
         )
         render_bold_value_block(
             trigger_cols[1],
-            "46개 보조 변수셋 확률",
-            format_percent(model_view.get("probability_speculative_46")),
+            "45개 보조 변수셋 확률",
+            format_percent(model_view.get("probability_speculative_45")),
+        )
+        render_badge_value_block(
+            trigger_cols[2],
+            "과민 경고 보조필터",
+            render_decision_badge(overwarning_status),
         )
         render_text_card(
-            trigger_cols[2],
+            trigger_cols[3],
             "검토 사유",
-            str(model_view.get("trigger_reason") or "추가 위원회 검토 트리거 없음"),
+            str(
+                model_view.get("overwarning_filter_reason")
+                if overwarning_candidate
+                else model_view.get("trigger_reason") or "추가 위원회 검토 트리거 없음"
+            ),
         )
         render_summary_banner("판단 차이 해석", summary_text, summary_color)
 

@@ -12,7 +12,7 @@ from cas.dashboard.data_loader import DEFAULT_ARTIFACT_DIR
 
 ROOT = Path(__file__).resolve().parents[3]
 APP_PATH = ROOT / "src" / "cas" / "dashboard" / "credit_app.py"
-EXPORT_SCRIPT_PATH = ROOT / "scripts" / "export_feature_44_dashboard_artifacts.py"
+EXPORT_SCRIPT_PATH = ROOT / "scripts" / "export_feature_43_dashboard_artifacts.py"
 
 REQUIRED_DASHBOARD_ARTIFACTS = (
     "company_universe.csv",
@@ -83,6 +83,32 @@ def parse_args() -> argparse.Namespace:
         help="Override CAS_STAGE2_MODEL for Agno dashboard runs.",
     )
     parser.add_argument(
+        "--stage2-agno-mode",
+        choices=("single", "multi_llm_committee"),
+        default=None,
+        help="Route Agno Stage 2 through one model or Claude/GPT/Gemini committee mode.",
+    )
+    parser.add_argument(
+        "--stage2-model-provider",
+        default=None,
+        help="Default Agno model provider: anthropic/claude, openai/gpt, or google/gemini.",
+    )
+    parser.add_argument(
+        "--stage2-quant-model",
+        default=None,
+        help="Override the QuantCreditAgent model in multi-LLM committee mode.",
+    )
+    parser.add_argument(
+        "--stage2-evidence-model",
+        default=None,
+        help="Override the EvidenceAuditAgent model in multi-LLM committee mode.",
+    )
+    parser.add_argument(
+        "--stage2-chair-model",
+        default=None,
+        help="Override the ChairReportAgent synthesis model in multi-LLM committee mode.",
+    )
+    parser.add_argument(
         "--strict-agno",
         action="store_true",
         help="Fail visibly instead of falling back to deterministic Stage 2 when Agno errors.",
@@ -115,6 +141,11 @@ def main() -> None:
         headless=args.headless,
         stage2_runner=args.stage2_runner,
         stage2_model=args.stage2_model,
+        stage2_agno_mode=args.stage2_agno_mode,
+        stage2_model_provider=args.stage2_model_provider,
+        stage2_quant_model=args.stage2_quant_model,
+        stage2_evidence_model=args.stage2_evidence_model,
+        stage2_chair_model=args.stage2_chair_model,
         strict_agno=args.strict_agno,
     )
 
@@ -148,6 +179,11 @@ def launch_streamlit(
     headless: bool,
     stage2_runner: str | None,
     stage2_model: str | None,
+    stage2_agno_mode: str | None,
+    stage2_model_provider: str | None,
+    stage2_quant_model: str | None,
+    stage2_evidence_model: str | None,
+    stage2_chair_model: str | None,
     strict_agno: bool,
 ) -> None:
     """Launch Streamlit with the prepared artifact directory."""
@@ -165,6 +201,16 @@ def launch_streamlit(
         os.environ["CAS_DASHBOARD_STAGE2_RUNNER"] = stage2_runner
     if stage2_model:
         os.environ["CAS_STAGE2_MODEL"] = stage2_model
+    if stage2_agno_mode:
+        os.environ["CAS_STAGE2_AGNO_MODE"] = stage2_agno_mode
+    if stage2_model_provider:
+        os.environ["CAS_STAGE2_MODEL_PROVIDER"] = stage2_model_provider
+    if stage2_quant_model:
+        os.environ["CAS_STAGE2_QUANT_MODEL"] = stage2_quant_model
+    if stage2_evidence_model:
+        os.environ["CAS_STAGE2_EVIDENCE_MODEL"] = stage2_evidence_model
+    if stage2_chair_model:
+        os.environ["CAS_STAGE2_CHAIR_MODEL"] = stage2_chair_model
     if strict_agno:
         os.environ["CAS_STAGE2_FALLBACK_ON_ERROR"] = "0"
     argv = ["streamlit", "run", str(APP_PATH)]

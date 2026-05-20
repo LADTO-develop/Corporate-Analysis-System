@@ -88,3 +88,70 @@ def test_external_evidence_veto_requires_direct_multi_source_high_reliability() 
         company_name="삼천당제약(주)",
         stock_code="000250",
     )
+
+
+def test_external_evidence_veto_ignores_routine_or_caution_disclosures() -> None:
+    snapshot = {
+        "status": "ready",
+        "has_critical_risk": True,
+        "critical_terms": ["감사의견"],
+        "items": [
+            {
+                "source": "opendart",
+                "title": "삼천당제약(주) 감사보고서 제출",
+                "summary": "삼천당제약(주) 정기 외부감사 관련 공시입니다.",
+                "reliability": "high",
+                "company_match": True,
+                "critical_terms": ["감사의견"],
+                "disclosure_severity": "caution",
+            },
+            {
+                "source": "naver_news",
+                "title": "삼천당제약 감사보고서 관련 보도",
+                "summary": "삼천당제약 관련 후속 보도입니다.",
+                "reliability": "medium",
+                "company_match": True,
+                "critical_terms": ["감사의견"],
+            },
+        ],
+    }
+
+    assert not external_evidence_veto_triggered(
+        snapshot,
+        company_name="삼천당제약(주)",
+        stock_code="000250",
+    )
+
+
+def test_external_evidence_veto_rejects_unconfirmed_keyword_context() -> None:
+    snapshot = {
+        "status": "ready",
+        "has_critical_risk": True,
+        "critical_terms": ["횡령"],
+        "items": [
+            {
+                "source": "opendart",
+                "title": "삼천당제약(주) 횡령 혐의 발생",
+                "summary": "삼천당제약(주) 공시입니다.",
+                "reliability": "high",
+                "company_match": True,
+                "critical_terms": ["횡령"],
+                "critical_context_confirmed": False,
+            },
+            {
+                "source": "naver_news",
+                "title": "삼천당제약 관련 기사",
+                "summary": "다른 회사 임원이 횡령 혐의로 기소되었습니다.",
+                "reliability": "medium",
+                "company_match": True,
+                "critical_terms": ["횡령"],
+                "critical_context_confirmed": False,
+            },
+        ],
+    }
+
+    assert not external_evidence_veto_triggered(
+        snapshot,
+        company_name="삼천당제약(주)",
+        stock_code="000250",
+    )
