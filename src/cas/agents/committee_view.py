@@ -409,9 +409,7 @@ def _secondary_review_risk_assessment(bundle: Stage2InputBundle) -> SecondaryRev
     ]
     if trigger_reason:
         reason_parts.append(trigger_reason)
-    reason_parts.append(
-        "따라서 2차 위원회는 이를 최종 적격으로 확정하지 않고 보류로 재점검합니다."
-    )
+    reason_parts.append("따라서 2차 위원회는 이를 최종 적격으로 확정하지 않고 보류로 재점검합니다.")
     return SecondaryReviewRiskAssessment(True, " ".join(reason_parts), review_priority)
 
 

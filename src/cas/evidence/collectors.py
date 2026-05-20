@@ -286,21 +286,23 @@ def _external_evidence_cache_key(
     as_of_date: date | str | None,
     env: Mapping[str, str],
 ) -> str:
-    return stable_cache_key(
-        {
-            "cache_version": "external_evidence_v1",
-            "company_name": company_name,
-            "stock_code": stock_code or "",
-            "corp_code": corp_code or "",
-            "as_of_date": _collection_end_date(as_of_date).isoformat(),
-            "providers": {
-                "naver_news": bool(
-                    env.get("NAVER_CLIENT_ID") and env.get("NAVER_CLIENT_SECRET")
-                ),
-                "tavily": bool(env.get("TAVILY_API_KEY")),
-                "opendart": bool(env.get("OPENDART_API_KEY")),
-            },
-        }
+    return str(
+        stable_cache_key(
+            {
+                "cache_version": "external_evidence_v1",
+                "company_name": company_name,
+                "stock_code": stock_code or "",
+                "corp_code": corp_code or "",
+                "as_of_date": _collection_end_date(as_of_date).isoformat(),
+                "providers": {
+                    "naver_news": bool(
+                        env.get("NAVER_CLIENT_ID") and env.get("NAVER_CLIENT_SECRET")
+                    ),
+                    "tavily": bool(env.get("TAVILY_API_KEY")),
+                    "opendart": bool(env.get("OPENDART_API_KEY")),
+                },
+            }
+        )
     )
 
 

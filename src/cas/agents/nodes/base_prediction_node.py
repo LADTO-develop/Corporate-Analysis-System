@@ -19,7 +19,9 @@ _MODEL_ARTIFACT_DIR = Path("data/outputs/modeling/feature_43_xgboost")
 _MODEL_ARTIFACT_PATH = _MODEL_ARTIFACT_DIR / "xgboost_model.json"
 _MODEL_METADATA_PATH = _MODEL_ARTIFACT_DIR / "model_artifact_metadata.json"
 _FEATURE_LIST_PATH = Path("data/input/credit_43_features/feature_43_list.json")
-_STAGE2_REVIEW_SIGNALS_PATH = Path("data/outputs/dashboard/feature_43_mvp/stage2_review_signals.csv")
+_STAGE2_REVIEW_SIGNALS_PATH = Path(
+    "data/outputs/dashboard/feature_43_mvp/stage2_review_signals.csv"
+)
 _DEFAULT_MISSING_VALUE_STRATEGY = "xgboost_native_missing"
 
 
@@ -316,7 +318,9 @@ def _load_model_bundle() -> dict[str, Any]:
 def _load_stage2_review_signals() -> pd.DataFrame | None:
     if not _STAGE2_REVIEW_SIGNALS_PATH.exists():
         return None
-    frame = pd.read_csv(_STAGE2_REVIEW_SIGNALS_PATH, encoding="utf-8-sig", dtype={"stock_code": str})
+    frame = pd.read_csv(
+        _STAGE2_REVIEW_SIGNALS_PATH, encoding="utf-8-sig", dtype={"stock_code": str}
+    )
     frame["stock_code"] = frame["stock_code"].astype(str).str.zfill(6)
     return frame
 
