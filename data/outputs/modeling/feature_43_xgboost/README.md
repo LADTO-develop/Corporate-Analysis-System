@@ -62,11 +62,3 @@ Stage 2 위원회 검토 경로를 비교하는 평가는 아래 명령으로 �
 ```bash
 /opt/anaconda3/envs/aura/bin/python scripts/export_2026_external_validation_evaluation.py
 ```
-
-Stage 2 보류/검토 정책은 2026 외부검증셋에 맞춰 튜닝하지 않고, 기존
-validation/test 구간에서 먼저 비교합니다. validation으로 후보를 고르고 test는
-holdout 확인용으로만 보는 진단은 아래 명령으로 재생성할 수 있습니다.
-
-```bash
-/opt/anaconda3/envs/aura/bin/python scripts/export_stage2_validation_test_policy_evaluation.py
-```
