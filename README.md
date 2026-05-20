@@ -187,23 +187,37 @@ Gemini가 최종 종합(`ChairReportAgent`)을 맡습니다. 이 모드에는
 
 ## 8. 실행 방법
 
-Python 3.12 환경을 사용합니다. 팀 로컬 기준으로는 `aura` 환경을 사용할 수 있습니다.
+Python 3.12 단일 환경을 기준으로 합니다. 새 로컬 환경은 repo 루트에서 다음처럼 만듭니다.
 
 ```bash
-/opt/anaconda3/envs/aura/bin/python -m pip install -e ".[dev,ml,viz,dashboard]"
+conda env create -f environment.yml
+conda activate cas-dev
+python scripts/check_dev_environment.py
 ```
+
+이미 사용하는 Python 3.12 환경이 있다면 같은 환경 안에서 다음 명령으로 dev, agent,
+dashboard, ML 의존성을 모두 맞춥니다.
+
+```bash
+python -m pip install -e ".[dev,agent,ml,viz,dashboard]"
+python scripts/check_dev_environment.py
+```
+
+라이브 Agno/다중 LLM 회의까지 확인하려면 `.env`에 API 키를 설정한 뒤
+`python scripts/check_dev_environment.py --live-agno` 또는
+`python scripts/check_agno_stage2.py`를 실행합니다.
 
 43개 입력셋 재생성:
 
 ```bash
-/opt/anaconda3/envs/aura/bin/python scripts/rebuild_feature_43_dataset.py
+python scripts/rebuild_feature_43_dataset.py
 ```
 
 2026 추론 입력 보정/검증:
 
 ```bash
-/opt/anaconda3/envs/aura/bin/python scripts/import_feature_43_inference_2026_aux.py
-/opt/anaconda3/envs/aura/bin/python scripts/build_feature_43_inference_2026.py
+python scripts/import_feature_43_inference_2026_aux.py
+python scripts/build_feature_43_inference_2026.py
 ```
 
 `import_feature_43_inference_2026_aux.py`는 2026 추론 입력의 기업규모와
@@ -213,7 +227,7 @@ Python 3.12 환경을 사용합니다. 팀 로컬 기준으로는 `aura` 환경�
 대시보드/모델 artifact 재생성:
 
 ```bash
-/opt/anaconda3/envs/aura/bin/python scripts/export_feature_43_dashboard_artifacts.py
+python scripts/export_feature_43_dashboard_artifacts.py
 ```
 
 이 스크립트는 Stage 1 런타임과 팀 공유가 함께 사용하는 모델 artifact를
@@ -222,7 +236,7 @@ Python 3.12 환경을 사용합니다. 팀 로컬 기준으로는 `aura` 환경�
 모델 성능 진단 리포트 재생성:
 
 ```bash
-/opt/anaconda3/envs/aura/bin/python scripts/export_feature_43_model_diagnostics.py
+python scripts/export_feature_43_model_diagnostics.py
 ```
 
 이 스크립트는 기존 예측 결과를 다시 학습하지 않고 연도/시장/산업별 성능,
@@ -232,7 +246,7 @@ threshold trade-off, 확률 보정, 대표 오류 사례를
 Threshold 정책 실험 재생성:
 
 ```bash
-/opt/anaconda3/envs/aura/bin/python scripts/export_feature_43_threshold_policy_experiments.py
+python scripts/export_feature_43_threshold_policy_experiments.py
 ```
 
 이 스크립트는 validation 기준으로 선택한 threshold 정책을 test에서 사후 확인하고,
@@ -241,7 +255,7 @@ Threshold 정책 실험 재생성:
 대시보드 실행:
 
 ```bash
-/opt/anaconda3/envs/aura/bin/python scripts/run_credit_dashboard.py
+python scripts/run_credit_dashboard.py
 ```
 
 실행 후 브라우저에서 Streamlit이 표시하는 로컬 주소로 접속합니다.
@@ -264,9 +278,12 @@ cas-agent --company-id sample-company
 ## 10. 개발 및 검증
 
 ```bash
-/opt/anaconda3/envs/aura/bin/python -m ruff check .
-/opt/anaconda3/envs/aura/bin/python -m mypy src/cas
-/opt/anaconda3/envs/aura/bin/python -m pytest
+python scripts/check_dev_environment.py
+python -m ruff check .
+python -m ruff format --check .
+python -m mypy src
+python -m pytest tests/unit -v --cov=cas --cov-report=xml -m "not slow and not requires_llm and not requires_gpu"
+python -m pytest tests/integration -v -m "not requires_llm and not requires_gpu"
 ```
 
 현재 주요 테스트는 `company_selection` 입력 계약, 기본 예측 노드,
