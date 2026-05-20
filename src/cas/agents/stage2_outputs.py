@@ -58,6 +58,7 @@ class EvidenceAuditOutput(_StrictModel):
     debt_liquidity_cross_check: list[str]
     macro_industry_sensitivity: list[str]
     external_evidence_findings: list[str]
+    evidence_limitations: list[str] = Field(default_factory=list)
     confidence: float = Field(ge=0.0, le=1.0)
 
     def to_agent_output(self) -> AgentOutput:
@@ -78,6 +79,7 @@ class EvidenceAuditOutput(_StrictModel):
                 *self.debt_liquidity_cross_check,
                 *self.macro_industry_sensitivity,
                 *self.external_evidence_findings,
+                *[f"근거 한계: {item}" for item in self.evidence_limitations],
             ],
             confidence=self.confidence,
         )

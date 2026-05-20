@@ -33,3 +33,11 @@ def test_chair_report_spec_owns_committee_view_fields() -> None:
     assert "hidden_tail_risk_flag" in spec.output_fields
     assert "conflict_resolution" in spec.output_fields
     assert "final_review_memo" in spec.output_fields
+
+
+def test_evidence_audit_spec_exposes_evidence_limitations() -> None:
+    spec = get_stage2_agent_spec("evidence_audit")
+
+    assert "evidence_strength" in spec.output_fields
+    assert "model_challenge" in spec.output_fields
+    assert "evidence_limitations" in spec.output_fields

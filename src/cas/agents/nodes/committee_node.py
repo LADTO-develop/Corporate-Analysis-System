@@ -472,6 +472,10 @@ def _evidence_audit_agent(bundle: Stage2InputBundle) -> EvidenceAuditOutput:
             str(evidence_profile["finding"]),
             *external_signals.findings,
         ],
+        evidence_limitations=_evidence_limitations(
+            bundle.news_cache_snapshot,
+            evidence_profile=evidence_profile,
+        ),
         confidence=_evidence_audit_confidence(
             status=status,
             debt_confidence=debt_signals.confidence,
@@ -657,6 +661,93 @@ def _evidence_reliability_text(evidence_profile: _EvidenceProfile) -> str:
         f"직접 관련 {evidence_profile['direct_count']}건, "
         f"검증 가능 {evidence_profile['verified_count']}건으로 요약됩니다."
     )
+
+
+def _evidence_limitations(
+    news_cache: dict[str, Any],
+    *,
+    evidence_profile: _EvidenceProfile,
+) -> list[str]:
+    """Explain evidence coverage limits so Stage 2 does not overstate weak signals."""
+    limitations: list[str] = []
+    status = evidence_profile["status"]
+    if status in {"disabled", "not_implemented", "placeholder", "missing_credentials"}:
+        limitations.append(
+            f"외부근거 수집 상태가 `{status}`라서 뉴스·웹·공시 기반 검증은 제한적입니다."
+        )
+    elif evidence_profile["item_count"] > 0 and evidence_profile["direct_count"] == 0:
+        limitations.append(
+            "수집 항목은 있지만 기업명 또는 종목코드 직접 관련성이 확인된 근거가 없습니다."
+        )
+    elif evidence_profile["weak_count"] > evidence_profile["direct_count"]:
+        limitations.append(
+            "간접/약한 근거가 직접 관련 근거보다 많아, 위험 신호를 확정 사실로 보지 않습니다."
+        )
+
+    date_filter_note = _historical_evidence_filter_note(news_cache)
+    if date_filter_note:
+        limitations.append(date_filter_note)
+
+    provider_note = _provider_coverage_limitation_note(news_cache.get("providers"))
+    if provider_note:
+        limitations.append(provider_note)
+
+    if not limitations and evidence_profile["strength"] in {"none", "weak"}:
+        limitations.append(
+            "현재 외부근거 강도는 낮아 모델 판단을 뒤집기보다 설명 보완용으로만 사용합니다."
+        )
+    return limitations[:3]
+
+
+def _historical_evidence_filter_note(news_cache: dict[str, Any]) -> str:
+    providers = news_cache.get("providers")
+    if not isinstance(providers, dict):
+        return ""
+    end_dates: set[str] = set()
+    filtered_after_cutoff = 0
+    filtered_undated = 0
+    historical_mode = False
+    for provider in providers.values():
+        if not isinstance(provider, dict):
+            continue
+        date_filter = provider.get("as_of_date_filter")
+        if isinstance(date_filter, dict):
+            historical_mode = historical_mode or bool(date_filter.get("historical_mode", False))
+            end_date = str(date_filter.get("end_date") or "")
+            if end_date:
+                end_dates.add(end_date)
+            filtered_after_cutoff += _safe_int(date_filter.get("filtered_after_cutoff_count"))
+            filtered_undated += _safe_int(date_filter.get("filtered_undated_count"))
+        query_window = provider.get("query_window")
+        if isinstance(query_window, dict):
+            end_date = str(query_window.get("end_date") or "")
+            if end_date:
+                end_dates.add(end_date)
+    if not historical_mode:
+        return ""
+    cutoff = sorted(end_dates)[-1] if end_dates else str(news_cache.get("as_of_date") or "")
+    filtered_count = filtered_after_cutoff + filtered_undated
+    if filtered_count <= 0:
+        return f"과거 기준일 {cutoff} 이전 공개 근거만 사용하도록 날짜 필터를 적용했습니다."
+    return (
+        f"과거 기준일 {cutoff} 이후 또는 날짜 미확인 근거 {filtered_count}건을 제외해 "
+        "look-ahead bias를 줄였습니다."
+    )
+
+
+def _provider_coverage_limitation_note(providers: object) -> str:
+    if not isinstance(providers, dict) or not providers:
+        return ""
+    limited: list[str] = []
+    for provider_name, raw_provider in providers.items():
+        if not isinstance(raw_provider, dict):
+            continue
+        status = str(raw_provider.get("status") or "")
+        if status in {"missing_key", "error", "partial_error", "missing_corp_code"}:
+            limited.append(f"{provider_name}:{status}")
+    if not limited:
+        return ""
+    return "일부 수집 경로에 제한이 있습니다(" + ", ".join(limited[:3]) + ")."
 
 
 def _model_evidence_challenge(

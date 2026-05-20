@@ -40,6 +40,7 @@ def test_evidence_audit_output_flattens_to_common_agent_output() -> None:
         debt_liquidity_cross_check=["부채·유동성 검증 의견: 추가 점검 필요"],
         macro_industry_sensitivity=["거시·시장 점검: 스프레드 확인"],
         external_evidence_findings=["외부 근거(naver, 신뢰도 medium): 기사"],
+        evidence_limitations=["기준일 이후 근거는 제외했습니다."],
         confidence=0.7,
     )
 
@@ -48,6 +49,7 @@ def test_evidence_audit_output_flattens_to_common_agent_output() -> None:
     assert agent.role == "evidence_audit"
     assert "collected" in agent.findings[0]
     assert "추가 점검 필요" in " ".join(agent.findings)
+    assert "근거 한계: 기준일 이후 근거는 제외했습니다." in agent.findings
 
 
 def test_chair_report_output_flattens_to_common_agent_output() -> None:
