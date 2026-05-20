@@ -6,11 +6,9 @@ import json
 import os
 import time
 from importlib import import_module
-from typing import Protocol, TypeVar, cast
+from typing import Any, Protocol, cast
 
 from pydantic import BaseModel
-
-ModelT = TypeVar("ModelT", bound=BaseModel)
 
 
 class AgnoAgentLike(Protocol):
@@ -20,7 +18,58 @@ class AgnoAgentLike(Protocol):
         """Run an agent prompt and return the provider response."""
 
 
-def build_agno_agent(  # noqa: UP047, RUF100
+def _get_api_key(provider: str) -> str:
+    """Retrieve the correct API key based on the LLM provider."""
+    key_map = {
+        "openai": "OPENAI_API_KEY",
+        "anthropic": "ANTHROPIC_API_KEY",
+        "gemini": "GEMINI_API_KEY",
+    }
+    env_var = key_map.get(provider)
+    if not env_var:
+        raise ValueError(f"지원하지 않는 LLM 제공자입니다: {provider}")
+
+    api_key = os.environ.get(env_var, "").strip()
+    if not api_key:
+        raise RuntimeError(
+            f"CAS_STAGE2_RUNNER 에러: '{provider}' 모델을 사용하려면 "
+            f"환경 변수에 {env_var} 가 설정되어 있어야 합니다."
+        )
+    return api_key
+
+
+def _create_model(model_config: str, max_tokens: int) -> Any:  # noqa: ANN401
+    """Parse 'provider:model_name' string and return the Agno Model instance."""
+    if ":" not in model_config:
+        raise ValueError(
+            f"잘못된 모델 설정 포맷입니다: '{model_config}'. "
+            "반드시 'provider:model_name' 형식이어야 합니다."
+        )
+
+    provider, model_id = model_config.split(":", 1)
+    provider = provider.lower()
+    api_key = _get_api_key(provider)
+
+    try:
+        if provider == "openai":
+            from agno.models.openai import OpenAIChat
+
+            return OpenAIChat(id=model_id, max_tokens=max_tokens, temperature=0, api_key=api_key)
+        if provider == "anthropic":
+            from agno.models.anthropic import Claude
+
+            return Claude(id=model_id, max_tokens=max_tokens, temperature=0, api_key=api_key)
+        if provider == "gemini":
+            # [최종 수정] 오직 Mypy가 에러를 뿜는 GeminiModel에만 정밀하게 예외 처리 적용
+            from agno.models.google import GeminiModel  # type: ignore[attr-defined]
+
+            return GeminiModel(id=model_id, max_tokens=max_tokens, temperature=0, api_key=api_key)
+        raise ValueError(f"지원하지 않는 LLM 제공자입니다: {provider}")
+    except ImportError as error:
+        raise RuntimeError(f"{provider} 관련 패키지를 찾을 수 없습니다.") from error
+
+
+def build_agno_agent[ModelT: BaseModel](
     *,
     name: str,
     model_name: str,
@@ -28,31 +77,18 @@ def build_agno_agent(  # noqa: UP047, RUF100
     response_model: type[ModelT],
     instructions: list[str],
 ) -> AgnoAgentLike:
-    """Create an Agno Agent lazily so importing CAS does not require Agno."""
-    api_key = _anthropic_api_key()
+    """Create an Agno Agent dynamically based on the requested LLM provider."""
     try:
         agent_module = import_module("agno.agent")
-        anthropic_module = import_module("agno.models.anthropic")
     except ImportError as error:
-        raise RuntimeError(
-            "CAS_STAGE2_RUNNER=agno requires the optional Agno/Anthropic runtime. "
-            "Install this project with the 'agent' extra and configure ANTHROPIC_API_KEY."
-        ) from error
+        raise RuntimeError("CAS_STAGE2_RUNNER=agno requires the optional Agno runtime.") from error
 
     agent_cls = agent_module.Agent
-    claude_cls = anthropic_module.Claude
-    model = claude_cls(
-        id=model_name,
-        max_tokens=max_tokens,
-        temperature=0,
-        api_key=api_key,
-    )
-
     return cast(
         AgnoAgentLike,
         agent_cls(
             name=name,
-            model=model,
+            model=_create_model(model_name, max_tokens),
             instructions=instructions,
             output_schema=response_model,
             parse_response=True,
@@ -62,7 +98,7 @@ def build_agno_agent(  # noqa: UP047, RUF100
     )
 
 
-def run_structured_agent(  # noqa: UP047, RUF100
+def run_structured_agent[ModelT: BaseModel](
     *,
     agent: AgnoAgentLike,
     query: str,
@@ -79,11 +115,12 @@ def run_structured_agent(  # noqa: UP047, RUF100
             if attempt >= attempts:
                 raise
             time.sleep(_stage2_agent_retry_delay_seconds() * attempt)
-
     raise RuntimeError("Agno agent retry loop exited unexpectedly.")
 
 
-def coerce_model_response(raw_response: object, response_model: type[ModelT]) -> ModelT:  # noqa: UP047, RUF100
+def coerce_model_response[ModelT: BaseModel](
+    raw_response: object, response_model: type[ModelT]
+) -> ModelT:
     """Coerce common Agno response shapes into the requested response model."""
     if isinstance(raw_response, response_model):
         return raw_response
@@ -93,14 +130,12 @@ def coerce_model_response(raw_response: object, response_model: type[ModelT]) ->
         return response_model.model_validate(raw_response)
     if isinstance(raw_response, str):
         return response_model.model_validate_json(_strip_json_fence(raw_response))
-    raise TypeError(
-        f"Agno agent returned an unsupported response type: {type(raw_response).__name__}"
-    )
+    raise TypeError(f"지원하지 않는 응답 타입입니다: {type(raw_response).__name__}")
 
 
 def json_payload(value: object) -> str:
     """Serialize prompt context with stable formatting."""
-    return json.dumps(value, ensure_ascii=False, indent=2, default=str)
+    return str(json.dumps(value, ensure_ascii=False, indent=2, default=str))
 
 
 def compact_items(*values: str) -> list[str]:
@@ -121,16 +156,6 @@ def _strip_json_fence(value: str) -> str:
     return "\n".join(lines).strip()
 
 
-def _anthropic_api_key() -> str:
-    api_key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
-    if not api_key:
-        raise RuntimeError(
-            "CAS_STAGE2_RUNNER=agno requires ANTHROPIC_API_KEY. "
-            "Set it in your local .env or environment before running live Agno Stage 2."
-        )
-    return api_key
-
-
 def _stage2_agent_retry_attempts() -> int:
     raw_value = os.environ.get("CAS_STAGE2_AGENT_RETRIES", "2").strip()
     try:
@@ -140,10 +165,14 @@ def _stage2_agent_retry_attempts() -> int:
     return min(max(attempts, 1), 5)
 
 
-def _stage2_agent_retry_delay_seconds() -> float:
+def _stage2_agent_retry_seconds() -> float:
     raw_value = os.environ.get("CAS_STAGE2_AGENT_RETRY_DELAY_SECONDS", "1.5").strip()
     try:
         delay = float(raw_value)
     except ValueError:
         delay = 1.5
     return min(max(delay, 0.0), 10.0)
+
+
+def _stage2_agent_retry_delay_seconds() -> float:
+    return _stage2_agent_retry_seconds()
