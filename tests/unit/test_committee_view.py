@@ -44,6 +44,9 @@ def test_committee_view_maps_review_to_hold_label() -> None:
     )
 
     assert committee_view["final_committee_label"] == "보류"
+    assert committee_view["committee_decision_type"] == "review_hold"
+    assert committee_view["committee_decision_type_label"] == "확인필요 보류"
+    assert committee_view["committee_risk_signal"] is False
     assert committee_view["veto_triggered"] is False
     assert committee_view["key_risk_factors"] == [
         "유동비율이 낮습니다.",
@@ -257,6 +260,9 @@ def test_committee_view_flags_hidden_tail_risk_from_direct_external_adverse_evid
     )
 
     assert committee_view["final_committee_label"] == "보류"
+    assert committee_view["committee_decision_type"] == "risk_hold"
+    assert committee_view["committee_decision_type_label"] == "위험 보류"
+    assert committee_view["committee_risk_signal"] is True
     assert committee_view["veto_triggered"] is False
     assert committee_view["hidden_tail_risk_flag"] is True
     assert "숨은 꼬리위험 보완 플래그" in committee_view["hidden_tail_risk_reason"]
@@ -366,6 +372,176 @@ def test_committee_view_holds_investment_model_with_secondary_review_trigger() -
     assert "2차 보조 레이더 플래그" in committee_view["key_risk_factors"][0]
     assert "45개 보조 변수셋" in committee_view["conflict_resolution"]
     assert "FN 가능성" in committee_view["final_review_memo"]
+
+
+def test_committee_view_keeps_low_probability_secondary_liquidity_watch_eligible() -> None:
+    state: AgentState = {
+        "company_id": "086670",
+        "company_name": "(주)비엠티",
+        "source_feature_row": {
+            "stock_code": "086670",
+            "current_ratio": 1.24,
+            "cash_ratio": 0.09,
+            "interest_coverage_ratio": 6.2,
+            "icr_under_1": 0,
+            "is_2y_consecutive_operating_loss": 0,
+            "is_2y_consecutive_ocf_deficit": 0,
+        },
+        "model_view": {
+            "prediction_label": "투자적격",
+            "probability_speculative": 0.2316,
+            "threshold": 0.315,
+            "stage2_secondary_trigger": True,
+            "stage2_review_priority": "medium",
+            "trigger_reason": "45개 보조 변수셋이 기준선 근처로 재점검을 요구했습니다.",
+        },
+        "xgboost_result": {
+            "prediction_label": "투자적격",
+            "probability_speculative": 0.2316,
+            "threshold": 0.315,
+            "stage2_secondary_trigger": True,
+            "stage2_review_priority": "medium",
+        },
+        "rule_result": {
+            "risk_band": "watch",
+            "recommendation": "watch",
+            "reasons": [
+                "model_probability_speculative=0.232",
+                "cash_ratio=0.09 indicates weak cash liquidity",
+            ],
+            "blocking_flags": [],
+        },
+        "news_cache_snapshot": {"status": "disabled", "items": []},
+    }
+    agents = [
+        AgentOutput(role="quant_credit", summary="정량 결과", findings=[], confidence=0.8),
+        AgentOutput(role="evidence_audit", summary="근거 검토", findings=[], confidence=0.6),
+        AgentOutput(role="chair_report", summary="종합", findings=[], confidence=0.7),
+    ]
+
+    committee_view = build_committee_view(
+        bundle=build_stage2_input_bundle(state),
+        recommendation="priority",
+        agents=agents,
+    )
+
+    assert committee_view["final_committee_label"] == "적격"
+    assert committee_view["hidden_tail_risk_flag"] is False
+    assert committee_view["key_risk_factors"] == [
+        "현재 scaffold 기준 추가 위험 요인은 제한적입니다."
+    ]
+
+
+def test_committee_view_holds_confident_low_probability_liquidity_watch() -> None:
+    state: AgentState = {
+        "company_id": "086670",
+        "company_name": "(주)비엠티",
+        "source_feature_row": {
+            "stock_code": "086670",
+            "current_ratio": 1.40,
+            "cash_ratio": 0.098,
+            "interest_coverage_ratio": 4.09,
+            "icr_under_1": 0,
+            "is_2y_consecutive_operating_loss": 0,
+            "is_2y_consecutive_ocf_deficit": 0,
+        },
+        "model_view": {
+            "prediction_label": "투자적격",
+            "probability_speculative": 0.2316,
+            "threshold": 0.315,
+            "stage2_secondary_trigger": True,
+            "stage2_review_priority": "medium",
+            "trigger_reason": "기준선 0.10 이내의 보수 검토 대상입니다.",
+        },
+        "xgboost_result": {
+            "prediction_label": "투자적격",
+            "probability_speculative": 0.2316,
+            "threshold": 0.315,
+            "stage2_secondary_trigger": True,
+            "stage2_review_priority": "medium",
+        },
+        "rule_result": {
+            "risk_band": "watch",
+            "recommendation": "watch",
+            "confidence": 0.62,
+            "reasons": [
+                "model_probability_speculative=0.232",
+                "cash_ratio=0.10 indicates weak cash liquidity",
+            ],
+            "blocking_flags": [],
+        },
+        "news_cache_snapshot": {"status": "disabled", "items": []},
+    }
+    agents = [
+        AgentOutput(role="quant_credit", summary="정량 결과", findings=[], confidence=0.8),
+        AgentOutput(role="evidence_audit", summary="근거 검토", findings=[], confidence=0.6),
+        AgentOutput(role="chair_report", summary="종합", findings=[], confidence=0.7),
+    ]
+
+    committee_view = build_committee_view(
+        bundle=build_stage2_input_bundle(state),
+        recommendation="priority",
+        agents=agents,
+    )
+
+    assert committee_view["final_committee_label"] == "보류"
+    assert "유동성 watch 신호" in committee_view["key_risk_factors"][0]
+
+
+def test_committee_view_keeps_low_fold_threshold_liquidity_watch_eligible() -> None:
+    state: AgentState = {
+        "company_id": "140290",
+        "company_name": "청광건설(주)",
+        "source_feature_row": {
+            "stock_code": "140290",
+            "current_ratio": 0.0,
+            "cash_ratio": 0.0,
+            "interest_coverage_ratio": 1_000_000.0,
+            "icr_under_1": 0,
+            "is_2y_consecutive_operating_loss": 0,
+            "is_2y_consecutive_ocf_deficit": 0,
+        },
+        "model_view": {
+            "prediction_label": "투자적격",
+            "probability_speculative": 0.2198,
+            "threshold": 0.225,
+            "stage2_secondary_trigger": True,
+            "stage2_review_priority": "high",
+            "trigger_reason": "낮은 fold threshold 근처의 보수 검토 대상입니다.",
+        },
+        "xgboost_result": {
+            "prediction_label": "투자적격",
+            "probability_speculative": 0.2198,
+            "threshold": 0.225,
+            "stage2_secondary_trigger": True,
+            "stage2_review_priority": "high",
+        },
+        "rule_result": {
+            "risk_band": "watch",
+            "recommendation": "watch",
+            "confidence": 0.62,
+            "reasons": [
+                "model_probability_speculative=0.220",
+                "current_ratio=0.00 is below the watch floor",
+                "cash_ratio=0.00 indicates weak cash liquidity",
+            ],
+            "blocking_flags": [],
+        },
+        "news_cache_snapshot": {"status": "disabled", "items": []},
+    }
+    agents = [
+        AgentOutput(role="quant_credit", summary="정량 결과", findings=[], confidence=0.8),
+        AgentOutput(role="evidence_audit", summary="근거 검토", findings=[], confidence=0.6),
+        AgentOutput(role="chair_report", summary="종합", findings=[], confidence=0.7),
+    ]
+
+    committee_view = build_committee_view(
+        bundle=build_stage2_input_bundle(state),
+        recommendation="priority",
+        agents=agents,
+    )
+
+    assert committee_view["final_committee_label"] == "적격"
 
 
 def test_committee_view_keeps_investment_model_eligible_with_noncritical_evidence() -> None:
@@ -594,6 +770,71 @@ def test_committee_view_keeps_high_probability_risk_as_reject() -> None:
     )
 
     assert committee_view["final_committee_label"] == "부적격"
+
+
+def test_committee_view_softens_model_only_high_probability_warning_to_hold() -> None:
+    state: AgentState = {
+        "company_id": "033540",
+        "company_name": "(주)파라텍",
+        "source_feature_row": {
+            "stock_code": "033540",
+            "current_ratio": 1.107,
+            "cash_ratio": 0.019,
+            "interest_coverage_ratio": -29.0,
+            "capital_impairment_ratio": -5.253,
+            "equity_ratio": 0.430,
+            "debt_ratio": 1.328,
+            "total_borrowings_ratio": 0.238,
+            "short_term_borrowings_share": 0.651,
+            "cashflow_coverage_ratio": 7.353,
+            "ocf_to_total_liabilities": 0.133,
+            "ocf_to_sales": 0.074,
+            "icr_under_1": 1,
+            "is_2y_consecutive_operating_loss": 1,
+            "is_2y_consecutive_ocf_deficit": 0,
+        },
+        "model_view": {
+            "prediction_label": "부적격",
+            "probability_speculative": 0.851,
+            "threshold": 0.225,
+            "risk_band": "high_risk",
+        },
+        "xgboost_result": {
+            "prediction_label": "부적격",
+            "probability_speculative": 0.851,
+            "threshold": 0.225,
+            "risk_band": "high_risk",
+        },
+        "rule_result": {
+            "risk_band": "high_risk",
+            "recommendation": "defer",
+            "blocking_flags": ["interest_coverage_under_1"],
+        },
+        "news_cache_snapshot": {"status": "disabled", "items": []},
+    }
+    agents = [
+        AgentOutput(role="quant_credit", summary="정량 결과", findings=[], confidence=0.8),
+        AgentOutput(
+            role="evidence_audit",
+            summary="근거 검토",
+            findings=["완화 요인: 배당금 지급과 장기 상장 이력이 일부 완화 근거입니다."],
+            confidence=0.6,
+        ),
+        AgentOutput(role="chair_report", summary="종합", findings=[], confidence=0.7),
+    ]
+
+    committee_view = build_committee_view(
+        bundle=build_stage2_input_bundle(state),
+        recommendation="defer",
+        agents=agents,
+    )
+
+    assert committee_view["final_committee_label"] == "보류"
+    assert committee_view["committee_decision_type"] == "mitigation_hold"
+    assert committee_view["committee_decision_type_label"] == "과민경고 완화 보류"
+    assert committee_view["committee_risk_signal"] is False
+    assert "고확률 모델 단독 경고 완화" in committee_view["mitigating_factors"][0]
+    assert "OCF와 자본/부채 구조" in committee_view["mitigating_factors"][0]
 
 
 def test_committee_view_softens_high_probability_risk_with_financial_resilience() -> None:
@@ -902,6 +1143,9 @@ def test_committee_view_model_validates_strict_payload() -> None:
     )
 
     assert committee_view.final_committee_label == "적격"
+    assert committee_view.committee_decision_type == "eligible"
+    assert committee_view.committee_decision_type_label == "적격"
+    assert committee_view.committee_risk_signal is False
     assert committee_view.model_dump(mode="json")["evidence_summary"][0]["source"] == "model_view"
 
 

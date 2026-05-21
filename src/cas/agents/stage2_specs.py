@@ -101,6 +101,9 @@ STAGE2_AGENT_SPECS: tuple[Stage2AgentSpec, ...] = (
         ),
         output_fields=(
             "final_committee_label",
+            "committee_decision_type",
+            "committee_decision_type_label",
+            "committee_risk_signal",
             "veto_triggered",
             "hidden_tail_risk_flag",
             "hidden_tail_risk_reason",
@@ -112,7 +115,9 @@ STAGE2_AGENT_SPECS: tuple[Stage2AgentSpec, ...] = (
         ),
         future_agno_instruction=(
             "Resolve conflicts conservatively, explain any gap between model_view "
-            "and committee_view, and emit the strict committee_view fields."
+            "and committee_view, avoid turning low-absolute-risk near-threshold "
+            "cases into holds without severe financial or verified evidence support, "
+            "and emit the strict committee_view fields."
         ),
     ),
 )

@@ -29,6 +29,8 @@ def test_chair_report_spec_owns_committee_view_fields() -> None:
     spec = get_stage2_agent_spec("chair_report")
 
     assert "final_committee_label" in spec.output_fields
+    assert "committee_decision_type" in spec.output_fields
+    assert "committee_risk_signal" in spec.output_fields
     assert "veto_triggered" in spec.output_fields
     assert "hidden_tail_risk_flag" in spec.output_fields
     assert "conflict_resolution" in spec.output_fields

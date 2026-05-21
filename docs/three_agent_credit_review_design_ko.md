@@ -233,6 +233,9 @@ Agno structured output 기반 실행으로 교체된다. 이때 모델 판단은
 ```json
 {
   "final_committee_label": "보류",
+  "committee_decision_type": "risk_hold",
+  "committee_decision_type_label": "위험 보류",
+  "committee_risk_signal": true,
   "veto_triggered": false,
   "hidden_tail_risk_flag": true,
   "hidden_tail_risk_reason": "모델은 투자적격으로 봤지만 직접 관련 외부 위험 근거가 확인되어 FN 가능성을 보수적으로 점검",
@@ -257,6 +260,9 @@ Agno structured output 기반 실행으로 교체된다. 이때 모델 판단은
 필드 의미:
 
 - `final_committee_label`: 최종 위원회 라벨 (`적격` / `보류` / `부적격`)
+- `committee_decision_type`: `보류`를 세분화한 내부 판단 유형 (`eligible`, `risk_hold`, `mitigation_hold`, `review_hold`, `reject`)
+- `committee_decision_type_label`: 사용자에게 보여줄 세부 판단명 (`적격`, `위험 보류`, `과민경고 완화 보류`, `확인필요 보류`, `부적격`)
+- `committee_risk_signal`: Precision/Recall 계산 시 실제 위험 신호로 볼지 여부. `위험 보류`와 `부적격`은 `true`, `과민경고 완화 보류`와 `확인필요 보류`는 기본적으로 `false`
 - `veto_triggered`: 횡령, 배임, 상장폐지, 감사의견 거절 같은 치명적 외부 리스크가 있어 강제 경고가 필요한지 여부
 - `hidden_tail_risk_flag`: 모델이 `투자적격`으로 본 기업에서 직접 관련 외부 위험 근거가 확인되어 false negative 가능성을 보완해야 하는지 여부
 - `hidden_tail_risk_reason`: 숨은 꼬리위험 보완 플래그가 켜진 이유

@@ -149,6 +149,30 @@ OUTPUT_FORMAT_DESCRIPTIONS = {
     "detailed": "에이전트별 검토, 규칙 기반 판단 근거, 1차 모델 세부 항목까지 함께 확인하는 상세 형식입니다.",
 }
 
+COMMITTEE_DECISION_TYPE_GUIDE = {
+    "위험 보류": {
+        "signal": "위험신호 있음",
+        "tone": "risk",
+        "title": "위험 보류",
+        "body": "투기등급 가능성을 놓치지 않기 위해 추가 검토 대상으로 올린 상태입니다.",
+        "action": "재무 스트레스, 외부 근거, 경계등급 여부를 우선 확인합니다.",
+    },
+    "과민경고 완화 보류": {
+        "signal": "위험신호 아님",
+        "tone": "mitigate",
+        "title": "과민경고 완화 보류",
+        "body": "1차 모델은 위험하게 봤지만, 완화 근거가 있어 부적격 확정은 피한 상태입니다.",
+        "action": "모델이 과민 반응했는지와 완화 근거가 충분한지 확인합니다.",
+    },
+    "확인필요 보류": {
+        "signal": "위험신호 아님",
+        "tone": "warning",
+        "title": "확인필요 보류",
+        "body": "위험으로 단정하기보다는 근거 부족이나 판단 충돌 때문에 확인을 남긴 상태입니다.",
+        "action": "추가 공시, 최신 뉴스, 재무제표 주석을 보완해 확인합니다.",
+    },
+}
+
 MONEY_DISPLAY_MODES = {
     "detailed": "상세 (억·만·원)",
     "eok_only": "단순 (억 원)",
@@ -558,6 +582,69 @@ def inject_dashboard_theme() -> None:
           margin-bottom: 0.35rem;
         }
 
+        .committee-signal-guide {
+          display: grid;
+          gap: 0.75rem;
+          grid-template-columns: minmax(260px, 1.15fr) repeat(3, minmax(180px, 1fr));
+          margin: 0.35rem 0 0.95rem 0;
+        }
+
+        .committee-signal-card {
+          background: var(--cas-panel);
+          border: 1px solid var(--cas-border);
+          border-left: 5px solid var(--cas-blue);
+          border-radius: 8px;
+          box-shadow: var(--cas-shadow);
+          padding: 0.9rem 1rem;
+        }
+
+        .committee-signal-card.risk {
+          border-left-color: var(--cas-risk);
+        }
+
+        .committee-signal-card.mitigate {
+          border-left-color: var(--cas-success);
+        }
+
+        .committee-signal-card.warning {
+          border-left-color: var(--cas-warning);
+        }
+
+        .committee-signal-card.active {
+          background: var(--cas-panel-strong);
+        }
+
+        .committee-signal-eyebrow {
+          color: var(--cas-muted);
+          font-size: 0.82rem;
+          font-weight: 800;
+          margin-bottom: 0.35rem;
+        }
+
+        .committee-signal-title {
+          color: inherit;
+          font-size: 1.02rem;
+          font-weight: 850;
+          line-height: 1.35;
+          margin-bottom: 0.42rem;
+          word-break: keep-all;
+        }
+
+        .committee-signal-body {
+          color: inherit;
+          font-size: 0.92rem;
+          line-height: 1.58;
+          word-break: keep-all;
+        }
+
+        .committee-signal-action {
+          color: var(--cas-muted);
+          font-size: 0.86rem;
+          line-height: 1.48;
+          margin-top: 0.5rem;
+          word-break: keep-all;
+        }
+
         .committee-detail-flow {
           background: var(--cas-panel);
           border: 1px solid var(--cas-border);
@@ -622,6 +709,10 @@ def inject_dashboard_theme() -> None:
           div[data-testid="stTabs"] [role="tablist"] {
             overflow-x: auto;
             white-space: nowrap;
+          }
+
+          .committee-signal-guide {
+            grid-template-columns: 1fr;
           }
         }
         </style>
@@ -1697,13 +1788,15 @@ def build_dashboard_committee_context(
 def _run_dashboard_stage2(state: AgentState) -> dict[str, object]:
     """Run Stage 2 using the dashboard-selected runner."""
     previous_runner = os.environ.get("CAS_STAGE2_RUNNER")
-    dashboard_runner = (
+    requested_runner = (
         os.environ.get("CAS_DASHBOARD_STAGE2_RUNNER")
         or os.environ.get("CAS_STAGE2_RUNNER")
         or "deterministic"
     ).strip()
-    if not dashboard_runner:
-        dashboard_runner = "deterministic"
+    dashboard_runner = _dashboard_stage2_runner_for_state(
+        state,
+        requested_runner=requested_runner or "deterministic",
+    )
     os.environ["CAS_STAGE2_RUNNER"] = dashboard_runner
     try:
         return cast(dict[str, object], committee_node.run(state))
@@ -1712,6 +1805,42 @@ def _run_dashboard_stage2(state: AgentState) -> dict[str, object]:
             os.environ.pop("CAS_STAGE2_RUNNER", None)
         else:
             os.environ["CAS_STAGE2_RUNNER"] = previous_runner
+
+
+def _dashboard_stage2_runner_for_state(
+    state: AgentState,
+    *,
+    requested_runner: str,
+) -> str:
+    """Route dashboard Agno calls only to companies that need live review."""
+    runner = requested_runner.strip().lower() or "deterministic"
+    if runner != "agno" or not _dashboard_stage2_trigger_only_enabled():
+        return runner
+    if _dashboard_needs_live_stage2(state):
+        return runner
+    return "deterministic"
+
+
+def _dashboard_stage2_trigger_only_enabled() -> bool:
+    raw_value = os.environ.get("CAS_DASHBOARD_STAGE2_TRIGGER_ONLY", "1")
+    return raw_value.strip().lower() not in {"0", "false", "no", "off"}
+
+
+def _dashboard_needs_live_stage2(state: AgentState) -> bool:
+    model_view = dict(state.get("model_view") or {})
+    if bool(model_view.get("stage2_review_trigger")):
+        return True
+    if bool(model_view.get("stage2_secondary_trigger")):
+        return True
+    if str(model_view.get("stage2_review_priority") or "").strip().lower() in {"medium", "high"}:
+        return True
+
+    news_cache = dict(state.get("news_cache_snapshot") or {})
+    return (
+        bool(news_cache.get("has_critical_risk"))
+        or (_optional_int(news_cache.get("veto_candidate_count")) or 0) > 0
+        or (_optional_int(news_cache.get("high_confidence_critical_count")) or 0) > 0
+    )
 
 
 def _committee_evidence_frame(evidence_summary: object) -> pd.DataFrame:
@@ -2032,6 +2161,31 @@ def render_decision_badge(label: object, *, muted: bool = False) -> str:
             "fg": "var(--cas-warning)",
             "border": "var(--cas-warning-border)",
         },
+        "위험 보류": {
+            "bg": "var(--cas-risk-soft)",
+            "fg": "var(--cas-risk)",
+            "border": "var(--cas-risk-border)",
+        },
+        "과민경고 완화 보류": {
+            "bg": "var(--cas-success-soft)",
+            "fg": "var(--cas-success)",
+            "border": "var(--cas-success-border)",
+        },
+        "확인필요 보류": {
+            "bg": "var(--cas-warning-soft)",
+            "fg": "var(--cas-warning)",
+            "border": "var(--cas-warning-border)",
+        },
+        "위험신호 있음": {
+            "bg": "var(--cas-risk-soft)",
+            "fg": "var(--cas-risk)",
+            "border": "var(--cas-risk-border)",
+        },
+        "위험신호 아님": {
+            "bg": "var(--cas-success-soft)",
+            "fg": "var(--cas-success)",
+            "border": "var(--cas-success-border)",
+        },
         "부적격": {
             "bg": "var(--cas-risk-soft)",
             "fg": "var(--cas-risk)",
@@ -2088,6 +2242,86 @@ def render_decision_badge(label: object, *, muted: bool = False) -> str:
         f"background:{style['bg']};color:{style['fg']};border:1px solid {style['border']};"
         "font-weight:700;font-size:0.95rem;'>"
         f"{escape(text)}</div>"
+    )
+
+
+def _committee_decision_type_info(
+    decision_type_label: str,
+    *,
+    risk_signal: bool,
+) -> dict[str, str]:
+    """Return user-facing copy for a committee decision subtype."""
+    info = COMMITTEE_DECISION_TYPE_GUIDE.get(decision_type_label)
+    if info is not None:
+        return dict(info)
+    if decision_type_label == "부적격" or risk_signal:
+        return {
+            "signal": "위험신호 있음",
+            "tone": "risk",
+            "title": decision_type_label or "위험 판단",
+            "body": "위원회가 실제 위험 경고로 볼 만한 신호가 있다고 정리한 상태입니다.",
+            "action": "핵심 위험 요인과 외부 근거를 우선 확인합니다.",
+        }
+    if decision_type_label == "적격":
+        return {
+            "signal": "위험신호 아님",
+            "tone": "mitigate",
+            "title": "적격",
+            "body": "현재 2차 위원회가 추가 위험신호를 강하게 보지 않은 상태입니다.",
+            "action": "다만 최신 공시나 뉴스가 바뀌면 다시 확인합니다.",
+        }
+    return {
+        "signal": "위험신호 아님",
+        "tone": "warning",
+        "title": decision_type_label or "확인 필요",
+        "body": "위험 여부를 단정하기보다 추가 확인이 필요한 상태입니다.",
+        "action": "근거의 최신성, 직접 관련성, 재무 완충력을 함께 봅니다.",
+    }
+
+
+def render_committee_signal_guide(
+    *,
+    decision_type_label: str,
+    risk_signal: bool,
+) -> None:
+    """Show whether the current committee decision is a risk signal or review-only hold."""
+    current_info = _committee_decision_type_info(
+        decision_type_label,
+        risk_signal=risk_signal,
+    )
+    current_signal = "위험신호 있음" if risk_signal else current_info["signal"]
+    current_html = (
+        "<div class='committee-signal-card "
+        f"{escape(current_info['tone'])} active'>"
+        "<div class='committee-signal-eyebrow'>현재 선택 기업</div>"
+        f"<div class='committee-signal-title'>{escape(current_info['title'])}</div>"
+        f"{render_decision_badge(current_signal)}"
+        f"<div class='committee-signal-body' style='margin-top:0.55rem;'>"
+        f"{escape(current_info['body'])}"
+        "</div>"
+        f"<div class='committee-signal-action'>{escape(current_info['action'])}</div>"
+        "</div>"
+    )
+
+    guide_cards = []
+    for label, info in COMMITTEE_DECISION_TYPE_GUIDE.items():
+        active_class = " active" if label == decision_type_label else ""
+        guide_cards.append(
+            "<div class='committee-signal-card "
+            f"{escape(info['tone'])}{active_class}'>"
+            "<div class='committee-signal-eyebrow'>보류 유형 안내</div>"
+            f"<div class='committee-signal-title'>{escape(label)}</div>"
+            f"{render_decision_badge(info['signal'])}"
+            f"<div class='committee-signal-body' style='margin-top:0.55rem;'>"
+            f"{escape(info['body'])}"
+            "</div>"
+            f"<div class='committee-signal-action'>{escape(info['action'])}</div>"
+            "</div>"
+        )
+
+    st.markdown(
+        (f"<div class='committee-signal-guide'>{current_html}{''.join(guide_cards)}</div>"),
+        unsafe_allow_html=True,
     )
 
 
@@ -2327,6 +2561,8 @@ def _committee_highlight_body_html(items: list[str]) -> str:
 def render_committee_key_highlights(
     *,
     committee_label: str,
+    committee_decision_type_label: str,
+    committee_risk_signal_label: str,
     model_display_label: str,
     decision_gap_label: str,
     veto_label: str,
@@ -2348,7 +2584,9 @@ def render_committee_key_highlights(
     )
     checkpoint_text = final_memo or conflict_text or summary_text
     decision_meta = (
-        f"1차 모델: {model_display_label} / 판단 차이: {decision_gap_label} / "
+        f"세부 판단: {committee_decision_type_label} / 1차 모델: {model_display_label} / "
+        f"판단 차이: {decision_gap_label} / "
+        f"위험신호: {committee_risk_signal_label} / "
         f"강제 경고: {veto_label} / 신뢰도: {format_percent(final_confidence)}"
     )
     cards = [
@@ -2390,6 +2628,7 @@ def render_committee_key_highlights(
             "<div class='committee-decision-topline'>"
             "<span class='committee-decision-label'>2차 위원회 최종 판단</span>"
             f"{render_decision_badge(committee_label)}"
+            f"{render_decision_badge(committee_decision_type_label)}"
             "</div>"
             f"<p class='committee-decision-summary'>{escape(_normalize_committee_text(summary_text))}</p>"
             "</div>"
@@ -4170,6 +4409,14 @@ def render_committee_view_tab(
     model_label = str(model_view.get("prediction_label") or "-")
     model_display_label = "투기등급(부적격)" if model_label == "부적격" else model_label
     committee_label = str(committee_view.get("final_committee_label") or "보류")
+    committee_decision_type_label = str(
+        committee_view.get("committee_decision_type_label") or committee_label
+    )
+    committee_risk_signal = _optional_bool(
+        committee_view.get("committee_risk_signal"),
+        default=committee_decision_type_label in {"위험 보류", "부적격"},
+    )
+    committee_risk_signal_label = "위험신호 있음" if committee_risk_signal else "위험신호 아님"
     model_base_label = to_committee_base_label(model_label)
     has_decision_gap = model_base_label != committee_label
     veto_triggered = bool(committee_view.get("veto_triggered", False))
@@ -4215,6 +4462,16 @@ def render_committee_view_tab(
         )
         summary_color = COLOR_MITIGATE
 
+    st.subheader("2차 위원회 판단 종류")
+    st.caption(
+        "같은 보류라도 의미가 다릅니다. 위험 보류는 실제 위험신호로 보고, "
+        "과민경고 완화 보류와 확인필요 보류는 사용자가 추가 확인할 대상으로 구분합니다."
+    )
+    render_committee_signal_guide(
+        decision_type_label=committee_decision_type_label,
+        risk_signal=committee_risk_signal,
+    )
+
     render_external_evidence_judgment(
         evidence_snapshot,
         committee_view,
@@ -4230,7 +4487,7 @@ def render_committee_view_tab(
     )
 
     with st.expander("1차 모델 판단과 비교해서 보기", expanded=False):
-        comparison_cols = st.columns(4)
+        comparison_cols = st.columns(6)
         render_badge_value_block(
             comparison_cols[0],
             "1차 모델 판단",
@@ -4243,11 +4500,21 @@ def render_committee_view_tab(
         )
         render_badge_value_block(
             comparison_cols[2],
+            "보류 세부 유형",
+            render_decision_badge(committee_decision_type_label),
+        )
+        render_badge_value_block(
+            comparison_cols[3],
+            "위험신호 여부",
+            render_decision_badge(committee_risk_signal_label),
+        )
+        render_badge_value_block(
+            comparison_cols[4],
             "판단 차이",
             render_decision_badge(decision_gap_label),
         )
         render_badge_value_block(
-            comparison_cols[3],
+            comparison_cols[5],
             "강제 경고 상태",
             render_decision_badge(veto_label),
         )
@@ -4333,6 +4600,8 @@ def render_committee_view_tab(
     )
     render_committee_key_highlights(
         committee_label=committee_label,
+        committee_decision_type_label=committee_decision_type_label,
+        committee_risk_signal_label=committee_risk_signal_label,
         model_display_label=model_display_label,
         decision_gap_label=decision_gap_label,
         veto_label=veto_label,

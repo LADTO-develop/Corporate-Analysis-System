@@ -245,29 +245,41 @@ def success_question(row: pd.Series) -> str:
     return "1차 모델이 안정으로 본 사례입니다. 위원회가 근거 없이 과도하게 위험을 키우지 않는지 확인합니다."
 
 
-def build_historical_samples(scores: pd.DataFrame, per_category: int) -> pd.DataFrame:
-    test = scores.loc[scores["split"].astype(str).eq("test")].copy()
-    test = add_policy_flags(test)
-    test["as_of_date"] = historical_as_of_date(test)
+def build_historical_samples(
+    scores: pd.DataFrame,
+    *,
+    split: str,
+    evaluation_mode: str,
+    per_category: int,
+) -> pd.DataFrame:
+    split_frame = scores.loc[scores["split"].astype(str).eq(split)].copy()
+    split_frame = add_policy_flags(split_frame)
+    split_frame["as_of_date"] = historical_as_of_date(split_frame)
     sample_frames: list[pd.DataFrame] = []
     policy_columns = {
         "balanced_current_45_or_near_threshold_0_10": "balanced_committee_review_trigger",
         "recall_first_current_45_or_fn_mid_mfg_prob_0_10": "recall_first_committee_review_trigger",
     }
     for policy_name, trigger_column in policy_columns.items():
-        triggered = test[trigger_column].astype(bool)
+        triggered = split_frame[trigger_column].astype(bool)
         category_masks = {
             "fn_caught_by_stage2_review": (
-                triggered & test["stage1_review_trigger"].eq(False) & test["is_speculative"].eq(1)
+                triggered
+                & split_frame["stage1_review_trigger"].eq(False)
+                & split_frame["is_speculative"].eq(1)
             ),
             "fp_needing_committee_mitigation": (
-                triggered & test["stage1_review_trigger"].eq(True) & test["is_speculative"].eq(0)
+                triggered
+                & split_frame["stage1_review_trigger"].eq(True)
+                & split_frame["is_speculative"].eq(0)
             ),
             "bbb_minus_bb_plus_boundary": (
-                triggered & test["is_exact_boundary_bbb_minus_bb_plus"].astype(bool)
+                triggered & split_frame["is_exact_boundary_bbb_minus_bb_plus"].astype(bool)
             ),
             "true_positive_risk_explanation": (
-                triggered & test["stage1_review_trigger"].eq(True) & test["is_speculative"].eq(1)
+                triggered
+                & split_frame["stage1_review_trigger"].eq(True)
+                & split_frame["is_speculative"].eq(1)
             ),
         }
         sort_orders = {
@@ -278,9 +290,9 @@ def build_historical_samples(scores: pd.DataFrame, per_category: int) -> pd.Data
         }
         for category, mask in category_masks.items():
             sort_column, ascending = sort_orders[category]
-            subset = test.loc[mask].copy().sort_values(sort_column, ascending=ascending)
+            subset = split_frame.loc[mask].copy().sort_values(sort_column, ascending=ascending)
             subset = subset.head(per_category)
-            subset["evaluation_mode"] = "historical_test_replay"
+            subset["evaluation_mode"] = evaluation_mode
             subset["committee_policy"] = policy_name
             subset["sample_category"] = category
             sample_frames.append(subset)
@@ -300,6 +312,7 @@ def build_historical_samples(scores: pd.DataFrame, per_category: int) -> pd.Data
     samples["company_selection_json"] = samples.apply(company_selection_payload, axis=1)
     columns = [
         "evaluation_mode",
+        "split",
         "committee_policy",
         "sample_category",
         "market",
@@ -392,15 +405,22 @@ def build_2026_candidates(labels_path: Path, inference_path: Path) -> pd.DataFra
     return merged.loc[:, [column for column in columns if column in merged.columns]]
 
 
-def summarize_samples(historical: pd.DataFrame, current_2026: pd.DataFrame) -> dict[str, object]:
-    historical_counts = (
-        historical.groupby(["committee_policy", "sample_category"], dropna=False)
+def _historical_counts(frame: pd.DataFrame) -> list[dict[str, object]]:
+    return (
+        frame.groupby(["committee_policy", "sample_category"], dropna=False)
         .size()
         .reset_index(name="rows")
         .to_dict(orient="records")
-        if not historical.empty
+        if not frame.empty
         else []
     )
+
+
+def summarize_samples(
+    validation_historical: pd.DataFrame,
+    test_historical: pd.DataFrame,
+    current_2026: pd.DataFrame,
+) -> dict[str, object]:
     current_counts = (
         current_2026.groupby(["model_score_status", "actual_label_name"], dropna=False)
         .size()
@@ -411,10 +431,23 @@ def summarize_samples(historical: pd.DataFrame, current_2026: pd.DataFrame) -> d
     )
     return {
         "generated_at_utc": datetime.now(UTC).isoformat(),
-        "historical_test_replay_rows": len(historical),
+        "historical_validation_tuning_rows": len(validation_historical),
+        "historical_test_holdout_rows": len(test_historical),
         "current_2026_external_validation_rows": len(current_2026),
-        "historical_counts": historical_counts,
+        "validation_tuning_counts": _historical_counts(validation_historical),
+        "test_holdout_counts": _historical_counts(test_historical),
         "current_2026_counts": current_counts,
+        "split_usage_policy": {
+            "validation": (
+                "Use for Stage 2 committee prompt/rule tuning and operational threshold "
+                "diagnostics."
+            ),
+            "test": (
+                "Hold out for final confirmation after validation-selected committee "
+                "changes are fixed."
+            ),
+            "external_2026": ("Use only as a final external validation set, not for tuning."),
+        },
         "leakage_guardrail": {
             "historical_as_of_date": "fiscal_year-12-31",
             "naver_tavily_filter": "published_at must be <= as_of_date; undated web results are excluded in historical mode",
@@ -437,9 +470,13 @@ def markdown_table(frame: pd.DataFrame, max_rows: int = 20) -> str:
 
 
 def build_report(
-    historical: pd.DataFrame, current_2026: pd.DataFrame, summary: dict[str, object]
+    validation_historical: pd.DataFrame,
+    test_historical: pd.DataFrame,
+    current_2026: pd.DataFrame,
+    summary: dict[str, object],
 ) -> str:
-    historical_counts = pd.DataFrame(summary["historical_counts"])
+    validation_counts = pd.DataFrame(summary["validation_tuning_counts"])
+    test_counts = pd.DataFrame(summary["test_holdout_counts"])
     current_counts = pd.DataFrame(summary["current_2026_counts"])
     return "\n".join(
         [
@@ -447,20 +484,21 @@ def build_report(
             "",
             "Stage 2 위원회가 모델 판단을 얼마나 보완하는지 평가하기 위한 샘플과 실행 기준입니다.",
             "",
-            "## 1. Historical Test Replay",
+            "## 1. Historical Validation Tuning",
             "",
-            "- 목적: 과거 test 구간에서 위원회가 FN을 보류/부적격으로 끌어올리고, FP를 적격/보류로 완화하는지 확인합니다.",
+            "- 목적: validation 구간에서 위원회가 FN을 보류/부적격으로 끌어올리고, FP를 적격/보류로 완화하도록 에이전트 규칙과 프롬프트를 개선합니다.",
             "- 기준일: 각 행의 `as_of_date = fiscal_year-12-31`입니다.",
             "- 누수 방지: Naver/Tavily는 기준일 이후 결과를 제외하고, 과거 모드에서는 날짜 없는 웹 결과도 제외합니다. OpenDART는 조회 종료일을 기준일로 고정합니다.",
+            "- 사용 원칙: 이 샘플은 에이전트 개선용입니다. test 성능을 보면서 규칙을 조정하지 않습니다.",
             "",
-            "### Historical Sample Counts",
+            "### Validation Tuning Sample Counts",
             "",
-            markdown_table(historical_counts),
+            markdown_table(validation_counts),
             "",
-            "### Historical Sample Preview",
+            "### Validation Tuning Sample Preview",
             "",
             markdown_table(
-                historical[
+                validation_historical[
                     [
                         "committee_policy",
                         "sample_category",
@@ -474,15 +512,46 @@ def build_report(
                         "prob_speculative",
                     ]
                 ]
-                if not historical.empty
-                else historical
+                if not validation_historical.empty
+                else validation_historical
             ),
             "",
-            "## 2. Current/2026 External Validation",
+            "## 2. Historical Test Holdout",
+            "",
+            "- 목적: validation에서 고정한 에이전트 개선안이 test 구간에서도 유지되는지 마지막에 확인합니다.",
+            "- 기준일과 누수 방지 규칙은 validation tuning과 동일합니다.",
+            "- 사용 원칙: test 결과는 사후 확인용이며, test 결과를 보고 다시 에이전트 규칙을 고치지 않습니다.",
+            "",
+            "### Test Holdout Sample Counts",
+            "",
+            markdown_table(test_counts),
+            "",
+            "### Test Holdout Sample Preview",
+            "",
+            markdown_table(
+                test_historical[
+                    [
+                        "committee_policy",
+                        "sample_category",
+                        "corp_name",
+                        "fiscal_year",
+                        "eval_year",
+                        "as_of_date",
+                        "actual_label_name",
+                        "model_predicted_label_name",
+                        "credit_rating",
+                        "prob_speculative",
+                    ]
+                ]
+                if not test_historical.empty
+                else test_historical
+            ),
+            "",
+            "## 3. Current/2026 External Validation",
             "",
             "- 목적: 2026 inference 기업을 현재 시점에서 실제 외부 검증 정답셋과 비교할 준비를 합니다.",
             "- 기준일: 실행일 기준 현재 사용 가능한 뉴스/공시를 사용할 수 있습니다.",
-            "- 다음 단계: 2026 prediction score를 export한 뒤 `model_score_status=feature_row_ready_score_not_exported` 행과 결합해 위원회 판단을 비교합니다.",
+            "- 사용 원칙: validation/test 기반 개선이 끝난 뒤 외부검증셋으로만 사용합니다. 에이전트 규칙 튜닝에는 사용하지 않습니다.",
             "",
             "### 2026 Candidate Counts",
             "",
@@ -493,7 +562,7 @@ def build_report(
             "- FN 보완: 실제 투기등급인데 1차 모델이 투자적격으로 본 기업을 위원회가 보류/부적격으로 끌어올리는가?",
             "- FP 완화: 실제 투자적격인데 1차 모델이 위험하다고 본 기업을 위원회가 적격/보류로 완화하는가?",
             "- 근거 신뢰도: veto나 숨은 꼬리위험 판단이 실제 기업 직접 근거에 기반하는가?",
-            "- 발표 표현: 과거 test 재현 평가는 look-ahead bias를 막기 위해 기준일 이전 공개 정보만 사용합니다.",
+            "- 발표 표현: 과거 validation/test 재현 평가는 look-ahead bias를 막기 위해 기준일 이전 공개 정보만 사용합니다.",
             "",
         ]
     )
@@ -501,28 +570,41 @@ def build_report(
 
 def write_outputs(
     *,
-    historical: pd.DataFrame,
+    validation_historical: pd.DataFrame,
+    test_historical: pd.DataFrame,
     current_2026: pd.DataFrame,
     output_dir: Path,
 ) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
-    historical_path = output_dir / "committee_review_historical_test_replay_samples.csv"
+    validation_path = output_dir / "committee_review_historical_validation_tuning_samples.csv"
+    test_holdout_path = output_dir / "committee_review_historical_test_holdout_samples.csv"
+    legacy_test_path = output_dir / "committee_review_historical_test_replay_samples.csv"
     current_2026_path = output_dir / "committee_review_2026_external_validation_candidates.csv"
     summary_path = output_dir / "committee_review_evaluation_summary.json"
     report_path = output_dir / "committee_review_evaluation_plan.md"
-    summary = summarize_samples(historical, current_2026)
+    summary = summarize_samples(validation_historical, test_historical, current_2026)
     summary["paths"] = {
-        "historical_samples": str(historical_path.relative_to(ROOT)),
+        "validation_tuning_samples": str(validation_path.relative_to(ROOT)),
+        "test_holdout_samples": str(test_holdout_path.relative_to(ROOT)),
+        "legacy_test_replay_samples": str(legacy_test_path.relative_to(ROOT)),
         "current_2026_candidates": str(current_2026_path.relative_to(ROOT)),
         "summary": str(summary_path.relative_to(ROOT)),
         "report": str(report_path.relative_to(ROOT)),
     }
 
-    historical.to_csv(historical_path, index=False, encoding="utf-8-sig")
+    validation_historical.to_csv(validation_path, index=False, encoding="utf-8-sig")
+    test_historical.to_csv(test_holdout_path, index=False, encoding="utf-8-sig")
+    # Keep the legacy path for existing operational scripts; it remains the locked test replay set.
+    test_historical.to_csv(legacy_test_path, index=False, encoding="utf-8-sig")
     current_2026.to_csv(current_2026_path, index=False, encoding="utf-8-sig")
     summary_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
-    report_path.write_text(build_report(historical, current_2026, summary), encoding="utf-8")
-    print(f"[Saved] {historical_path}")
+    report_path.write_text(
+        build_report(validation_historical, test_historical, current_2026, summary),
+        encoding="utf-8",
+    )
+    print(f"[Saved] {validation_path}")
+    print(f"[Saved] {test_holdout_path}")
+    print(f"[Saved] {legacy_test_path}")
     print(f"[Saved] {current_2026_path}")
     print(f"[Saved] {summary_path}")
     print(f"[Saved] {report_path}")
@@ -533,9 +615,25 @@ def main() -> None:
     scores = read_scores(args.prediction_scores)
     labels = read_labels(args.target_label_reference)
     scores = attach_rating_reference(scores, labels)
-    historical = build_historical_samples(scores, args.per_category)
+    validation_historical = build_historical_samples(
+        scores,
+        split="valid",
+        evaluation_mode="historical_validation_tuning",
+        per_category=args.per_category,
+    )
+    test_historical = build_historical_samples(
+        scores,
+        split="test",
+        evaluation_mode="historical_test_holdout",
+        per_category=args.per_category,
+    )
     current_2026 = build_2026_candidates(args.labels_2026, args.inference_2026)
-    write_outputs(historical=historical, current_2026=current_2026, output_dir=args.output_dir)
+    write_outputs(
+        validation_historical=validation_historical,
+        test_historical=test_historical,
+        current_2026=current_2026,
+        output_dir=args.output_dir,
+    )
 
 
 if __name__ == "__main__":

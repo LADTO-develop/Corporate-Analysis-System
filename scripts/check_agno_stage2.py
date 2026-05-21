@@ -36,21 +36,32 @@ def main() -> None:
     print("CAS Stage 2 Agno preflight")
     print(f"- CAS_STAGE2_RUNNER={runner or 'deterministic'}")
     print(f"- CAS_STAGE2_AGNO_MODE={agno_mode or 'multi_llm_committee'}")
-    print(f"- CAS_STAGE2_MODEL={os.environ.get('CAS_STAGE2_MODEL', 'claude-sonnet-4-5-20250929')}")
-    print(f"- CAS_STAGE2_QUANT_PROVIDER={os.environ.get('CAS_STAGE2_QUANT_PROVIDER', 'anthropic')}")
-    print(
-        f"- CAS_STAGE2_QUANT_MODEL={os.environ.get('CAS_STAGE2_QUANT_MODEL', os.environ.get('CAS_STAGE2_MODEL', 'claude-sonnet-4-5-20250929'))}"
-    )
-    print(
-        f"- CAS_STAGE2_EVIDENCE_PROVIDER={os.environ.get('CAS_STAGE2_EVIDENCE_PROVIDER', 'openai')}"
-    )
-    print(
-        f"- CAS_STAGE2_EVIDENCE_MODEL={os.environ.get('CAS_STAGE2_EVIDENCE_MODEL', 'gpt-5.4-mini')}"
-    )
-    print(f"- CAS_STAGE2_CHAIR_PROVIDER={os.environ.get('CAS_STAGE2_CHAIR_PROVIDER', 'google')}")
-    print(
-        f"- CAS_STAGE2_CHAIR_MODEL={os.environ.get('CAS_STAGE2_CHAIR_MODEL', 'gemini-flash-latest')}"
-    )
+    if runner == "agno" and agno_mode in {"multi", "multi_llm", "multi_llm_committee"}:
+        print(
+            f"- CAS_STAGE2_QUANT_PROVIDER={os.environ.get('CAS_STAGE2_QUANT_PROVIDER', 'anthropic')}"
+        )
+        print(
+            f"- CAS_STAGE2_QUANT_MODEL={os.environ.get('CAS_STAGE2_QUANT_MODEL', os.environ.get('CAS_STAGE2_MODEL', 'claude-sonnet-4-5-20250929'))}"
+        )
+        print(
+            f"- CAS_STAGE2_EVIDENCE_PROVIDER={os.environ.get('CAS_STAGE2_EVIDENCE_PROVIDER', 'openai')}"
+        )
+        print(
+            f"- CAS_STAGE2_EVIDENCE_MODEL={os.environ.get('CAS_STAGE2_EVIDENCE_MODEL', 'gpt-5.4-mini')}"
+        )
+        print(
+            f"- CAS_STAGE2_CHAIR_PROVIDER={os.environ.get('CAS_STAGE2_CHAIR_PROVIDER', 'google')}"
+        )
+        print(
+            f"- CAS_STAGE2_CHAIR_MODEL={os.environ.get('CAS_STAGE2_CHAIR_MODEL', 'gemini-flash-latest')}"
+        )
+    else:
+        print(
+            f"- CAS_STAGE2_MODEL_PROVIDER={os.environ.get('CAS_STAGE2_MODEL_PROVIDER', 'anthropic')}"
+        )
+        print(
+            f"- CAS_STAGE2_MODEL={os.environ.get('CAS_STAGE2_MODEL', 'claude-sonnet-4-5-20250929')}"
+        )
     print(f"- CAS_STAGE2_FALLBACK_ON_ERROR={fallback or '1'}")
     for package_name in package_specs:
         print(f"- {package_name}={_package_version(package_name)}")

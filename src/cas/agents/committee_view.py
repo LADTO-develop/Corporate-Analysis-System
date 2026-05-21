@@ -5,7 +5,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Literal, cast
 
-from cas.agents.committee_schema import CommitteeLabel, CommitteeViewPayload
+from cas.agents.committee_schema import (
+    CommitteeDecisionType,
+    CommitteeLabel,
+    CommitteeViewPayload,
+)
 from cas.agents.stage2_bundle import Stage2InputBundle
 from cas.agents.state import AgentOutput, Recommendation
 from cas.veto_rules import (
@@ -172,9 +176,18 @@ def build_committee_view_model(
     evidence_summary = _clean_evidence_summary_items(evidence_summary)
     conflict_resolution = _clean_korean_review_text(conflict_resolution)
     final_review_memo = _clean_korean_review_text(final_review_memo)
+    decision_type = _committee_decision_type(
+        committee_label=committee_label,
+        hidden_tail_risk=hidden_tail_risk,
+        secondary_review_risk=secondary_review_risk,
+        overwarning_mitigation=overwarning_mitigation,
+    )
 
     return CommitteeViewPayload(
         final_committee_label=committee_label,
+        committee_decision_type=decision_type,
+        committee_decision_type_label=_committee_decision_type_label(decision_type),
+        committee_risk_signal=_committee_risk_signal(decision_type),
         veto_triggered=veto_triggered,
         hidden_tail_risk_flag=hidden_tail_risk.triggered,
         hidden_tail_risk_reason=hidden_tail_risk.reason,
@@ -193,6 +206,39 @@ def _committee_label_from_recommendation(recommendation: Recommendation) -> Comm
     if recommendation in {"watch", "review"}:
         return "보류"
     return "부적격"
+
+
+def _committee_decision_type(
+    *,
+    committee_label: CommitteeLabel,
+    hidden_tail_risk: HiddenTailRiskAssessment,
+    secondary_review_risk: SecondaryReviewRiskAssessment,
+    overwarning_mitigation: OverwarningMitigationAssessment,
+) -> CommitteeDecisionType:
+    if committee_label == "적격":
+        return "eligible"
+    if committee_label == "부적격":
+        return "reject"
+    if hidden_tail_risk.triggered or secondary_review_risk.triggered:
+        return "risk_hold"
+    if overwarning_mitigation.triggered:
+        return "mitigation_hold"
+    return "review_hold"
+
+
+def _committee_decision_type_label(decision_type: CommitteeDecisionType) -> str:
+    labels: dict[CommitteeDecisionType, str] = {
+        "eligible": "적격",
+        "risk_hold": "위험 보류",
+        "mitigation_hold": "과민경고 완화 보류",
+        "review_hold": "확인필요 보류",
+        "reject": "부적격",
+    }
+    return labels[decision_type]
+
+
+def _committee_risk_signal(decision_type: CommitteeDecisionType) -> bool:
+    return decision_type in {"risk_hold", "reject"}
 
 
 def _veto_triggered(bundle: Stage2InputBundle, *, veto_rules: VetoRules) -> bool:
@@ -256,7 +302,7 @@ def _committee_label_with_model_alignment(
         return committee_label
     if not _external_evidence_unavailable(bundle.news_status):
         return committee_label
-    if _has_stage2_secondary_trigger(bundle):
+    if _secondary_review_requires_hold(bundle):
         return committee_label
     if _has_blocking_flags(bundle):
         return committee_label
@@ -265,7 +311,7 @@ def _committee_label_with_model_alignment(
 
     probability = bundle.probability_speculative
     threshold = _model_threshold(bundle)
-    near_threshold = probability >= threshold - 0.05
+    near_threshold = probability >= max(0.28, threshold - 0.05)
     if near_threshold:
         return committee_label
     if _has_severe_financial_watch_signal(bundle.source_feature_row):
@@ -287,7 +333,7 @@ def _committee_label_with_investment_evidence_alignment(
         return committee_label
     if _external_evidence_unavailable(bundle.news_status):
         return committee_label
-    if _has_stage2_secondary_trigger(bundle):
+    if _secondary_review_requires_hold(bundle):
         return committee_label
     if _has_blocking_flags(bundle):
         return committee_label
@@ -335,9 +381,67 @@ def _has_stage2_secondary_trigger(bundle: Stage2InputBundle) -> bool:
     return False
 
 
+def _secondary_review_requires_hold(bundle: Stage2InputBundle) -> bool:
+    """Return whether a secondary trigger is strong enough to block eligible alignment."""
+    if not _has_stage2_secondary_trigger(bundle):
+        return False
+    probability = bundle.probability_speculative
+    threshold = _model_threshold(bundle)
+    probability_floor = max(0.28, threshold - 0.10)
+    secondary_liquidity_watch = _has_secondary_rule_liquidity_watch_signal(bundle)
+    confident_secondary_liquidity_watch = secondary_liquidity_watch and (
+        probability >= probability_floor
+        or (threshold >= 0.28 and _rule_confidence_at_least(bundle, 0.60))
+    )
+    return (
+        probability >= probability_floor
+        or _has_severe_financial_watch_signal(bundle.source_feature_row)
+        or confident_secondary_liquidity_watch
+    )
+
+
 def _has_blocking_flags(bundle: Stage2InputBundle) -> bool:
     flags = bundle.rule_result.get("blocking_flags", []) or []
     return any(str(flag).strip() for flag in flags)
+
+
+def _has_secondary_rule_liquidity_watch_signal(bundle: Stage2InputBundle) -> bool:
+    """Preserve hold for low-but-near-threshold eligible calls with liquidity rule watch."""
+    if not _has_stage2_secondary_trigger(bundle):
+        return False
+    probability = bundle.probability_speculative
+    threshold = _model_threshold(bundle)
+    if probability < threshold - 0.10:
+        return False
+    review_priority = _stage2_review_priority(bundle)
+    if review_priority not in {"medium", "high", "critical"}:
+        return False
+
+    risk_band = str(bundle.rule_result.get("risk_band") or "").strip().lower()
+    recommendation = str(bundle.rule_result.get("recommendation") or "").strip().lower()
+    if risk_band not in {"watch", "관찰"} and recommendation not in {"watch", "review"}:
+        return False
+
+    raw_reasons = bundle.rule_result.get("reasons", [])
+    reason_text = " ".join(str(reason) for reason in raw_reasons if str(reason).strip()).lower()
+    liquidity_markers = (
+        "current_ratio",
+        "cash_ratio",
+        "liquidity",
+        "유동비율",
+        "현금비율",
+        "유동성",
+    )
+    if any(marker in reason_text for marker in liquidity_markers):
+        return True
+    return _metric_below(bundle.source_feature_row, "current_ratio", 1.0) or _metric_below(
+        bundle.source_feature_row, "cash_ratio", 0.10
+    )
+
+
+def _rule_confidence_at_least(bundle: Stage2InputBundle, threshold: float) -> bool:
+    confidence = _safe_float(bundle.rule_result.get("confidence"))
+    return confidence is not None and confidence >= threshold
 
 
 def _has_severe_financial_watch_signal(row: dict[str, Any]) -> bool:
@@ -394,10 +498,23 @@ def _secondary_review_risk_assessment(bundle: Stage2InputBundle) -> SecondaryRev
     probability = bundle.probability_speculative
     threshold = _model_threshold(bundle)
     review_priority = _stage2_review_priority(bundle)
-    near_threshold = probability >= threshold - 0.10
+    # Near-threshold review should not automatically turn every stable call into
+    # "보류". Rolling validation showed low absolute probabilities near a low
+    # fold threshold can create unnecessary holds, so keep a minimum risk floor.
+    probability_floor = max(0.28, threshold - 0.10)
+    meets_probability_floor = probability >= probability_floor
+    near_threshold = probability >= threshold - 0.10 and meets_probability_floor
     priority_requires_hold = review_priority in {"medium", "high", "critical"}
     severe_watch = _has_severe_financial_watch_signal(bundle.source_feature_row)
-    if not (near_threshold or priority_requires_hold or severe_watch):
+    secondary_liquidity_watch = _has_secondary_rule_liquidity_watch_signal(bundle)
+    rule_liquidity_watch = secondary_liquidity_watch and (
+        meets_probability_floor or (threshold >= 0.28 and _rule_confidence_at_least(bundle, 0.60))
+    )
+    if not (
+        ((near_threshold or priority_requires_hold) and meets_probability_floor)
+        or severe_watch
+        or rule_liquidity_watch
+    ):
         return SecondaryReviewRiskAssessment(False, "", review_priority)
 
     trigger_reason = _stage2_trigger_reason(bundle)
@@ -405,10 +522,16 @@ def _secondary_review_risk_assessment(bundle: Stage2InputBundle) -> SecondaryRev
         "2차 보조 레이더 플래그: 43개 모델은 투자적격으로 봤지만 "
         "45개 보조 변수셋이 추가 검토 대상으로 올렸습니다.",
         f"투기등급 확률은 {probability:.1%}, 기준선은 {threshold:.1%}, "
-        f"검토 우선순위는 {review_priority}입니다.",
+        f"검토 우선순위는 {review_priority}, 최소 보류 검토 확률선은 "
+        f"{probability_floor:.1%}입니다.",
     ]
     if trigger_reason:
         reason_parts.append(trigger_reason)
+    if rule_liquidity_watch:
+        reason_parts.append(
+            "룰 엔진도 유동성 watch 신호를 냈기 때문에 낮은 확률 바닥선만으로 "
+            "적격 확정하지 않고 보류를 유지합니다."
+        )
     reason_parts.append("따라서 2차 위원회는 이를 최종 적격으로 확정하지 않고 보류로 재점검합니다.")
     return SecondaryReviewRiskAssessment(True, " ".join(reason_parts), review_priority)
 
@@ -438,12 +561,17 @@ def _overwarning_mitigation_assessment(
     explicit_overwarning = bool(bundle.model_view.get("stage2_overwarning_filter_candidate"))
     financial_resilience = _financial_resilience_overwarning_assessment(bundle.source_feature_row)
     noncritical_evidence = _noncritical_external_evidence_assessment(bundle.news_cache_snapshot)
+    model_only_buffer_reason = _model_only_overwarning_buffer_reason(
+        bundle,
+        mitigating_factors=mitigating_factors,
+    )
     if not (
         near_threshold
         or watch_band
         or explicit_overwarning
         or financial_resilience.triggered
         or noncritical_evidence.triggered
+        or model_only_buffer_reason
     ):
         return OverwarningMitigationAssessment(False, "")
     if (
@@ -451,6 +579,7 @@ def _overwarning_mitigation_assessment(
         and not explicit_overwarning
         and not financial_resilience.triggered
         and not noncritical_evidence.triggered
+        and not model_only_buffer_reason
     ):
         return OverwarningMitigationAssessment(False, "")
 
@@ -469,7 +598,78 @@ def _overwarning_mitigation_assessment(
         reason_parts.append(financial_resilience.reason)
     if noncritical_evidence.triggered:
         reason_parts.append(noncritical_evidence.reason)
+    if model_only_buffer_reason:
+        reason_parts.append(model_only_buffer_reason)
     return OverwarningMitigationAssessment(True, " ".join(reason_parts))
+
+
+def _model_only_overwarning_buffer_reason(
+    bundle: Stage2InputBundle,
+    *,
+    mitigating_factors: list[str],
+) -> str:
+    """Downgrade unsupported high-probability reject calls to hold, not eligible."""
+    probability = bundle.probability_speculative
+    threshold = _model_threshold(bundle)
+    if probability <= threshold + 0.10:
+        return ""
+    # Above this level, keep the model's severe warning unless another explicit
+    # mitigation screen such as financial resilience or non-critical evidence fires.
+    if probability >= 0.90:
+        return ""
+    if not mitigating_factors:
+        return ""
+    cashflow_backed_resilience = _has_cashflow_backed_fp_resilience(bundle.source_feature_row)
+    if not cashflow_backed_resilience:
+        return ""
+    if _has_blocking_flags(bundle) and not cashflow_backed_resilience:
+        return ""
+    if (
+        _has_severe_financial_watch_signal(bundle.source_feature_row)
+        and not cashflow_backed_resilience
+    ):
+        return ""
+    if _verified_adverse_external_items(bundle.news_cache_snapshot):
+        return ""
+
+    news_status = bundle.news_status
+    if not _external_evidence_unavailable(news_status) and not _no_direct_external_items(
+        bundle.news_cache_snapshot
+    ):
+        return ""
+    if cashflow_backed_resilience:
+        return (
+            f"고확률 모델 단독 경고 완화: 투기등급 확률은 {probability:.1%}로 높고 "
+            "일부 손익·이자보상 스트레스가 있지만, OCF와 자본/부채 구조가 방어력을 "
+            "제공합니다. 직접 외부 치명근거도 확인되지 않았으므로 즉시 부적격 "
+            "확정보다는 보류로 재점검합니다."
+        )
+    return (
+        f"고확률 모델 단독 경고 완화: 투기등급 확률은 {probability:.1%}로 높지만 "
+        "부적격 확정을 뒷받침하는 veto·직접 외부 치명근거·강한 재무 차단 신호는 "
+        "확인되지 않았습니다. 완화 요인이 일부 있으므로 즉시 부적격 확정보다는 "
+        "보류로 재점검합니다."
+    )
+
+
+def _has_cashflow_backed_fp_resilience(row: dict[str, Any]) -> bool:
+    """Allow hold, not reject, when stress is offset by cash-flow and balance-sheet buffers."""
+    if _flag_is_true(row.get("is_2y_consecutive_ocf_deficit")):
+        return False
+    if _metric_above(row, "capital_impairment_ratio", 0.0):
+        return False
+    cashflow_support = (
+        _metric_at_least(row, "cashflow_coverage_ratio", 0.0)
+        or _metric_at_least(row, "ocf_to_total_liabilities", 0.05)
+        or _metric_at_least(row, "ocf_to_sales", 0.0)
+    )
+    balance_sheet_support = _metric_at_least(row, "equity_ratio", 0.40) and _metric_at_most(
+        row, "debt_ratio", 1.50
+    )
+    borrowing_support = _metric_at_most(row, "total_borrowings_ratio", 0.40) or _metric_at_most(
+        row, "short_term_borrowings_share", 0.70
+    )
+    return bool(cashflow_support and balance_sheet_support and borrowing_support)
 
 
 def _noncritical_external_evidence_assessment(
@@ -505,6 +705,15 @@ def _noncritical_external_evidence_assessment(
         "따라서 2차 위원회는 모델의 부적격 경고를 확정하기보다 보류로 재점검합니다."
     )
     return NoncriticalEvidenceAssessment(True, reason, len(direct_items), 0)
+
+
+def _no_direct_external_items(news_cache: dict[str, Any]) -> bool:
+    raw_items = news_cache.get("items", [])
+    if not isinstance(raw_items, list):
+        return True
+    return not any(
+        isinstance(item, dict) and item.get("company_match") is True for item in raw_items
+    )
 
 
 def _financial_resilience_overwarning_assessment(
