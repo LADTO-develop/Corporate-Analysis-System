@@ -45,6 +45,13 @@ class AgnoEvidenceAuditResponse(BaseModel):
     external_risk_level: str = Field(
         description="External evidence risk level such as low, medium, high, or equivalent Korean label."
     )
+    evidence_limitations: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Evidence-bundle limitations such as missing providers, date filters, "
+            "weak company relevance, or unverified snippets."
+        ),
+    )
 
 
 def run_evidence_audit_agent(
@@ -72,6 +79,8 @@ def run_evidence_audit_agent(
             "Do not use general market knowledge as confirmed company-specific evidence.",
             "If direct external evidence is missing, state that evidence is unavailable and do not infer events.",
             "In the committee meeting, challenge or qualify the quantitative view only with supplied evidence.",
+            "List evidence limitations separately from confirmed risks.",
+            "For historical evaluation, use only evidence already present in the bundle after as_of_date filtering.",
             "Write in Korean business-report language. Do not say a credit decision is confirmed or approved.",
             "Return concise Korean review prose in the structured response fields only.",
         ],
@@ -100,6 +109,7 @@ def run_evidence_audit_agent(
             result.critical_off_balance_risk,
             f"External risk level: {result.external_risk_level}",
         ),
+        evidence_limitations=compact_items(*result.evidence_limitations),
         confidence=_confidence_for_strength(strength),
     )
 
@@ -120,6 +130,7 @@ def _query(bundle: Stage2InputBundle) -> str:
         "news_cache_snapshot": bundle.news_cache_snapshot,
         "evidence_guardrail": {
             "news_status": bundle.news_status,
+            "as_of_date": bundle.news_cache_snapshot.get("as_of_date", ""),
             "external_evidence_available": not _external_evidence_unavailable(bundle.news_status),
             "rule_kr": (
                 "외부근거가 없거나 비활성화된 상태라면 특정 뉴스, 공시, 업황 사건을 "
@@ -232,6 +243,7 @@ def _unavailable_evidence_output(bundle: Stage2InputBundle) -> EvidenceAuditOutp
             "거시·산업 관련 외부근거가 제공되지 않아 정성 판단은 제한적입니다."
         ],
         external_evidence_findings=["확인된 외부 뉴스·공시 항목 없음"],
+        evidence_limitations=[f"외부근거 수집 상태가 `{status}`라서 확인 가능한 근거가 없습니다."],
         confidence=0.45,
     )
 

@@ -184,6 +184,39 @@ def test_committee_view_does_not_escalate_on_unconfirmed_external_risk() -> None
     ]
 
 
+def test_committee_view_surfaces_evidence_limitations_in_summary() -> None:
+    state: AgentState = {
+        "xgboost_result": {"prediction_label": "투자적격"},
+        "news_cache_snapshot": {"status": "ready"},
+    }
+    agents = [
+        AgentOutput(role="quant_credit", summary="정량 결과", findings=[], confidence=0.8),
+        AgentOutput(
+            role="evidence_audit",
+            summary="외부근거 검토",
+            findings=[
+                "근거 한계: 과거 기준일 이후 또는 날짜 미확인 근거 2건을 제외했습니다.",
+            ],
+            confidence=0.6,
+        ),
+        AgentOutput(role="chair_report", summary="종합", findings=[], confidence=0.7),
+    ]
+
+    committee_view = build_committee_view(
+        bundle=build_stage2_input_bundle(state),
+        recommendation="priority",
+        agents=agents,
+    )
+
+    limitation_items = [
+        item
+        for item in committee_view["evidence_summary"]
+        if item["source"] == "evidence_limitations"
+    ]
+    assert limitation_items
+    assert "날짜 미확인 근거 2건" in limitation_items[0]["summary"]
+
+
 def test_committee_view_flags_hidden_tail_risk_from_direct_external_adverse_evidence() -> None:
     state: AgentState = {
         "company_id": "096770",

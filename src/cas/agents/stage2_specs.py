@@ -68,11 +68,16 @@ STAGE2_AGENT_SPECS: tuple[Stage2AgentSpec, ...] = (
             "macro_market_context",
         ),
         output_fields=(
+            "evidence_summary",
+            "evidence_status",
             "evidence_reliability",
-            "hidden_tail_risk",
-            "fn_supplement_flag",
+            "evidence_strength",
+            "model_challenge",
+            "audit_conclusion",
             "debt_liquidity_cross_check",
             "macro_industry_sensitivity",
+            "external_evidence_findings",
+            "evidence_limitations",
             "confidence",
         ),
         future_agno_instruction=(

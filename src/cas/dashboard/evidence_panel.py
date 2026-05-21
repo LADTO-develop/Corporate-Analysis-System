@@ -12,6 +12,7 @@ from cas.dashboard.streamlit_compat import stretch_dataframe
 
 EXTERNAL_EVIDENCE_STATUS_LABELS = {
     "not_requested": "아직 수집하지 않음",
+    "dashboard_not_collected": "아직 수집하지 않음",
     "ready": "수집 완료",
     "no_results": "검색 결과 없음",
     "missing_credentials": "API 키 미설정",
@@ -329,13 +330,14 @@ def _external_evidence_collection_note(
     )
     if not provider_text:
         provider_text = "뉴스, 웹 검색, OpenDART 공시를 기준으로 확인합니다."
+    date_filter_text = _external_evidence_date_filter_text(snapshot)
     if veto_label == "발동":
         action_text = "강한 외부 위험 신호가 확인되어 위원회 판단을 보수적으로 조정합니다."
     elif veto_label == "후보 검토":
         action_text = "키워드는 감지됐지만 확정 근거가 부족해 후보로만 표시하고 판단을 과도하게 바꾸지 않습니다."
     else:
         action_text = "수집 근거는 판단 메모에 반영하되, 강한 경고 신호가 없으면 모델 판단을 무리하게 뒤집지 않습니다."
-    return f"{provider_text} {action_text}"
+    return " ".join(part for part in (provider_text, date_filter_text, action_text) if part)
 
 
 def _external_evidence_items_frame(snapshot: dict[str, object] | None) -> pd.DataFrame:
@@ -388,6 +390,47 @@ def _external_evidence_provider_status_text(providers: object) -> str:
     if not parts:
         return ""
     return "제공자 상태는 " + ", ".join(parts) + "입니다."
+
+
+def _external_evidence_date_filter_text(snapshot: dict[str, object] | None) -> str:
+    """Explain historical cut-off filtering when the evidence bundle includes it."""
+    if not snapshot:
+        return ""
+    providers = snapshot.get("providers")
+    if not isinstance(providers, dict):
+        return ""
+    cutoff_dates: set[str] = set()
+    filtered_after_cutoff = 0
+    filtered_undated = 0
+    historical_mode = False
+    for provider in providers.values():
+        if not isinstance(provider, dict):
+            continue
+        date_filter = provider.get("as_of_date_filter")
+        if isinstance(date_filter, dict):
+            historical_mode = historical_mode or bool(date_filter.get("historical_mode", False))
+            cutoff = str(date_filter.get("end_date") or "")
+            if cutoff:
+                cutoff_dates.add(cutoff)
+            filtered_after_cutoff += (
+                _optional_int(date_filter.get("filtered_after_cutoff_count")) or 0
+            )
+            filtered_undated += _optional_int(date_filter.get("filtered_undated_count")) or 0
+        query_window = provider.get("query_window")
+        if isinstance(query_window, dict):
+            cutoff = str(query_window.get("end_date") or "")
+            if cutoff:
+                cutoff_dates.add(cutoff)
+    if not historical_mode:
+        return ""
+    cutoff = sorted(cutoff_dates)[-1] if cutoff_dates else str(snapshot.get("as_of_date") or "")
+    filtered_total = filtered_after_cutoff + filtered_undated
+    if filtered_total <= 0:
+        return f"과거 재현 평가는 기준일 {cutoff} 이전 공개 근거만 사용하도록 날짜 필터를 적용했습니다."
+    return (
+        f"과거 재현 평가는 기준일 {cutoff} 이후 또는 날짜 미확인 근거 "
+        f"{filtered_total}건을 제외했습니다."
+    )
 
 
 def _external_evidence_source_label(value: object) -> str:

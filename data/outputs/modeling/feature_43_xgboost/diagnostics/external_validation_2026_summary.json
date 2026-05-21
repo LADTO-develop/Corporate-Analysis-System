@@ -1,0 +1,327 @@
+{
+  "created_at": "2026-05-20T07:55:54Z",
+  "benchmark_name": "2026_external_rating_validation",
+  "committee_mode": "offline",
+  "committee_mode_note": "Stage 2 was run with deterministic/offline evidence only. Live Naver/Tavily/OpenDART evidence is intentionally excluded so the benchmark is reproducible.",
+  "rows": 141,
+  "positive_count": 15,
+  "negative_count": 126,
+  "positive_rate": 0.10638297872340426,
+  "stage1_model": {
+    "precision": 0.7647058823529411,
+    "recall": 0.8666666666666667,
+    "f1": 0.8125,
+    "tp": 13,
+    "fp": 4,
+    "fn": 2,
+    "tn": 122,
+    "pr_auc": 0.9528322440087146,
+    "roc_auc": 0.9931216931216932
+  },
+  "stage2_review_route": {
+    "precision": 0.14705882352941177,
+    "recall": 1.0,
+    "f1": 0.2564102564102564,
+    "tp": 15,
+    "fp": 87,
+    "fn": 0,
+    "tn": 39,
+    "pr_auc": null,
+    "roc_auc": null
+  },
+  "stage2_committee_review_or_reject": {
+    "precision": 0.14,
+    "recall": 0.9333333333333333,
+    "f1": 0.24347826086956523,
+    "tp": 14,
+    "fp": 86,
+    "fn": 1,
+    "tn": 40,
+    "pr_auc": null,
+    "roc_auc": null
+  },
+  "stage2_committee_reject_only": {
+    "precision": 1.0,
+    "recall": 0.6666666666666666,
+    "f1": 0.8,
+    "tp": 10,
+    "fp": 0,
+    "fn": 5,
+    "tn": 126,
+    "pr_auc": null,
+    "roc_auc": null
+  },
+  "stage2_effect_counts": {
+    "tn_escalated_to_hold_or_reject": 83,
+    "tn_kept_eligible": 39,
+    "tp_risk_preserved": 12,
+    "fp_softened_to_eligible_or_hold": 4,
+    "fn_caught_as_review_or_reject": 2,
+    "tp_softened_too_much": 1
+  },
+  "stage1_error_counts": {
+    "TN": 122,
+    "TP": 13,
+    "FP": 4,
+    "FN": 2
+  },
+  "committee_label_counts": {
+    "보류": 90,
+    "적격": 41,
+    "부적격": 10
+  },
+  "review_load": {
+    "stage1_reject_count": 17,
+    "stage2_review_route_count": 102,
+    "stage2_review_or_reject_count": 100,
+    "stage2_reject_only_count": 10
+  },
+  "by_market": [
+    {
+      "market": "KOSPI",
+      "rows": 121,
+      "positive_count": 7,
+      "stage1_recall": 1.0,
+      "stage2_route_recall": 1.0,
+      "stage2_review_recall": 0.8571428571428571,
+      "stage1_fp": 4,
+      "stage2_route_fp": 78,
+      "stage2_review_fp": 77
+    },
+    {
+      "market": "KOSDAQ",
+      "rows": 20,
+      "positive_count": 8,
+      "stage1_recall": 0.75,
+      "stage2_route_recall": 1.0,
+      "stage2_review_recall": 1.0,
+      "stage1_fp": 0,
+      "stage2_route_fp": 9,
+      "stage2_review_fp": 9
+    }
+  ],
+  "by_rating_boundary": [
+    {
+      "credit_rating": "AA-",
+      "rows": 26,
+      "positive_count": 0,
+      "stage1_recall": null,
+      "stage2_route_recall": null,
+      "stage2_review_recall": null,
+      "stage1_fp": 0,
+      "stage2_route_fp": 17,
+      "stage2_review_fp": 17
+    },
+    {
+      "credit_rating": "A+",
+      "rows": 23,
+      "positive_count": 0,
+      "stage1_recall": null,
+      "stage2_route_recall": null,
+      "stage2_review_recall": null,
+      "stage1_fp": 0,
+      "stage2_route_fp": 16,
+      "stage2_review_fp": 16
+    },
+    {
+      "credit_rating": "A",
+      "rows": 18,
+      "positive_count": 0,
+      "stage1_recall": null,
+      "stage2_route_recall": null,
+      "stage2_review_recall": null,
+      "stage1_fp": 0,
+      "stage2_route_fp": 12,
+      "stage2_review_fp": 12
+    },
+    {
+      "credit_rating": "AA",
+      "rows": 12,
+      "positive_count": 0,
+      "stage1_recall": null,
+      "stage2_route_recall": null,
+      "stage2_review_recall": null,
+      "stage1_fp": 0,
+      "stage2_route_fp": 8,
+      "stage2_review_fp": 8
+    },
+    {
+      "credit_rating": "BBB+",
+      "rows": 12,
+      "positive_count": 0,
+      "stage1_recall": null,
+      "stage2_route_recall": null,
+      "stage2_review_recall": null,
+      "stage1_fp": 0,
+      "stage2_route_fp": 10,
+      "stage2_review_fp": 10
+    },
+    {
+      "credit_rating": "A-",
+      "rows": 9,
+      "positive_count": 0,
+      "stage1_recall": null,
+      "stage2_route_recall": null,
+      "stage2_review_recall": null,
+      "stage1_fp": 1,
+      "stage2_route_fp": 6,
+      "stage2_review_fp": 6
+    },
+    {
+      "credit_rating": "BBB",
+      "rows": 9,
+      "positive_count": 0,
+      "stage1_recall": null,
+      "stage2_route_recall": null,
+      "stage2_review_recall": null,
+      "stage1_fp": 2,
+      "stage2_route_fp": 8,
+      "stage2_review_fp": 7
+    },
+    {
+      "credit_rating": "AA+",
+      "rows": 8,
+      "positive_count": 0,
+      "stage1_recall": null,
+      "stage2_route_recall": null,
+      "stage2_review_recall": null,
+      "stage1_fp": 0,
+      "stage2_route_fp": 3,
+      "stage2_review_fp": 3
+    },
+    {
+      "credit_rating": "BB",
+      "rows": 7,
+      "positive_count": 7,
+      "stage1_recall": 0.8571428571428571,
+      "stage2_route_recall": 1.0,
+      "stage2_review_recall": 1.0,
+      "stage1_fp": 0,
+      "stage2_route_fp": 0,
+      "stage2_review_fp": 0
+    },
+    {
+      "credit_rating": "AAA",
+      "rows": 5,
+      "positive_count": 0,
+      "stage1_recall": null,
+      "stage2_route_recall": null,
+      "stage2_review_recall": null,
+      "stage1_fp": 0,
+      "stage2_route_fp": 3,
+      "stage2_review_fp": 3
+    },
+    {
+      "credit_rating": "BBB-",
+      "rows": 4,
+      "positive_count": 0,
+      "stage1_recall": null,
+      "stage2_route_recall": null,
+      "stage2_review_recall": null,
+      "stage1_fp": 1,
+      "stage2_route_fp": 4,
+      "stage2_review_fp": 4
+    },
+    {
+      "credit_rating": "BB+",
+      "rows": 2,
+      "positive_count": 2,
+      "stage1_recall": 1.0,
+      "stage2_route_recall": 1.0,
+      "stage2_review_recall": 0.5,
+      "stage1_fp": 0,
+      "stage2_route_fp": 0,
+      "stage2_review_fp": 0
+    },
+    {
+      "credit_rating": "BB-",
+      "rows": 2,
+      "positive_count": 2,
+      "stage1_recall": 0.5,
+      "stage2_route_recall": 1.0,
+      "stage2_review_recall": 1.0,
+      "stage1_fp": 0,
+      "stage2_route_fp": 0,
+      "stage2_review_fp": 0
+    },
+    {
+      "credit_rating": "B",
+      "rows": 1,
+      "positive_count": 1,
+      "stage1_recall": 1.0,
+      "stage2_route_recall": 1.0,
+      "stage2_review_recall": 1.0,
+      "stage1_fp": 0,
+      "stage2_route_fp": 0,
+      "stage2_review_fp": 0
+    },
+    {
+      "credit_rating": "B-",
+      "rows": 1,
+      "positive_count": 1,
+      "stage1_recall": 1.0,
+      "stage2_route_recall": 1.0,
+      "stage2_review_recall": 1.0,
+      "stage1_fp": 0,
+      "stage2_route_fp": 0,
+      "stage2_review_fp": 0
+    },
+    {
+      "credit_rating": "CCC",
+      "rows": 1,
+      "positive_count": 1,
+      "stage1_recall": 1.0,
+      "stage2_route_recall": 1.0,
+      "stage2_review_recall": 1.0,
+      "stage1_fp": 0,
+      "stage2_route_fp": 0,
+      "stage2_review_fp": 0
+    },
+    {
+      "credit_rating": "D",
+      "rows": 1,
+      "positive_count": 1,
+      "stage1_recall": 1.0,
+      "stage2_route_recall": 1.0,
+      "stage2_review_recall": 1.0,
+      "stage1_fp": 0,
+      "stage2_route_fp": 0,
+      "stage2_review_fp": 0
+    }
+  ],
+  "by_rating_agency": [
+    {
+      "rating_agency": "한국기업평가",
+      "rows": 76,
+      "positive_count": 5,
+      "stage1_recall": 0.8,
+      "stage2_route_recall": 1.0,
+      "stage2_review_recall": 1.0,
+      "stage1_fp": 2,
+      "stage2_route_fp": 49,
+      "stage2_review_fp": 49
+    },
+    {
+      "rating_agency": "NICE신용평가",
+      "rows": 36,
+      "positive_count": 7,
+      "stage1_recall": 0.8571428571428571,
+      "stage2_route_recall": 1.0,
+      "stage2_review_recall": 0.8571428571428571,
+      "stage1_fp": 2,
+      "stage2_route_fp": 22,
+      "stage2_review_fp": 21
+    },
+    {
+      "rating_agency": "한국신용평가",
+      "rows": 29,
+      "positive_count": 3,
+      "stage1_recall": 1.0,
+      "stage2_route_recall": 1.0,
+      "stage2_review_recall": 1.0,
+      "stage1_fp": 0,
+      "stage2_route_fp": 16,
+      "stage2_review_fp": 16
+    }
+  ]
+}

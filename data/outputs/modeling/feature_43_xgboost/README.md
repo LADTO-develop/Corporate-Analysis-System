@@ -9,8 +9,8 @@ XGBoost 모델링 산출물을 저장한 결과입니다. CAS 기준 원본은
 - `xgboost_model.json`: XGBoost 원본 모델 파일
 - `model_artifact_metadata.json`: 사용 변수, 결측 처리 전략, 기준선 등 메타데이터
 - `diagnostics/`: 연도/시장/산업별 성능, threshold trade-off, calibration,
-  대표 오류 사례, threshold 정책, FP 집중 구간, 43/44 변수셋 비교 요약을
-  정리한 모델 진단 산출물
+  대표 오류 사례, threshold 정책, FP 집중 구간, 43/44 변수셋 비교 요약,
+  2026 외부 신용평가 라벨 검증 결과를 정리한 모델 진단 산출물
 
 이 경로는 팀 공유용 모델링 산출물이자 Stage 1 런타임이 직접 참조하는 기준
 모델 artifact 위치입니다.
@@ -54,4 +54,11 @@ threshold 정책별 valid/test 성능 실험은 아래 명령으로 재생성할
 
 ```bash
 /opt/anaconda3/envs/aura/bin/python scripts/export_feature_43_error_deep_dive.py
+```
+
+2026 신용평가 공시 라벨을 외부 검증 정답셋으로 사용해 Stage 1 모델과
+Stage 2 위원회 검토 경로를 비교하는 평가는 아래 명령으로 재생성할 수 있습니다.
+
+```bash
+/opt/anaconda3/envs/aura/bin/python scripts/export_2026_external_validation_evaluation.py
 ```
