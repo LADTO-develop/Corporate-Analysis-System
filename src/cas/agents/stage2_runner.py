@@ -295,6 +295,7 @@ def _build_prompt_payload(
             "Use evidence_quality, evidence_score, and verification_flags when judging news strength.",
             "Do not describe critical_terms as confirmed events unless veto_candidate=true or veto_triggered=true.",
             "Use hidden_tail_risk_flag when direct, verified external adverse evidence challenges an eligible model decision.",
+            "Do not escalate an eligible near-threshold model call to hold from proximity alone when absolute risk is low and severe financial stress is absent.",
             "EvidenceAuditAgent must separate evidence_limitations from confirmed risks.",
             "Do not say the system confirms, approves, assigns, or finalizes an official credit rating.",
             "Treat rule_engine_confidence as a rule-engine review confidence, not model confidence.",

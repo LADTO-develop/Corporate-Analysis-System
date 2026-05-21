@@ -1,8 +1,51 @@
 {
-  "generated_at_utc": "2026-05-19T13:42:21.397062+00:00",
-  "historical_test_replay_rows": 115,
+  "generated_at_utc": "2026-05-21T01:01:14.093813+00:00",
+  "historical_validation_tuning_rows": 120,
+  "historical_test_holdout_rows": 115,
   "current_2026_external_validation_rows": 141,
-  "historical_counts": [
+  "validation_tuning_counts": [
+    {
+      "committee_policy": "balanced_current_45_or_near_threshold_0_10",
+      "sample_category": "bbb_minus_bb_plus_boundary",
+      "rows": 15
+    },
+    {
+      "committee_policy": "balanced_current_45_or_near_threshold_0_10",
+      "sample_category": "fn_caught_by_stage2_review",
+      "rows": 15
+    },
+    {
+      "committee_policy": "balanced_current_45_or_near_threshold_0_10",
+      "sample_category": "fp_needing_committee_mitigation",
+      "rows": 15
+    },
+    {
+      "committee_policy": "balanced_current_45_or_near_threshold_0_10",
+      "sample_category": "true_positive_risk_explanation",
+      "rows": 15
+    },
+    {
+      "committee_policy": "recall_first_current_45_or_fn_mid_mfg_prob_0_10",
+      "sample_category": "bbb_minus_bb_plus_boundary",
+      "rows": 15
+    },
+    {
+      "committee_policy": "recall_first_current_45_or_fn_mid_mfg_prob_0_10",
+      "sample_category": "fn_caught_by_stage2_review",
+      "rows": 15
+    },
+    {
+      "committee_policy": "recall_first_current_45_or_fn_mid_mfg_prob_0_10",
+      "sample_category": "fp_needing_committee_mitigation",
+      "rows": 15
+    },
+    {
+      "committee_policy": "recall_first_current_45_or_fn_mid_mfg_prob_0_10",
+      "sample_category": "true_positive_risk_explanation",
+      "rows": 15
+    }
+  ],
+  "test_holdout_counts": [
     {
       "committee_policy": "balanced_current_45_or_near_threshold_0_10",
       "sample_category": "bbb_minus_bb_plus_boundary",
@@ -56,6 +99,11 @@
       "rows": 126
     }
   ],
+  "split_usage_policy": {
+    "validation": "Use for Stage 2 committee prompt/rule tuning and operational threshold diagnostics.",
+    "test": "Hold out for final confirmation after validation-selected committee changes are fixed.",
+    "external_2026": "Use only as a final external validation set, not for tuning."
+  },
   "leakage_guardrail": {
     "historical_as_of_date": "fiscal_year-12-31",
     "naver_tavily_filter": "published_at must be <= as_of_date; undated web results are excluded in historical mode",
@@ -63,7 +111,9 @@
     "current_2026_mode": "uses evidence available as of run date"
   },
   "paths": {
-    "historical_samples": "data/outputs/modeling/feature_43_xgboost/diagnostics/committee_review_historical_test_replay_samples.csv",
+    "validation_tuning_samples": "data/outputs/modeling/feature_43_xgboost/diagnostics/committee_review_historical_validation_tuning_samples.csv",
+    "test_holdout_samples": "data/outputs/modeling/feature_43_xgboost/diagnostics/committee_review_historical_test_holdout_samples.csv",
+    "legacy_test_replay_samples": "data/outputs/modeling/feature_43_xgboost/diagnostics/committee_review_historical_test_replay_samples.csv",
     "current_2026_candidates": "data/outputs/modeling/feature_43_xgboost/diagnostics/committee_review_2026_external_validation_candidates.csv",
     "summary": "data/outputs/modeling/feature_43_xgboost/diagnostics/committee_review_evaluation_summary.json",
     "report": "data/outputs/modeling/feature_43_xgboost/diagnostics/committee_review_evaluation_plan.md"

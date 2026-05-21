@@ -1,0 +1,24 @@
+experiment_group,artifact_dir,rows,strict_successes,strict_success_rate,review_safe_successes,review_safe_success_rate,run_failures,note
+historical_12_baseline,.,12,9,0.750,,,0,Initial 12-case baseline
+live_claude_pilot,committee_review_live_claude_pilot,4,2,0.500,,,0,Initial Claude connectivity and quality pilot
+live_claude_fp_mitigation,committee_review_live_claude_pilot_fp_mitigation,4,3,0.750,,,0,FP mitigation prompt update
+live_claude_label_alignment,committee_review_live_claude_pilot_label_alignment,4,4,1.000,,,0,4-case label alignment success
+live_claude_12case_label_alignment,committee_review_live_claude_12case_label_alignment,12,10,0.833,,,0,Expanded 12-case Claude label alignment
+other_candidates,committee_review_batch_other_candidates,20,18,0.900,,,0,Expanded candidate set
+keyword_context_rerun,committee_review_batch_rerun_keyword_context_claude,12,11,0.917,,,0,Keyword and evidence-context rerun
+secondary_trigger_rerun,committee_review_batch_secondary_trigger_rerun,12,11,0.917,,,0,Secondary trigger rerun
+secondary_signal_connected,committee_review_batch_secondary_signal_connected,12,12,1.000,,,0,Same 12-case series after secondary signal connection
+rolling_validation_pilot,committee_review_rolling_validation_batch,5,3,0.600,4,0.800,0,Initial rolling validation replay
+rolling_agno_claude_retry_batch,committee_review_rolling_validation_agno_claude_retry_batch,2,1,0.500,1,0.500,0,Small FP retry batch
+rolling_agno_claude_round2,committee_review_rolling_validation_agno_claude_round2_batch,10,9,0.900,10,1.000,0,Stabilized 10-case Agno/Claude round 2
+rolling_validation_combined_15,committee_review_rolling_validation_batch + committee_review_rolling_validation_agno_claude_round2_batch,15,12,0.800,14,0.933,0,Combined rolling validation evidence set
+holdout_unseen_deterministic_speed_baseline,committee_review_holdout_unseen_deterministic_speed_baseline,8,6,0.750,6,0.750,0,Local deterministic baseline on unseen holdout 8 cases; FN guardrail remains the improvement target
+holdout_unseen_liquidity_guardrail,committee_review_holdout_unseen_guardrail_speed_batch,8,8,1.000,8,1.000,0,Local deterministic liquidity-watch guardrail on unseen holdout 8 cases; improved baseline by 25.0 percentage points
+rolling_agno_claude_round3_live_parallel,committee_review_rolling_validation_agno_claude_round3_batch,10,8,0.800,10,1.000,0,New unseen rolling validation Agno/Claude round 3 with workers=3; TN over-hold remained the main weakness
+rolling_agno_claude_round3_low_prob_guardrail,committee_review_rolling_validation_agno_claude_round3_after_guardrail_batch,10,9,0.900,10,1.000,0,Same round 3 samples after low-absolute-probability secondary-trigger guardrail; one TN moved from hold to eligible
+rerun_check_historical_test_12,rerun_check_historical_test_12,12,10,0.833,10,0.833,0,Final rerun after failed pilot cleanup; deterministic replay of historical test 12
+rerun_check_rolling_pilot_5,rerun_check_rolling_pilot_5,5,3,0.600,4,0.800,0,Final rerun after failed pilot cleanup; original rolling pilot baseline retained for comparison
+rerun_check_holdout_guardrail,rerun_check_holdout_guardrail,8,8,1.000,8,1.000,0,Final rerun after failed pilot cleanup; unseen holdout guardrail remains 100 percent
+rerun_check_round2_agno,rerun_check_round2_agno,10,9,0.900,10,1.000,0,Final cached Agno rerun after failed pilot cleanup; round 2 remains review-safe 100 percent
+rerun_check_round3_after_guardrail,rerun_check_round3_after_guardrail,10,9,0.900,10,1.000,0,Final cached Agno rerun after failed pilot cleanup; round 3 guardrail remains review-safe 100 percent
+rerun_check_random_rolling_10,rerun_check_random_rolling_10,10,10,1.000,10,1.000,0,Random rolling validation sanity check after FP mitigation; 8 true-negative safe firms stayed eligible and 1 high-probability FP moved from reject to hold

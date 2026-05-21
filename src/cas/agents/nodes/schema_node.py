@@ -149,6 +149,13 @@ def _committee_view_payload(
     if committee_view:
         return {
             "final_committee_label": str(committee_view.get("final_committee_label", "보류")),
+            "committee_decision_type": str(
+                committee_view.get("committee_decision_type", "review_hold")
+            ),
+            "committee_decision_type_label": str(
+                committee_view.get("committee_decision_type_label", "확인필요 보류")
+            ),
+            "committee_risk_signal": bool(committee_view.get("committee_risk_signal", True)),
             "veto_triggered": bool(committee_view.get("veto_triggered", False)),
             "hidden_tail_risk_flag": bool(committee_view.get("hidden_tail_risk_flag", False)),
             "hidden_tail_risk_reason": str(committee_view.get("hidden_tail_risk_reason", "")),
@@ -170,6 +177,11 @@ def _committee_view_payload(
         memo = "Stage 2 committee_view가 생성되지 않아 model_view 기준 라벨만 반영했습니다."
     return {
         "final_committee_label": label,
+        "committee_decision_type": "review_hold" if label == "보류" else "eligible"
+        if label == "적격"
+        else "reject",
+        "committee_decision_type_label": "확인필요 보류" if label == "보류" else label,
+        "committee_risk_signal": label == "부적격",
         "veto_triggered": False,
         "hidden_tail_risk_flag": False,
         "hidden_tail_risk_reason": "",

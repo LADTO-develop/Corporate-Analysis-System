@@ -1,0 +1,13 @@
+﻿run,committee_decision_type_label,count
+agno_round2_10,과민경고 완화 보류,5
+agno_round2_10,위험 보류,3
+agno_round2_10,부적격,1
+agno_round2_10,적격,1
+agno_round3_10,과민경고 완화 보류,5
+agno_round3_10,위험 보류,3
+agno_round3_10,부적격,1
+agno_round3_10,적격,1
+agno_random_rolling_10,적격,7
+agno_random_rolling_10,과민경고 완화 보류,1
+agno_random_rolling_10,부적격,1
+agno_random_rolling_10,확인필요 보류,1
