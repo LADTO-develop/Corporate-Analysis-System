@@ -446,9 +446,7 @@ def summarize_samples(
                 "Hold out for final confirmation after validation-selected committee "
                 "changes are fixed."
             ),
-            "external_2026": (
-                "Use only as a final external validation set, not for tuning."
-            ),
+            "external_2026": ("Use only as a final external validation set, not for tuning."),
         },
         "leakage_guardrail": {
             "historical_as_of_date": "fiscal_year-12-31",

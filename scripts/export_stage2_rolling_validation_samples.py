@@ -126,7 +126,9 @@ def attach_rating_reference(master: pd.DataFrame, labels_path: Path) -> pd.DataF
     return add_rating_segments(merged)
 
 
-def rolling_scores(master: pd.DataFrame, eval_years: list[int]) -> tuple[pd.DataFrame, pd.DataFrame]:
+def rolling_scores(
+    master: pd.DataFrame, eval_years: list[int]
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     features = feature_columns(master)
     score_frames: list[pd.DataFrame] = []
     fold_rows: list[dict[str, Any]] = []
@@ -234,7 +236,10 @@ def build_samples(scores: pd.DataFrame, per_category: int) -> pd.DataFrame:
             "bbb_minus_bb_plus_boundary": triggered
             & frame["is_exact_boundary_bbb_minus_bb_plus"].astype(bool),
             "true_positive_risk_explanation": triggered & base & actual,
-            "true_negative_overescalation_guardrail": triggered & (~base) & (~actual) & near_threshold,
+            "true_negative_overescalation_guardrail": triggered
+            & (~base)
+            & (~actual)
+            & near_threshold,
         }
         sort_orders = {
             "fn_caught_by_stage2_review": ("prob_speculative", False),
@@ -245,9 +250,13 @@ def build_samples(scores: pd.DataFrame, per_category: int) -> pd.DataFrame:
         }
         for category, mask in category_masks.items():
             sort_column, ascending = sort_orders[category]
-            subset = frame.loc[mask].copy().sort_values(
-                [sort_column, "rolling_eval_year", "stock_code"],
-                ascending=[ascending, True, True],
+            subset = (
+                frame.loc[mask]
+                .copy()
+                .sort_values(
+                    [sort_column, "rolling_eval_year", "stock_code"],
+                    ascending=[ascending, True, True],
+                )
             )
             subset = subset.head(per_category)
             subset["evaluation_mode"] = "rolling_validation_tuning"

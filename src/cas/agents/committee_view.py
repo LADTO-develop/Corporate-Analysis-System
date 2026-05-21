@@ -619,9 +619,7 @@ def _model_only_overwarning_buffer_reason(
         return ""
     if not mitigating_factors:
         return ""
-    cashflow_backed_resilience = _has_cashflow_backed_fp_resilience(
-        bundle.source_feature_row
-    )
+    cashflow_backed_resilience = _has_cashflow_backed_fp_resilience(bundle.source_feature_row)
     if not cashflow_backed_resilience:
         return ""
     if _has_blocking_flags(bundle) and not cashflow_backed_resilience:
@@ -668,9 +666,9 @@ def _has_cashflow_backed_fp_resilience(row: dict[str, Any]) -> bool:
     balance_sheet_support = _metric_at_least(row, "equity_ratio", 0.40) and _metric_at_most(
         row, "debt_ratio", 1.50
     )
-    borrowing_support = _metric_at_most(
-        row, "total_borrowings_ratio", 0.40
-    ) or _metric_at_most(row, "short_term_borrowings_share", 0.70)
+    borrowing_support = _metric_at_most(row, "total_borrowings_ratio", 0.40) or _metric_at_most(
+        row, "short_term_borrowings_share", 0.70
+    )
     return bool(cashflow_support and balance_sheet_support and borrowing_support)
 
 
@@ -713,7 +711,9 @@ def _no_direct_external_items(news_cache: dict[str, Any]) -> bool:
     raw_items = news_cache.get("items", [])
     if not isinstance(raw_items, list):
         return True
-    return not any(isinstance(item, dict) and item.get("company_match") is True for item in raw_items)
+    return not any(
+        isinstance(item, dict) and item.get("company_match") is True for item in raw_items
+    )
 
 
 def _financial_resilience_overwarning_assessment(

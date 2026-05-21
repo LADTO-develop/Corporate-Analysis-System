@@ -260,9 +260,7 @@ def _rerun_committee_with_sample_model_view(
     return updated
 
 
-def _sample_model_view_updates(
-    state: dict[str, Any], sample: dict[str, Any]
-) -> dict[str, Any]:
+def _sample_model_view_updates(state: dict[str, Any], sample: dict[str, Any]) -> dict[str, Any]:
     probability = _safe_float(sample.get("prob_speculative"), default=0.0)
     threshold = _safe_float(sample.get("threshold"), default=0.315)
     prediction_label = str(sample.get("model_predicted_label_name") or "").strip()
@@ -448,9 +446,7 @@ def _committee_success(*, model_error_type: str, final_label: str) -> tuple[bool
     return False, "unknown_case_type"
 
 
-def _committee_review_safe_success(
-    *, model_error_type: str, final_label: str
-) -> tuple[bool, str]:
+def _committee_review_safe_success(*, model_error_type: str, final_label: str) -> tuple[bool, str]:
     """Evaluate Stage 2 as a review triage, where hold is acceptable for normal firms."""
     if not final_label:
         return False, "run_failed"

@@ -2320,12 +2320,7 @@ def render_committee_signal_guide(
         )
 
     st.markdown(
-        (
-            "<div class='committee-signal-guide'>"
-            f"{current_html}"
-            f"{''.join(guide_cards)}"
-            "</div>"
-        ),
+        (f"<div class='committee-signal-guide'>{current_html}{''.join(guide_cards)}</div>"),
         unsafe_allow_html=True,
     )
 

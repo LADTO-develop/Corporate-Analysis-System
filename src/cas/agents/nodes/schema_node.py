@@ -177,7 +177,9 @@ def _committee_view_payload(
         memo = "Stage 2 committee_view가 생성되지 않아 model_view 기준 라벨만 반영했습니다."
     return {
         "final_committee_label": label,
-        "committee_decision_type": "review_hold" if label == "보류" else "eligible"
+        "committee_decision_type": "review_hold"
+        if label == "보류"
+        else "eligible"
         if label == "적격"
         else "reject",
         "committee_decision_type_label": "확인필요 보류" if label == "보류" else label,
