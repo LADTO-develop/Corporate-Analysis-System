@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from cas.dashboard.credit_app import _committee_decision_type_info
+from cas.dashboard.committee_copy import committee_decision_type_info
 from cas.dashboard.formatting import COVERAGE_CAP_LABEL, format_ratio_value
 
 
@@ -28,8 +28,8 @@ def test_negative_capital_impairment_keeps_its_signed_percentage() -> None:
 
 
 def test_committee_decision_copy_is_user_friendly() -> None:
-    boundary = _committee_decision_type_info("경계등급 보류", risk_signal=False)
-    mitigation = _committee_decision_type_info("과민경고 완화 보류", risk_signal=False)
+    boundary = committee_decision_type_info("경계등급 보류", risk_signal=False)
+    mitigation = committee_decision_type_info("과민경고 완화 보류", risk_signal=False)
 
     assert "딱 잘라 말하기 어려운" in boundary["body"]
     assert "BBB-/BB+" in boundary["detail"]

@@ -79,7 +79,9 @@ def apply_supplements_to_inference(
 
     supplements = supplements.copy()
     supplements["_stock_code_key"] = supplements["stock_code"].map(normalize_stock_code)
-    supplement_lookup = supplements.set_index(["market", "_stock_code_key", "fiscal_year"], drop=False)
+    supplement_lookup = supplements.set_index(
+        ["market", "_stock_code_key", "fiscal_year"], drop=False
+    )
 
     audit_records: list[dict[str, object]] = []
     for index, row in output.loc[missing_mask].iterrows():
@@ -136,7 +138,9 @@ def main() -> None:
     original_columns = inference.columns.tolist()
     original_stock_code = inference["stock_code"].copy()
 
-    history = pd.read_csv(args.history, encoding="utf-8-sig", low_memory=False, dtype={"stock_code": "string"})
+    history = pd.read_csv(
+        args.history, encoding="utf-8-sig", low_memory=False, dtype={"stock_code": "string"}
+    )
     raw = load_supplement_rows(args.raw_supplement)
     supplements = build_supplement_frame(raw)
 
@@ -158,7 +162,14 @@ def main() -> None:
     if not audit.empty:
         print(
             audit[
-                ["market", "stock_code", "corp_name", "fiscal_year", "fs_div_used", "changed_column_count"]
+                [
+                    "market",
+                    "stock_code",
+                    "corp_name",
+                    "fiscal_year",
+                    "fs_div_used",
+                    "changed_column_count",
+                ]
             ]
             .head(20)
             .to_string(index=False)

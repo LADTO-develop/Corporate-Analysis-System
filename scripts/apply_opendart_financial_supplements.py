@@ -16,9 +16,7 @@ DEFAULT_RAW_SUPPLEMENT_PATH = (
     / "opendart"
     / "financial_statements_model-v1_all_years_cfs_with_ofs_fallback_raw.csv"
 )
-DEFAULT_AUDIT_PATH = (
-    ROOT / "data" / "raw" / "opendart" / "model_v1_opendart_supplement_audit.csv"
-)
+DEFAULT_AUDIT_PATH = ROOT / "data" / "raw" / "opendart" / "model_v1_opendart_supplement_audit.csv"
 INF_CAP = 1_000_000.0
 CV_CAP = 10.0
 KEY_COLUMNS = ["market", "stock_code", "fiscal_year"]
@@ -423,7 +421,9 @@ def build_supplement_frame(raw: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(records)
 
 
-def apply_supplements(model_v1: pd.DataFrame, supplements: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+def apply_supplements(
+    model_v1: pd.DataFrame, supplements: pd.DataFrame
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     output = model_v1.copy()
     output["_stock_code_key"] = output["stock_code"].map(normalize_stock_code)
     output["fiscal_year"] = pd.to_numeric(output["fiscal_year"], errors="coerce").astype(int)
@@ -479,7 +479,8 @@ def recompute_derived_columns(panel: pd.DataFrame) -> pd.DataFrame:
     numeric_columns = [
         column
         for column in output.columns
-        if column not in {"market", "stock_code", "corp_name", "firm_size_group", "industry_macro_category"}
+        if column
+        not in {"market", "stock_code", "corp_name", "firm_size_group", "industry_macro_category"}
     ]
     for column in numeric_columns:
         converted = pd.to_numeric(output[column], errors="coerce")
@@ -499,7 +500,9 @@ def recompute_derived_columns(panel: pd.DataFrame) -> pd.DataFrame:
 
     output["current_ratio"] = safe_ratio(output["current_assets"], output["current_liabilities"])
     output["debt_ratio"] = safe_ratio(output["liabilities_total"], output["equity_total"])
-    output["total_borrowings_ratio"] = safe_ratio(output["total_borrowings"], output["assets_total"])
+    output["total_borrowings_ratio"] = safe_ratio(
+        output["total_borrowings"], output["assets_total"]
+    )
     output["short_term_borrowings_share"] = safe_ratio(
         output["short_term_borrowings"], output["total_borrowings"]
     )
@@ -551,11 +554,11 @@ def recompute_derived_columns(panel: pd.DataFrame) -> pd.DataFrame:
     )
     output["lag1_current_ratio"] = prev_current_ratio
     output["is_2y_consecutive_operating_loss"] = (
-        output["operating_income"].lt(0) & prev_operating_income.lt(0)
-    ).fillna(False).astype(int)
+        (output["operating_income"].lt(0) & prev_operating_income.lt(0)).fillna(False).astype(int)
+    )
     output["is_2y_consecutive_ocf_deficit"] = (
-        output["ocf"].lt(0) & prev_ocf.lt(0)
-    ).fillna(False).astype(int)
+        (output["ocf"].lt(0) & prev_ocf.lt(0)).fillna(False).astype(int)
+    )
 
     output["interest_coverage_ratio"] = capped_ratio(
         output["operating_income"], output["interest_expense"]
@@ -567,14 +570,18 @@ def recompute_derived_columns(panel: pd.DataFrame) -> pd.DataFrame:
     output["ocf_deficit_flag"] = output["ocf"].lt(0).fillna(False).astype(int)
     output["cashflow_coverage_ratio"] = capped_ratio(output["ocf"], output["interest_expense"])
 
-    output["accounts_receivable_ratio"] = safe_ratio(output["accounts_receivable"], output["assets_total"])
+    output["accounts_receivable_ratio"] = safe_ratio(
+        output["accounts_receivable"], output["assets_total"]
+    )
     output["inventory_ratio"] = safe_ratio(output["inventories"], output["assets_total"])
     output["contract_assets_ratio"] = safe_ratio(output["contract_assets"], output["revenue"])
     output["ar_days"] = safe_ratio(output["accounts_receivable"] * 365.0, output["revenue"])
     output["inventory_days"] = safe_ratio(output["inventories"] * 365.0, output["cost_of_sales"])
     output["ap_days"] = safe_ratio(output["accounts_payable"] * 365.0, output["cost_of_sales"])
     output["ppe_ratio"] = safe_ratio(output["property_plant_equipment"], output["assets_total"])
-    output["intangible_assets_ratio"] = safe_ratio(output["intangible_assets"], output["assets_total"])
+    output["intangible_assets_ratio"] = safe_ratio(
+        output["intangible_assets"], output["assets_total"]
+    )
     output["advances_from_customers_ratio"] = safe_ratio(
         output["advances_from_customers"], output["liabilities_total"]
     )
@@ -589,7 +596,9 @@ def recompute_derived_columns(panel: pd.DataFrame) -> pd.DataFrame:
         .eq(3)
         .astype(int)
     )
-    output["accruals_ratio"] = safe_ratio(output["net_income"] - output["ocf"], output["assets_total"])
+    output["accruals_ratio"] = safe_ratio(
+        output["net_income"] - output["ocf"], output["assets_total"]
+    )
     output["delta_accruals_ratio"] = group["accruals_ratio"].transform(lambda s: s.diff())
     output["non_paid_in_equity_ratio"] = safe_ratio(
         output["equity_total"] - output["capital_stock"], output["assets_total"]
@@ -620,11 +629,11 @@ def recompute_derived_columns(panel: pd.DataFrame) -> pd.DataFrame:
     )
     output["lag1_equity_ratio"] = group["equity_ratio"].shift(1)
 
-    om_mean = group["operating_margin"].transform(lambda s: s.rolling(window=3, min_periods=2).mean())
-    om_std = group["operating_margin"].transform(lambda s: s.rolling(window=3, min_periods=2).std())
-    output["rolling_3y_cv_operating_margin"] = safe_ratio(om_std, om_mean.abs()).clip(
-        upper=CV_CAP
+    om_mean = group["operating_margin"].transform(
+        lambda s: s.rolling(window=3, min_periods=2).mean()
     )
+    om_std = group["operating_margin"].transform(lambda s: s.rolling(window=3, min_periods=2).std())
+    output["rolling_3y_cv_operating_margin"] = safe_ratio(om_std, om_mean.abs()).clip(upper=CV_CAP)
     otb_mean = group["ocf_to_total_borrowings"].transform(
         lambda s: s.rolling(window=3, min_periods=2).mean()
     )
@@ -641,29 +650,33 @@ def recompute_derived_columns(panel: pd.DataFrame) -> pd.DataFrame:
     prev2_operating_income = group["operating_income"].shift(2)
     prev2_ocf = group["ocf"].shift(2)
     output["is_3y_consecutive_operating_loss"] = (
-        output["operating_income"].lt(0)
-        & prev_operating_income.lt(0)
-        & prev2_operating_income.lt(0)
-    ).fillna(False).astype(int)
+        (
+            output["operating_income"].lt(0)
+            & prev_operating_income.lt(0)
+            & prev2_operating_income.lt(0)
+        )
+        .fillna(False)
+        .astype(int)
+    )
     output["is_3y_consecutive_ocf_deficit"] = (
-        output["ocf"].lt(0) & prev_ocf.lt(0) & prev2_ocf.lt(0)
-    ).fillna(False).astype(int)
+        (output["ocf"].lt(0) & prev_ocf.lt(0) & prev2_ocf.lt(0)).fillna(False).astype(int)
+    )
     output["total_assets_growth"] = growth_ratio(
         output["assets_total"], group["assets_total"].shift(1), abs_base=False
     )
     output["negative_equity_flag"] = output["equity_total"].lt(0).fillna(False).astype(int)
     output["is_operating_income_turn_negative"] = (
-        output["operating_income"].lt(0) & prev_operating_income.ge(0)
-    ).fillna(False).astype(int)
+        (output["operating_income"].lt(0) & prev_operating_income.ge(0)).fillna(False).astype(int)
+    )
     output["is_ocf_turn_negative"] = (
-        output["ocf"].lt(0) & prev_ocf.ge(0)
-    ).fillna(False).astype(int)
+        (output["ocf"].lt(0) & prev_ocf.ge(0)).fillna(False).astype(int)
+    )
     output["is_current_ratio_below_1"] = (
-        output["current_ratio"].lt(1) & prev_current_ratio.ge(1)
-    ).fillna(False).astype(int)
+        (output["current_ratio"].lt(1) & prev_current_ratio.ge(1)).fillna(False).astype(int)
+    )
     output["is_negative_equity_entry"] = (
-        output["equity_total"].lt(0) & prev_equity_total.ge(0)
-    ).fillna(False).astype(int)
+        (output["equity_total"].lt(0) & prev_equity_total.ge(0)).fillna(False).astype(int)
+    )
     output["ar_days_diff"] = group["ar_days"].transform(lambda s: s.diff())
     output["inventory_days_diff"] = group["inventory_days"].transform(lambda s: s.diff())
     output["ap_days_diff"] = group["ap_days"].transform(lambda s: s.diff())
@@ -689,7 +702,20 @@ def main() -> None:
     print(f"[Supplements] raw_rows={len(raw):,}, companies={len(supplements):,}")
     print(f"[Applied] rows={len(audit):,}")
     if not audit.empty:
-        print(audit[["market", "stock_code", "corp_name", "fiscal_year", "fs_div_used", "changed_column_count"]].head(20).to_string(index=False))
+        print(
+            audit[
+                [
+                    "market",
+                    "stock_code",
+                    "corp_name",
+                    "fiscal_year",
+                    "fs_div_used",
+                    "changed_column_count",
+                ]
+            ]
+            .head(20)
+            .to_string(index=False)
+        )
 
     if args.dry_run:
         return

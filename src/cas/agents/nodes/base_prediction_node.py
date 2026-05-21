@@ -320,9 +320,7 @@ def _load_stage2_review_signals() -> pd.DataFrame | None:
     signals_path = next((path for path in _STAGE2_REVIEW_SIGNALS_PATHS if path.exists()), None)
     if signals_path is None:
         return None
-    frame = pd.read_csv(
-        signals_path, encoding="utf-8-sig", dtype={"stock_code": str}
-    )
+    frame = pd.read_csv(signals_path, encoding="utf-8-sig", dtype={"stock_code": str})
     frame["stock_code"] = frame["stock_code"].astype(str).str.zfill(6)
     frame.attrs["stage2_review_signals_path"] = str(signals_path)
     return frame

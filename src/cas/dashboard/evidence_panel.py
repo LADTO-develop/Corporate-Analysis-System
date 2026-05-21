@@ -191,9 +191,13 @@ def render_external_evidence_judgment(
     )
     total_count = len(evidence_frame)
     caution_count = external_veto_candidate_count(evidence_snapshot)
-    final_label = display_committee_label or str(committee_view.get("final_committee_label") or "보류")
+    final_label = display_committee_label or str(
+        committee_view.get("final_committee_label") or "보류"
+    )
 
-    card_container = st.expander("외부근거 요약 카드 더 보기", expanded=False) if compact else st.container()
+    card_container = (
+        st.expander("외부근거 요약 카드 더 보기", expanded=False) if compact else st.container()
+    )
     with card_container:
         status_cols = st.columns(4)
         renderers.render_badge_value_block(

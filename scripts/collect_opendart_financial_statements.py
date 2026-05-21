@@ -11,8 +11,12 @@ import requests
 from dotenv import load_dotenv
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_INFERENCE_PATH = ROOT / "data" / "input" / "credit_43_features" / "feature_43_inference_2026.csv"
-DEFAULT_MODEL_V1_PATH = ROOT / "data" / "raw" / "ts2000" / "TS2000_Credit_Model_Dataset_Model_V1.csv"
+DEFAULT_INFERENCE_PATH = (
+    ROOT / "data" / "input" / "credit_43_features" / "feature_43_inference_2026.csv"
+)
+DEFAULT_MODEL_V1_PATH = (
+    ROOT / "data" / "raw" / "ts2000" / "TS2000_Credit_Model_Dataset_Model_V1.csv"
+)
 DEFAULT_CORP_CODE_PATH = ROOT / "data" / "external" / "opendart" / "corp_codes.csv"
 DEFAULT_OUTPUT_DIR = ROOT / "data" / "raw" / "opendart"
 OPENDART_FINANCIAL_URL = "https://opendart.fss.or.kr/api/fnlttSinglAcntAll.json"
@@ -145,9 +149,7 @@ def load_inference_targets(args: argparse.Namespace) -> pd.DataFrame:
         source_path = DEFAULT_MODEL_V1_PATH if args.source_kind == "model-v1" else args.inference
     source = pd.read_csv(source_path, encoding="utf-8-sig", dtype={"stock_code": "string"})
     source["stock_code"] = source["stock_code"].map(normalize_stock_code)
-    source["fiscal_year"] = pd.to_numeric(source["fiscal_year"], errors="coerce").astype(
-        "Int64"
-    )
+    source["fiscal_year"] = pd.to_numeric(source["fiscal_year"], errors="coerce").astype("Int64")
     if not args.all_years:
         source = source.loc[source["fiscal_year"].eq(args.target_fiscal_year)].copy()
 

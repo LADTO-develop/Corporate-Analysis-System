@@ -81,9 +81,7 @@ def load_boundary_frame(prediction_scores: Path, prior_reference: Path) -> pd.Da
         how="left",
         suffixes=("", "_prior_reference"),
     )
-    boundary = merged.loc[
-        merged["prior_rating_boundary_group"].eq(BOUNDARY_GROUP)
-    ].copy()
+    boundary = merged.loc[merged["prior_rating_boundary_group"].eq(BOUNDARY_GROUP)].copy()
     return enrich_boundary_frame(boundary)
 
 
@@ -93,19 +91,15 @@ def enrich_boundary_frame(frame: pd.DataFrame) -> pd.DataFrame:
     output["actual_is_speculative"] = output["is_speculative"].map(_bool_value)
     output["stage1_predicts_risk"] = output.apply(_stage1_risk, axis=1)
     output["stage2_review_trigger_bool"] = output["stage2_review_trigger"].map(_bool_value)
-    output["stage2_secondary_trigger_bool"] = output["stage2_secondary_trigger"].map(
-        _bool_value
-    )
+    output["stage2_secondary_trigger_bool"] = output["stage2_secondary_trigger"].map(_bool_value)
     output["stage2_overwarning_filter_candidate_bool"] = output[
         "stage2_overwarning_filter_candidate"
     ].map(_bool_value)
     output["stage2_cautious_review"] = (
-        output["stage2_review_trigger_bool"]
-        | output["stage2_overwarning_filter_candidate_bool"]
+        output["stage2_review_trigger_bool"] | output["stage2_overwarning_filter_candidate_bool"]
     )
     output["stage2_risk_signal_proxy"] = (
-        output["stage1_predicts_risk"]
-        & ~output["stage2_overwarning_filter_candidate_bool"]
+        output["stage1_predicts_risk"] & ~output["stage2_overwarning_filter_candidate_bool"]
     ) | output["stage2_secondary_trigger_bool"]
     output["stage1_error_type"] = output.apply(_stage1_error_type, axis=1)
     output["stage2_boundary_role"] = output.apply(_stage2_boundary_role, axis=1)

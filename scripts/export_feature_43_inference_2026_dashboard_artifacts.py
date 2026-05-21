@@ -28,9 +28,7 @@ MODEL_PATH = MODEL_DIR / "xgboost_model.json"
 MODEL_METADATA_PATH = MODEL_DIR / "model_artifact_metadata.json"
 SOURCE_DASHBOARD_DIR = ROOT / "data" / "outputs" / "dashboard" / "feature_43_mvp"
 OUTPUT_DIR = ROOT / "data" / "outputs" / "dashboard" / "feature_43_inference_2026"
-VALIDATION_SCORES_PATH = (
-    MODEL_DIR / "diagnostics" / "external_validation_2026_scores.csv"
-)
+VALIDATION_SCORES_PATH = MODEL_DIR / "diagnostics" / "external_validation_2026_scores.csv"
 TOP_K_SHAP = 10
 
 
@@ -45,7 +43,9 @@ def write_json(path: Path, payload: dict[str, Any]) -> None:
     )
 
 
-def apply_platt_calibration(raw_probabilities: np.ndarray, calibration: dict[str, Any]) -> np.ndarray:
+def apply_platt_calibration(
+    raw_probabilities: np.ndarray, calibration: dict[str, Any]
+) -> np.ndarray:
     epsilon = float(calibration.get("clip_epsilon", 1e-6))
     clipped = np.clip(raw_probabilities, epsilon, 1.0 - epsilon)
     logits = np.log(clipped / (1.0 - clipped))
@@ -133,14 +133,14 @@ def build_prediction_scores(
 
     scored["prob_speculative_overwarning_filter"] = np.nan
     scored["prob_speculative_overwarning_filter_raw"] = np.nan
-    scored["probability_overwarning_filter_calibration_method"] = (
-        "not_available_for_inference_2026"
-    )
+    scored["probability_overwarning_filter_calibration_method"] = "not_available_for_inference_2026"
     scored["threshold_overwarning_filter"] = np.nan
     scored["pred_label_overwarning_filter_tuned"] = np.nan
     scored["stage2_overwarning_filter_candidate"] = False
     scored["overwarning_filter_reason_code"] = "none"
-    scored["overwarning_filter_reason"] = "과민 경고 보조필터는 2026 추론 산출물에서 별도 계산하지 않았습니다."
+    scored["overwarning_filter_reason"] = (
+        "과민 경고 보조필터는 2026 추론 산출물에서 별도 계산하지 않았습니다."
+    )
     scored["overwarning_filter_policy"] = "not_available_for_inference_2026"
     return scored
 
@@ -240,9 +240,9 @@ def attach_validation_recommendation_flags(prediction_scores: pd.DataFrame) -> p
         "fn_caught_as_review_or_reject": "committee_caught",
         "fp_softened_to_eligible_or_hold": "overwarning_softened",
     }
-    output["landing_recommendation_bucket"] = output[
-        "external_validation_stage2_effect"
-    ].map(bucket_map).fillna("")
+    output["landing_recommendation_bucket"] = (
+        output["external_validation_stage2_effect"].map(bucket_map).fillna("")
+    )
     return output
 
 
@@ -256,7 +256,9 @@ def copy_static_artifacts(output_dir: Path) -> None:
         shutil.copy2(SOURCE_DASHBOARD_DIR / filename, output_dir / filename)
 
 
-def build_model_summary(metadata: dict[str, Any], prediction_scores: pd.DataFrame) -> dict[str, Any]:
+def build_model_summary(
+    metadata: dict[str, Any], prediction_scores: pd.DataFrame
+) -> dict[str, Any]:
     return {
         "dashboard_dataset": "feature_43_inference_2026",
         "source_inference_file": str(INFERENCE_PATH.relative_to(ROOT)),
@@ -340,7 +342,12 @@ def main() -> None:
         *source_features,
     ]
     company_universe = inference.loc[
-        :, [column for column in dict.fromkeys(company_universe_columns) if column in inference.columns]
+        :,
+        [
+            column
+            for column in dict.fromkeys(company_universe_columns)
+            if column in inference.columns
+        ],
     ].copy()
     company_latest = build_company_latest(inference, source_features)
     peer_percentiles = build_peer_percentiles(inference, numeric_source_features)
@@ -395,9 +402,7 @@ def main() -> None:
                 "inference": str(INFERENCE_PATH.relative_to(ROOT)),
                 "model": str(MODEL_PATH.relative_to(ROOT)),
                 "metadata": str(MODEL_METADATA_PATH.relative_to(ROOT)),
-                "external_validation_scores": str(
-                    VALIDATION_SCORES_PATH.relative_to(ROOT)
-                )
+                "external_validation_scores": str(VALIDATION_SCORES_PATH.relative_to(ROOT))
                 if VALIDATION_SCORES_PATH.exists()
                 else None,
             },

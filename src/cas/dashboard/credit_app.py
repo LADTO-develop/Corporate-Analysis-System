@@ -19,6 +19,14 @@ from dotenv import load_dotenv
 from cas.agents.contracts import build_company_selection_from_row
 from cas.agents.nodes import committee_node, rule_engine_node
 from cas.agents.state import AgentState
+from cas.dashboard.committee_copy import (
+    COMMITTEE_DECISION_STAGE_GUIDE,
+    committee_user_reason_label,
+    committee_user_stage_label,
+)
+from cas.dashboard.committee_copy import (
+    committee_decision_type_info as _committee_decision_type_info,
+)
 from cas.dashboard.data_loader import (
     DEFAULT_ARTIFACT_DIR,
     DashboardArtifacts,
@@ -171,88 +179,6 @@ OUTPUT_FORMAT_DESCRIPTIONS = {
     "memo": "위험 요인, 완화 요인, 외부근거를 균형 있게 읽습니다.",
     "detailed": "판단 규칙과 참고 근거까지 조금 더 자세히 살펴봅니다.",
 }
-
-COMMITTEE_DECISION_TYPE_GUIDE = {
-    "위험 보류": {
-        "signal": "위험신호 있음",
-        "tone": "risk",
-        "title": "위험 주의",
-        "body": "지금은 그냥 넘기기보다 한 번 더 들여다봐야 하는 기업입니다.",
-        "detail": (
-            "모델 확률, 보조 변수셋, 외부 근거 중 하나 이상이 위험 쪽으로 기울어 "
-            "위원회가 안전하게 보류했습니다."
-        ),
-        "action": "먼저 손실 지속, 이자보상, 차입 부담, 직접 관련 공시·뉴스를 확인하세요.",
-    },
-    "경계등급 보류": {
-        "signal": "위험신호 아님",
-        "tone": "neutral",
-        "title": "관찰",
-        "body": "좋다/나쁘다를 딱 잘라 말하기 어려운 경계선 위의 기업입니다.",
-        "detail": (
-            "이전 공개등급이 BBB-/BB+ 근처이거나 모델 확률이 기준선 가까이에 있어 "
-            "작은 정보 차이로 판단이 바뀔 수 있습니다."
-        ),
-        "action": "최근 등급 방향, 등급전망, 현금흐름 회복 여부, 외부근거의 방향성을 함께 보세요.",
-    },
-    "과민경고 완화 보류": {
-        "signal": "위험신호 아님",
-        "tone": "mitigate",
-        "title": "관찰",
-        "body": "모델은 경고했지만, 위원회가 보기에는 바로 부적격으로 단정하긴 이릅니다.",
-        "detail": (
-            "유동성, 자본비율, 영업현금흐름 같은 방어력이 있거나 외부근거가 치명적이지 "
-            "않아 과민경고 가능성을 열어둔 상태입니다."
-        ),
-        "action": "모델을 자극한 SHAP 요인과 실제 재무 방어력이 서로 충돌하는지 확인하세요.",
-    },
-    "확인필요 보류": {
-        "signal": "위험신호 아님",
-        "tone": "neutral",
-        "title": "관찰",
-        "body": "현재 정보만으로는 결론을 세게 내기보다 근거를 더 모아야 하는 상태입니다.",
-        "detail": (
-            "모델과 외부근거가 뚜렷하게 같은 방향을 가리키지 않거나, 수집된 근거의 "
-            "직접 관련성·최신성이 아직 충분하지 않습니다."
-        ),
-        "action": "누락된 공시, 최신 뉴스, 재무제표 주석, 동종업계 비교를 보완하세요.",
-    },
-}
-
-COMMITTEE_DECISION_STAGE_GUIDE = [
-    {
-        "title": "적격",
-        "signal": "위험신호 아님",
-        "tone": "mitigate",
-        "body": "현재 확인된 정보에서는 큰 위험 신호가 두드러지지 않는 단계입니다.",
-        "detail": "모델 판단과 외부근거가 대체로 안정적인 방향으로 맞아떨어질 때 표시합니다.",
-        "action": "정기 모니터링 관점에서 최신 공시와 등급 변화를 확인합니다.",
-    },
-    {
-        "title": "관찰",
-        "signal": "위험신호 아님",
-        "tone": "neutral",
-        "body": "당장 위험으로 단정하긴 어렵지만 흐름을 계속 지켜보면 좋은 단계입니다.",
-        "detail": "경계등급, 근거 부족, 모델 과민 가능성처럼 추가 확인이 필요한 경우를 이 단계로 묶어 보여줍니다.",
-        "action": "판단 이유를 함께 보고, 최신 공시·뉴스와 재무 방어력을 확인합니다.",
-    },
-    {
-        "title": "위험 주의",
-        "signal": "위험신호 있음",
-        "tone": "risk",
-        "body": "그냥 넘기기보다 먼저 확인해야 할 위험 신호가 있는 단계입니다.",
-        "detail": "모델 확률, 보조 변수셋, 외부근거 중 하나 이상이 위험 쪽으로 기울 때 표시합니다.",
-        "action": "손실 지속, 이자보상, 차입 부담, 직접 관련 공시·뉴스를 우선 확인합니다.",
-    },
-    {
-        "title": "부적격",
-        "signal": "위험신호 있음",
-        "tone": "risk",
-        "body": "정량·정성 근거를 종합할 때 신용위험이 높다고 보는 단계입니다.",
-        "detail": "강한 재무 위험이나 신뢰도 높은 외부 위험 근거가 확인될 때 표시합니다.",
-        "action": "투자 판단 전 핵심 위험 요인과 최신 공시를 반드시 재확인합니다.",
-    },
-]
 
 COMMITTEE_SIGNAL_METRIC_GUIDE = [
     {
@@ -1682,10 +1608,26 @@ def render_selected_company_detail_header(selected_row: pd.Series) -> None:
     )
     review_priority = str(selected_row.get("stage2_review_priority") or "none").strip().lower()
     review_status_map = {
-        "high": ("주의 깊게 살펴보기", "에이전트 위원회가 먼저 확인해야 할 신호가 있다고 본 기업입니다.", "high"),
-        "medium": ("한 번 더 확인하기", "모델 결과와 보조 신호를 함께 보며 추가 확인이 필요한 기업입니다.", "watch"),
-        "watch": ("변화 신호 확인하기", "지금 바로 위험하다고 단정하기보다는, 최근 흐름을 한 번 더 살펴보면 좋은 기업입니다.", "watch"),
-        "none": ("기본 모니터링", "현재는 큰 경고보다 정기적으로 흐름을 확인하는 관점에서 보는 기업입니다.", "stable"),
+        "high": (
+            "주의 깊게 살펴보기",
+            "에이전트 위원회가 먼저 확인해야 할 신호가 있다고 본 기업입니다.",
+            "high",
+        ),
+        "medium": (
+            "한 번 더 확인하기",
+            "모델 결과와 보조 신호를 함께 보며 추가 확인이 필요한 기업입니다.",
+            "watch",
+        ),
+        "watch": (
+            "변화 신호 확인하기",
+            "지금 바로 위험하다고 단정하기보다는, 최근 흐름을 한 번 더 살펴보면 좋은 기업입니다.",
+            "watch",
+        ),
+        "none": (
+            "기본 모니터링",
+            "현재는 큰 경고보다 정기적으로 흐름을 확인하는 관점에서 보는 기업입니다.",
+            "stable",
+        ),
     }
     review_status, review_caption, review_tone = review_status_map.get(
         review_priority,
@@ -1856,9 +1798,7 @@ def render_company_market_explorer(explorer_frame: pd.DataFrame) -> str | None:
         st.info("선택한 시장/산업 조건에 맞는 기업이 없습니다. 필터를 조정해 주세요.")
         return str(st.session_state.get("selected_company_key", ""))
 
-    selected_market_label = (
-        "전체 시장" if selected_market == "전체" else str(selected_market)
-    )
+    selected_market_label = "전체 시장" if selected_market == "전체" else str(selected_market)
     selected_industry_label = (
         "전체 산업" if selected_industry == "전체" else to_industry_display_label(selected_industry)
     )
@@ -1910,8 +1850,8 @@ def render_company_market_explorer(explorer_frame: pd.DataFrame) -> str | None:
         )
     st.markdown(
         (
-            f"<div class=\"landing-section-title\">{escape(section_title)}</div>"
-            f"<div class=\"landing-section-caption\">{escape(section_caption)}</div>"
+            f'<div class="landing-section-title">{escape(section_title)}</div>'
+            f'<div class="landing-section-caption">{escape(section_caption)}</div>'
         ),
         unsafe_allow_html=True,
     )
@@ -2202,7 +2142,9 @@ def build_company_feature_map(
     financial_source_missing = _has_missing_financial_statement_source(selected_row)
     for record in feature_dictionary.to_dict(orient="records"):
         feature = str(record["feature"])
-        source_missing = financial_source_missing and feature in FINANCIAL_STATEMENT_DERIVED_FEATURES
+        source_missing = (
+            financial_source_missing and feature in FINANCIAL_STATEMENT_DERIVED_FEATURES
+        )
         rows.append(
             {
                 "feature": feature,
@@ -2647,11 +2589,14 @@ def _dashboard_evidence_key(selected_row: pd.Series) -> str:
 
 def _dashboard_cache_read(namespace: str, key: str) -> dict[str, object] | None:
     """Read a dashboard JSON cache that can survive browser refreshes."""
-    return read_json_cache(
-        namespace,
-        key,
-        env_var="CAS_DASHBOARD_CACHE_ENABLED",
-        default=True,
+    return cast(
+        "dict[str, object] | None",
+        read_json_cache(
+            namespace,
+            key,
+            env_var="CAS_DASHBOARD_CACHE_ENABLED",
+            default=True,
+        ),
     )
 
 
@@ -2672,16 +2617,19 @@ def _dashboard_cache_write(
 
 def _dashboard_evidence_cache_key(selected_row: pd.Series) -> str:
     """Build a stable file-cache key for dashboard external evidence."""
-    return stable_cache_key(
-        {
-            "cache_version": "dashboard_external_evidence_v1",
-            "stock_code": _stock_code_text(selected_row.get("stock_code")),
-            "corp_name": str(selected_row.get("corp_name") or ""),
-            "corp_code": _optional_text(selected_row.get("corp_code")),
-            "fiscal_year": _optional_int(selected_row.get("fiscal_year")),
-            "eval_year": _optional_int(selected_row.get("eval_year")),
-            "as_of_date": _dashboard_evidence_as_of_date(selected_row),
-        }
+    return cast(
+        str,
+        stable_cache_key(
+            {
+                "cache_version": "dashboard_external_evidence_v1",
+                "stock_code": _stock_code_text(selected_row.get("stock_code")),
+                "corp_name": str(selected_row.get("corp_name") or ""),
+                "corp_code": _optional_text(selected_row.get("corp_code")),
+                "fiscal_year": _optional_int(selected_row.get("fiscal_year")),
+                "eval_year": _optional_int(selected_row.get("eval_year")),
+                "as_of_date": _dashboard_evidence_as_of_date(selected_row),
+            }
+        ),
     )
 
 
@@ -2702,30 +2650,35 @@ def _dashboard_committee_cache_key(
     """Build a stable cache key for the rendered committee decision context."""
     if prediction_row is None:
         return None
-    return stable_cache_key(
-        {
-            "cache_version": "dashboard_committee_context_v1",
-            "runner": _dashboard_stage2_runner_name(),
-            "stock_code": _stock_code_text(selected_row.get("stock_code")),
-            "corp_name": str(selected_row.get("corp_name") or ""),
-            "fiscal_year": _optional_int(selected_row.get("fiscal_year")),
-            "eval_year": _optional_int(selected_row.get("eval_year")),
-            "probability_speculative": _optional_float(prediction_row.get("prob_speculative")),
-            "threshold": _optional_float(prediction_row.get("threshold")),
-            "predicted_label": _clean_dashboard_value(prediction_row.get("predicted_label")),
-            "risk_band": _clean_dashboard_value(prediction_row.get("risk_band")),
-            "stage2_review_priority": _clean_dashboard_value(
-                prediction_row.get("stage2_review_priority")
-            ),
-            "stage2_review_trigger": _optional_bool(prediction_row.get("stage2_review_trigger")),
-            "stage2_secondary_trigger": _optional_bool(
-                prediction_row.get("stage2_secondary_trigger")
-            ),
-            "overwarning_filter_candidate": _optional_bool(
-                prediction_row.get("stage2_overwarning_filter_candidate")
-            ),
-            "external_evidence_key": stable_cache_key(external_evidence_snapshot),
-        }
+    return cast(
+        str,
+        stable_cache_key(
+            {
+                "cache_version": "dashboard_committee_context_v1",
+                "runner": _dashboard_stage2_runner_name(),
+                "stock_code": _stock_code_text(selected_row.get("stock_code")),
+                "corp_name": str(selected_row.get("corp_name") or ""),
+                "fiscal_year": _optional_int(selected_row.get("fiscal_year")),
+                "eval_year": _optional_int(selected_row.get("eval_year")),
+                "probability_speculative": _optional_float(prediction_row.get("prob_speculative")),
+                "threshold": _optional_float(prediction_row.get("threshold")),
+                "predicted_label": _clean_dashboard_value(prediction_row.get("predicted_label")),
+                "risk_band": _clean_dashboard_value(prediction_row.get("risk_band")),
+                "stage2_review_priority": _clean_dashboard_value(
+                    prediction_row.get("stage2_review_priority")
+                ),
+                "stage2_review_trigger": _optional_bool(
+                    prediction_row.get("stage2_review_trigger")
+                ),
+                "stage2_secondary_trigger": _optional_bool(
+                    prediction_row.get("stage2_secondary_trigger")
+                ),
+                "overwarning_filter_candidate": _optional_bool(
+                    prediction_row.get("stage2_overwarning_filter_candidate")
+                ),
+                "external_evidence_key": cast(str, stable_cache_key(external_evidence_snapshot)),
+            }
+        ),
     )
 
 
@@ -3503,78 +3456,6 @@ def render_decision_badge(label: object, *, muted: bool = False) -> str:
     )
 
 
-def committee_user_stage_label(
-    *,
-    committee_label: str,
-    decision_type_label: str,
-    risk_signal: bool,
-) -> str:
-    """Map internal committee labels to a single user-facing decision stage."""
-    if committee_label == "부적격":
-        return "부적격"
-    if committee_label == "적격":
-        return "적격"
-    if decision_type_label == "과민경고 완화 보류":
-        return "관찰"
-    if decision_type_label == "경계등급 보류":
-        return "관찰"
-    if decision_type_label == "위험 보류" or risk_signal:
-        return "위험 주의"
-    if decision_type_label == "확인필요 보류" or committee_label == "보류":
-        return "관찰"
-    return committee_label or "관찰"
-
-
-def committee_user_reason_label(decision_type_label: str, *, risk_signal: bool) -> str:
-    """Return a short reason tag that avoids duplicating the final decision stage."""
-    if decision_type_label == "과민경고 완화 보류":
-        return "과민경고 완화"
-    if decision_type_label == "경계등급 보류":
-        return "경계등급 확인"
-    if decision_type_label == "위험 보류" or risk_signal:
-        return "위험 신호 확인"
-    if decision_type_label == "확인필요 보류":
-        return "근거 추가 확인"
-    return decision_type_label or "근거 추가 확인"
-
-
-def _committee_decision_type_info(
-    decision_type_label: str,
-    *,
-    risk_signal: bool,
-) -> dict[str, str]:
-    """Return user-facing copy for a committee decision subtype."""
-    info = COMMITTEE_DECISION_TYPE_GUIDE.get(decision_type_label)
-    if info is not None:
-        return dict(info)
-    if decision_type_label == "부적격" or risk_signal:
-        return {
-            "signal": "위험신호 있음",
-            "tone": "risk",
-            "title": decision_type_label or "위험 판단",
-            "body": "위원회가 실제 위험 경고로 볼 만한 신호가 있다고 정리한 상태입니다.",
-            "detail": "모델 판단만이 아니라 재무·외부근거를 함께 보아 위험 쪽으로 해석했습니다.",
-            "action": "핵심 위험 요인과 외부 근거를 우선 확인합니다.",
-        }
-    if decision_type_label == "적격":
-        return {
-            "signal": "위험신호 아님",
-            "tone": "mitigate",
-            "title": "적격",
-            "body": "현재 2차 위원회가 추가 위험신호를 강하게 보지 않은 상태입니다.",
-            "detail": "모델 판단과 확인된 근거가 대체로 무리 없이 맞아떨어진 경우입니다.",
-            "action": "다만 최신 공시나 뉴스가 바뀌면 다시 확인합니다.",
-        }
-    return {
-        "signal": "위험신호 아님",
-        "tone": "neutral",
-        "title": "관찰",
-        "body": "위험 여부를 단정하기보다 추가 확인이 필요한 상태입니다.",
-        "detail": "아직 판단을 강하게 밀어줄 근거가 충분하지 않거나 근거끼리 방향이 엇갈립니다.",
-        "action": "근거의 최신성, 직접 관련성, 재무 완충력을 함께 봅니다.",
-    }
-
-
 def render_committee_signal_guide(
     *,
     decision_type_label: str,
@@ -3612,9 +3493,7 @@ def render_committee_signal_guide(
         active_class = " active" if title == current_stage_title else ""
         detail = info.get("detail", "")
         current_badge = (
-            "<span class='committee-signal-current-badge'>현재 단계</span>"
-            if active_class
-            else ""
+            "<span class='committee-signal-current-badge'>현재 단계</span>" if active_class else ""
         )
         guide_cards.append(
             "<div class='committee-signal-card "
@@ -3629,10 +3508,12 @@ def render_committee_signal_guide(
             + (f"<div class='committee-signal-detail'>{escape(detail)}</div>" if detail else "")
             + f"<div class='committee-signal-action'>{escape(info['action'])}</div>"
             + "</div>"
-    )
+        )
 
     st.markdown(
-        (f"<div class='committee-signal-guide' style='grid-template-columns:minmax(0, 1fr);'>{current_html}</div>"),
+        (
+            f"<div class='committee-signal-guide' style='grid-template-columns:minmax(0, 1fr);'>{current_html}</div>"
+        ),
         unsafe_allow_html=True,
     )
     st.caption(

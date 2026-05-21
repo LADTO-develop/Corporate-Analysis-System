@@ -982,11 +982,9 @@ def _reject_confirmation_assessment(
     probability = bundle.probability_speculative
     very_high_model_warning = probability >= 0.90
     direct_adverse_evidence = bool(_overwarning_blocking_external_items(bundle.news_cache_snapshot))
-    extreme_financial_distress = _has_extreme_financial_distress_signal(
+    extreme_financial_distress = _has_extreme_financial_distress_signal(bundle.source_feature_row)
+    severe_financial_watch = very_high_model_warning and _has_severe_financial_watch_signal(
         bundle.source_feature_row
-    )
-    severe_financial_watch = (
-        very_high_model_warning and _has_severe_financial_watch_signal(bundle.source_feature_row)
     )
     signals = []
     if very_high_model_warning:
@@ -1433,9 +1431,7 @@ def _has_resolved_reverse_listing_halt(news_cache: dict[str, Any]) -> bool:
     for raw_item in raw_items:
         if not isinstance(raw_item, dict) or raw_item.get("company_match") is not True:
             continue
-        text = _compact_text(
-            " ".join(str(raw_item.get(key, "")) for key in ("title", "summary"))
-        )
+        text = _compact_text(" ".join(str(raw_item.get(key, "")) for key in ("title", "summary")))
         if "거래정지해제" in text and "우회상장" in text and "미해당" in text:
             return True
     return False
