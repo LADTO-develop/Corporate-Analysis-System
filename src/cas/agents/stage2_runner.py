@@ -21,6 +21,7 @@ from cas.agents.stage2_outputs import (
     QuantCreditOutput,
 )
 from cas.agents.state import Recommendation
+from cas.utils.live_cache import read_json_cache, stable_cache_key, write_json_cache
 
 QuantCreditFn = Callable[[Stage2InputBundle], QuantCreditOutput]
 EvidenceAuditFn = Callable[[Stage2InputBundle], EvidenceAuditOutput]
@@ -122,9 +123,9 @@ class AgnoStage2AgentRunner:
     This path is intentionally opt-in. If the ``agno`` package is unavailable,
     install the optional LLM dependencies or inject a ``Stage2LLMClient`` in
     tests/local experiments. Without an injected client, the runner executes
-    the three Agno triplet agents in sequence. The default routing remains a
-    single Claude model for backward compatibility; ``multi_llm_committee``
-    routes Claude/GPT/Gemini across the committee roles.
+    the three Agno triplet agents. The default routing remains a single Claude
+    model for backward compatibility; ``multi_llm_committee`` routes
+    Claude/GPT/Gemini across the committee roles.
     """
 
     deterministic_runner: DeterministicStage2AgentRunner | None = None
@@ -153,6 +154,21 @@ class AgnoStage2AgentRunner:
     ) -> Stage2RunnerOutputs:
         """Run Stage 2 through the Agno triplet agents or an injected LLM client."""
         try:
+            cache_key = stable_cache_key(
+                _stage2_cache_payload(
+                    runner=self,
+                    bundle=bundle,
+                    recommendation=recommendation,
+                    confidence=confidence,
+                )
+            )
+            cached_response = _read_stage2_cached_response(cache_key)
+            if cached_response is not None:
+                response, cached_backend_name = cached_response
+                self.last_run_backend_name = cached_backend_name
+                self.last_error_message = ""
+                return response.as_outputs()
+
             if self.llm_client is not None:
                 prompt_payload = _build_prompt_payload(
                     bundle=bundle,
@@ -164,6 +180,7 @@ class AgnoStage2AgentRunner:
                     prompt_payload=prompt_payload,
                     output_schema=Stage2LLMResponse,
                 )
+                successful_backend_name = self.backend_name
             else:
                 raw_response = _run_triplet_agents_with_agno(
                     bundle=bundle,
@@ -179,8 +196,15 @@ class AgnoStage2AgentRunner:
                     chair_model_name=self._role_model_name("chair_report"),
                     max_tokens=self.max_tokens,
                 )
-            outputs = _coerce_llm_response(raw_response).as_outputs()
-            self.last_run_backend_name = self.backend_name
+                successful_backend_name = self.backend_name
+            response = _coerce_llm_response(raw_response)
+            _write_stage2_cached_response(
+                cache_key=cache_key,
+                backend_name=successful_backend_name,
+                response=response,
+            )
+            outputs = response.as_outputs()
+            self.last_run_backend_name = successful_backend_name
             self.last_error_message = ""
             return outputs
         except Exception as error:
@@ -285,6 +309,76 @@ def _build_prompt_payload(
         "stage2_input_bundle": bundle.to_prompt_payload(),
         "deterministic_draft_outputs": draft_outputs,
     }
+
+
+def _stage2_cache_payload(
+    *,
+    runner: AgnoStage2AgentRunner,
+    bundle: Stage2InputBundle,
+    recommendation: Recommendation,
+    confidence: float,
+) -> dict[str, Any]:
+    return {
+        "cache_version": "stage2_llm_response_v1",
+        "runner": {
+            "backend_name": runner.backend_name,
+            "routing_mode": runner.routing_mode,
+            "model_provider": runner.model_provider,
+            "model_name": runner.model_name,
+            "quant_model_provider": runner._role_provider("quant_credit"),
+            "quant_model_name": runner._role_model_name("quant_credit"),
+            "evidence_model_provider": runner._role_provider("evidence_audit"),
+            "evidence_model_name": runner._role_model_name("evidence_audit"),
+            "chair_model_provider": runner._role_provider("chair_report"),
+            "chair_model_name": runner._role_model_name("chair_report"),
+            "max_tokens": runner.max_tokens,
+            "llm_client_class": (
+                type(runner.llm_client).__name__ if runner.llm_client is not None else ""
+            ),
+        },
+        "recommendation": recommendation,
+        "confidence": confidence,
+        "stage2_input_bundle": bundle.to_prompt_payload(),
+    }
+
+
+def _read_stage2_cached_response(cache_key: str) -> tuple[Stage2LLMResponse, str] | None:
+    cached_payload = read_json_cache(
+        "llm_stage2",
+        cache_key,
+        env_var="CAS_STAGE2_LLM_CACHE_ENABLED",
+        default=True,
+    )
+    if cached_payload is None:
+        return None
+    response_payload = cached_payload.get("response", cached_payload)
+    try:
+        response = Stage2LLMResponse.model_validate(response_payload)
+    except ValueError:
+        return None
+    backend_name = str(cached_payload.get("backend_name") or "agno")
+    if not backend_name.endswith("_cache"):
+        backend_name = f"{backend_name}_cache"
+    return response, backend_name
+
+
+def _write_stage2_cached_response(
+    *,
+    cache_key: str,
+    backend_name: str,
+    response: Stage2LLMResponse,
+) -> None:
+    write_json_cache(
+        "llm_stage2",
+        cache_key,
+        {
+            "cache_version": "stage2_llm_response_v1",
+            "backend_name": backend_name,
+            "response": response.model_dump(mode="json"),
+        },
+        env_var="CAS_STAGE2_LLM_CACHE_ENABLED",
+        default=True,
+    )
 
 
 def _run_triplet_agents_with_agno(

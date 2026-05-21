@@ -31,6 +31,15 @@ class HiddenTailRiskAssessment:
 
 
 @dataclass(frozen=True)
+class SecondaryReviewRiskAssessment:
+    """Model-aware Stage 2 review flag for near-threshold false-negative risk."""
+
+    triggered: bool
+    reason: str
+    review_priority: str
+
+
+@dataclass(frozen=True)
 class OverwarningMitigationAssessment:
     """Model-aware mitigation flag for likely false-positive review cases."""
 
@@ -46,6 +55,16 @@ class FinancialResilienceAssessment:
     reason: str
     support_count: int
     blocker_count: int
+
+
+@dataclass(frozen=True)
+class NoncriticalEvidenceAssessment:
+    """External-evidence screen for severe model warnings without decisive corroboration."""
+
+    triggered: bool
+    reason: str
+    direct_item_count: int
+    blocking_item_count: int
 
 
 def build_committee_view(
@@ -81,13 +100,36 @@ def build_committee_view_model(
     risk_factors = _collect_committee_factors(agents, target="risk")
     if hidden_tail_risk.triggered:
         risk_factors = [hidden_tail_risk.reason, *risk_factors]
+    secondary_review_risk = _secondary_review_risk_assessment(bundle)
+    if secondary_review_risk.triggered:
+        risk_factors = [secondary_review_risk.reason, *risk_factors]
     mitigating_factors = _collect_committee_factors(agents, target="mitigation")
     if not veto_triggered:
         committee_label = _committee_label_with_evidence_escalation(
             committee_label,
+            bundle=bundle,
             agents=agents,
             hidden_tail_risk=hidden_tail_risk,
         )
+    if (
+        not veto_triggered
+        and not hidden_tail_risk.triggered
+        and secondary_review_risk.triggered
+        and committee_label == "적격"
+    ):
+        committee_label = "보류"
+    committee_label = _committee_label_with_model_alignment(
+        committee_label,
+        bundle=bundle,
+        veto_triggered=veto_triggered,
+        hidden_tail_risk=hidden_tail_risk,
+    )
+    committee_label = _committee_label_with_investment_evidence_alignment(
+        committee_label,
+        bundle=bundle,
+        veto_triggered=veto_triggered,
+        hidden_tail_risk=hidden_tail_risk,
+    )
     if prediction_label == "투자적격" and committee_label == "부적격" and not veto_triggered:
         committee_label = "보류"
     overwarning_mitigation = _overwarning_mitigation_assessment(
@@ -104,12 +146,15 @@ def build_committee_view_model(
     ):
         committee_label = "보류"
         mitigating_factors = [overwarning_mitigation.reason, *mitigating_factors]
+    if prediction_label == "부적격" and committee_label == "적격" and not veto_triggered:
+        committee_label = "보류"
     evidence_summary = _evidence_summary_items(bundle, agents)
     conflict_resolution = _conflict_resolution(
         prediction_label=prediction_label,
         committee_label=committee_label,
         veto_triggered=veto_triggered,
         hidden_tail_risk=hidden_tail_risk,
+        secondary_review_risk=secondary_review_risk,
         overwarning_mitigation=overwarning_mitigation,
     )
     final_review_memo = _final_review_memo(
@@ -117,6 +162,7 @@ def build_committee_view_model(
         committee_label=committee_label,
         veto_triggered=veto_triggered,
         hidden_tail_risk=hidden_tail_risk,
+        secondary_review_risk=secondary_review_risk,
         overwarning_mitigation=overwarning_mitigation,
         risk_factors=risk_factors,
         mitigating_factors=mitigating_factors,
@@ -177,6 +223,7 @@ def _veto_triggered_label(veto_rules: VetoRules) -> CommitteeLabel:
 def _committee_label_with_evidence_escalation(
     committee_label: CommitteeLabel,
     *,
+    bundle: Stage2InputBundle,
     agents: list[AgentOutput],
     hidden_tail_risk: HiddenTailRiskAssessment,
 ) -> CommitteeLabel:
@@ -188,9 +235,72 @@ def _committee_label_with_evidence_escalation(
     evidence_agent = next((agent for agent in agents if agent.role == "evidence_audit"), None)
     if evidence_agent is None:
         return committee_label
+    if _external_evidence_unavailable(bundle.news_status):
+        return committee_label
     if _evidence_agent_requires_hold(evidence_agent):
         return "보류"
     return committee_label
+
+
+def _committee_label_with_model_alignment(
+    committee_label: CommitteeLabel,
+    *,
+    bundle: Stage2InputBundle,
+    veto_triggered: bool,
+    hidden_tail_risk: HiddenTailRiskAssessment,
+) -> CommitteeLabel:
+    """Keep low-probability model-eligible cases eligible unless hard evidence overrides."""
+    if committee_label != "보류" or bundle.prediction_label != "투자적격":
+        return committee_label
+    if veto_triggered or hidden_tail_risk.triggered:
+        return committee_label
+    if not _external_evidence_unavailable(bundle.news_status):
+        return committee_label
+    if _has_stage2_secondary_trigger(bundle):
+        return committee_label
+    if _has_blocking_flags(bundle):
+        return committee_label
+    if not bundle.source_feature_row:
+        return committee_label
+
+    probability = bundle.probability_speculative
+    threshold = _model_threshold(bundle)
+    near_threshold = probability >= threshold - 0.05
+    if near_threshold:
+        return committee_label
+    if _has_severe_financial_watch_signal(bundle.source_feature_row):
+        return committee_label
+    return "적격"
+
+
+def _committee_label_with_investment_evidence_alignment(
+    committee_label: CommitteeLabel,
+    *,
+    bundle: Stage2InputBundle,
+    veto_triggered: bool,
+    hidden_tail_risk: HiddenTailRiskAssessment,
+) -> CommitteeLabel:
+    """Keep eligible model calls eligible when collected evidence is only non-critical context."""
+    if committee_label != "보류" or bundle.prediction_label != "투자적격":
+        return committee_label
+    if veto_triggered or hidden_tail_risk.triggered:
+        return committee_label
+    if _external_evidence_unavailable(bundle.news_status):
+        return committee_label
+    if _has_stage2_secondary_trigger(bundle):
+        return committee_label
+    if _has_blocking_flags(bundle):
+        return committee_label
+    if _has_severe_financial_watch_signal(bundle.source_feature_row):
+        return committee_label
+    probability = bundle.probability_speculative
+    threshold = _model_threshold(bundle)
+    if probability >= threshold:
+        return committee_label
+    noncritical_evidence = _noncritical_external_evidence_assessment(bundle.news_cache_snapshot)
+    if not noncritical_evidence.triggered:
+        return committee_label
+    return "적격"
 
 
 def _evidence_agent_requires_hold(agent: AgentOutput) -> bool:
@@ -205,6 +315,48 @@ def _evidence_agent_requires_hold(agent: AgentOutput) -> bool:
                 continue
             return True
     return False
+
+
+def _external_evidence_unavailable(status: str) -> bool:
+    return status.strip().lower() in {
+        "disabled",
+        "missing_credentials",
+        "not_implemented",
+        "not_requested",
+        "placeholder",
+        "no_results",
+    }
+
+
+def _has_stage2_secondary_trigger(bundle: Stage2InputBundle) -> bool:
+    for source in (bundle.model_view, bundle.xgboost_result):
+        if bool(source.get("stage2_secondary_trigger")):
+            return True
+    return False
+
+
+def _has_blocking_flags(bundle: Stage2InputBundle) -> bool:
+    flags = bundle.rule_result.get("blocking_flags", []) or []
+    return any(str(flag).strip() for flag in flags)
+
+
+def _has_severe_financial_watch_signal(row: dict[str, Any]) -> bool:
+    hard_stress_flags = [
+        _flag_is_true(row.get("icr_under_1")),
+        _flag_is_true(row.get("is_2y_consecutive_operating_loss"))
+        and _flag_is_true(row.get("is_2y_consecutive_ocf_deficit")),
+        _metric_above(row, "capital_impairment_ratio", 0.0),
+        _metric_below(row, "interest_coverage_ratio", 1.0),
+    ]
+    if any(hard_stress_flags):
+        return True
+    weak_liquidity = _metric_below(row, "current_ratio", 0.7) and _metric_below(
+        row, "cash_ratio", 0.05
+    )
+    weak_cashflow = _metric_below(row, "cashflow_coverage_ratio", 0.0) or _metric_below(
+        row, "ocf_to_total_liabilities", 0.0
+    )
+    return bool(weak_liquidity and weak_cashflow)
 
 
 def _hidden_tail_risk_assessment(bundle: Stage2InputBundle) -> HiddenTailRiskAssessment:
@@ -234,6 +386,33 @@ def _hidden_tail_risk_assessment(bundle: Stage2InputBundle) -> HiddenTailRiskAss
     return HiddenTailRiskAssessment(True, reason, len(adverse_items), len(verified_items))
 
 
+def _secondary_review_risk_assessment(bundle: Stage2InputBundle) -> SecondaryReviewRiskAssessment:
+    """Flag likely FN cases surfaced by the 45-feature Stage 2 review radar."""
+    if bundle.prediction_label != "투자적격" or not _has_stage2_secondary_trigger(bundle):
+        return SecondaryReviewRiskAssessment(False, "", "none")
+
+    probability = bundle.probability_speculative
+    threshold = _model_threshold(bundle)
+    review_priority = _stage2_review_priority(bundle)
+    near_threshold = probability >= threshold - 0.10
+    priority_requires_hold = review_priority in {"medium", "high", "critical"}
+    severe_watch = _has_severe_financial_watch_signal(bundle.source_feature_row)
+    if not (near_threshold or priority_requires_hold or severe_watch):
+        return SecondaryReviewRiskAssessment(False, "", review_priority)
+
+    trigger_reason = _stage2_trigger_reason(bundle)
+    reason_parts = [
+        "2차 보조 레이더 플래그: 43개 모델은 투자적격으로 봤지만 "
+        "45개 보조 변수셋이 추가 검토 대상으로 올렸습니다.",
+        f"투기등급 확률은 {probability:.1%}, 기준선은 {threshold:.1%}, "
+        f"검토 우선순위는 {review_priority}입니다.",
+    ]
+    if trigger_reason:
+        reason_parts.append(trigger_reason)
+    reason_parts.append("따라서 2차 위원회는 이를 최종 적격으로 확정하지 않고 보류로 재점검합니다.")
+    return SecondaryReviewRiskAssessment(True, " ".join(reason_parts), review_priority)
+
+
 def _overwarning_mitigation_assessment(
     bundle: Stage2InputBundle,
     *,
@@ -258,9 +437,21 @@ def _overwarning_mitigation_assessment(
     ).lower() in {"watch", "관찰"}
     explicit_overwarning = bool(bundle.model_view.get("stage2_overwarning_filter_candidate"))
     financial_resilience = _financial_resilience_overwarning_assessment(bundle.source_feature_row)
-    if not (near_threshold or watch_band or explicit_overwarning or financial_resilience.triggered):
+    noncritical_evidence = _noncritical_external_evidence_assessment(bundle.news_cache_snapshot)
+    if not (
+        near_threshold
+        or watch_band
+        or explicit_overwarning
+        or financial_resilience.triggered
+        or noncritical_evidence.triggered
+    ):
         return OverwarningMitigationAssessment(False, "")
-    if not mitigating_factors and not explicit_overwarning and not financial_resilience.triggered:
+    if (
+        not mitigating_factors
+        and not explicit_overwarning
+        and not financial_resilience.triggered
+        and not noncritical_evidence.triggered
+    ):
         return OverwarningMitigationAssessment(False, "")
 
     reason_parts = [
@@ -276,7 +467,44 @@ def _overwarning_mitigation_assessment(
             reason_parts.append(reason)
     if financial_resilience.triggered:
         reason_parts.append(financial_resilience.reason)
+    if noncritical_evidence.triggered:
+        reason_parts.append(noncritical_evidence.reason)
     return OverwarningMitigationAssessment(True, " ".join(reason_parts))
+
+
+def _noncritical_external_evidence_assessment(
+    news_cache: dict[str, Any],
+) -> NoncriticalEvidenceAssessment:
+    """Treat verified but non-critical external evidence as a reason to hold, not reject."""
+    status = str(news_cache.get("status", "")).strip().lower()
+    if status != "ready":
+        return NoncriticalEvidenceAssessment(False, "", 0, 0)
+    raw_items = news_cache.get("items", [])
+    if not isinstance(raw_items, list):
+        return NoncriticalEvidenceAssessment(False, "", 0, 0)
+    direct_items = [
+        item for item in raw_items if isinstance(item, dict) and item.get("company_match") is True
+    ]
+    if not direct_items:
+        return NoncriticalEvidenceAssessment(False, "", 0, 0)
+    blocking_items = [item for item in direct_items if _is_blocking_external_adverse_item(item)]
+    if blocking_items:
+        return NoncriticalEvidenceAssessment(False, "", len(direct_items), len(blocking_items))
+    contextual_items = [
+        item
+        for item in direct_items
+        if str(item.get("disclosure_severity", "")).lower() in {"routine", "caution"}
+        or str(item.get("provider_relevance", "")).lower() in {"routine", "context", "caution"}
+        or str(item.get("source", "")).lower() in {"opendart", "naver_news", "tavily"}
+    ]
+    if not contextual_items:
+        return NoncriticalEvidenceAssessment(False, "", len(direct_items), 0)
+    reason = (
+        f"외부근거 완화 신호: 직접 관련 근거 {len(direct_items)}건을 수집했지만 "
+        "강제 경고·치명 키워드·실질 adverse 공시는 확인되지 않았습니다. "
+        "따라서 2차 위원회는 모델의 부적격 경고를 확정하기보다 보류로 재점검합니다."
+    )
+    return NoncriticalEvidenceAssessment(True, reason, len(direct_items), 0)
 
 
 def _financial_resilience_overwarning_assessment(
@@ -374,6 +602,19 @@ def _is_adverse_external_item(item: dict[str, Any]) -> bool:
     return str(item.get("evidence_quality", "")).lower() in _ADVERSE_EVIDENCE_QUALITY
 
 
+def _is_blocking_external_adverse_item(item: dict[str, Any]) -> bool:
+    """Return whether an evidence item should prevent FP mitigation."""
+    if item.get("veto_candidate") is True:
+        return True
+    source = str(item.get("source", "")).lower()
+    severity = str(item.get("disclosure_severity", "")).lower()
+    if severity in {"veto", "adverse"}:
+        return source == "opendart" or item.get("critical_context_confirmed") is True
+    # Keyword hits from aggregated news snippets are noisy. They should block
+    # over-warning mitigation only when the collector confirmed the risky context.
+    return item.get("critical_context_confirmed") is True
+
+
 def _is_verified_adverse_external_item(item: dict[str, Any]) -> bool:
     quality = str(item.get("evidence_quality", "")).lower()
     if quality in _ADVERSE_EVIDENCE_QUALITY:
@@ -397,6 +638,22 @@ def _model_threshold(bundle: Stage2InputBundle) -> float:
             if value is not None and value > 0:
                 return value
     return 0.315
+
+
+def _stage2_review_priority(bundle: Stage2InputBundle) -> str:
+    for source in (bundle.model_view, bundle.xgboost_result, bundle.rule_result):
+        value = str(source.get("stage2_review_priority") or "").strip().lower()
+        if value:
+            return value
+    return "none"
+
+
+def _stage2_trigger_reason(bundle: Stage2InputBundle) -> str:
+    for source in (bundle.model_view, bundle.xgboost_result, bundle.rule_result):
+        value = str(source.get("trigger_reason") or "").strip()
+        if value:
+            return value
+    return ""
 
 
 def _collect_committee_factors(
@@ -453,8 +710,13 @@ def _non_escalating_risk_text(text: str) -> bool:
         "수집 상태가 `not_requested`",
         "수집 상태가 `disabled`",
         "수집 상태가 `no_results`",
+        "모델 판단을 실질적으로 뒤집기 어렵",
+        "모델 원판단을 실질적으로 뒤집기 어렵",
+        "stage 1 모델 판단을 실질적으로 뒤집기 어렵",
+        "모델 라벨은 투자적격으로 보존",
     )
-    return any(marker in text for marker in neutral_markers)
+    lowered = text.lower()
+    return any(marker in lowered for marker in neutral_markers)
 
 
 def _classify_committee_factor(
@@ -575,6 +837,7 @@ def _conflict_resolution(
     committee_label: str,
     veto_triggered: bool,
     hidden_tail_risk: HiddenTailRiskAssessment,
+    secondary_review_risk: SecondaryReviewRiskAssessment,
     overwarning_mitigation: OverwarningMitigationAssessment,
 ) -> str:
     if veto_triggered:
@@ -586,6 +849,11 @@ def _conflict_resolution(
         return (
             f"모델 원판단은 {prediction_label}이지만, 직접 관련 외부 위험 근거가 "
             "모델이 놓칠 수 있는 숨은 꼬리위험을 보완해 위원회 의견은 보류로 정리했습니다."
+        )
+    if secondary_review_risk.triggered:
+        return (
+            f"모델 원판단은 {prediction_label}이지만, 45개 보조 변수셋의 추가 검토 신호가 "
+            "FN 가능성을 보완해 위원회 의견은 보류로 정리했습니다."
         )
     if overwarning_mitigation.triggered:
         return (
@@ -615,6 +883,7 @@ def _final_review_memo(
     committee_label: str,
     veto_triggered: bool,
     hidden_tail_risk: HiddenTailRiskAssessment,
+    secondary_review_risk: SecondaryReviewRiskAssessment,
     overwarning_mitigation: OverwarningMitigationAssessment,
     risk_factors: list[str],
     mitigating_factors: list[str],
@@ -629,6 +898,13 @@ def _final_review_memo(
             f"모델 원판단은 {prediction_label}으로 보존합니다. 다만 직접 관련 외부 위험 "
             f"근거가 확인되어 재무제표 기반 모델이 놓칠 수 있는 FN 가능성을 보완했습니다. "
             f"위원회는 최종 의견을 {committee_label}로 정리했습니다. {hidden_tail_risk.reason}"
+        )
+    if secondary_review_risk.triggered:
+        return (
+            f"모델 원판단은 {prediction_label}으로 보존합니다. 다만 45개 보조 변수셋이 "
+            f"추가 검토 대상으로 올린 케이스라 FN 가능성을 보수적으로 보완했습니다. "
+            f"위원회는 최종 의견을 {committee_label}로 정리했습니다. "
+            f"{secondary_review_risk.reason}"
         )
     if overwarning_mitigation.triggered:
         return (

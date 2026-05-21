@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pandas as pd
 import pytest
 
 
@@ -87,3 +88,49 @@ def test_falls_back_when_model_artifact_is_missing(monkeypatch: pytest.MonkeyPat
     assert result["xgboost_result"]["prediction_label"] in {"투자적격", "부적격"}
     assert result["model_view"]["risk_band"] in {"stable", "watch", "high_risk"}
     assert "Saved XGBoost artifact was not found" in result["audit"][0].summary
+
+
+def test_stage2_review_signals_are_attached_to_model_view(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    from cas.agents.nodes import base_prediction_node
+
+    signals_path = tmp_path / "stage2_review_signals.csv"
+    pd.DataFrame(
+        [
+            {
+                "stock_code": "311390",
+                "fiscal_year": 2023,
+                "stage2_review_trigger": True,
+                "stage2_secondary_trigger": True,
+                "stage2_review_priority": "medium",
+                "trigger_reason_code": "secondary_45",
+                "trigger_reason": "43개 모델은 투자적격이나 45개 변수셋이 위험 기준선을 넘었습니다.",
+                "prob_speculative_45": 0.37,
+                "threshold_45": 0.315,
+                "threshold_45_it_services_review": 0.175,
+                "stage2_overwarning_filter_candidate": False,
+                "overwarning_filter_reason_code": "none",
+                "overwarning_filter_reason": "과민 경고 보조필터 특이 신호 없음",
+                "prob_speculative_overwarning_filter": 0.12,
+                "threshold_overwarning_filter": 0.33,
+            }
+        ]
+    ).to_csv(signals_path, index=False, encoding="utf-8-sig")
+    monkeypatch.setattr(base_prediction_node, "_STAGE2_REVIEW_SIGNALS_PATH", signals_path)
+    base_prediction_node._load_stage2_review_signals.cache_clear()
+
+    payload = base_prediction_node._stage2_review_signal_payload(
+        {
+            "source_feature_row": {
+                "stock_code": "311390",
+                "fiscal_year": 2023,
+            }
+        }
+    )
+
+    assert payload["stage2_secondary_trigger"] is True
+    assert payload["stage2_review_priority"] == "medium"
+    assert payload["probability_speculative_45"] == 0.37
+    assert "45개 변수셋" in payload["trigger_reason"]

@@ -19,6 +19,9 @@ _MODEL_ARTIFACT_DIR = Path("data/outputs/modeling/feature_43_xgboost")
 _MODEL_ARTIFACT_PATH = _MODEL_ARTIFACT_DIR / "xgboost_model.json"
 _MODEL_METADATA_PATH = _MODEL_ARTIFACT_DIR / "model_artifact_metadata.json"
 _FEATURE_LIST_PATH = Path("data/input/credit_43_features/feature_43_list.json")
+_STAGE2_REVIEW_SIGNALS_PATH = Path(
+    "data/outputs/dashboard/feature_43_mvp/stage2_review_signals.csv"
+)
 _DEFAULT_MISSING_VALUE_STRATEGY = "xgboost_native_missing"
 
 
@@ -107,6 +110,10 @@ def run(state: AgentState) -> dict[str, Any]:
         "threshold": threshold,
         "top_drivers": [{"name": name, "value": value} for name, value in top_drivers],
     }
+    stage2_signals = _stage2_review_signal_payload(state)
+    model_view.update(stage2_signals)
+    xgboost_payload = xgboost_result.model_dump()
+    xgboost_payload.update(stage2_signals)
     audit = AuditEntry(
         node="xgboost_inference",
         timestamp=_now(),
@@ -128,7 +135,7 @@ def run(state: AgentState) -> dict[str, Any]:
         # model_view는 화면/에이전트가 공통으로 읽는 가벼운 표현이고,
         # xgboost_result는 schema/export 쪽에서 쓰는 구조화 결과다.
         "model_view": model_view,
-        "xgboost_result": xgboost_result.model_dump(),
+        "xgboost_result": xgboost_payload,
         # model_registry_ref는 "어떤 artifact와 threshold로 이 판단이 나왔는지"를 남기는 추적 정보다.
         "model_registry_ref": {
             "registry_name": model_registry.get("registry_name", "local_model_registry"),
@@ -196,6 +203,17 @@ def _run_fallback_prediction(
         threshold=threshold,
         top_drivers=top_drivers,
     )
+    stage2_signals = _stage2_review_signal_payload(state)
+    model_view = {
+        "probability_speculative": probability_speculative,
+        "prediction_label": prediction_label,
+        "risk_band": risk_band,
+        "threshold": threshold,
+        "top_drivers": [{"name": name, "value": value} for name, value in top_drivers],
+    }
+    model_view.update(stage2_signals)
+    xgboost_payload = xgboost_result.model_dump()
+    xgboost_payload.update(stage2_signals)
     audit = AuditEntry(
         node="xgboost_inference",
         timestamp=_now(),
@@ -216,14 +234,8 @@ def _run_fallback_prediction(
         "overall_score": overall_score,
         # fallback도 반환 shape는 Stage 1 정상 경로와 맞춰 둬야
         # downstream node가 분기 없이 동일한 state key를 읽을 수 있다.
-        "model_view": {
-            "probability_speculative": probability_speculative,
-            "prediction_label": prediction_label,
-            "risk_band": risk_band,
-            "threshold": threshold,
-            "top_drivers": [{"name": name, "value": value} for name, value in top_drivers],
-        },
-        "xgboost_result": xgboost_result.model_dump(),
+        "model_view": model_view,
+        "xgboost_result": xgboost_payload,
         "model_registry_ref": {
             "registry_name": model_registry.get("registry_name", "local_model_registry"),
             "active_model": xgboost_result.model_name,
@@ -300,6 +312,61 @@ def _load_model_bundle() -> dict[str, Any]:
         "probability_calibration": metadata.get("probability_calibration"),
         "model": booster,
     }
+
+
+@lru_cache(maxsize=1)
+def _load_stage2_review_signals() -> pd.DataFrame | None:
+    if not _STAGE2_REVIEW_SIGNALS_PATH.exists():
+        return None
+    frame = pd.read_csv(
+        _STAGE2_REVIEW_SIGNALS_PATH, encoding="utf-8-sig", dtype={"stock_code": str}
+    )
+    frame["stock_code"] = frame["stock_code"].astype(str).str.zfill(6)
+    return frame
+
+
+def _stage2_review_signal_payload(state: AgentState) -> dict[str, Any]:
+    """Attach precomputed 45-feature Stage 2 radar signals to realtime model_view."""
+    source_row = dict(state.get("source_feature_row") or {})
+    stock_code = _normalize_stock_code(source_row.get("stock_code"))
+    fiscal_year = _to_int(source_row.get("fiscal_year"))
+    if not stock_code or fiscal_year is None:
+        return {}
+
+    signals = _load_stage2_review_signals()
+    if signals is None or signals.empty:
+        return {}
+    matched = signals.loc[
+        (signals["stock_code"].astype(str).str.zfill(6) == stock_code)
+        & (signals["fiscal_year"] == fiscal_year)
+    ]
+    if matched.empty:
+        return {}
+
+    row = matched.iloc[-1]
+    payload: dict[str, Any] = {
+        "stage2_signal_source": str(_STAGE2_REVIEW_SIGNALS_PATH),
+        "stage2_review_trigger": _to_bool(row.get("stage2_review_trigger")),
+        "stage2_secondary_trigger": _to_bool(row.get("stage2_secondary_trigger")),
+        "stage2_review_priority": _clean_scalar(row.get("stage2_review_priority")),
+        "trigger_reason_code": _clean_scalar(row.get("trigger_reason_code")),
+        "trigger_reason": _clean_scalar(row.get("trigger_reason")),
+        "probability_speculative_45": _to_optional_float(row.get("prob_speculative_45")),
+        "threshold_45": _to_optional_float(row.get("threshold_45")),
+        "threshold_45_it_services_review": _to_optional_float(
+            row.get("threshold_45_it_services_review")
+        ),
+        "stage2_overwarning_filter_candidate": _to_bool(
+            row.get("stage2_overwarning_filter_candidate")
+        ),
+        "overwarning_filter_reason_code": _clean_scalar(row.get("overwarning_filter_reason_code")),
+        "overwarning_filter_reason": _clean_scalar(row.get("overwarning_filter_reason")),
+        "probability_speculative_overwarning_filter": _to_optional_float(
+            row.get("prob_speculative_overwarning_filter")
+        ),
+        "threshold_overwarning_filter": _to_optional_float(row.get("threshold_overwarning_filter")),
+    }
+    return {key: value for key, value in payload.items() if value is not None}
 
 
 def _apply_probability_calibration(
@@ -432,6 +499,13 @@ def _to_float(value: object) -> float:
         return 0.0
 
 
+def _to_int(value: object) -> int | None:
+    numeric = _to_optional_float(value)
+    if numeric is None:
+        return None
+    return int(numeric)
+
+
 def _to_optional_float(value: object) -> float | None:
     try:
         if value is None:
@@ -444,6 +518,31 @@ def _to_optional_float(value: object) -> float | None:
         return numeric
     except (TypeError, ValueError):
         return None
+
+
+def _to_bool(value: object) -> bool:
+    if isinstance(value, bool):
+        return value
+    numeric = _to_optional_float(value)
+    if numeric is not None:
+        return numeric >= 0.5
+    return str(value).strip().lower() in {"1", "true", "yes", "y", "on"}
+
+
+def _clean_scalar(value: object) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text or text.lower() in {"nan", "none", "null"}:
+        return None
+    return text
+
+
+def _normalize_stock_code(value: object) -> str:
+    text = str(value or "").strip()
+    if text.isdigit() and len(text) <= 6:
+        return text.zfill(6)
+    return text
 
 
 def _now() -> str:

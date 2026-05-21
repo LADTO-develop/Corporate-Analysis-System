@@ -193,6 +193,66 @@ def test_agno_stage2_runner_uses_triplet_agents(
     assert outputs[2].report_summary == "Triplet chair summary"
 
 
+def test_agno_stage2_runner_reuses_cached_triplet_response(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Any,
+) -> None:
+    calls = 0
+
+    def fake_triplet_agents(**_kwargs: Any) -> Stage2LLMResponse:
+        nonlocal calls
+        calls += 1
+        return Stage2LLMResponse(
+            quant_credit=QuantCreditOutput(
+                quant_summary="Cached quant summary",
+                model_rationale="Cached model rationale",
+                key_risk_factors=["Cached risk"],
+                mitigating_factors=["Cached mitigation"],
+                confidence=0.77,
+            ),
+            evidence_audit=EvidenceAuditOutput(
+                evidence_summary="Cached evidence summary",
+                evidence_status="ready",
+                evidence_reliability="Cached reliability",
+                evidence_strength="moderate",
+                model_challenge="Cached challenge",
+                audit_conclusion="Cached conclusion",
+                debt_liquidity_cross_check=["Cached debt check"],
+                macro_industry_sensitivity=["Cached macro check"],
+                external_evidence_findings=["Cached evidence"],
+                confidence=0.72,
+            ),
+            chair_report=ChairReportOutput(
+                report_summary="Cached chair summary",
+                model_preservation_note="Cached model preservation",
+                committee_scope_note="Cached scope",
+                final_review_memo_seed="Cached memo",
+                confidence=0.74,
+            ),
+        )
+
+    monkeypatch.setenv("CAS_STAGE2_LLM_CACHE_ENABLED", "1")
+    monkeypatch.setenv("CAS_STAGE2_CACHE_DIR", str(tmp_path))
+    monkeypatch.setattr(
+        stage2_runner_module,
+        "_run_triplet_agents_with_agno",
+        fake_triplet_agents,
+    )
+    runner = AgnoStage2AgentRunner(
+        deterministic_runner=_deterministic_runner(),
+        model_name="claude-sonnet",
+    )
+    bundle = build_stage2_input_bundle(_minimal_state())
+
+    first_outputs = runner.run(bundle=bundle, recommendation="review", confidence=0.7)
+    second_outputs = runner.run(bundle=bundle, recommendation="review", confidence=0.7)
+
+    assert calls == 1
+    assert first_outputs[0].quant_summary == "Cached quant summary"
+    assert second_outputs[0].quant_summary == "Cached quant summary"
+    assert runner.last_run_backend_name == "agno_cache"
+
+
 def test_agno_stage2_runner_routes_multi_llm_committee(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

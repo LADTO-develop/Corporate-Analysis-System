@@ -308,6 +308,199 @@ def test_committee_view_does_not_flag_hidden_tail_risk_for_routine_external_cont
     assert committee_view["hidden_tail_risk_reason"] == ""
 
 
+def test_committee_view_holds_investment_model_with_secondary_review_trigger() -> None:
+    state: AgentState = {
+        "company_id": "311390",
+        "company_name": "(주)네오크레마",
+        "source_feature_row": {
+            "stock_code": "311390",
+            "interest_coverage_ratio": 4.4,
+            "icr_under_1": 0,
+            "is_2y_consecutive_operating_loss": 0,
+            "is_2y_consecutive_ocf_deficit": 0,
+        },
+        "model_view": {
+            "prediction_label": "투자적격",
+            "probability_speculative": 0.2836,
+            "threshold": 0.315,
+            "stage2_secondary_trigger": True,
+            "stage2_review_priority": "medium",
+            "trigger_reason": "43개 모델은 투자적격이나 45개 변수셋이 위험 기준선을 넘었습니다.",
+        },
+        "xgboost_result": {
+            "prediction_label": "투자적격",
+            "probability_speculative": 0.2836,
+            "threshold": 0.315,
+        },
+        "news_cache_snapshot": {
+            "status": "ready",
+            "items": [
+                {
+                    "source": "opendart",
+                    "title": "감사보고서제출",
+                    "summary": "(주)네오크레마 직접 관련 정기 공시입니다.",
+                    "company_match": True,
+                    "provider_relevance": "routine",
+                    "disclosure_severity": "routine",
+                    "critical_terms": [],
+                    "evidence_quality": "high",
+                    "evidence_score": 0.86,
+                }
+            ],
+        },
+    }
+    agents = [
+        AgentOutput(role="quant_credit", summary="정량 결과", findings=[], confidence=0.8),
+        AgentOutput(role="evidence_audit", summary="근거 검토", findings=[], confidence=0.6),
+        AgentOutput(role="chair_report", summary="종합", findings=[], confidence=0.7),
+    ]
+
+    committee_view = build_committee_view(
+        bundle=build_stage2_input_bundle(state),
+        recommendation="priority",
+        agents=agents,
+    )
+
+    assert committee_view["final_committee_label"] == "보류"
+    assert committee_view["hidden_tail_risk_flag"] is False
+    assert "2차 보조 레이더 플래그" in committee_view["key_risk_factors"][0]
+    assert "45개 보조 변수셋" in committee_view["conflict_resolution"]
+    assert "FN 가능성" in committee_view["final_review_memo"]
+
+
+def test_committee_view_keeps_investment_model_eligible_with_noncritical_evidence() -> None:
+    state: AgentState = {
+        "company_id": "086710",
+        "company_name": "선진뷰티사이언스(주)",
+        "source_feature_row": {
+            "stock_code": "086710",
+            "interest_coverage_ratio": 5.1,
+            "icr_under_1": 0,
+            "is_2y_consecutive_operating_loss": 0,
+            "is_2y_consecutive_ocf_deficit": 0,
+        },
+        "model_view": {
+            "prediction_label": "투자적격",
+            "probability_speculative": 0.3134,
+            "threshold": 0.315,
+            "risk_band": "watch",
+        },
+        "xgboost_result": {
+            "prediction_label": "투자적격",
+            "probability_speculative": 0.3134,
+            "threshold": 0.315,
+            "risk_band": "watch",
+        },
+        "news_cache_snapshot": {
+            "status": "ready",
+            "items": [
+                {
+                    "source": "opendart",
+                    "title": "감사보고서제출",
+                    "summary": "선진뷰티사이언스(주) 직접 관련 정기 공시입니다.",
+                    "reliability": "high",
+                    "company_match": True,
+                    "provider_relevance": "caution",
+                    "disclosure_severity": "caution",
+                    "critical_terms": [],
+                    "critical_context_confirmed": False,
+                    "veto_candidate": False,
+                    "evidence_quality": "medium",
+                    "evidence_score": 0.66,
+                }
+            ],
+        },
+    }
+    agents = [
+        AgentOutput(role="quant_credit", summary="정량 결과", findings=[], confidence=0.8),
+        AgentOutput(
+            role="evidence_audit",
+            summary="근거 검토",
+            findings=[
+                "EvidenceAudit 검토 결론: 현재 확인된 외부근거만으로는 Stage 1 모델 판단을 실질적으로 뒤집기 어렵습니다. 모델 라벨은 투자적격으로 보존합니다.",
+            ],
+            confidence=0.6,
+        ),
+        AgentOutput(role="chair_report", summary="종합", findings=[], confidence=0.7),
+    ]
+
+    committee_view = build_committee_view(
+        bundle=build_stage2_input_bundle(state),
+        recommendation="review",
+        agents=agents,
+    )
+
+    assert committee_view["final_committee_label"] == "적격"
+    assert committee_view["key_risk_factors"] == [
+        "현재 scaffold 기준 추가 위험 요인은 제한적입니다."
+    ]
+
+
+def test_committee_view_keeps_investment_model_on_hold_with_adverse_evidence() -> None:
+    state: AgentState = {
+        "company_id": "086710",
+        "company_name": "선진뷰티사이언스(주)",
+        "source_feature_row": {
+            "stock_code": "086710",
+            "interest_coverage_ratio": 5.1,
+            "icr_under_1": 0,
+            "is_2y_consecutive_operating_loss": 0,
+            "is_2y_consecutive_ocf_deficit": 0,
+        },
+        "model_view": {
+            "prediction_label": "투자적격",
+            "probability_speculative": 0.21,
+            "threshold": 0.315,
+            "risk_band": "stable",
+        },
+        "xgboost_result": {
+            "prediction_label": "투자적격",
+            "probability_speculative": 0.21,
+            "threshold": 0.315,
+            "risk_band": "stable",
+        },
+        "news_cache_snapshot": {
+            "status": "ready",
+            "items": [
+                {
+                    "source": "opendart",
+                    "title": "단일판매ㆍ공급계약해지",
+                    "summary": "선진뷰티사이언스(주) 직접 관련 계약해지 공시입니다.",
+                    "reliability": "high",
+                    "company_match": True,
+                    "provider_relevance": "risk",
+                    "disclosure_severity": "adverse",
+                    "critical_terms": [],
+                    "critical_context_confirmed": False,
+                    "veto_candidate": False,
+                    "evidence_quality": "high",
+                    "evidence_score": 0.82,
+                }
+            ],
+        },
+    }
+    agents = [
+        AgentOutput(role="quant_credit", summary="정량 결과", findings=[], confidence=0.8),
+        AgentOutput(
+            role="evidence_audit",
+            summary="근거 검토",
+            findings=[
+                "외부근거 위험: 직접 관련 외부 위험 근거가 있어 위원회 보수 검토가 필요합니다."
+            ],
+            confidence=0.6,
+        ),
+        AgentOutput(role="chair_report", summary="종합", findings=[], confidence=0.7),
+    ]
+
+    committee_view = build_committee_view(
+        bundle=build_stage2_input_bundle(state),
+        recommendation="review",
+        agents=agents,
+    )
+
+    assert committee_view["final_committee_label"] == "보류"
+
+
 def test_committee_view_softens_near_threshold_overwarning_to_hold() -> None:
     state: AgentState = {
         "company_id": "000250",
@@ -492,6 +685,151 @@ def test_committee_view_keeps_high_probability_risk_when_blockers_exist() -> Non
             role="quant_credit",
             summary="정량 결과",
             findings=["완화 요인: 유동비율은 단기 방어력을 일부 제공합니다."],
+            confidence=0.8,
+        ),
+        AgentOutput(role="evidence_audit", summary="근거 검토", findings=[], confidence=0.6),
+        AgentOutput(role="chair_report", summary="종합", findings=[], confidence=0.7),
+    ]
+
+    committee_view = build_committee_view(
+        bundle=build_stage2_input_bundle(state),
+        recommendation="defer",
+        agents=agents,
+    )
+
+    assert committee_view["final_committee_label"] == "부적격"
+
+
+def test_committee_view_softens_high_probability_risk_with_noncritical_evidence() -> None:
+    state: AgentState = {
+        "company_id": "317120",
+        "company_name": "(주)라닉스",
+        "source_feature_row": {
+            "stock_code": "317120",
+            "current_ratio": 1.90,
+            "cash_ratio": 0.25,
+            "equity_ratio": 0.36,
+            "debt_ratio": 1.75,
+            "total_borrowings_ratio": 0.62,
+            "capital_impairment_ratio": -1.17,
+            "interest_coverage_ratio": -1.92,
+            "net_margin": -0.47,
+            "ocf_to_sales": -0.11,
+            "is_2y_consecutive_operating_loss": 1,
+            "is_2y_consecutive_ocf_deficit": 1,
+            "icr_under_1": 1,
+            "short_term_borrowings_share": 0.28,
+        },
+        "model_view": {
+            "prediction_label": "부적격",
+            "probability_speculative": 0.95,
+            "threshold": 0.315,
+            "risk_band": "high_risk",
+        },
+        "xgboost_result": {
+            "prediction_label": "부적격",
+            "probability_speculative": 0.95,
+            "threshold": 0.315,
+            "risk_band": "high_risk",
+        },
+        "news_cache_snapshot": {
+            "status": "ready",
+            "items": [
+                {
+                    "source": "opendart",
+                    "title": "전환사채(해외전환사채포함)발행후만기전사채취득",
+                    "summary": "(주)라닉스 직접 관련 자금조달성 공시입니다.",
+                    "reliability": "high",
+                    "company_match": True,
+                    "provider_relevance": "caution",
+                    "disclosure_severity": "caution",
+                    "critical_terms": [],
+                    "critical_context_confirmed": False,
+                    "veto_candidate": False,
+                    "evidence_quality": "medium",
+                    "evidence_score": 0.66,
+                },
+                {
+                    "source": "naver_news",
+                    "title": "[전일 주요 공시] 여러 기업 횡령 배임 소식",
+                    "summary": "(주)라닉스가 언급된 종합 기사이나 위험 키워드 문맥은 다른 기업에 해당합니다.",
+                    "reliability": "medium",
+                    "company_match": True,
+                    "provider_relevance": "unknown",
+                    "disclosure_severity": "veto",
+                    "critical_terms": ["횡령", "배임"],
+                    "critical_context_confirmed": False,
+                    "veto_candidate": False,
+                    "evidence_quality": "low",
+                    "evidence_score": 0.54,
+                },
+            ],
+        },
+    }
+    agents = [
+        AgentOutput(
+            role="quant_credit",
+            summary="정량 결과",
+            findings=["완화 요인: 유동비율은 단기 방어력을 일부 제공합니다."],
+            confidence=0.8,
+        ),
+        AgentOutput(role="evidence_audit", summary="근거 검토", findings=[], confidence=0.6),
+        AgentOutput(role="chair_report", summary="종합", findings=[], confidence=0.7),
+    ]
+
+    committee_view = build_committee_view(
+        bundle=build_stage2_input_bundle(state),
+        recommendation="defer",
+        agents=agents,
+    )
+
+    assert committee_view["final_committee_label"] == "보류"
+    assert "외부근거 완화 신호" in committee_view["mitigating_factors"][0]
+    assert "과민 경고" in committee_view["conflict_resolution"]
+
+
+def test_committee_view_keeps_reject_when_external_evidence_is_adverse() -> None:
+    state: AgentState = {
+        "company_id": "123456",
+        "company_name": "테스트기업",
+        "source_feature_row": {"stock_code": "123456"},
+        "model_view": {
+            "prediction_label": "부적격",
+            "probability_speculative": 0.95,
+            "threshold": 0.315,
+            "risk_band": "high_risk",
+        },
+        "xgboost_result": {
+            "prediction_label": "부적격",
+            "probability_speculative": 0.95,
+            "threshold": 0.315,
+            "risk_band": "high_risk",
+        },
+        "news_cache_snapshot": {
+            "status": "ready",
+            "items": [
+                {
+                    "source": "opendart",
+                    "title": "단일판매ㆍ공급계약해지",
+                    "summary": "테스트기업 직접 관련 계약해지 공시입니다.",
+                    "reliability": "high",
+                    "company_match": True,
+                    "provider_relevance": "risk",
+                    "disclosure_severity": "adverse",
+                    "critical_terms": [],
+                    "critical_context_confirmed": False,
+                    "veto_candidate": False,
+                    "evidence_quality": "high",
+                    "evidence_score": 0.82,
+                }
+            ],
+        },
+    }
+    agents = [
+        AgentOutput(
+            role="quant_credit",
+            summary="정량 결과",
+            findings=["완화 요인: 일부 현금성 자산이 확인됩니다."],
             confidence=0.8,
         ),
         AgentOutput(role="evidence_audit", summary="근거 검토", findings=[], confidence=0.6),
