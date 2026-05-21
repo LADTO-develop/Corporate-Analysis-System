@@ -126,6 +126,7 @@ def _query(bundle: Stage2InputBundle) -> str:
             "prediction_label": bundle.prediction_label,
             "probability_speculative": bundle.probability_speculative,
         },
+        "prior_rating_reference": bundle.prior_rating_reference,
         "source_feature_row": bundle.source_feature_row,
         "news_cache_snapshot": bundle.news_cache_snapshot,
         "evidence_guardrail": {

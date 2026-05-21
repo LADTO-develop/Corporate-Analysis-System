@@ -1,7 +1,8 @@
 # 신용위험 대시보드 실행 안내
 
 ## 개요
-이 대시보드는 `credit_43_features` 데이터셋과 XGBoost 결과를 바탕으로 기업별 신용위험을 설명형으로 보여주는 Streamlit 앱입니다.
+이 대시보드는 `credit_43_features` 데이터셋과 XGBoost 결과, 2차 에이전트 위원회 검토를 바탕으로 기업별 신용도를 설명형으로 보여주는 Streamlit 앱입니다.
+현재 2026 추론 입력은 TS2000 원천에 OpenDART 사업보고서 CFS/OFS 보강을 반영한 기준입니다.
 
 현재 포함된 주요 기능은 다음과 같습니다.
 - 기업별 위험확률, 예측 라벨, 위험 밴드 확인
@@ -31,8 +32,19 @@ cd Corporate-Analysis-System
 ```
 
 위 명령은 `data/outputs/dashboard/feature_43_mvp` 아래의 대시보드 입력 파일이
-없으면 먼저 생성한 뒤 Streamlit을 실행합니다. 산출물을 강제로 다시 만들고 싶으면
-다음처럼 실행합니다.
+없으면 먼저 생성한 뒤 Streamlit을 실행합니다. 2026 추론 입력까지 최신 OpenDART
+보강 기준으로 다시 만들고 싶으면 아래 순서로 갱신한 뒤 실행합니다.
+
+```bash
+/opt/anaconda3/envs/aura/bin/python scripts/import_feature_43_inference_2026_aux.py
+/opt/anaconda3/envs/aura/bin/python scripts/build_feature_43_inference_2026.py
+/opt/anaconda3/envs/aura/bin/python scripts/collect_opendart_financial_statements.py --source-kind inference --target-fiscal-year 2025 --fallback-ofs
+/opt/anaconda3/envs/aura/bin/python scripts/apply_opendart_inference_financial_supplements.py
+/opt/anaconda3/envs/aura/bin/python scripts/build_feature_43_inference_2026.py --check-only
+/opt/anaconda3/envs/aura/bin/python scripts/export_feature_43_inference_2026_dashboard_artifacts.py
+```
+
+대시보드 산출물을 강제로 다시 만들고 싶으면 다음처럼 실행합니다.
 
 ```bash
 /opt/anaconda3/envs/aura/bin/python scripts/run_credit_dashboard.py --rebuild-artifacts
@@ -66,19 +78,12 @@ cas-dashboard
 - `data/outputs/dashboard/feature_43_mvp`
 
 ## 대시보드 구성
-- `개요`
-  - 기업 기본 정보
-  - 위험확률
-  - 예측 라벨
-  - 위험 밴드
-  - 핵심 지표
 - `위원회 검토`
-  - 1차 모델 판단과 2차 위원회 판단 비교
-  - 외부 근거, 위험 요인, 완화 요인 확인
+  - 1차 모델 판단을 출발점으로 한 2차 에이전트 위원회 해석
+  - 외부 근거, 위험 요인, 완화 요인, 판단 유형 확인
   - API 키 없이 위원회 검토 Markdown 보고서 다운로드
-- `AI 심사 요약`
-  - OpenAI API 기반 심사 메모 생성
-  - HTML/Markdown 다운로드
+- `기업 기본 정보`
+  - 시장, 산업, 규모, 주요 재무 스냅샷
 - `주요 요인`
   - 주요 설명 변수(SHAP)
 - `동종업계 비교`
@@ -107,5 +112,6 @@ cas-dashboard
 1. 저장소 `pull`
 2. `run_credit_dashboard.py` 실행
 3. 브라우저에서 로컬 주소 접속
-4. 사이드바에서 기업 검색/필터 후 리스팅된 기업 선택
-5. `위원회 검토` 탭에서 Markdown 보고서를 다운로드하거나, API 키가 있으면 `AI 심사 요약` 탭에서 AI 보고서를 생성
+4. 첫 화면에서 시장/산업 필터와 기업명 검색으로 기업 선택
+5. `위원회 검토` 탭에서 판단 유형, 위험 신호, 완화 근거, 외부근거를 먼저 확인
+6. 필요하면 Markdown 보고서를 다운로드하거나 API 키 기반 요약을 생성

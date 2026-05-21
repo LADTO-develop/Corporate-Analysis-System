@@ -397,6 +397,10 @@ def _result_row(
         "model_error_type": model_error_type,
         "credit_rating": sample.get("credit_rating"),
         "rating_boundary_group": sample.get("rating_boundary_group"),
+        "prior_credit_rating": sample.get("prior_credit_rating"),
+        "prior_rating_date": sample.get("prior_rating_date"),
+        "prior_rating_age_days": sample.get("prior_rating_age_days"),
+        "prior_rating_agency": sample.get("prior_rating_agency"),
         "industry_macro_category": sample.get("industry_macro_category"),
         "firm_size_group": sample.get("firm_size_group"),
         "sample_prob_speculative": sample.get("prob_speculative"),
@@ -617,6 +621,7 @@ def _report(results: pd.DataFrame, summary: dict[str, Any]) -> str:
     preview_columns = [
         "sample_category",
         "corp_name",
+        "prior_credit_rating",
         "actual_label_name",
         "model_predicted_label_name",
         "final_committee_label",

@@ -97,6 +97,13 @@ _OPENDART_ROUTINE_TERMS = (
     "증권발행결과",
     "자기주식취득신탁계약해지",
 )
+_BENIGN_TRADING_HALT_TERMS = (
+    "무상증자",
+    "주식분할",
+    "액면분할",
+    "주식병합",
+    "액면병합",
+)
 _NAVER_RISK_KEYWORDS = (
     "소송",
     "횡령",
@@ -289,7 +296,7 @@ def _external_evidence_cache_key(
     return str(
         stable_cache_key(
             {
-                "cache_version": "external_evidence_v1",
+                "cache_version": "external_evidence_v3",
                 "company_name": company_name,
                 "stock_code": stock_code or "",
                 "corp_code": corp_code or "",
@@ -730,6 +737,9 @@ def _disclosure_like_severity(title: str, summary: str) -> str:
 def _disclosure_term_severity(text: str) -> str:
     if _contains_any_term(text, _OPENDART_VETO_TERMS):
         return "veto"
+    benign_trading_halt_severity = _benign_trading_halt_severity(text)
+    if benign_trading_halt_severity:
+        return benign_trading_halt_severity
     if _contains_any_term(text, _OPENDART_ADVERSE_TERMS):
         return "adverse"
     if _contains_any_term(text, _OPENDART_CAUTION_TERMS):
@@ -738,6 +748,26 @@ def _disclosure_term_severity(text: str) -> str:
         return "routine"
     if _contains_any_term(text, _OPENDART_RISK_TERMS):
         return "adverse"
+    return ""
+
+
+def _benign_trading_halt_severity(text: str) -> str:
+    """Downgrade procedural trading halts that are tied to benign corporate actions."""
+    lowered = str(text).lower()
+    compact_text = "".join(lowered.split())
+    has_trading_halt = "거래정지" in lowered or "거래정지" in compact_text
+    if not has_trading_halt:
+        return ""
+
+    adverse_terms_without_trading_halt = tuple(
+        term for term in _OPENDART_ADVERSE_TERMS if term != "거래정지"
+    )
+    if _contains_any_term(text, adverse_terms_without_trading_halt):
+        return ""
+    if _contains_any_term(text, _BENIGN_TRADING_HALT_TERMS):
+        return "routine"
+    if "거래정지해제" in lowered or "거래정지해제" in compact_text:
+        return "caution"
     return ""
 
 
@@ -856,7 +886,7 @@ def _validated_item(
     disclosure_severity = str(item.get("disclosure_severity", "unknown")).lower()
     if disclosure_severity in {"", "none", "unknown"}:
         disclosure_severity = _disclosure_like_severity(title, summary)
-    text = f"{title} {summary} {url}"
+    text = "\n".join(part for part in (title, summary, url) if part)
     critical_terms = critical_terms_in_text(text)
     if disclosure_severity in {"routine", "caution"}:
         critical_terms = []
@@ -1267,16 +1297,16 @@ def _verification_summary(items: list[dict[str, object]]) -> dict[str, object]:
 
 def _critical_terms(items: list[dict[str, object]]) -> list[str]:
     terms: set[str] = set()
-    fallback_text_parts: list[str] = []
     for item in items:
-        terms.update(_string_list(item.get("critical_terms")))
+        if item.get("company_match") is not True:
+            continue
+        if item.get("critical_context_confirmed") is not True:
+            continue
         source = str(item.get("source", "")).lower()
         severity = str(item.get("disclosure_severity", "")).lower()
         if source == "opendart" and severity in {"routine", "caution"}:
             continue
-        fallback_text_parts.append(f"{item.get('title', '')} {item.get('summary', '')}".lower())
-    if fallback_text_parts:
-        terms.update(cast(list[str], critical_terms_in_text(" ".join(fallback_text_parts))))
+        terms.update(_string_list(item.get("critical_terms")))
     return sorted(terms)
 
 

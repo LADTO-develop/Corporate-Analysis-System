@@ -153,6 +153,8 @@ def render_external_evidence_judgment(
     veto_label: str,
     colors: EvidencePanelColors,
     renderers: EvidencePanelRenderers,
+    compact: bool = False,
+    display_committee_label: str | None = None,
 ) -> None:
     """Render the external-evidence interpretation as the main committee-tab focus."""
     st.subheader("외부 근거 판단")
@@ -189,44 +191,46 @@ def render_external_evidence_judgment(
     )
     total_count = len(evidence_frame)
     caution_count = external_veto_candidate_count(evidence_snapshot)
-    final_label = str(committee_view.get("final_committee_label") or "보류")
+    final_label = display_committee_label or str(committee_view.get("final_committee_label") or "보류")
 
-    status_cols = st.columns(4)
-    renderers.render_badge_value_block(
-        status_cols[0],
-        "2차 위원회 판단",
-        renderers.render_decision_badge(final_label),
-    )
-    renderers.render_bold_value_block(
-        status_cols[1],
-        "직접 관련 근거",
-        f"{direct_count}/{total_count}건",
-    )
-    renderers.render_bold_value_block(status_cols[2], "검증 통과 근거", f"{verified_count}건")
-    renderers.render_badge_value_block(
-        status_cols[3],
-        f"강제 경고 상태 ({caution_count}건)",
-        renderers.render_decision_badge(veto_label),
-    )
+    card_container = st.expander("외부근거 요약 카드 더 보기", expanded=False) if compact else st.container()
+    with card_container:
+        status_cols = st.columns(4)
+        renderers.render_badge_value_block(
+            status_cols[0],
+            "2차 위원회 단계",
+            renderers.render_decision_badge(final_label),
+        )
+        renderers.render_bold_value_block(
+            status_cols[1],
+            "직접 관련 근거",
+            f"{direct_count}/{total_count}건",
+        )
+        renderers.render_bold_value_block(status_cols[2], "검증 통과 근거", f"{verified_count}건")
+        renderers.render_badge_value_block(
+            status_cols[3],
+            f"강제 경고 상태 ({caution_count}건)",
+            renderers.render_decision_badge(veto_label),
+        )
 
-    evidence_cols = st.columns(3)
-    renderers.render_list_card(
-        evidence_cols[0],
-        "판단에 쓴 핵심 근거",
-        _external_evidence_item_summaries(evidence_snapshot, bucket="verified"),
-        colors.mitigate,
-    )
-    renderers.render_list_card(
-        evidence_cols[1],
-        "추가로 살펴볼 신호",
-        _external_evidence_item_summaries(evidence_snapshot, bucket="caution"),
-        colors.risk,
-    )
-    renderers.render_text_card(
-        evidence_cols[2],
-        "수집 경로와 반영 방식",
-        _external_evidence_collection_note(evidence_snapshot, veto_label=veto_label),
-    )
+        evidence_cols = st.columns(3)
+        renderers.render_list_card(
+            evidence_cols[0],
+            "판단에 쓴 핵심 근거",
+            _external_evidence_item_summaries(evidence_snapshot, bucket="verified"),
+            colors.mitigate,
+        )
+        renderers.render_list_card(
+            evidence_cols[1],
+            "추가로 살펴볼 신호",
+            _external_evidence_item_summaries(evidence_snapshot, bucket="caution"),
+            colors.risk,
+        )
+        renderers.render_text_card(
+            evidence_cols[2],
+            "수집 경로와 반영 방식",
+            _external_evidence_collection_note(evidence_snapshot, veto_label=veto_label),
+        )
 
 
 def _external_evidence_judgment_text(
@@ -257,8 +261,8 @@ def _external_evidence_judgment_text(
         )
     if veto_label == "후보 검토":
         return (
-            "위험 키워드가 일부 감지됐지만, 다중 출처나 고신뢰 문맥 조건이 충분하지 않아 "
-            "즉시 경고로 확정하지 않고 후보 상태로 분리했습니다.",
+            "주의해서 볼 만한 표현이 일부 확인됐습니다. 다만 여러 출처에서 강하게 확인된 "
+            "상황은 아니어서, 바로 위험 경고로 확정하지 않고 후보 신호로만 표시했습니다.",
             "#c0841a",
         )
     if status == "no_results" or item_count == 0:
