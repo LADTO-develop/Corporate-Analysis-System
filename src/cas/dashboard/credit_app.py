@@ -20,7 +20,7 @@ from cas.agents.contracts import build_company_selection_from_row
 from cas.agents.nodes import committee_node, rule_engine_node
 from cas.agents.state import AgentState
 from cas.dashboard.data_loader import (
-    TEAM43_ARTIFACT_DIR,
+    DEFAULT_ARTIFACT_DIR,
     DashboardArtifacts,
     load_dashboard_artifacts,
 )
@@ -95,20 +95,20 @@ COLOR_MITIGATE = "#2f9e5b"
 COLOR_NEUTRAL = "#4f6fad"
 COLOR_MUTED = "#9aa3b2"
 COLOR_SOFT_BLUE = "#7f93c9"
-COLOR_DARK = "#344054"
+COLOR_DARK = COLOR_MUTED
 COLOR_COMPANY = "#1d4ed8"
 COLOR_INDUSTRY = "#d97706"
 COLOR_MARKET = "#6b7280"
-COLOR_CARD_BG = "#ffffff"
-COLOR_CARD_BORDER = "#d9e1ec"
-COLOR_CARD_LABEL = "#667085"
-COLOR_CARD_VALUE = "#111827"
-CARD_SHADOW = "0 1px 2px rgba(16, 24, 40, 0.05)"
+COLOR_CARD_BG = "var(--cas-panel)"
+COLOR_CARD_BORDER = "var(--cas-border)"
+COLOR_CARD_LABEL = "var(--cas-muted)"
+COLOR_CARD_VALUE = "var(--cas-text)"
+CARD_SHADOW = "var(--cas-shadow)"
 
 ARTIFACT_PRESETS = {
     "team_43": {
         "label": "기본 결과",
-        "path": TEAM43_ARTIFACT_DIR,
+        "path": DEFAULT_ARTIFACT_DIR,
         "description": "현재 연결된 기본 대시보드 결과를 불러옵니다.",
     },
     "custom": {
@@ -199,22 +199,71 @@ cached_load_dashboard_artifacts: Callable[[str | None], DashboardArtifacts] = st
 
 
 def inject_dashboard_theme() -> None:
-    """Apply shared dashboard styling for denser, more readable screens."""
+    """Apply dashboard styling without forcing a fixed light theme.
+
+    Streamlit's Settings menu changes the app theme on the client side.  CSS
+    inserted through ``st.markdown`` cannot reliably read that setting in every
+    Streamlit release, so this stylesheet deliberately avoids hard-coded page
+    backgrounds.  Custom CAS cards are rendered as subtle currentColor-based
+    translucent surfaces, which makes them follow both Streamlit light and dark
+    themes automatically.
+    """
     st.markdown(
         """
         <style>
-        :root {
-          --cas-bg: #f5f7fb;
-          --cas-panel: #ffffff;
-          --cas-border: #d9e1ec;
-          --cas-border-soft: #e8edf5;
-          --cas-text: #111827;
-          --cas-muted: #667085;
-          --cas-blue: #1d4ed8;
+        :root,
+        .stApp {
+          color-scheme: light dark;
+          --cas-blue: var(--st-primary-color, var(--primary-color, #1d4ed8));
+          --cas-risk: #c85050;
+          --cas-risk-text: #d14a4a;
+          --cas-success: #2f9e5b;
+          --cas-warning: #b7791f;
+          --cas-neutral: #4f6fad;
+          --cas-text: inherit;
+          --cas-muted: currentColor;
+          --cas-panel: rgba(128, 128, 128, 0.08);
+          --cas-panel-strong: rgba(128, 128, 128, 0.12);
+          --cas-border: rgba(128, 128, 128, 0.28);
+          --cas-border-soft: rgba(128, 128, 128, 0.18);
+          --cas-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+          --cas-risk-soft: rgba(200, 80, 80, 0.14);
+          --cas-risk-border: rgba(200, 80, 80, 0.38);
+          --cas-success-soft: rgba(47, 158, 91, 0.14);
+          --cas-success-border: rgba(47, 158, 91, 0.38);
+          --cas-warning-soft: rgba(183, 121, 31, 0.14);
+          --cas-warning-border: rgba(183, 121, 31, 0.38);
+          --cas-neutral-soft: rgba(128, 128, 128, 0.10);
+          --cas-neutral-border: rgba(128, 128, 128, 0.28);
         }
 
-        .stApp {
-          background: var(--cas-bg);
+        @supports (color: color-mix(in srgb, white, black)) {
+          :root,
+          .stApp {
+            --cas-muted: color-mix(in srgb, currentColor 64%, transparent);
+            --cas-panel: color-mix(in srgb, currentColor 5%, transparent);
+            --cas-panel-strong: color-mix(in srgb, currentColor 8%, transparent);
+            --cas-border: color-mix(in srgb, currentColor 18%, transparent);
+            --cas-border-soft: color-mix(in srgb, currentColor 10%, transparent);
+            --cas-shadow: 0 1px 2px color-mix(in srgb, currentColor 13%, transparent);
+            --cas-risk-soft: color-mix(in srgb, var(--cas-risk) 17%, transparent);
+            --cas-risk-border: color-mix(in srgb, var(--cas-risk) 42%, transparent);
+            --cas-success-soft: color-mix(in srgb, var(--cas-success) 17%, transparent);
+            --cas-success-border: color-mix(in srgb, var(--cas-success) 42%, transparent);
+            --cas-warning-soft: color-mix(in srgb, var(--cas-warning) 17%, transparent);
+            --cas-warning-border: color-mix(in srgb, var(--cas-warning) 42%, transparent);
+            --cas-neutral-soft: color-mix(in srgb, currentColor 7%, transparent);
+            --cas-neutral-border: color-mix(in srgb, currentColor 18%, transparent);
+          }
+        }
+
+        .stApp,
+        div[data-testid="stAppViewContainer"],
+        div[data-testid="stMain"],
+        div[data-testid="stMainBlockContainer"],
+        .main,
+        .main .block-container {
+          color: inherit !important;
         }
 
         .main .block-container {
@@ -228,14 +277,14 @@ def inject_dashboard_theme() -> None:
         }
 
         h1 {
-          color: var(--cas-text);
+          color: inherit;
           font-size: 1.72rem !important;
           line-height: 1.25 !important;
           margin: 0 0 0.25rem 0 !important;
         }
 
         h2, h3 {
-          color: var(--cas-text);
+          color: inherit;
           line-height: 1.35 !important;
         }
 
@@ -263,7 +312,6 @@ def inject_dashboard_theme() -> None:
         }
 
         section[data-testid="stSidebar"] {
-          background: var(--cas-panel);
           border-right: 1px solid var(--cas-border);
         }
 
@@ -275,7 +323,7 @@ def inject_dashboard_theme() -> None:
 
         div[data-testid="stTabs"] [role="tablist"] {
           align-items: center;
-          background: var(--cas-bg);
+          background: transparent;
           border-bottom: 1px solid var(--cas-border);
           gap: 0.25rem;
           padding: 0.35rem 0 0.45rem 0;
@@ -286,7 +334,7 @@ def inject_dashboard_theme() -> None:
 
         button[role="tab"] {
           border-radius: 8px 8px 0 0 !important;
-          color: #475467 !important;
+          color: var(--cas-muted) !important;
           font-size: 0.92rem !important;
           font-weight: 700 !important;
           min-height: 2.35rem;
@@ -294,7 +342,7 @@ def inject_dashboard_theme() -> None:
         }
 
         button[role="tab"][aria-selected="true"] {
-          background: var(--cas-panel) !important;
+          background: var(--cas-panel-strong) !important;
           box-shadow: inset 0 -2px 0 var(--cas-blue);
           color: var(--cas-blue) !important;
         }
@@ -307,7 +355,7 @@ def inject_dashboard_theme() -> None:
           background: var(--cas-panel);
           border: 1px solid var(--cas-border) !important;
           border-radius: 8px !important;
-          box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+          box-shadow: var(--cas-shadow);
         }
 
         div[data-testid="stDataFrame"] {
@@ -329,10 +377,10 @@ def inject_dashboard_theme() -> None:
         }
 
         .market-search-panel {
-          background: #ffffff;
+          background: var(--cas-panel);
           border: 1px solid var(--cas-border);
           border-radius: 8px;
-          box-shadow: 0 1px 2px rgba(16, 24, 40, 0.05);
+          box-shadow: var(--cas-shadow);
           margin: 0.9rem 0 1rem 0;
           padding: 1rem;
         }
@@ -352,17 +400,17 @@ def inject_dashboard_theme() -> None:
         }
 
         .market-card {
-          background: #ffffff;
+          background: var(--cas-panel);
           border: 1px solid var(--cas-border);
-          border-left: 5px solid #c85050;
+          border-left: 5px solid var(--cas-risk);
           border-radius: 8px;
-          box-shadow: 0 1px 2px rgba(16, 24, 40, 0.05);
+          box-shadow: var(--cas-shadow);
           min-height: 148px;
           padding: 0.9rem 1rem;
         }
 
         .market-card-rank {
-          color: #c85050;
+          color: var(--cas-risk);
           font-size: 0.78rem;
           font-weight: 800;
           margin-bottom: 0.3rem;
@@ -370,7 +418,7 @@ def inject_dashboard_theme() -> None:
         }
 
         .market-card-title {
-          color: var(--cas-text);
+          color: inherit;
           font-size: 1.02rem;
           font-weight: 800;
           line-height: 1.35;
@@ -388,30 +436,30 @@ def inject_dashboard_theme() -> None:
         }
 
         .market-card-risk {
-          color: #b42318;
+          color: var(--cas-risk-text);
           font-size: 1.22rem;
           font-weight: 800;
           margin-top: 0.55rem;
         }
 
         .market-section-title {
-          color: var(--cas-text);
+          color: inherit;
           font-size: 1rem;
           font-weight: 800;
           margin: 0.2rem 0 0.45rem 0;
         }
 
         .selected-company-bar {
-          background: #ffffff;
+          background: var(--cas-panel);
           border: 1px solid var(--cas-border);
           border-radius: 8px;
-          box-shadow: 0 1px 2px rgba(16, 24, 40, 0.05);
+          box-shadow: var(--cas-shadow);
           margin: 0 0 0.8rem 0;
           padding: 0.72rem 0.9rem;
         }
 
         .selected-company-title {
-          color: var(--cas-text);
+          color: inherit;
           font-size: 1rem;
           font-weight: 800;
           line-height: 1.35;
@@ -425,11 +473,11 @@ def inject_dashboard_theme() -> None:
         }
 
         .committee-decision-strip {
-          background: #ffffff;
+          background: var(--cas-panel);
           border: 1px solid var(--cas-border);
-          border-left: 6px solid #2b6cb0;
+          border-left: 6px solid var(--cas-blue);
           border-radius: 8px;
-          box-shadow: 0 1px 2px rgba(16, 24, 40, 0.05);
+          box-shadow: var(--cas-shadow);
           margin: 0.4rem 0 0.75rem 0;
           padding: 1rem;
         }
@@ -449,7 +497,7 @@ def inject_dashboard_theme() -> None:
         }
 
         .committee-decision-summary {
-          color: var(--cas-text);
+          color: inherit;
           font-size: 1rem;
           font-weight: 700;
           line-height: 1.62;
@@ -465,25 +513,25 @@ def inject_dashboard_theme() -> None:
         }
 
         .committee-highlight-card {
-          background: #ffffff;
+          background: var(--cas-panel);
           border: 1px solid var(--cas-border);
-          border-top: 4px solid #2b6cb0;
+          border-top: 4px solid var(--cas-blue);
           border-radius: 8px;
-          box-shadow: 0 1px 2px rgba(16, 24, 40, 0.05);
+          box-shadow: var(--cas-shadow);
           min-height: 132px;
           padding: 0.9rem 1rem;
         }
 
         .committee-highlight-card.risk {
-          border-top-color: #c85050;
+          border-top-color: var(--cas-risk);
         }
 
         .committee-highlight-card.mitigate {
-          border-top-color: #3a8b5b;
+          border-top-color: var(--cas-success);
         }
 
         .committee-highlight-card.warning {
-          border-top-color: #c0841a;
+          border-top-color: var(--cas-warning);
         }
 
         .committee-highlight-title {
@@ -494,7 +542,7 @@ def inject_dashboard_theme() -> None:
         }
 
         .committee-highlight-body {
-          color: var(--cas-text);
+          color: inherit;
           font-size: 0.96rem;
           font-weight: 700;
           line-height: 1.6;
@@ -511,16 +559,16 @@ def inject_dashboard_theme() -> None:
         }
 
         .committee-detail-flow {
-          background: #ffffff;
+          background: var(--cas-panel);
           border: 1px solid var(--cas-border);
           border-radius: 8px;
-          box-shadow: 0 1px 2px rgba(16, 24, 40, 0.05);
+          box-shadow: var(--cas-shadow);
           margin: 0.25rem 0 1rem 0;
           padding: 1rem 1.05rem;
         }
 
         .committee-detail-title {
-          color: var(--cas-text);
+          color: inherit;
           font-size: 1rem;
           font-weight: 800;
           margin-bottom: 0.65rem;
@@ -545,7 +593,7 @@ def inject_dashboard_theme() -> None:
 
         .committee-detail-text,
         .committee-detail-section li {
-          color: var(--cas-text);
+          color: inherit;
           font-size: 0.97rem;
           line-height: 1.68;
           word-break: keep-all;
@@ -1901,10 +1949,25 @@ def style_direction_badge(value: object) -> str:
     text = str(value)
     base_style = "font-weight:700;text-align:center;border-radius:999px;padding:0.15rem 0.45rem;"
     if "높을수록" in text or "O가" in text:
-        return f"{base_style}background-color:#e8f6ee;color:{COLOR_MITIGATE};"
+        return (
+            f"{base_style}"
+            "background-color:var(--cas-success-soft);"
+            "color:var(--cas-success);"
+            "border:1px solid var(--cas-success-border);"
+        )
     if "낮을수록" in text or "아니오가" in text:
-        return f"{base_style}background-color:#fff4dd;color:#b7791f;"
-    return f"{base_style}background-color:#eef2f7;color:{COLOR_DARK};"
+        return (
+            f"{base_style}"
+            "background-color:var(--cas-warning-soft);"
+            "color:var(--cas-warning);"
+            "border:1px solid var(--cas-warning-border);"
+        )
+    return (
+        f"{base_style}"
+        "background-color:var(--cas-neutral-soft);"
+        "color:var(--cas-text);"
+        "border:1px solid var(--cas-neutral-border);"
+    )
 
 
 def render_direction_badge_html(value: object) -> str:
@@ -1918,11 +1981,30 @@ def render_risk_band_badge(risk_band: object) -> str:
     """Render a colored HTML badge for the risk band."""
     label = str(risk_band) if pd.notna(risk_band) else "-"
     style_map = {
-        "안정": {"bg": "#e8f6ee", "fg": COLOR_MITIGATE, "border": "#b9e3c8"},
-        "관찰": {"bg": "#fff4dd", "fg": "#b7791f", "border": "#f2d39a"},
-        "고위험": {"bg": "#fdeaea", "fg": COLOR_RISK, "border": "#f1bcbc"},
+        "안정": {
+            "bg": "var(--cas-success-soft)",
+            "fg": "var(--cas-success)",
+            "border": "var(--cas-success-border)",
+        },
+        "관찰": {
+            "bg": "var(--cas-warning-soft)",
+            "fg": "var(--cas-warning)",
+            "border": "var(--cas-warning-border)",
+        },
+        "고위험": {
+            "bg": "var(--cas-risk-soft)",
+            "fg": "var(--cas-risk)",
+            "border": "var(--cas-risk-border)",
+        },
     }
-    style = style_map.get(label, {"bg": "#eef2f7", "fg": COLOR_DARK, "border": "#d7dfe8"})
+    style = style_map.get(
+        label,
+        {
+            "bg": "var(--cas-neutral-soft)",
+            "fg": "var(--cas-text)",
+            "border": "var(--cas-neutral-border)",
+        },
+    )
     return (
         f"<div style='display:inline-block;padding:0.45rem 0.8rem;border-radius:999px;"
         f"background:{style['bg']};color:{style['fg']};border:1px solid {style['border']};"
@@ -1935,21 +2017,72 @@ def render_decision_badge(label: object, *, muted: bool = False) -> str:
     """Render a colored badge for model and committee decisions."""
     text = str(label) if pd.notna(label) else "-"
     style_map = {
-        "적격": {"bg": "#e8f6ee", "fg": COLOR_MITIGATE, "border": "#b9e3c8"},
-        "투자적격": {"bg": "#e8f6ee", "fg": COLOR_MITIGATE, "border": "#b9e3c8"},
-        "보류": {"bg": "#fff4dd", "fg": "#b7791f", "border": "#f2d39a"},
-        "부적격": {"bg": "#fdeaea", "fg": COLOR_RISK, "border": "#f1bcbc"},
-        "투기등급": {"bg": "#fdeaea", "fg": COLOR_RISK, "border": "#f1bcbc"},
-        "차이 있음": {"bg": "#fff4dd", "fg": "#b7791f", "border": "#f2d39a"},
-        "일치": {"bg": "#e8f6ee", "fg": COLOR_MITIGATE, "border": "#b9e3c8"},
-        "발동": {"bg": "#fdeaea", "fg": COLOR_RISK, "border": "#f1bcbc"},
-        "후보 검토": {"bg": "#fff4dd", "fg": "#b7791f", "border": "#f2d39a"},
-        "미발동": {"bg": "#eef2f7", "fg": COLOR_DARK, "border": "#d7dfe8"},
+        "적격": {
+            "bg": "var(--cas-success-soft)",
+            "fg": "var(--cas-success)",
+            "border": "var(--cas-success-border)",
+        },
+        "투자적격": {
+            "bg": "var(--cas-success-soft)",
+            "fg": "var(--cas-success)",
+            "border": "var(--cas-success-border)",
+        },
+        "보류": {
+            "bg": "var(--cas-warning-soft)",
+            "fg": "var(--cas-warning)",
+            "border": "var(--cas-warning-border)",
+        },
+        "부적격": {
+            "bg": "var(--cas-risk-soft)",
+            "fg": "var(--cas-risk)",
+            "border": "var(--cas-risk-border)",
+        },
+        "투기등급": {
+            "bg": "var(--cas-risk-soft)",
+            "fg": "var(--cas-risk)",
+            "border": "var(--cas-risk-border)",
+        },
+        "차이 있음": {
+            "bg": "var(--cas-warning-soft)",
+            "fg": "var(--cas-warning)",
+            "border": "var(--cas-warning-border)",
+        },
+        "일치": {
+            "bg": "var(--cas-success-soft)",
+            "fg": "var(--cas-success)",
+            "border": "var(--cas-success-border)",
+        },
+        "발동": {
+            "bg": "var(--cas-risk-soft)",
+            "fg": "var(--cas-risk)",
+            "border": "var(--cas-risk-border)",
+        },
+        "후보 검토": {
+            "bg": "var(--cas-warning-soft)",
+            "fg": "var(--cas-warning)",
+            "border": "var(--cas-warning-border)",
+        },
+        "미발동": {
+            "bg": "var(--cas-neutral-soft)",
+            "fg": "var(--cas-text)",
+            "border": "var(--cas-neutral-border)",
+        },
     }
     if muted:
-        style = {"bg": "#eef2f7", "fg": COLOR_DARK, "border": "#d7dfe8"}
+        style = {
+            "bg": "var(--cas-neutral-soft)",
+            "fg": "var(--cas-text)",
+            "border": "var(--cas-neutral-border)",
+        }
     else:
-        style = style_map.get(text, {"bg": "#eef2f7", "fg": COLOR_DARK, "border": "#d7dfe8"})
+        style = style_map.get(
+            text,
+            {
+                "bg": "var(--cas-neutral-soft)",
+                "fg": "var(--cas-text)",
+                "border": "var(--cas-neutral-border)",
+            },
+        )
     return (
         f"<div style='display:inline-block;padding:0.45rem 0.8rem;border-radius:999px;"
         f"background:{style['bg']};color:{style['fg']};border:1px solid {style['border']};"
@@ -4281,8 +4414,15 @@ def render_committee_view_tab(
 
                 st.markdown(
                     f"**{role_label}** "
-                    f"<span style='background-color:#f0f2f6; color:#31333f; padding:0.2rem 0.5rem; "
-                    f"border-radius:0.4rem; font-size:0.75rem; margin-left:0.5rem;'>"
+                    "<span style='"
+                    "background-color:var(--cas-neutral-soft); "
+                    "color:var(--cas-text); "
+                    "border:1px solid var(--cas-neutral-border); "
+                    "padding:0.2rem 0.5rem; "
+                    "border-radius:0.4rem; "
+                    "font-size:0.75rem; "
+                    "margin-left:0.5rem;'"
+                    ">"
                     f"사용 모델: {used_model}</span>",
                     unsafe_allow_html=True,
                 )
