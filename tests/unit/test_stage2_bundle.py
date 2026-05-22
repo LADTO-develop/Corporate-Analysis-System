@@ -32,8 +32,9 @@ def test_stage2_input_bundle_normalizes_state_for_agents() -> None:
     assert bundle.prediction_label == "투자적격"
     assert bundle.probability_speculative == 0.21
     assert bundle.news_status == "not_implemented"
-    assert bundle.prior_rating_reference["prior_credit_rating"] == "BBB-"
     assert set(bundle.peer_rows_by_feature) == {"current_ratio"}
+    assert bundle.prior_rating_reference["prior_credit_rating"] == "BBB-"
+    assert bundle.credit_policy_snapshot == {}
 
 
 def test_stage2_input_bundle_exports_prompt_payload() -> None:
@@ -49,3 +50,68 @@ def test_stage2_input_bundle_exports_prompt_payload() -> None:
     assert payload["company"]["market"] == "KOSDAQ"
     assert "model_view" in payload
     assert "prior_rating_reference" in payload
+    assert payload["credit_policy_snapshot"] == {}
+
+
+def test_stage2_input_bundle_includes_credit_policy_snapshot() -> None:
+    state: AgentState = {
+        "company_id": "KOSDAQ-000000-2025",
+        "company_name": "테스트기업",
+        "market": "KOSDAQ",
+        "analysis_year": 2026,
+        "company_profile": {},
+        "source_feature_row": {},
+        "peer_comparison_rows": [],
+        "model_view": {
+            "prediction_label": "투자적격",
+            "probability_speculative": 0.42,
+        },
+        "xgboost_result": {},
+        "rule_result": {},
+        "news_cache_snapshot": {"status": "not_requested"},
+        "credit_policy_snapshot": {
+            "policy_version": "credit_signal_policy_v1",
+            "signals": [],
+            "label_override_allowed": False,
+            "risk_signal_count": 0,
+            "mitigating_signal_count": 0,
+            "critical_signal_count": 0,
+        },
+    }
+
+    bundle = build_stage2_input_bundle(state)
+    payload = bundle.to_prompt_payload()
+
+    assert bundle.credit_policy_snapshot["policy_version"] == "credit_signal_policy_v1"
+    assert bundle.credit_policy_snapshot["label_override_allowed"] is False
+    assert bundle.credit_policy_snapshot["risk_signal_count"] == 0
+    assert payload["credit_policy_snapshot"]["label_override_allowed"] is False
+    assert payload["credit_policy_snapshot"]["critical_signal_count"] == 0
+
+
+def test_stage2_input_bundle_preserves_prior_rating_reference_fallbacks() -> None:
+    profile_state: AgentState = {
+        "company_id": "KOSPI-000000-2024",
+        "company_profile": {
+            "prior_rating_reference": {
+                "has_prior_rating": True,
+                "prior_credit_rating": "BB+",
+            }
+        },
+    }
+    profile_bundle = build_stage2_input_bundle(profile_state)
+
+    assert profile_bundle.prior_rating_reference["prior_credit_rating"] == "BB+"
+
+    model_view_state: AgentState = {
+        "company_id": "KOSPI-000001-2024",
+        "model_view": {
+            "prior_rating_reference": {
+                "has_prior_rating": True,
+                "prior_credit_rating": "BBB-",
+            }
+        },
+    }
+    model_view_bundle = build_stage2_input_bundle(model_view_state)
+
+    assert model_view_bundle.prior_rating_reference["prior_credit_rating"] == "BBB-"

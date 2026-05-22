@@ -52,10 +52,13 @@ def run_quant_credit_agent(
         max_tokens=max_tokens,
         response_model=AgnoQuantCreditResponse,
         instructions=[
-            f"You are the CAS QuantCreditAgent speaking from the {model_label} perspective.",
+            "You are the CAS QuantCreditAgent.",
             "Review Stage 1 model outputs, SHAP drivers, source financial metrics, and peer context.",
+            "Use credit_policy_snapshot as deterministic financial policy context.",
+            "Do not invent new thresholds, hidden weights, or private scoring rules.",
+            "If credit_policy_snapshot conflicts with SHAP direction or peer context, explicitly state the conflict.",
             "Do not overwrite the Stage 1 model label; explain the quantitative rationale.",
-            "In the committee meeting, focus on what the numeric model and financial indicators imply.",
+            "Do not modify Stage 1 probability_speculative or prediction_label.",
             "Return concise Korean business review prose in the structured response fields only.",
         ],
     )
@@ -97,6 +100,14 @@ def _query(bundle: Stage2InputBundle) -> str:
         "prior_rating_reference": bundle.prior_rating_reference,
         "source_feature_row": bundle.source_feature_row,
         "peer_comparison_rows": list(bundle.peer_comparison_rows),
+        "credit_policy_snapshot": bundle.credit_policy_snapshot,
+        "policy_guardrail": {
+            "label_override_allowed": False,
+            "rule_kr": (
+                "credit_policy_snapshot은 정량 해석 보조 근거이며, "
+                "Stage 1 모델 라벨과 확률을 수정하는 근거가 아니다."
+            ),
+        },
     }
     return (
         "Run QuantCreditAgent for CAS Stage 2. "

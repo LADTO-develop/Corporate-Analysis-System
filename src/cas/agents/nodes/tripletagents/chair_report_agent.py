@@ -58,6 +58,8 @@ def run_chair_report_agent(
             "Do not invent external news, DART filings, macro events, or industry events not present in the evidence input.",
             "If external evidence is unavailable, clearly state that the external review is limited.",
             "Return concise Korean review prose in the structured response fields only.",
+            "Use credit_policy_summary only to explain the already computed committee qualification.",
+            "Do not convert policy signals into a new official rating, probability, or label.",
         ],
     )
     result = run_structured_agent(
@@ -93,6 +95,17 @@ def run_chair_report_agent(
     )
 
 
+def _policy_summary(bundle: Stage2InputBundle) -> dict[str, object]:
+    snapshot = bundle.credit_policy_snapshot
+    return {
+        "policy_version": snapshot.get("policy_version"),
+        "label_override_allowed": snapshot.get("label_override_allowed", False),
+        "risk_signal_count": snapshot.get("risk_signal_count", 0),
+        "mitigating_signal_count": snapshot.get("mitigating_signal_count", 0),
+        "critical_signal_count": snapshot.get("critical_signal_count", 0),
+    }
+
+
 def _query(
     *,
     bundle: Stage2InputBundle,
@@ -123,6 +136,7 @@ def _query(
         },
         "quant_credit": quant_credit.model_dump(mode="json"),
         "evidence_audit": evidence_audit.model_dump(mode="json"),
+        "credit_policy_summary": _policy_summary(bundle),
     }
     return (
         "Run ChairReportAgent for CAS Stage 2. "

@@ -14,6 +14,7 @@ from cas.agents.signals import (
     evaluate_external_evidence,
     evaluate_macro_market,
 )
+from cas.agents.signals.credit_policy_signals import evaluate_credit_policy
 from cas.agents.stage2_bundle import Stage2InputBundle, build_stage2_input_bundle
 from cas.agents.stage2_outputs import (
     ChairReportOutput,
@@ -105,8 +106,20 @@ class _EvidenceProfile(TypedDict):
 
 def run(state: AgentState) -> dict[str, Any]:
     """Run the three-agent Stage 2 scaffold over Stage 1 outputs."""
-    bundle = build_stage2_input_bundle(state)
+    credit_policy_snapshot = evaluate_credit_policy(
+        source_feature_row=dict(state.get("source_feature_row") or {}),
+        peer_comparison_rows=list(state.get("peer_comparison_rows") or []),
+    ).model_dump(mode="json")
 
+    state_with_policy = cast(
+        AgentState,
+        {
+            **state,
+            "credit_policy_snapshot": credit_policy_snapshot,
+        },
+    )
+
+    bundle = build_stage2_input_bundle(state_with_policy)
     recommendation = cast(
         Recommendation,
         bundle.rule_result.get("recommendation") or state.get("final_recommendation") or "review",
@@ -182,6 +195,7 @@ def run(state: AgentState) -> dict[str, Any]:
         "committee_reviews": reviews,
         "agent_summary": agent_summary,
         "committee_view": committee_view,
+        "credit_policy_snapshot": credit_policy_snapshot,
         "final_recommendation": recommendation,
         "final_confidence": committee_confidence,
         "audit": [audit],

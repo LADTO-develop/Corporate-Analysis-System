@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, cast
 
 from cas.agents.state import AgentState
@@ -26,9 +26,10 @@ class Stage2InputBundle:
     xgboost_result: dict[str, Any]
     rule_result: dict[str, Any]
     source_feature_row: dict[str, Any]
-    prior_rating_reference: dict[str, Any]
     peer_comparison_rows: tuple[dict[str, Any], ...]
     news_cache_snapshot: dict[str, Any]
+    prior_rating_reference: dict[str, Any] = field(default_factory=dict)
+    credit_policy_snapshot: dict[str, Any] = field(default_factory=dict)
 
     @property
     def prediction_label(self) -> str:
@@ -76,9 +77,10 @@ class Stage2InputBundle:
             "xgboost_result": self.xgboost_result,
             "rule_result": self.rule_result,
             "source_feature_row": self.source_feature_row,
-            "prior_rating_reference": self.prior_rating_reference,
             "peer_comparison_rows": list(self.peer_comparison_rows),
             "news_cache_snapshot": self.news_cache_snapshot,
+            "prior_rating_reference": self.prior_rating_reference,
+            "credit_policy_snapshot": self.credit_policy_snapshot,
         }
 
 
@@ -122,9 +124,10 @@ def build_stage2_input_bundle(state: AgentState) -> Stage2InputBundle:
         xgboost_result=_as_dict(state.get("xgboost_result")),
         rule_result=_as_dict(state.get("rule_result")),
         source_feature_row=source_feature_row,
-        prior_rating_reference=prior_rating_reference,
         peer_comparison_rows=_as_dict_tuple(state.get("peer_comparison_rows")),
         news_cache_snapshot=_as_dict(state.get("news_cache_snapshot")),
+        prior_rating_reference=prior_rating_reference,
+        credit_policy_snapshot=_as_dict(state.get("credit_policy_snapshot")),
     )
 
 
