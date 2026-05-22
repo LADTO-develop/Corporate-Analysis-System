@@ -541,12 +541,39 @@ def _has_secondary_rule_liquidity_watch_signal(bundle: Stage2InputBundle) -> boo
     has_reported_liquidity_weakness = _metric_below(
         bundle.source_feature_row, "current_ratio", 1.0
     ) or _metric_below(bundle.source_feature_row, "cash_ratio", 0.10)
+    if has_reported_liquidity_weakness and _has_cashflow_backed_liquidity_buffer(
+        bundle.source_feature_row
+    ):
+        return False
     if (
         any(marker in reason_text for marker in liquidity_markers)
         and has_reported_liquidity_weakness
     ):
         return True
     return bool(has_reported_liquidity_weakness)
+
+
+def _has_cashflow_backed_liquidity_buffer(row: dict[str, Any]) -> bool:
+    """Allow a current-ratio watch through when cash, OCF, and capital are strong."""
+    return bool(
+        _metric_below(row, "current_ratio", 1.0)
+        and _metric_at_least(row, "cash_ratio", 0.25)
+        and _metric_at_least(row, "cashflow_coverage_ratio", 1.0)
+        and _metric_at_least(row, "ocf_to_total_liabilities", 0.05)
+        and _metric_at_least(row, "ocf_to_sales", 0.0)
+        and _metric_at_least(row, "interest_coverage_ratio", 3.0)
+        and _metric_at_least(row, "equity_ratio", 0.40)
+        and _metric_at_most(row, "debt_ratio", 1.50)
+        and (
+            _metric_at_most(row, "short_term_borrowings_share", 0.80)
+            or _metric_at_most(row, "total_borrowings_ratio", 0.30)
+        )
+        and _metric_at_most(row, "capital_impairment_ratio", 0.0)
+        and not _flag_is_true(row.get("icr_under_1"))
+        and not _flag_is_true(row.get("is_2y_consecutive_operating_loss"))
+        and not _flag_is_true(row.get("is_2y_consecutive_ocf_deficit"))
+        and not _metric_below(row, "net_margin", -0.05)
+    )
 
 
 def _secondary_overhold_guardrail_reason(bundle: Stage2InputBundle) -> str:

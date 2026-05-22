@@ -650,6 +650,67 @@ def test_committee_view_holds_secondary_radar_case_with_negative_cashflow() -> N
     )
 
 
+def test_committee_view_keeps_cashflow_backed_current_ratio_watch_eligible() -> None:
+    state: AgentState = {
+        "company_id": "294140",
+        "company_name": "(주)레몬",
+        "source_feature_row": {
+            "stock_code": "294140",
+            "current_ratio": 0.7443,
+            "cash_ratio": 0.2969,
+            "cashflow_coverage_ratio": 24.3625,
+            "ocf_to_sales": 0.2612,
+            "ocf_to_total_liabilities": 0.5441,
+            "interest_coverage_ratio": 18.7971,
+            "equity_ratio": 0.6099,
+            "debt_ratio": 0.6396,
+            "total_borrowings_ratio": 0.2635,
+            "short_term_borrowings_share": 1.0,
+            "capital_impairment_ratio": 0.0,
+            "net_margin": 0.1554,
+            "icr_under_1": 0,
+            "is_2y_consecutive_operating_loss": 0,
+            "is_2y_consecutive_ocf_deficit": 0,
+        },
+        "model_view": {
+            "prediction_label": "투자적격",
+            "probability_speculative": 0.3113,
+            "threshold": 0.325,
+            "stage2_secondary_trigger": True,
+            "stage2_review_priority": "high",
+            "trigger_reason": "45개 보조 레이더가 기준선 근처로 추가 검토를 요구했습니다.",
+        },
+        "xgboost_result": {
+            "prediction_label": "투자적격",
+            "probability_speculative": 0.3113,
+            "threshold": 0.325,
+        },
+        "rule_result": {
+            "risk_band": "watch",
+            "recommendation": "watch",
+            "reasons": ["current_ratio=0.74 is below the watch floor"],
+            "blocking_flags": [],
+        },
+        "news_cache_snapshot": {"status": "ready", "items": []},
+    }
+    agents = [
+        AgentOutput(role="quant_credit", summary="정량 결과", findings=[], confidence=0.8),
+        AgentOutput(role="evidence_audit", summary="근거 검토", findings=[], confidence=0.7),
+        AgentOutput(role="chair_report", summary="종합", findings=[], confidence=0.7),
+    ]
+
+    committee_view = build_committee_view(
+        bundle=build_stage2_input_bundle(state),
+        recommendation="watch",
+        agents=agents,
+    )
+
+    assert committee_view["final_committee_label"] == "적격"
+    assert committee_view["committee_decision_type"] == "eligible"
+    assert committee_view["committee_risk_signal"] is False
+    assert "정상기업 과잉 보류 방어 guardrail" in committee_view["mitigating_factors"][0]
+
+
 def test_committee_view_holds_secondary_radar_case_with_profitability_stress() -> None:
     state: AgentState = {
         "company_id": "009900",

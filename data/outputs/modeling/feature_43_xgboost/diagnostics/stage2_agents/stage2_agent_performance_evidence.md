@@ -18,6 +18,7 @@
 | round 3 저확률 guardrail 재평가 | 10 | 9/10 = 90.0% | 10/10 = 100.0% | 같은 샘플 캐시 재평가, TN 1건 개선 |
 | isolated ICR TN guardrail | 8 | 7/8 = 87.5% | 8/8 = 100.0% | 이자보상 단일 플래그 TN 1건 개선 |
 | OpenAI single 3-agent no-cache live | 8 | 7/8 = 87.5% | 8/8 = 100.0% | 캐시 hit 0, 역할별 실행시간 8/8건 기록 |
+| TN 과잉 보류 30건 확대 | 30 | 22/30 = 73.3% | 30/30 = 100.0% | 레몬 1건 보류→적격, 남은 보류 8건은 재무 차단 신호 보유 |
 
 개선 폭은 1차 5건 대비 추가 10건에서 엄격 기준 +30.0%p, review-safe 기준 +20.0%p다. 합산 기준으로도 review-safe 성공률은 93.3%까지 올라왔다.
 
@@ -110,6 +111,8 @@ round 3 live 결과에서는 FN 2건은 모두 보류로 끌어올렸고, FP 3�
 | Holdout unseen deterministic speed baseline | `committee_review_holdout_unseen_deterministic_speed_baseline` | 8 | 6/8 = 75.0% | 6/8 = 75.0% | 0 | 기존 결과와 겹치지 않는 새 holdout 8건의 로컬 기준선 |
 | Holdout unseen liquidity guardrail | `committee_review_holdout_unseen_guardrail_speed_batch` | 8 | 8/8 = 100.0% | 8/8 = 100.0% | 0 | FN 2건을 보류로 끌어올리고 FP/TP 판단 유지 |
 | OpenAI single 3-agent no-cache live | `committee_review_openai_single_3agent_no_cache_live_8` | 8 | 7/8 = 87.5% | 8/8 = 100.0% | 0 | OpenAI 단일 provider 3-agent live 실행, 캐시 hit 0 |
+| TN overhold expanded before liquidity buffer | `committee_review_tn_overhold_expanded_30_deterministic` | 30 | 21/30 = 70.0% | 30/30 = 100.0% | 0 | 기존 TN 검토 7건 제외 후 새 TN 30건 확대 분석 |
+| TN overhold expanded after liquidity buffer | `committee_review_tn_overhold_expanded_30_after_liquidity_buffer` | 30 | 22/30 = 73.3% | 30/30 = 100.0% | 0 | 현금흐름 방어 current-ratio watch 예외 후 레몬 1건 적격 개선 |
 
 Historical 12건 계열은 동일 기업 12건을 반복 검증한 산출물이다. 이 계열에서는 초기 75.0%에서 secondary signal connected 기준 100.0%까지 개선됐다. Rolling validation 계열은 샘플 구성과 평가지표가 달라 별도로 보며, 최종 추가 10건에서 90.0%/100.0%를 기록했다.
 
@@ -199,6 +202,19 @@ OpenAI Agno 재검증에서 드러난 FN 미상승 원인은 정상기업 과잉
 추가로 batch 결과 CSV에 Stage 2 실행 진단 컬럼을 남기도록 했다. 주요 컬럼은 `stage2_backend_name`, `stage2_llm_cache_hit`, `stage2_total_elapsed_seconds`, `stage2_agent_elapsed_seconds_sum`, `stage2_quant_credit_elapsed_seconds`, `stage2_evidence_audit_elapsed_seconds`, `stage2_chair_report_elapsed_seconds`, `stage2_parallel_independent_agents`다. 따라서 앞으로는 전체 배치 wall time뿐 아니라 케이스별 Stage 2 LLM 시간, 역할별 병목, 캐시 재사용 여부를 같은 결과 파일에서 바로 확인할 수 있다.
 
 이 진단 컬럼을 붙인 뒤 같은 8건을 `--no-stage2-llm-cache`로 다시 실행해 실제 OpenAI single 3-agent live 증거를 남겼다. 결과는 엄격 기준 7/8 = 87.5%, review-safe 8/8 = 100.0%였고, `stage2_llm_cache_hit=False`가 8/8건, `stage2_backend_name=agno`가 8/8건, `stage2_parallel_independent_agents=True`가 8/8건이었다. 역할별 실행시간도 8/8건 모두 채워졌으며 평균은 QuantCredit 9.8721초, EvidenceAudit 6.9654초, ChairReport 6.6039초였다. `stage2_total_elapsed_seconds` 평균은 16.4786초, 최대는 19.8059초였고, batch wall time은 67.6725초였다. 역할별 시간 합계가 Stage 2 총시간보다 큰 것은 QuantCredit과 EvidenceAudit을 독립 병렬 실행하기 때문이다.
+
+## TN 과잉 보류 30건 확대 분석
+
+휴맥스처럼 실제 투자적격이지만 Stage 2가 보류로 남기는 TN 케이스를 더 보기 위해, 기존 TN 검토 산출물에 등장한 7개 기업-연도를 제외하고 rolling validation TN 후보 30건을 새로 추출했다. 샘플은 `committee_review_tn_overhold_expanded_30_samples.csv`이며, 모두 실제 투자적격이고 1차 모델도 투자적격으로 판단했지만 기준선 근처라 Stage 2 검토 대상에 오른 기업이다.
+
+| 실행 | Runner | 건수 | 엄격 기준 | Review-safe | 보류 | 적격 | Wall time | 평균 case time |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| TN overhold expanded before liquidity buffer | deterministic | 30 | 21/30 = 70.0% | 30/30 = 100.0% | 9 | 21 | 2.6217초 | 0.3443초 |
+| TN overhold expanded after liquidity buffer | deterministic | 30 | 22/30 = 73.3% | 30/30 = 100.0% | 8 | 22 | 2.5362초 | 0.3332초 |
+
+확대 분석 결과, 기존 로직에서 보류 9건 중 8건은 이자보상배율 1 미만, OCF 동시 음수, 순이익률 -10% 미만, 약한 자본/이자보상 조합, 단기차입 압력 중 하나 이상이 있어 보류 유지가 합리적이었다. 반면 `(주)레몬` 2020은 current ratio가 0.7443으로 낮지만 cash ratio 0.2969, OCF/매출 0.2612, OCF/총부채 0.5441, cashflow coverage 24.3625, ICR 18.7971, 자기자본비율 0.6099로 유동성·현금흐름·자본 방어축이 모두 확인됐다. 이에 따라 current ratio watch가 있어도 현금비율·OCF·ICR·자본이 강하고 총차입금 부담이 낮은 경우에는 TN 과잉 보류 guardrail을 막지 않도록 아주 좁은 예외를 추가했다.
+
+수정 후 같은 30건에서 `(주)레몬`만 `보류 → 적격`으로 내려갔고, 남은 보류 8건은 모두 재무 차단 신호를 보유했다. 따라서 휴맥스형 케이스는 계속 보류로 남기고, 방어축이 확실한 current-ratio 단독 watch 케이스만 적격으로 낮추는 방향이 안전하다고 본다. 세부 분석 파일은 `tn_overhold_expanded_30_analysis.md`, `tn_overhold_expanded_30_analysis.csv`, `tn_overhold_expanded_30_analysis_summary.json`에 저장했다.
 
 ## Agno 실행 기준 보류 세분화 결과
 
