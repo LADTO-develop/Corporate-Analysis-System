@@ -2,6 +2,11 @@
 
 from __future__ import annotations
 
+import math
+
+import pandas as pd
+
+from cas.dashboard.chart_data import finite_chart_frame, finite_float_or_none
 from cas.dashboard.committee_copy import committee_decision_type_info
 from cas.dashboard.formatting import COVERAGE_CAP_LABEL, format_ratio_value
 from cas.dashboard.labels import (
@@ -51,3 +56,20 @@ def test_dashboard_label_helpers_match_user_facing_copy() -> None:
     assert to_committee_base_label("unknown") == "보류"
     assert to_stage2_risk_band("고위험") == "high_risk"
     assert format_stage2_risk_band("watch") == "관찰"
+
+
+def test_chart_numeric_helpers_drop_non_finite_values() -> None:
+    assert finite_float_or_none("12.5") == 12.5
+    assert finite_float_or_none(math.inf) is None
+
+    frame = finite_chart_frame(
+        [
+            {"label": "valid", "값": "1.25"},
+            {"label": "missing", "값": pd.NA},
+            {"label": "infinite", "값": math.inf},
+        ],
+        ["값"],
+    )
+
+    assert frame["label"].tolist() == ["valid"]
+    assert frame["값"].tolist() == [1.25]
