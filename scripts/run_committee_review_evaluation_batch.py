@@ -80,11 +80,20 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--stage2-agno-mode",
-        choices=["single", "multi", "multi_llm", "multi_llm_committee"],
+        choices=[
+            "single",
+            "single_call",
+            "single_agent",
+            "multi",
+            "multi_llm",
+            "multi_llm_committee",
+        ],
         default=os.environ.get("CAS_STAGE2_AGNO_MODE", "single"),
         help=(
-            "Agno routing mode for --stage2-runner agno. Default is single so "
-            "OpenAI-only API runs do not require Claude/Gemini credentials."
+            "Agno routing mode for --stage2-runner agno. Default single uses one "
+            "provider across the three role agents. single_call uses one structured "
+            "LLM request for faster smoke tests. OpenAI-only API runs do not require "
+            "Claude/Gemini credentials."
         ),
     )
     parser.add_argument(
@@ -104,6 +113,15 @@ def parse_args() -> argparse.Namespace:
         help=(
             "Number of companies to process concurrently. Use 1 for strict sequential "
             "runs or 3-5 for faster live Agno batches when API rate limits allow it."
+        ),
+    )
+    parser.add_argument(
+        "--stage2-llm-cache",
+        action=argparse.BooleanOptionalAction,
+        default=_default_stage2_llm_cache(),
+        help=(
+            "Use cached Stage 2 LLM responses. Disable with --no-stage2-llm-cache "
+            "when measuring true live API latency or prompt changes."
         ),
     )
     return parser.parse_args()
@@ -149,6 +167,7 @@ def configure_runtime(
     stage2_agno_mode: str = "single",
     stage2_model_provider: str = "openai",
     stage2_model: str = "gpt-4.1-mini",
+    stage2_llm_cache: bool = True,
 ) -> None:
     load_dotenv(ROOT / ".env")
     os.environ["CAS_STAGE2_RUNNER"] = stage2_runner
@@ -156,6 +175,7 @@ def configure_runtime(
         os.environ["CAS_STAGE2_AGNO_MODE"] = stage2_agno_mode
         os.environ["CAS_STAGE2_MODEL_PROVIDER"] = stage2_model_provider
         os.environ["CAS_STAGE2_MODEL"] = stage2_model
+        os.environ["CAS_STAGE2_LLM_CACHE_ENABLED"] = "1" if stage2_llm_cache else "0"
     os.environ.setdefault("CAS_STAGE2_FALLBACK_ON_ERROR", "1")
     os.environ.setdefault(
         "CAS_OPENDART_CORP_CODE_CACHE_PATH", "/private/tmp/cas_opendart_corp_codes.csv"
@@ -546,6 +566,11 @@ def _default_workers() -> int:
     return max(workers, 1)
 
 
+def _default_stage2_llm_cache() -> bool:
+    raw_value = os.environ.get("CAS_STAGE2_LLM_CACHE_ENABLED", "1").strip().lower()
+    return raw_value not in {"0", "false", "no", "off"}
+
+
 def _bounded_worker_count(workers: int, row_count: int) -> int:
     if row_count <= 0:
         return 1
@@ -712,6 +737,7 @@ def main() -> None:
         stage2_agno_mode=args.stage2_agno_mode,
         stage2_model_provider=args.stage2_model_provider,
         stage2_model=args.stage2_model,
+        stage2_llm_cache=args.stage2_llm_cache,
     )
     samples = read_samples(args.samples)
     batch = select_batch(

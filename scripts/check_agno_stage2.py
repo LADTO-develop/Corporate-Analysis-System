@@ -35,6 +35,7 @@ def main() -> None:
     package_errors = _missing_packages(package_specs)
     env_errors = _missing_env_vars(providers)
     fallback = os.environ.get("CAS_STAGE2_FALLBACK_ON_ERROR", "1").strip()
+    llm_cache = os.environ.get("CAS_STAGE2_LLM_CACHE_ENABLED", "1").strip()
 
     print("CAS Stage 2 Agno preflight")
     print(f"- CAS_STAGE2_RUNNER={runner or 'deterministic'}")
@@ -64,6 +65,7 @@ def main() -> None:
         )
         print(f"- CAS_STAGE2_MODEL={os.environ.get('CAS_STAGE2_MODEL', DEFAULT_MODEL)}")
     print(f"- CAS_STAGE2_FALLBACK_ON_ERROR={fallback or '1'}")
+    print(f"- CAS_STAGE2_LLM_CACHE_ENABLED={llm_cache or '1'}")
     for package_name in package_specs:
         print(f"- {package_name}={_package_version(package_name)}")
 

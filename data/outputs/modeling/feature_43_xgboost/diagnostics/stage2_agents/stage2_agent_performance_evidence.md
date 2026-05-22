@@ -15,6 +15,7 @@
 | 새 holdout 8건 로컬 guardrail | 8 | 8/8 = 100.0% | 8/8 = 100.0% | 기존 실험과 겹치지 않는 기업-회계연도 |
 | 추가 Agno/Claude round 3 | 10 | 8/10 = 80.0% | 10/10 = 100.0% | 새 기업-회계연도, workers=3 실제 API 실행 |
 | round 3 저확률 guardrail 재평가 | 10 | 9/10 = 90.0% | 10/10 = 100.0% | 같은 샘플 캐시 재평가, TN 1건 개선 |
+| isolated ICR TN guardrail | 8 | 7/8 = 87.5% | 8/8 = 100.0% | 이자보상 단일 플래그 TN 1건 개선 |
 
 개선 폭은 1차 5건 대비 추가 10건에서 엄격 기준 +30.0%p, review-safe 기준 +20.0%p다. 합산 기준으로도 review-safe 성공률은 93.3%까지 올라왔다.
 
@@ -175,6 +176,7 @@ Claude/Agno Stage 2는 FN 보완과 FP 완화에는 이미 효과가 있다. 특
 | TN guardrail deterministic 8 | deterministic | disabled | 4/8 = 50.0% | 6/8 = 75.0% | 0 | 1.9270초 | 0.7124초 | 249.0919건/분 |
 | TN guardrail OpenAI Agno 8 | OpenAI Agno single `gpt-4.1-mini` | ready 8/8 | 4/8 = 50.0% | 6/8 = 75.0% | 0 | 70.8385초 | 17.5339초 | 6.7760건/분 |
 | FN escalation OpenAI Agno rerun 8 | OpenAI Agno single `gpt-4.1-mini` | ready 8/8 | 6/8 = 75.0% | 8/8 = 100.0% | 0 | 1.5040초 | 0.3758초 | 319.1489건/분 |
+| Isolated ICR guardrail deterministic 8 | deterministic | disabled | 7/8 = 87.5% | 8/8 = 100.0% | 0 | 1.8684초 | 0.4666초 | 256.9043건/분 |
 
 OpenAI Agno 결과는 deterministic과 최종 라벨이 8/8건 동일했다. FN 2건은 둘 다 `적격`으로 남아 missed, FP 2건은 `과민경고 완화 보류`, TP 1건은 `부적격`, TN 3건 중 동성화인텍은 `적격`, 데이타솔루션과 휴맥스는 `경계등급 보류`였다. 모든 케이스의 `evidence_status`는 `ready`였고 `error_message`는 비어 있었다.
 
@@ -185,6 +187,10 @@ OpenAI Agno 재검증에서 드러난 FN 미상승 원인은 정상기업 과잉
 수정 후 같은 8건 deterministic 재평가에서는 엄격 기준이 4/8 = 50.0%에서 6/8 = 75.0%로, review-safe 기준이 6/8 = 75.0%에서 8/8 = 100.0%로 개선됐다. FN 2건은 모두 `경계등급 보류`로 끌어올렸고, FP 2건은 `과민경고 완화 보류`, TP 1건은 `부적격`, TN 3건은 동성화인텍 `적격`, 데이타솔루션·휴맥스 `경계등급 보류`로 유지됐다. 속도는 wall time 1.4459초, 평균 case time 0.5330초, 처리량 331.9732건/분이었다.
 
 수정 후 OpenAI Agno 경로 재실행에서도 엄격 기준 6/8 = 75.0%, review-safe 8/8 = 100.0%로 같은 개선이 확인됐다. 수정 전 OpenAI Agno 결과와 비교하면 예선테크와 명신산업 2건만 `적격`에서 `경계등급 보류`로 바뀌었고, FP/TP/TN 라벨은 그대로 유지됐다. 다만 wall time 1.5040초, 평균 case time 0.3758초로 이전 live API 실행보다 매우 짧아 Agno/외부근거 캐시 재사용 가능성이 높다. 따라서 이 행은 수정 후 최종 라벨 회귀 확인으로 사용하고, 실제 live API 지연시간 대표값은 앞선 70.8385초 실행을 함께 참고한다.
+
+추가 진단에서는 남은 TN 과잉 보류 중 데이타솔루션 2020이 `interest_coverage_under_1` 단일 blocking flag에 과하게 묶인 것으로 확인됐다. 이 케이스는 ICR이 1배 미만이지만 OCF/총부채 15.7%, cashflow coverage 7.83배, 현금비율 34.0%, 총차입금 비중 7.6%로 현금흐름과 차입 부담이 방어적이었다. 이에 따라 blocking flag가 이자보상 단일 항목이고, OCF·현금·저차입 조건이 동시에 충족되는 경우에만 정상기업 과잉 보류 guardrail을 허용했다. 같은 8건 deterministic 재평가에서 데이타솔루션은 `경계등급 보류`에서 `적격`으로 개선됐고, FN 2건은 계속 `경계등급 보류`, 휴맥스는 음수 OCF와 음수 ICR 때문에 보류로 남았다. 결과는 엄격 기준 7/8 = 87.5%, review-safe 8/8 = 100.0%다.
+
+속도/검증 신뢰도 쪽 문제도 함께 확인했다. 기존 `single` 모드는 OpenAI 단일 provider라는 뜻이지 LLM 1회 호출이 아니어서 케이스당 QuantCredit, EvidenceAudit, ChairReport 호출이 발생한다. 빠른 smoke test를 위해 `CAS_STAGE2_AGNO_MODE=single_call`을 추가했고, live latency 측정 시 캐시 재사용을 피할 수 있도록 batch CLI에 `--no-stage2-llm-cache`를 추가했다. 따라서 앞으로 실제 API 속도를 잴 때는 `single_call + --no-stage2-llm-cache`와 기존 `single + --no-stage2-llm-cache`를 나란히 비교한다.
 
 ## Agno 실행 기준 보류 세분화 결과
 

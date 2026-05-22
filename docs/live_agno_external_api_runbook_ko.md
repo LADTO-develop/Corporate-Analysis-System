@@ -4,7 +4,9 @@
 
 ## 문제 원인
 
-현재 Stage 2 Agno 기본 모드는 OpenAI 단일 실행(`CAS_STAGE2_AGNO_MODE=single`, `CAS_STAGE2_MODEL_PROVIDER=openai`)이다. 이 모드는 `OPENAI_API_KEY`만 있으면 preflight가 통과하도록 맞춰져 있다.
+현재 Stage 2 Agno 기본 모드는 OpenAI 단일 provider 실행(`CAS_STAGE2_AGNO_MODE=single`, `CAS_STAGE2_MODEL_PROVIDER=openai`)이다. 이 모드는 `OPENAI_API_KEY`만 있으면 preflight가 통과하도록 맞춰져 있다.
+
+속도 점검용으로는 `CAS_STAGE2_AGNO_MODE=single_call`도 사용할 수 있다. `single`은 OpenAI 한 provider로 세 역할 agent를 실행하는 모드이고, `single_call`은 QuantCredit/EvidenceAudit/ChairReport 구조를 한 번의 structured output 호출로 받는 빠른 모드다. 실제 live latency를 측정할 때는 캐시 재사용을 피하기 위해 `--no-stage2-llm-cache`를 붙인다.
 
 여러 LLM 관점을 비교하는 `multi_llm_committee`는 선택 사항이다. 이 모드는 역할별로 Claude, GPT, Gemini를 함께 쓰므로 `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GOOGLE_API_KEY` 또는 `GEMINI_API_KEY`가 모두 필요할 수 있다.
 
@@ -51,8 +53,11 @@ Agno Stage 2 preflight passed.
   --stage2-agno-mode single \
   --stage2-model-provider openai \
   --stage2-model gpt-4.1-mini \
+  --no-stage2-llm-cache \
   --workers 2
 ```
+
+빠른 smoke test는 `--stage2-agno-mode single_call`로 바꿔 실행한다. 이 모드는 1건당 LLM 호출 수를 줄이는 대신, 세 역할 agent의 독립 토론 효과는 약해지므로 최종 발표용 품질 비교는 `single` 또는 `multi_llm_committee`로 재확인한다.
 
 외부 뉴스/공시 수집까지 함께 켤 때는 `OPENDART_API_KEY`, `NAVER_CLIENT_ID`, `NAVER_CLIENT_SECRET`, `TAVILY_API_KEY`를 `.env`에 설정한 뒤 `--live-external-evidence`를 추가한다.
 

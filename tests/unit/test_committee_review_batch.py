@@ -123,7 +123,26 @@ def test_configure_runtime_sets_single_claude_agno_mode(
     assert batch_module.os.environ["CAS_STAGE2_AGNO_MODE"] == "single"
     assert batch_module.os.environ["CAS_STAGE2_MODEL_PROVIDER"] == "anthropic"
     assert batch_module.os.environ["CAS_STAGE2_MODEL"] == "claude-sonnet-4-5-20250929"
+    assert batch_module.os.environ["CAS_STAGE2_LLM_CACHE_ENABLED"] == "1"
     assert "CAS_ENABLE_EXTERNAL_EVIDENCE" not in batch_module.os.environ
+
+
+def test_configure_runtime_can_disable_stage2_llm_cache(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("CAS_STAGE2_LLM_CACHE_ENABLED", raising=False)
+
+    batch_module.configure_runtime(
+        live_external_evidence=False,
+        stage2_runner="agno",
+        stage2_agno_mode="single_call",
+        stage2_model_provider="openai",
+        stage2_model="gpt-4.1-mini",
+        stage2_llm_cache=False,
+    )
+
+    assert batch_module.os.environ["CAS_STAGE2_AGNO_MODE"] == "single_call"
+    assert batch_module.os.environ["CAS_STAGE2_LLM_CACHE_ENABLED"] == "0"
 
 
 def _sample_batch_frame() -> pd.DataFrame:

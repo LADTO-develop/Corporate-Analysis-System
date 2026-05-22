@@ -133,7 +133,7 @@ def build_committee_view_model(
         hidden_tail_risk=hidden_tail_risk,
     )
     if prediction_label == "투자적격" and committee_label == "부적격" and not veto_triggered:
-        committee_label = "보류"
+        committee_label = "적격" if secondary_overhold_guardrail_reason else "보류"
     overwarning_mitigation = _overwarning_mitigation_assessment(
         bundle,
         veto_triggered=veto_triggered,
@@ -482,6 +482,33 @@ def _has_blocking_flags(bundle: Stage2InputBundle) -> bool:
     return any(str(flag).strip() for flag in flags)
 
 
+def _has_isolated_interest_cover_defense(bundle: Stage2InputBundle) -> bool:
+    """Allow TN guardrail when ICR is the only hard flag and OCF coverage is strong."""
+    raw_flags = bundle.rule_result.get("blocking_flags", []) or []
+    flags = {str(flag).strip().lower() for flag in raw_flags if str(flag).strip()}
+    if not flags or not flags.issubset(
+        {"interest_coverage_under_1", "icr_under_1", "interest_coverage_ratio_under_1"}
+    ):
+        return False
+    return _has_isolated_interest_cover_row_defense(bundle.source_feature_row)
+
+
+def _has_isolated_interest_cover_row_defense(row: dict[str, Any]) -> bool:
+    """Return whether cash flow and low borrowings offset a single-year ICR dip."""
+    return bool(
+        (_flag_is_true(row.get("icr_under_1")) or _metric_below(row, "interest_coverage_ratio", 1.0))
+        and _metric_at_least(row, "current_ratio", 1.2)
+        and _metric_at_least(row, "cash_ratio", 0.15)
+        and _metric_at_least(row, "cashflow_coverage_ratio", 1.0)
+        and _metric_at_least(row, "ocf_to_total_liabilities", 0.05)
+        and _metric_at_most(row, "total_borrowings_ratio", 0.10)
+        and _metric_at_most(row, "capital_impairment_ratio", 0.0)
+        and not _flag_is_true(row.get("is_2y_consecutive_operating_loss"))
+        and not _flag_is_true(row.get("is_2y_consecutive_ocf_deficit"))
+        and not _metric_below(row, "net_margin", -0.05)
+    )
+
+
 def _has_secondary_rule_liquidity_watch_signal(bundle: Stage2InputBundle) -> bool:
     """Preserve hold for low-but-near-threshold eligible calls with liquidity rule watch."""
     if not _has_stage2_secondary_trigger(bundle):
@@ -533,13 +560,17 @@ def _secondary_overhold_guardrail_reason(bundle: Stage2InputBundle) -> str:
         return ""
     if not bundle.source_feature_row:
         return ""
-    if _has_blocking_flags(bundle):
+    if _has_blocking_flags(bundle) and not _has_isolated_interest_cover_defense(bundle):
         return ""
-    if _has_severe_financial_watch_signal(bundle.source_feature_row):
+    if _has_severe_financial_watch_signal(
+        bundle.source_feature_row
+    ) and not _has_isolated_interest_cover_defense(bundle):
         return ""
     if _has_extreme_financial_distress_signal(bundle.source_feature_row):
         return ""
-    if _has_secondary_overhold_guardrail_blocker(bundle.source_feature_row):
+    if _has_secondary_overhold_guardrail_blocker(
+        bundle.source_feature_row
+    ) and not _has_isolated_interest_cover_defense(bundle):
         return ""
     if _has_secondary_rule_liquidity_watch_signal(bundle):
         return ""
@@ -580,7 +611,9 @@ def _secondary_overhold_guardrail_supports(row: dict[str, Any]) -> list[str]:
     interest_service_signal = _metric_at_least(row, "interest_coverage_ratio", 1.0) and not (
         _flag_is_true(row.get("icr_under_1"))
     )
-    if cashflow_signal and interest_service_signal:
+    if cashflow_signal and (
+        interest_service_signal or _has_isolated_interest_cover_row_defense(row)
+    ):
         supports.append("현금흐름")
 
     capital_support = (

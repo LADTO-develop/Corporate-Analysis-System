@@ -201,6 +201,67 @@ def test_agno_stage2_runner_uses_triplet_agents(
     assert outputs[2].report_summary == "Triplet chair summary"
 
 
+def test_agno_stage2_runner_uses_single_call_mode(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, Any] = {}
+
+    def fake_single_call_agent(**kwargs: Any) -> Stage2LLMResponse:
+        captured.update(kwargs)
+        return Stage2LLMResponse(
+            quant_credit=QuantCreditOutput(
+                quant_summary="Single-call quant summary",
+                model_rationale="Single-call model rationale",
+                key_risk_factors=["Single-call risk"],
+                mitigating_factors=["Single-call mitigation"],
+                confidence=0.77,
+            ),
+            evidence_audit=EvidenceAuditOutput(
+                evidence_summary="Single-call evidence summary",
+                evidence_status="ready",
+                evidence_reliability="Single-call reliability",
+                evidence_strength="moderate",
+                model_challenge="Single-call challenge",
+                audit_conclusion="Single-call conclusion",
+                debt_liquidity_cross_check=["Single-call debt check"],
+                macro_industry_sensitivity=["Single-call macro check"],
+                external_evidence_findings=["Single-call evidence"],
+                confidence=0.72,
+            ),
+            chair_report=ChairReportOutput(
+                report_summary="Single-call chair summary",
+                model_preservation_note="Single-call model preservation",
+                committee_scope_note="Single-call scope",
+                final_review_memo_seed="Single-call memo",
+                confidence=0.74,
+            ),
+        )
+
+    monkeypatch.setattr(
+        stage2_runner_module,
+        "_run_single_call_agent_with_agno",
+        fake_single_call_agent,
+    )
+    runner = AgnoStage2AgentRunner(
+        deterministic_runner=_deterministic_runner(),
+        routing_mode="single_call",
+        model_provider="openai",
+        model_name="gpt-4.1-mini",
+    )
+
+    outputs = runner.run(
+        bundle=build_stage2_input_bundle(_minimal_state()),
+        recommendation="review",
+        confidence=0.7,
+    )
+
+    assert runner.last_run_backend_name == "agno_single_call"
+    assert captured["model_provider"] == "openai"
+    assert captured["draft_outputs"]["quant_credit"]["quant_summary"] == "정량 요약"
+    assert outputs[0].quant_summary == "Single-call quant summary"
+    assert outputs[2].report_summary == "Single-call chair summary"
+
+
 def test_agno_stage2_runner_reuses_cached_triplet_response(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Any,

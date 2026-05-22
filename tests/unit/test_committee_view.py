@@ -509,6 +509,91 @@ def test_committee_view_keeps_defensive_secondary_radar_case_eligible() -> None:
     assert "경계등급 보류" not in committee_view["conflict_resolution"]
 
 
+def test_committee_view_keeps_isolated_icr_flag_with_cashflow_buffer_eligible() -> None:
+    state: AgentState = {
+        "company_id": "263800",
+        "company_name": "(주)데이타솔루션",
+        "source_feature_row": {
+            "stock_code": "263800",
+            "current_ratio": 1.36,
+            "cash_ratio": 0.34,
+            "cashflow_coverage_ratio": 7.83,
+            "ocf_to_sales": 0.076,
+            "ocf_to_total_liabilities": 0.157,
+            "interest_coverage_ratio": 0.61,
+            "equity_ratio": 0.37,
+            "debt_ratio": 1.70,
+            "total_borrowings_ratio": 0.076,
+            "capital_impairment_ratio": 0.0,
+            "net_margin": 0.005,
+            "icr_under_1": 1,
+            "is_2y_consecutive_operating_loss": 0,
+            "is_2y_consecutive_ocf_deficit": 0,
+        },
+        "prior_rating_reference": {
+            "has_prior_rating": True,
+            "prior_credit_rating": "BBB-",
+            "prior_credit_rating_rank": 10,
+            "prior_rating_boundary_group": "exact_bbb_minus_bb_plus_boundary",
+            "prior_rating_date": "2020-04-03",
+            "prior_rating_age_days": 272,
+            "prior_rating_agency": "이크레더블",
+        },
+        "model_view": {
+            "prediction_label": "투자적격",
+            "probability_speculative": 0.3225,
+            "threshold": 0.325,
+            "stage2_secondary_trigger": True,
+            "stage2_review_priority": "high",
+            "trigger_reason": "45개 보조 레이더가 기준선 근처로 추가 검토를 요구했습니다.",
+        },
+        "xgboost_result": {
+            "prediction_label": "투자적격",
+            "probability_speculative": 0.3225,
+            "threshold": 0.325,
+        },
+        "rule_result": {
+            "risk_band": "high_risk",
+            "recommendation": "defer",
+            "reasons": ["interest_coverage_ratio=0.61 indicates potential debt stress"],
+            "blocking_flags": ["interest_coverage_under_1"],
+        },
+        "news_cache_snapshot": {
+            "status": "ready",
+            "items": [
+                {
+                    "source": "opendart",
+                    "title": "사업보고서",
+                    "summary": "(주)데이타솔루션 직접 관련 정기 공시입니다.",
+                    "company_match": True,
+                    "provider_relevance": "routine",
+                    "disclosure_severity": "routine",
+                    "critical_terms": [],
+                    "evidence_quality": "high",
+                    "evidence_score": 0.88,
+                }
+            ],
+        },
+    }
+    agents = [
+        AgentOutput(role="quant_credit", summary="정량 결과", findings=[], confidence=0.8),
+        AgentOutput(role="evidence_audit", summary="근거 검토", findings=[], confidence=0.7),
+        AgentOutput(role="chair_report", summary="종합", findings=[], confidence=0.7),
+    ]
+
+    committee_view = build_committee_view(
+        bundle=build_stage2_input_bundle(state),
+        recommendation="defer",
+        agents=agents,
+    )
+
+    assert committee_view["final_committee_label"] == "적격"
+    assert committee_view["committee_decision_type"] == "eligible"
+    assert committee_view["committee_risk_signal"] is False
+    assert "정상기업 과잉 보류 방어 guardrail" in committee_view["mitigating_factors"][0]
+    assert "현금흐름" in committee_view["mitigating_factors"][0]
+
+
 def test_committee_view_holds_secondary_radar_case_with_negative_cashflow() -> None:
     state: AgentState = {
         "company_id": "250930",
