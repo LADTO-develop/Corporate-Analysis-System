@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import math
 import os
 import re
 from collections.abc import Callable
@@ -40,6 +41,7 @@ from cas.dashboard.cards import (
     render_value_detail_block,
     style_direction_badge,
 )
+from cas.dashboard.chart_data import finite_chart_frame
 from cas.dashboard.committee_copy import committee_user_reason_label, committee_user_stage_label
 from cas.dashboard.committee_panel import (
     CommitteePanelRenderers,
@@ -396,9 +398,10 @@ def _float_or_none(value: object) -> float | None:
     if cleaned is None:
         return None
     try:
-        return float(str(cleaned))
+        number = float(str(cleaned))
     except (TypeError, ValueError):
         return None
+    return number if math.isfinite(number) else None
 
 
 def _is_effectively_zero(value: object) -> bool:
@@ -2728,8 +2731,9 @@ def render_overview_tab(
                 ),
                 axis=1,
             )
+            peer_chart_slice = finite_chart_frame(peer_slice, ["industry_percentile"])
             percentile_chart = (
-                alt.Chart(peer_slice)
+                alt.Chart(peer_chart_slice)
                 .mark_bar(cornerRadiusTopLeft=4, cornerRadiusTopRight=4)
                 .encode(
                     x=alt.X(
@@ -2748,7 +2752,10 @@ def render_overview_tab(
                 .properties(height=260)
             )
             st.markdown("**핵심 지표가 산업 안에서 어느 수준인지**")
-            stretch_altair_chart(percentile_chart)
+            if peer_chart_slice.empty:
+                st.caption("차트로 표시할 수 있는 산업 백분위 값이 없습니다.")
+            else:
+                stretch_altair_chart(percentile_chart)
 
 
 def render_committee_view_tab(
@@ -3552,8 +3559,9 @@ def render_drivers_tab(
                 "상위 5개 설명 변수의 평균 |SHAP| 수준입니다.",
                 COLOR_NEUTRAL,
             )
+            local_chart_view = finite_chart_frame(local_view, ["shap_value", "abs_shap"])
             chart = (
-                alt.Chart(local_view)
+                alt.Chart(local_chart_view)
                 .mark_bar(cornerRadiusTopLeft=4, cornerRadiusTopRight=4)
                 .encode(
                     x=alt.X("shap_value:Q", title="SHAP 값"),
@@ -3576,7 +3584,10 @@ def render_drivers_tab(
                 )
                 .properties(height=360)
             )
-            stretch_altair_chart(chart)
+            if local_chart_view.empty:
+                st.caption("차트로 표시할 수 있는 기업별 SHAP 값이 없습니다.")
+            else:
+                stretch_altair_chart(chart)
             local_table = local_view.loc[
                 :,
                 [
@@ -3647,8 +3658,9 @@ def render_drivers_tab(
         "상위 5개 변수의 평균 |SHAP| 수준입니다.",
         COLOR_NEUTRAL,
     )
+    top_feature_chart = finite_chart_frame(top_features, ["mean_abs_shap"])
     chart = (
-        alt.Chart(top_features)
+        alt.Chart(top_feature_chart)
         .mark_bar(cornerRadiusTopLeft=4, cornerRadiusTopRight=4, color=COLOR_NEUTRAL)
         .encode(
             x=alt.X("mean_abs_shap:Q", title="평균 |SHAP|"),
@@ -3661,7 +3673,10 @@ def render_drivers_tab(
         )
         .properties(height=360)
     )
-    stretch_altair_chart(chart)
+    if top_feature_chart.empty:
+        st.caption("차트로 표시할 수 있는 전체 SHAP 기준값이 없습니다.")
+    else:
+        stretch_altair_chart(chart)
     global_table = top_features.loc[
         :,
         ["rank", "표시명", "feature_group", "일반 해석 방향", "mean_abs_shap", "실제값"],
@@ -3916,8 +3931,9 @@ def render_peer_tab(
         legend_col3, "전체 시장 중앙값", "같은 시장 전체 기업들의 중앙값입니다.", COLOR_MARKET
     )
     if len(table_units) <= 1:
+        compare_frame = finite_chart_frame(chart_rows, ["값"])
         compare_chart = (
-            alt.Chart(pd.DataFrame(chart_rows))
+            alt.Chart(compare_frame)
             .mark_bar()
             .encode(
                 x=alt.X("값:Q", title=value_axis_title),
@@ -3930,12 +3946,15 @@ def render_peer_tab(
                     ),
                     legend=alt.Legend(title="비교 기준", orient="top"),
                 ),
-                xOffset="기준:N",
+                yOffset="기준:N",
                 tooltip=["구분:N", "기준:N", alt.Tooltip("값_표시:N", title="값")],
             )
             .properties(height=360)
         )
-        stretch_altair_chart(compare_chart)
+        if compare_frame.empty:
+            st.caption("차트로 표시할 수 있는 숫자형 비교 값이 없습니다.")
+        else:
+            stretch_altair_chart(compare_chart)
     else:
         st.caption("선택한 변수의 단위가 섞여 있어 변수별 비교 카드로 나누어 표시합니다.")
         detail_cols = st.columns(2)
@@ -3960,6 +3979,7 @@ def render_peer_tab(
                 axis_title = "값 (억 원)"
             else:
                 axis_title = "값"
+            row_chart_data = finite_chart_frame(row_chart_data, ["값"])
             with detail_cols[index % 2]:
                 render_text_card(
                     st.container(),
@@ -3984,7 +4004,10 @@ def render_peer_tab(
                     )
                     .properties(height=150)
                 )
-                stretch_altair_chart(mini_chart)
+                if row_chart_data.empty:
+                    st.caption("이 변수는 차트로 표시할 수 있는 숫자형 비교 값이 없습니다.")
+                else:
+                    stretch_altair_chart(mini_chart)
 
     table["산업 대비 차이"] = table.apply(
         lambda row: format_delta_with_unit(
@@ -4043,12 +4066,14 @@ def render_peer_tab(
             ]
         )
 
+    gap_frame = finite_chart_frame(gap_rows, ["값"])
+    percentile_frame = finite_chart_frame(percentile_rows, ["백분위"])
     zero_rule = (
         alt.Chart(pd.DataFrame({"x": [0]}))
         .mark_rule(color=COLOR_MUTED, strokeDash=[4, 4])
         .encode(x="x:Q")
     )
-    gap_base = alt.Chart(pd.DataFrame(gap_rows))
+    gap_base = alt.Chart(gap_frame)
     gap_bars = gap_base.mark_bar(cornerRadiusTopLeft=4, cornerRadiusTopRight=4).encode(
         x=alt.X(
             "값:Q",
@@ -4063,12 +4088,12 @@ def render_peer_tab(
             ),
             legend=alt.Legend(title="차이 기준", orient="top"),
         ),
-        xOffset="비교:N",
+        yOffset="비교:N",
         tooltip=["구분:N", "비교:N", alt.Tooltip("값_표시:N", title="차이")],
     )
     gap_chart = alt.layer(zero_rule, gap_bars).properties(height=340)
 
-    percentile_base = alt.Chart(pd.DataFrame(percentile_rows))
+    percentile_base = alt.Chart(percentile_frame)
     percentile_points = percentile_base.mark_circle(size=170).encode(
         x=alt.X("백분위:Q", title="백분위 위치", scale=alt.Scale(domain=[0, 100])),
         y=alt.Y("구분:N", title="", sort=table["표시명"].tolist()),
@@ -4093,13 +4118,19 @@ def render_peer_tab(
     with col_gap:
         st.markdown("**비교 기준 대비 차이**")
         if len(table_units) <= 1:
-            stretch_altair_chart(gap_chart)
+            if gap_frame.empty:
+                st.caption("차트로 표시할 수 있는 숫자형 차이 값이 없습니다.")
+            else:
+                stretch_altair_chart(gap_chart)
         else:
             st.caption("단위가 섞여 있어 차이는 표에서 변수별로 읽는 것이 더 적절합니다.")
         st.caption("0보다 크면 선택 기업 값이 비교 기준보다 높고, 0보다 작으면 낮습니다.")
     with col_percentile:
         st.markdown("**산업/시장 내 백분위 위치**")
-        stretch_altair_chart(percentile_chart)
+        if percentile_frame.empty:
+            st.caption("차트로 표시할 수 있는 백분위 값이 없습니다.")
+        else:
+            stretch_altair_chart(percentile_chart)
         st.caption("50백분위 점선을 기준으로, 오른쪽일수록 상대적으로 높은 수준입니다.")
 
     table_view = table.loc[
@@ -4314,6 +4345,7 @@ def render_industry_tab(
     if shap_summary is not None and not shap_summary.empty:
         st.subheader("산업 기준 주요 설명 변수")
         top_shap = shap_summary.head(10).copy()
+        top_shap = finite_chart_frame(top_shap, ["mean_abs_shap"])
         feature_map = build_company_feature_map(selected_row, artifacts.feature_dictionary)
         top_shap["표시명"] = top_shap["feature"].map(lambda value: display_name(value, feature_map))
         top_shap["일반 해석 방향"] = top_shap["feature"].map(
@@ -4334,7 +4366,10 @@ def render_industry_tab(
             )
             .properties(height=320)
         )
-        stretch_altair_chart(chart)
+        if top_shap.empty:
+            st.caption("차트로 표시할 수 있는 산업 SHAP 기준값이 없습니다.")
+        else:
+            stretch_altair_chart(chart)
         top_shap_view = top_shap.loc[
             :,
             ["rank_within_group", "표시명", "일반 해석 방향", "mean_abs_shap", "mean_signed_shap"],
@@ -4517,8 +4552,9 @@ def render_scenario_tab(
                     },
                 ]
             )
+        scenario_chart_frame = finite_chart_frame(chart_rows, ["값"])
         scenario_chart = (
-            alt.Chart(pd.DataFrame(chart_rows))
+            alt.Chart(scenario_chart_frame)
             .mark_bar()
             .encode(
                 x=alt.X("값:Q", title="값 (억 원)" if money_view else "값"),
@@ -4529,12 +4565,15 @@ def render_scenario_tab(
                         domain=["현재 수준", "시나리오 반영값"], range=[COLOR_MUTED, COLOR_RISK]
                     ),
                 ),
-                xOffset="구분:N",
+                yOffset="구분:N",
                 tooltip=["변수:N", "구분:N", alt.Tooltip("값_표시:N", title="값")],
             )
             .properties(height=max(160, len(unit_frame) * 56))
         )
-        stretch_altair_chart(scenario_chart)
+        if scenario_chart_frame.empty:
+            st.caption("이 단위 그룹은 차트로 표시할 수 있는 숫자형 값이 없습니다.")
+        else:
+            stretch_altair_chart(scenario_chart)
     scenario_table = scenario_frame.loc[
         :,
         [
