@@ -97,6 +97,7 @@ def _query(bundle: Stage2InputBundle) -> str:
             "xgboost_result": bundle.xgboost_result,
             "model_view": bundle.model_view,
         },
+        "prior_rating_reference": bundle.prior_rating_reference,
         "source_feature_row": bundle.source_feature_row,
         "peer_comparison_rows": list(bundle.peer_comparison_rows),
         "credit_policy_snapshot": bundle.credit_policy_snapshot,

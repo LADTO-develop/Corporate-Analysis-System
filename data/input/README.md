@@ -6,6 +6,8 @@ edited by hand.
 
 Current datasets:
 - `credit_43_features/`: current 43-feature XGBoost input set used by the runtime.
+  It is regenerated from the canonical TS2000 Model V1 source after OpenDART
+  CFS/OFS financial-statement supplementation.
 - `companies/`: reserved for sample or custom company input payloads.
 
 Candidate feature experiments are not retained as separate input folders. Keep

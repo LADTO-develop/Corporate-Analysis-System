@@ -47,6 +47,18 @@ Model V1 전체 5,451개 행은 전체 라벨 데이터입니다. 모델 학습�
 | Validation | `fiscal_year == 2022` | 676 | 176 | 26.04% |
 | Test | `fiscal_year >= 2023` | 924 | 203 | 21.97% |
 
+재무제표 원천값은 TS2000 기준을 유지하되, TS2000에서 연결재무제표(CFS) 값이
+비어 있어 `0` 또는 `NaN`으로 들어간 기업-연도는 OpenDART 사업보고서(`11011`)로
+보강합니다. 기준은 **CFS 우선, CFS가 없으면 OFS fallback**입니다.
+
+| 보강 대상 | 보강 전 누락 후보 | OpenDART 반영 | 보강 후 누락 후보 |
+|---|---:|---:|---:|
+| Model V1 / 학습 기준 데이터 | 741행 | 669행 | 73행 |
+| 2026 추론 입력 | 424행 | 422행 | 2행 |
+
+2026 추론 입력에서 남은 2행은 OpenDART `corp_code`가 매칭되지 않는 특수 종목코드
+기업입니다.
+
 ## 3. 전처리 기준
 
 신용등급 타겟은 KOSPI와 KOSDAQ에 동일한 기준을 적용합니다.
@@ -77,12 +89,18 @@ Platt scaling을 적용한 보정 확률입니다. Raw 확률은 산출물에
 | 원-핫 대상 | 3개 | `market`, `firm_size_group`, `industry_macro_category` |
 | 최종 모델 입력 | 43개 | XGBoost 학습 및 추론 입력 |
 
-2025년 신용평가 공시 라벨을 Model V1에 통합한 뒤, 현재 43-feature XGBoost
-artifact 기준 test 성능은 다음과 같습니다.
+2025년 신용평가 공시 라벨을 Model V1에 통합하고, CFS 누락 기업을 OpenDART
+OFS fallback으로 보강한 뒤 재학습한 현재 43-feature XGBoost artifact 기준 test
+성능은 다음과 같습니다.
 
 | 모델 | PR-AUC | ROC-AUC | Precision | Recall | F1 |
 |---|---:|---:|---:|---:|---:|
-| 43-feature XGBoost current | 0.7930 | 0.9286 | 0.6603 | 0.8522 | 0.7441 |
+| 43-feature XGBoost, threshold 0.5 | 0.8329 | 0.9415 | 0.7737 | 0.7241 | 0.7481 |
+| 43-feature XGBoost, tuned threshold 0.32 | 0.8329 | 0.9415 | 0.7004 | 0.8522 | 0.7689 |
+
+보강 전 tuned 기준 test 성능은 `PR-AUC 0.7930`, `ROC-AUC 0.9286`,
+`Precision 0.6603`, `Recall 0.8522`, `F1 0.7441`이었습니다. 새 기준에서는
+Recall을 유지하면서 Precision과 F1이 개선되었습니다.
 
 `industry_current_ratio_percentile`을 추가한 44개 후보 변수셋은 성능 비교 결과
 43개 공식 변수셋보다 낮아 artifact를 제거했습니다. 비교 기록은
@@ -94,6 +112,7 @@ artifact 기준 test 성능은 다음과 같습니다.
 ```mermaid
 flowchart TD
     A["CAS 내부 Model V1 원본"] --> B["43-feature 입력셋 생성"]
+    A1["OpenDART CFS/OFS 보강"] --> A
     B --> C["Train / Valid / Test 시간순 분할"]
     C --> D["Stage 1 XGBoost 학습"]
     D --> E["model_view"]
@@ -149,7 +168,8 @@ Gemini가 최종 종합(`ChairReportAgent`)을 맡습니다. 이 모드에는
 │   └── runtime/                 # 실행 설정
 ├── data/
 │   ├── raw/
-│   │   └── ts2000/              # CAS 기준 Model V1 원본
+│   │   ├── ts2000/              # CAS 기준 Model V1 원본
+│   │   └── opendart/            # CFS/OFS 보강 원천 및 audit
 │   ├── input/
 │   │   └── credit_43_features/  # 현재 공식 43개 모델 입력셋, split, 2026 추론 입력
 │   └── outputs/
@@ -162,6 +182,9 @@ Gemini가 최종 종합(`ChairReportAgent`)을 맡습니다. 이 모드에는
 │   └── pipeline/
 ├── scripts/
 │   ├── rebuild_feature_43_dataset.py
+│   ├── collect_opendart_financial_statements.py
+│   ├── apply_opendart_financial_supplements.py
+│   ├── apply_opendart_inference_financial_supplements.py
 │   ├── build_feature_43_inference_2026.py
 │   ├── export_feature_43_dashboard_artifacts.py
 │   ├── export_feature_43_model_diagnostics.py
@@ -210,6 +233,8 @@ python scripts/check_dev_environment.py
 43개 입력셋 재생성:
 
 ```bash
+python scripts/collect_opendart_financial_statements.py --source-kind model-v1 --all-years --fallback-ofs
+python scripts/apply_opendart_financial_supplements.py
 python scripts/rebuild_feature_43_dataset.py
 ```
 
@@ -218,6 +243,9 @@ python scripts/rebuild_feature_43_dataset.py
 ```bash
 python scripts/import_feature_43_inference_2026_aux.py
 python scripts/build_feature_43_inference_2026.py
+python scripts/collect_opendart_financial_statements.py --source-kind inference --target-fiscal-year 2025 --fallback-ofs
+python scripts/apply_opendart_inference_financial_supplements.py
+python scripts/build_feature_43_inference_2026.py --check-only
 ```
 
 `import_feature_43_inference_2026_aux.py`는 2026 추론 입력의 기업규모와
@@ -293,6 +321,8 @@ python -m pytest tests/integration -v -m "not requires_llm and not requires_gpu"
 
 - CAS 기준 데이터와 실행 파일은 저장소 내부 경로만 참조합니다.
 - Model V1은 CAS의 기준 원본이며, 공식 43-feature 입력셋은 이 파일에서 재생성합니다.
+- CFS 재무제표가 비어 있는 기업-연도는 OpenDART 사업보고서 기준으로 CFS 우선,
+  CFS 부재 시 OFS fallback을 적용합니다.
 - `industry_current_ratio_percentile`은 공식 입력에서 제외하고 Model V1의 후보 칼럼으로만 보존합니다.
 - 43-feature 입력셋과 artifact는 현재 공식 Stage 1 기준으로 유지합니다.
 - `model_view`와 `committee_view`는 분리합니다.

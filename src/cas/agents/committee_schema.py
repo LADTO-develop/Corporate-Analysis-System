@@ -10,6 +10,7 @@ CommitteeLabel = Literal["적격", "보류", "부적격"]
 CommitteeDecisionType = Literal[
     "eligible",
     "risk_hold",
+    "boundary_hold",
     "mitigation_hold",
     "review_hold",
     "reject",

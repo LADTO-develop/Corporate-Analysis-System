@@ -125,6 +125,7 @@ def _query(
             "prediction_label": bundle.prediction_label,
             "probability_speculative": bundle.probability_speculative,
         },
+        "prior_rating_reference": bundle.prior_rating_reference,
         "rule_engine": {
             "recommendation": recommendation,
             "rule_engine_confidence": confidence,

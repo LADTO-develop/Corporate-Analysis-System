@@ -189,6 +189,43 @@ class _ScopedKeywordSession:
         return _FakeResponse({"results": []})
 
 
+class _AggregatedDisclosureNewsSession:
+    def get(
+        self,
+        url: str,
+        *,
+        params: Mapping[str, object] | None = None,
+        headers: Mapping[str, str] | None = None,
+        timeout: float | None = None,
+    ) -> _FakeResponse:
+        if "naver.com" in url:
+            return _FakeResponse(
+                {
+                    "items": [
+                        {
+                            "title": "[전일 주요 공시] 한미약품ㆍ테스트기업 등",
+                            "description": (
+                                "임직원 횡령ㆍ배임 유죄 △다른기업, 무상증자 권리락 "
+                                "△테스트기업, 현저한 시황변동 관련 조회공시"
+                            ),
+                            "originallink": "https://example.com/market-wrap",
+                            "pubDate": "Fri, 13 Dec 2019 08:06:00 +0900",
+                        }
+                    ]
+                }
+            )
+        return _FakeResponse({"list": []})
+
+    def post(
+        self,
+        url: str,
+        *,
+        json: Mapping[str, object] | None = None,
+        timeout: float | None = None,
+    ) -> _FakeResponse:
+        return _FakeResponse({"results": []})
+
+
 class _DuplicateSession:
     def get(
         self,
@@ -451,6 +488,46 @@ class _RoutineOpenDartSession:
         return _FakeResponse({"results": []})
 
 
+class _BenignTradingHaltOpenDartSession:
+    def get(
+        self,
+        url: str,
+        *,
+        params: Mapping[str, object] | None = None,
+        headers: Mapping[str, str] | None = None,
+        timeout: float | None = None,
+    ) -> _FakeResponse:
+        if "corpCode.xml" in url:
+            return _FakeResponse({}, content=_corp_code_zip())
+        if "opendart" in url:
+            assert params is not None
+            if str(params.get("pblntf_ty", "")) == "B":
+                return _FakeResponse(
+                    {
+                        "list": [
+                            {
+                                "report_nm": "주권매매거래정지(무상증자)",
+                                "rcept_no": "202012310001",
+                                "rcept_dt": "20201231",
+                            }
+                        ]
+                    }
+                )
+            return _FakeResponse({"list": []})
+        if "naver.com" in url:
+            return _FakeResponse({"items": []})
+        return _FakeResponse({"list": []})
+
+    def post(
+        self,
+        url: str,
+        *,
+        json: Mapping[str, object] | None = None,
+        timeout: float | None = None,
+    ) -> _FakeResponse:
+        return _FakeResponse({"results": []})
+
+
 class _HistoricalEvidenceFilterSession:
     def get(
         self,
@@ -597,6 +674,8 @@ def test_collect_external_evidence_marks_keyword_only_results_as_weak() -> None:
     )
 
     assert snapshot["status"] == "ready"
+    assert snapshot["has_critical_risk"] is False
+    assert snapshot["critical_terms"] == []
     assert snapshot["direct_match_count"] == 0
     assert snapshot["verified_item_count"] == 0
     assert snapshot["high_confidence_critical_count"] == 0
@@ -644,6 +723,8 @@ def test_collect_external_evidence_requires_company_and_keyword_same_context() -
     )
 
     assert snapshot["status"] == "ready"
+    assert snapshot["has_critical_risk"] is False
+    assert snapshot["critical_terms"] == []
     assert snapshot["veto_candidate_count"] == 0
     assert snapshot["high_confidence_critical_count"] == 0
     item = snapshot["items"][0]
@@ -653,6 +734,31 @@ def test_collect_external_evidence_requires_company_and_keyword_same_context() -
     assert item["veto_candidate"] is False
     assert item["evidence_quality"] == "low"
     assert float(item["evidence_score"]) < 0.55
+
+
+def test_collect_external_evidence_does_not_confirm_aggregated_news_list_terms() -> None:
+    snapshot = collect_external_evidence(
+        company_name="테스트기업",
+        stock_code="000001",
+        as_of_date="2022-12-31",
+        env={
+            "CAS_ENABLE_EXTERNAL_EVIDENCE": "1",
+            "NAVER_CLIENT_ID": "dummy",
+            "NAVER_CLIENT_SECRET": "dummy",
+        },
+        session=_AggregatedDisclosureNewsSession(),
+    )
+
+    assert snapshot["status"] == "ready"
+    assert snapshot["has_critical_risk"] is False
+    assert snapshot["veto_candidate_count"] == 0
+    assert snapshot["high_confidence_critical_count"] == 0
+    item = snapshot["items"][0]
+    assert item["company_match"] is True
+    assert item["critical_terms"] == ["배임", "횡령"]
+    assert item["critical_context_confirmed"] is False
+    assert item["veto_candidate"] is False
+    assert item["evidence_quality"] == "low"
 
 
 def test_collect_external_evidence_deduplicates_same_article_url() -> None:
@@ -813,6 +919,33 @@ def test_collect_external_evidence_treats_routine_opendart_as_context(
     assert item["critical_terms"] == []
     assert item["veto_candidate"] is False
     assert float(item["evidence_score"]) < 0.55
+
+
+def test_collect_external_evidence_downgrades_benign_trading_halt_opendart(
+    tmp_path: Path,
+) -> None:
+    snapshot = collect_external_evidence(
+        company_name="테스트기업",
+        stock_code="000001",
+        as_of_date="2020-12-31",
+        env={
+            "CAS_ENABLE_EXTERNAL_EVIDENCE": "1",
+            "OPENDART_API_KEY": "dummy",
+            "CAS_OPENDART_CORP_CODE_CACHE_PATH": str(tmp_path / "corp_codes.csv"),
+        },
+        session=_BenignTradingHaltOpenDartSession(),
+    )
+
+    assert snapshot["status"] == "ready"
+    assert snapshot["has_critical_risk"] is False
+    assert snapshot["verified_item_count"] == 0
+    assert snapshot["veto_candidate_count"] == 0
+    item = snapshot["items"][0]
+    assert item["source"] == "opendart"
+    assert item["provider_relevance"] == "routine"
+    assert item["disclosure_severity"] == "routine"
+    assert item["critical_terms"] == []
+    assert item["veto_candidate"] is False
 
 
 def test_collect_external_evidence_filters_web_items_after_historical_as_of_date() -> None:

@@ -26,6 +26,7 @@ class Stage2InputBundle:
     xgboost_result: dict[str, Any]
     rule_result: dict[str, Any]
     source_feature_row: dict[str, Any]
+    prior_rating_reference: dict[str, Any]
     peer_comparison_rows: tuple[dict[str, Any], ...]
     news_cache_snapshot: dict[str, Any]
     credit_policy_snapshot: dict[str, Any] = field(default_factory=dict)
@@ -77,6 +78,7 @@ class Stage2InputBundle:
             "xgboost_result": self.xgboost_result,
             "rule_result": self.rule_result,
             "source_feature_row": self.source_feature_row,
+            "prior_rating_reference": self.prior_rating_reference,
             "peer_comparison_rows": list(self.peer_comparison_rows),
             "news_cache_snapshot": self.news_cache_snapshot,
             "prior_rating_reference": self.prior_rating_reference,
@@ -88,6 +90,13 @@ def build_stage2_input_bundle(state: AgentState) -> Stage2InputBundle:
     """Normalize LangGraph state into the Stage 2 agent input contract."""
     company_profile = _as_dict(state.get("company_profile"))
     source_feature_row = _as_dict(state.get("source_feature_row"))
+    prior_rating_reference = _as_dict(state.get("prior_rating_reference"))
+    if not prior_rating_reference:
+        prior_rating_reference = _as_dict(company_profile.get("prior_rating_reference"))
+    if not prior_rating_reference:
+        prior_rating_reference = _as_dict(
+            _as_dict(state.get("model_view")).get("prior_rating_reference")
+        )
     company_id = str(
         state.get("company_id")
         or company_profile.get("company_id")
@@ -117,6 +126,7 @@ def build_stage2_input_bundle(state: AgentState) -> Stage2InputBundle:
         xgboost_result=_as_dict(state.get("xgboost_result")),
         rule_result=_as_dict(state.get("rule_result")),
         source_feature_row=source_feature_row,
+        prior_rating_reference=prior_rating_reference,
         peer_comparison_rows=_as_dict_tuple(state.get("peer_comparison_rows")),
         news_cache_snapshot=_as_dict(state.get("news_cache_snapshot")),
         prior_rating_reference=_as_dict(state.get("prior_rating_reference")),

@@ -71,6 +71,8 @@ def test_sample_model_replay_skips_pre_replay_stage2(
     assert calls == {"pre_stage": 1, "replay": 1}
     assert results.loc[0, "committee_effect"] == "fn_escalated"
     assert results.loc[0, "final_committee_label"] == "보류"
+    assert results.loc[0, "prior_credit_rating"] == "BB+"
+    assert results.loc[0, "prior_rating_agency"] == "한국신용평가"
 
 
 def test_parallel_batch_preserves_input_order(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -143,6 +145,10 @@ def _sample_batch_frame() -> pd.DataFrame:
                 "actual_label_name": "투기등급",
                 "model_predicted_label_name": "투자적격",
                 "model_error_type": "false_negative",
+                "prior_credit_rating": "BB+",
+                "prior_rating_date": "2023-04-01",
+                "prior_rating_age_days": 274,
+                "prior_rating_agency": "한국신용평가",
                 "sample_category": "fn_caught_by_stage2_review",
                 "market": "KOSDAQ",
                 "stock_code": "000001",
