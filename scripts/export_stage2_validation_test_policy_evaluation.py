@@ -15,7 +15,6 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
-from sklearn.metrics import confusion_matrix, f1_score, precision_score, recall_score
 
 from cas.agents.nodes import committee_node, rule_engine_node
 
@@ -330,11 +329,19 @@ def build_policy_metrics(frame: pd.DataFrame) -> pd.DataFrame:
 
 
 def metrics_at_threshold(y_true: pd.Series, y_pred: pd.Series) -> dict[str, Any]:
-    tn, fp, fn, tp = confusion_matrix(y_true, y_pred, labels=[0, 1]).ravel()
+    y_true_int = y_true.astype(int)
+    y_pred_int = y_pred.astype(int)
+    tp = int(y_true_int.eq(1).mul(y_pred_int.eq(1)).sum())
+    fp = int(y_true_int.eq(0).mul(y_pred_int.eq(1)).sum())
+    fn = int(y_true_int.eq(1).mul(y_pred_int.eq(0)).sum())
+    tn = int(y_true_int.eq(0).mul(y_pred_int.eq(0)).sum())
+    precision = tp / (tp + fp) if tp + fp else 0.0
+    recall = tp / (tp + fn) if tp + fn else 0.0
+    f1 = 2 * precision * recall / (precision + recall) if precision + recall else 0.0
     return {
-        "precision": float(precision_score(y_true, y_pred, zero_division=0)),
-        "recall": float(recall_score(y_true, y_pred, zero_division=0)),
-        "f1": float(f1_score(y_true, y_pred, zero_division=0)),
+        "precision": float(precision),
+        "recall": float(recall),
+        "f1": float(f1),
         "tp": int(tp),
         "fp": int(fp),
         "fn": int(fn),
