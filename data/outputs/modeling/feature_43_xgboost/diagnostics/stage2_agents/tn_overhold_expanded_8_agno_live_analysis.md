@@ -44,3 +44,16 @@ TN 과잉 보류 30건 확대 샘플 중 대표 8건을 OpenAI single provider 3
 1. 단일 medium 자금조달 공시는 `risk_hold`가 아니라 `review_hold` 또는 guardrail 허용 대상으로 낮춘다.
 2. 반복 자금조달, 고위험 disclosure severity, 또는 재무 차단 신호와 결합된 자금조달만 `risk_hold` blocker로 둔다.
 3. chair memo가 최종 committee label과 충돌하지 않도록, agent memo는 "보강 의견"으로만 붙이고 최종 라벨 문구가 우선하도록 정리한다.
+
+## Follow-up Guardrail
+
+Agno live 결과를 반영해 단일 medium 자금조달 공시와 반복·고위험 자금조달 공시를 분리했다. 단일 medium DART 전환사채/유상증자 공시는 TN overhold guardrail을 막지 않고, 반복 자금조달 2건 이상 또는 high-risk/adverse 자금조달 근거만 보류 보강 근거로 둔다. 또한 최종 라벨이 `보류`인데 chair memo가 "투자적격 판단 유지"처럼 읽히는 경우에는 해당 보강 메모를 붙이지 않도록 정리했다.
+
+같은 8건과 같은 외부근거 캐시로 deterministic committee replay를 수행한 결과는 다음과 같다.
+
+| 실행 | 엄격 기준 | Review-safe | 적격 | 보류 | 비고 |
+| --- | ---: | ---: | ---: | ---: | --- |
+| Agno live no-cache before follow-up | 2/8 = 25.0% | 8/8 = 100.0% | 2 | 6 | 단일 전환사채 공시가 있는 머큐리도 risk_hold |
+| Cached-evidence replay after follow-up | 3/8 = 37.5% | 8/8 = 100.0% | 3 | 5 | 머큐리만 적격으로 개선, 반복 자금조달 레몬은 보류 유지 |
+
+이 재평가는 LLM live 재호출이 아니라 committee_view 로직 회귀검증이다. 따라서 "Agno live에서도 개선 유지"를 최종 증거로 쓰려면 같은 8건을 OpenAI Agno no-cache로 한 번 더 돌려 확인하는 것이 좋다.

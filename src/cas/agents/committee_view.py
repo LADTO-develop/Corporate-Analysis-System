@@ -212,7 +212,7 @@ def build_committee_view_model(
     )
     final_review_memo = _with_chair_report_memo(
         final_review_memo,
-        _chair_report_memo_seed(agents),
+        _chair_report_memo_seed(agents, committee_label=committee_label),
     )
     risk_factors = _clean_text_items(risk_factors)
     mitigating_factors = _clean_text_items(mitigating_factors)
@@ -603,7 +603,7 @@ def _secondary_overhold_guardrail_reason(bundle: Stage2InputBundle) -> str:
         return ""
     if _overwarning_blocking_external_items(bundle.news_cache_snapshot):
         return ""
-    if _repeated_financing_evidence_count(bundle.news_cache_snapshot) >= 1:
+    if _material_financing_evidence_blocks_tn_hold(bundle.news_cache_snapshot):
         return ""
     if _prior_rating_is_speculative(bundle.prior_rating_reference):
         return ""
@@ -788,8 +788,8 @@ def _secondary_review_risk_assessment(bundle: Stage2InputBundle) -> SecondaryRev
     elif probability >= risk_signal_floor:
         reason_parts.append(
             f"확률은 위험신호 표시 기준선({risk_signal_floor:.1%}) 이상이지만 "
-            "직접 adverse 외부근거, 반복 자금조달, 심각 재무 watch 같은 위험 보강 근거가 "
-            "부족해 사용자 화면에서는 확인필요 보류로 분리합니다."
+            "직접 adverse 외부근거, 반복·고위험 자금조달, 심각 재무 watch 같은 위험 보강 "
+            "근거가 부족해 사용자 화면에서는 확인필요 보류로 분리합니다."
         )
     else:
         reason_parts.append(
@@ -828,7 +828,7 @@ def _secondary_review_risk_signal_corroborated(
         return True
     if _overwarning_blocking_external_items(bundle.news_cache_snapshot):
         return True
-    if _repeated_financing_evidence_count(bundle.news_cache_snapshot) >= 1:
+    if _material_financing_evidence_blocks_tn_hold(bundle.news_cache_snapshot):
         return True
     prior = bundle.prior_rating_reference
     return _prior_rating_is_speculative(prior) or _prior_rating_is_exact_boundary(prior)
@@ -1207,10 +1207,35 @@ def _unconfirmed_reject_review_risk_assessment(
 
 
 def _repeated_financing_evidence_count(news_cache: dict[str, Any]) -> int:
+    return len(_financing_evidence_items(news_cache))
+
+
+def _material_financing_evidence_blocks_tn_hold(news_cache: dict[str, Any]) -> bool:
+    """Block TN overhold relief only for repeated or explicitly high-risk financing."""
+    return bool(
+        _repeated_financing_evidence_count(news_cache) >= 2
+        or _high_risk_financing_evidence_count(news_cache) >= 1
+    )
+
+
+def _high_risk_financing_evidence_count(news_cache: dict[str, Any]) -> int:
+    return sum(
+        1
+        for item in _financing_evidence_items(news_cache)
+        if (
+            item.get("veto_candidate") is True
+            or item.get("critical_context_confirmed") is True
+            or str(item.get("provider_relevance", "")).lower() in ADVERSE_PROVIDER_RELEVANCE
+            or str(item.get("disclosure_severity", "")).lower() in {"adverse", "veto"}
+        )
+    )
+
+
+def _financing_evidence_items(news_cache: dict[str, Any]) -> list[dict[str, Any]]:
     raw_items = news_cache.get("items", [])
     if not isinstance(raw_items, list):
-        return 0
-    count = 0
+        return []
+    items: list[dict[str, Any]] = []
     for item in raw_items:
         if not isinstance(item, dict) or item.get("company_match") is not True:
             continue
@@ -1218,8 +1243,8 @@ def _repeated_financing_evidence_count(news_cache: dict[str, Any]) -> int:
             continue
         text = _compact_text(" ".join(str(item.get(key, "")) for key in ("title", "summary")))
         if any(term in text for term in FINANCING_EVIDENCE_TERMS):
-            count += 1
-    return count
+            items.append(item)
+    return items
 
 
 def _prior_rating_is_speculative(prior: dict[str, Any]) -> bool:
@@ -2071,19 +2096,24 @@ def _final_review_memo(
     )
 
 
-def _chair_report_memo_seed(agents: list[AgentOutput]) -> str:
+def _chair_report_memo_seed(
+    agents: list[AgentOutput], *, committee_label: CommitteeLabel
+) -> str:
     chair = next((agent for agent in agents if agent.role == "chair_report"), None)
     if chair is None:
         return ""
     candidates = [*chair.findings[::-1], chair.summary]
     for candidate in candidates:
         cleaned = cast(str, _clean_korean_review_text(str(candidate or "")))
-        if _is_informative_chair_report_memo(cleaned):
+        if _is_informative_chair_report_memo(
+            cleaned,
+            committee_label=committee_label,
+        ):
             return cleaned
     return ""
 
 
-def _is_informative_chair_report_memo(text: str) -> bool:
+def _is_informative_chair_report_memo(text: str, *, committee_label: CommitteeLabel) -> bool:
     if len(text.strip()) < 40:
         return False
     generic_markers = (
@@ -2096,7 +2126,28 @@ def _is_informative_chair_report_memo(text: str) -> bool:
         "ChairReportAgent는 모델 원판단",
         "현재 서비스 recommendation은",
     )
-    return not any(marker in text for marker in generic_markers)
+    if any(marker in text for marker in generic_markers):
+        return False
+    return not _chair_report_memo_conflicts_with_final_label(
+        text,
+        committee_label=committee_label,
+    )
+
+
+def _chair_report_memo_conflicts_with_final_label(
+    text: str, *, committee_label: CommitteeLabel
+) -> bool:
+    """Avoid appending agent prose that contradicts the resolved committee label."""
+    if committee_label == "적격":
+        return False
+    investment_keep_markers = (
+        "투자적격 판단을 유지",
+        "투자적격 라벨을 유지",
+        "투자적격 등급을 유지",
+        "투자적격 분류를 유지",
+        "기존 투자적격",
+    )
+    return any(marker in text for marker in investment_keep_markers)
 
 
 def _with_chair_report_memo(base_memo: str, chair_memo_seed: str) -> str:

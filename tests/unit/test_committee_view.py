@@ -711,6 +711,172 @@ def test_committee_view_keeps_cashflow_backed_current_ratio_watch_eligible() -> 
     assert "정상기업 과잉 보류 방어 guardrail" in committee_view["mitigating_factors"][0]
 
 
+def test_committee_view_allows_single_medium_financing_when_defensive_tn() -> None:
+    state: AgentState = {
+        "company_id": "100590",
+        "company_name": "(주)머큐리",
+        "source_feature_row": {
+            "stock_code": "100590",
+            "current_ratio": 2.1984,
+            "cash_ratio": 0.5520,
+            "cashflow_coverage_ratio": 2.9206,
+            "ocf_to_sales": 0.0297,
+            "ocf_to_total_liabilities": 0.0763,
+            "interest_coverage_ratio": 2.7991,
+            "equity_ratio": 0.6358,
+            "debt_ratio": 0.5727,
+            "total_borrowings_ratio": 0.1229,
+            "short_term_borrowings_share": 0.0,
+            "capital_impairment_ratio": 0.0,
+            "net_margin": 0.0697,
+            "icr_under_1": 0,
+            "is_2y_consecutive_operating_loss": 0,
+            "is_2y_consecutive_ocf_deficit": 0,
+        },
+        "model_view": {
+            "prediction_label": "투자적격",
+            "probability_speculative": 0.3113,
+            "threshold": 0.325,
+            "stage2_secondary_trigger": True,
+            "stage2_review_priority": "high",
+            "trigger_reason": "45개 보조 레이더가 기준선 근처로 추가 검토를 요구했습니다.",
+        },
+        "xgboost_result": {
+            "prediction_label": "투자적격",
+            "probability_speculative": 0.3113,
+            "threshold": 0.325,
+        },
+        "rule_result": {"risk_band": "stable", "recommendation": "priority"},
+        "news_cache_snapshot": {
+            "status": "ready",
+            "items": [
+                {
+                    "source": "opendart",
+                    "title": "주요사항보고서(전환사채권발행결정)",
+                    "summary": "(주)머큐리 직접 관련 자금조달성 공시입니다.",
+                    "company_match": True,
+                    "provider_relevance": "caution",
+                    "disclosure_severity": "caution",
+                    "evidence_quality": "medium",
+                    "evidence_score": 0.50,
+                },
+            ],
+        },
+    }
+    agents = [
+        AgentOutput(role="quant_credit", summary="정량 결과", findings=[], confidence=0.8),
+        AgentOutput(role="evidence_audit", summary="근거 검토", findings=[], confidence=0.7),
+        AgentOutput(role="chair_report", summary="종합", findings=[], confidence=0.7),
+    ]
+
+    committee_view = build_committee_view(
+        bundle=build_stage2_input_bundle(state),
+        recommendation="priority",
+        agents=agents,
+    )
+
+    assert committee_view["final_committee_label"] == "적격"
+    assert committee_view["committee_decision_type"] == "eligible"
+    assert committee_view["committee_risk_signal"] is False
+    assert "정상기업 과잉 보류 방어 guardrail" in committee_view["mitigating_factors"][0]
+
+
+def test_committee_view_blocks_overhold_guardrail_for_repeated_financing() -> None:
+    state: AgentState = {
+        "company_id": "294140",
+        "company_name": "(주)레몬",
+        "source_feature_row": {
+            "stock_code": "294140",
+            "current_ratio": 0.7443,
+            "cash_ratio": 0.2969,
+            "cashflow_coverage_ratio": 24.3625,
+            "ocf_to_sales": 0.2612,
+            "ocf_to_total_liabilities": 0.5441,
+            "interest_coverage_ratio": 18.7971,
+            "equity_ratio": 0.6099,
+            "debt_ratio": 0.6396,
+            "total_borrowings_ratio": 0.2635,
+            "short_term_borrowings_share": 1.0,
+            "capital_impairment_ratio": 0.0,
+            "net_margin": 0.1554,
+            "icr_under_1": 0,
+            "is_2y_consecutive_operating_loss": 0,
+            "is_2y_consecutive_ocf_deficit": 0,
+        },
+        "model_view": {
+            "prediction_label": "투자적격",
+            "probability_speculative": 0.3113,
+            "threshold": 0.325,
+            "stage2_secondary_trigger": True,
+            "stage2_review_priority": "high",
+            "trigger_reason": "45개 보조 레이더가 기준선 근처로 추가 검토를 요구했습니다.",
+        },
+        "xgboost_result": {
+            "prediction_label": "투자적격",
+            "probability_speculative": 0.3113,
+            "threshold": 0.325,
+        },
+        "rule_result": {
+            "risk_band": "watch",
+            "recommendation": "watch",
+            "reasons": ["current_ratio=0.74 is below the watch floor"],
+            "blocking_flags": [],
+        },
+        "news_cache_snapshot": {
+            "status": "ready",
+            "items": [
+                {
+                    "source": "opendart",
+                    "title": "주요사항보고서(유상증자결정)",
+                    "summary": "(주)레몬 직접 관련 자금조달성 공시입니다.",
+                    "company_match": True,
+                    "provider_relevance": "caution",
+                    "disclosure_severity": "caution",
+                    "evidence_quality": "medium",
+                    "evidence_score": 0.50,
+                },
+                {
+                    "source": "opendart",
+                    "title": "주요사항보고서(전환사채권발행결정)",
+                    "summary": "(주)레몬 직접 관련 자금조달성 공시입니다.",
+                    "company_match": True,
+                    "provider_relevance": "caution",
+                    "disclosure_severity": "caution",
+                    "evidence_quality": "medium",
+                    "evidence_score": 0.50,
+                },
+            ],
+        },
+    }
+    conflicting_chair_memo = (
+        "Stage 1 모델의 투자적격 판단을 유지하되, 단기 유동성 취약점은 관찰합니다."
+    )
+    agents = [
+        AgentOutput(role="quant_credit", summary="정량 결과", findings=[], confidence=0.8),
+        AgentOutput(role="evidence_audit", summary="근거 검토", findings=[], confidence=0.7),
+        AgentOutput(
+            role="chair_report",
+            summary=conflicting_chair_memo,
+            findings=[],
+            confidence=0.7,
+        ),
+    ]
+
+    committee_view = build_committee_view(
+        bundle=build_stage2_input_bundle(state),
+        recommendation="watch",
+        agents=agents,
+    )
+
+    assert committee_view["final_committee_label"] == "보류"
+    assert committee_view["committee_decision_type"] == "risk_hold"
+    assert committee_view["committee_risk_signal"] is True
+    assert "정상기업 과잉 보류 방어 guardrail" not in " ".join(
+        committee_view["mitigating_factors"]
+    )
+    assert conflicting_chair_memo not in committee_view["final_review_memo"]
+
+
 def test_committee_view_holds_secondary_radar_case_with_profitability_stress() -> None:
     state: AgentState = {
         "company_id": "009900",

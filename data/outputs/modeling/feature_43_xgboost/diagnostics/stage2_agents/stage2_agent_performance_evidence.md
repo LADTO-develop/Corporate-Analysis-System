@@ -20,6 +20,7 @@
 | OpenAI single 3-agent no-cache live | 8 | 7/8 = 87.5% | 8/8 = 100.0% | 캐시 hit 0, 역할별 실행시간 8/8건 기록 |
 | TN 과잉 보류 30건 확대 | 30 | 22/30 = 73.3% | 30/30 = 100.0% | 레몬 1건 보류→적격, 남은 보류 8건은 재무 차단 신호 보유 |
 | TN 과잉 보류 8건 OpenAI Agno live | 8 | 2/8 = 25.0% | 8/8 = 100.0% | 캐시 hit 0, 외부근거 ready 8/8, 자금조달 공시 민감도 발견 |
+| TN 자금조달 guardrail 재평가 | 8 | 3/8 = 37.5% | 8/8 = 100.0% | 같은 외부근거 캐시 재평가, 머큐리 1건 보류→적격 |
 
 개선 폭은 1차 5건 대비 추가 10건에서 엄격 기준 +30.0%p, review-safe 기준 +20.0%p다. 합산 기준으로도 review-safe 성공률은 93.3%까지 올라왔다.
 
@@ -115,6 +116,7 @@ round 3 live 결과에서는 FN 2건은 모두 보류로 끌어올렸고, FP 3�
 | TN overhold expanded before liquidity buffer | `committee_review_tn_overhold_expanded_30_deterministic` | 30 | 21/30 = 70.0% | 30/30 = 100.0% | 0 | 기존 TN 검토 7건 제외 후 새 TN 30건 확대 분석 |
 | TN overhold expanded after liquidity buffer | `committee_review_tn_overhold_expanded_30_after_liquidity_buffer` | 30 | 22/30 = 73.3% | 30/30 = 100.0% | 0 | 현금흐름 방어 current-ratio watch 예외 후 레몬 1건 적격 개선 |
 | TN overhold expanded OpenAI Agno live no-cache | `committee_review_tn_overhold_expanded_8_agno_openai_live_no_cache` | 8 | 2/8 = 25.0% | 8/8 = 100.0% | 0 | TN 확대 샘플 대표 8건 Agno live 검증, 자금조달 공시가 보수적 보류를 유발 |
+| TN overhold expanded financing guardrail cached evidence | `committee_review_tn_overhold_expanded_8_after_financing_guardrail_cached_evidence` | 8 | 3/8 = 37.5% | 8/8 = 100.0% | 0 | 단일 medium 자금조달 공시 예외 후 머큐리 1건 적격 개선, 반복 자금조달 레몬은 보류 유지 |
 
 Historical 12건 계열은 동일 기업 12건을 반복 검증한 산출물이다. 이 계열에서는 초기 75.0%에서 secondary signal connected 기준 100.0%까지 개선됐다. Rolling validation 계열은 샘플 구성과 평가지표가 달라 별도로 보며, 최종 추가 10건에서 90.0%/100.0%를 기록했다.
 
@@ -229,6 +231,8 @@ OpenAI Agno 재검증에서 드러난 FN 미상승 원인은 정상기업 과잉
 deterministic 결과와 비교하면 6/8건은 같은 최종 라벨을 유지했다. `(주)엔에프씨`, `(주)휴니드테크놀러지스`는 계속 적격으로 남았고, 현대무벡스·한울반도체·화승알앤에이·하나투어는 보류로 남았다. 바뀐 2건은 `(주)머큐리`와 `(주)레몬`으로, deterministic에서는 재무 방어축이 강해 적격이었지만 Agno live에서는 DART 기반 전환사채/유상증자 공시가 수집되면서 보류로 올라갔다.
 
 이 결과는 Agno 경로가 TN을 모두 적격으로 낮춘다는 증거가 아니라, live 외부근거까지 넣으면 자금조달성 공시에 매우 보수적으로 반응한다는 증거다. 특히 `(주)머큐리`는 전환사채 공시 1건만으로 보류가 되었고, chair memo는 외부 증거가 낮은 위험 수준을 뒷받침해 투자적격 판단을 유지한다고 적었지만 최종 라벨은 보류였다. 따라서 다음 개선은 단일 medium 자금조달 공시와 반복·고위험 자금조달 공시를 분리하고, 최종 라벨과 chair memo가 충돌하지 않도록 설명 합성 로직을 정리하는 쪽이 적합하다. 세부 분석은 `tn_overhold_expanded_8_agno_live_analysis.md`에 별도로 저장했다.
+
+후속 개선에서는 단일 medium 자금조달 공시를 `risk_hold` 보강 근거에서 제외하고, 반복 자금조달 2건 이상 또는 high-risk/adverse 자금조달 근거만 TN overhold guardrail을 막도록 조정했다. 같은 8건과 같은 외부근거 캐시로 deterministic committee replay를 수행한 결과, `(주)머큐리`만 `보류 → 적격`으로 내려갔고 `(주)레몬`은 반복 유상증자/전환사채 공시 때문에 보류로 유지됐다. 엄격 기준은 2/8 = 25.0%에서 3/8 = 37.5%로 개선됐고, review-safe는 8/8 = 100.0%를 유지했다. 이 재평가는 LLM live 재호출이 아니라 외부근거 캐시를 사용한 로직 회귀검증이므로, 최종 발표용 live 수치는 별도 OpenAI Agno no-cache 재실행으로 확인하는 것이 좋다.
 
 ## Agno 실행 기준 보류 세분화 결과
 
