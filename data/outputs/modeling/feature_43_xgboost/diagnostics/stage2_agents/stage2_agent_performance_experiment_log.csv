@@ -25,3 +25,4 @@ rerun_check_random_rolling_10,rerun_check_random_rolling_10,10,10,1.000,10,1.000
 tn_guardrail_deterministic_8,committee_review_tn_guardrail_deterministic_8,8,4,0.500,6,0.750,0,Local deterministic baseline for TN guardrail 8 case sample before OpenAI Agno live rerun
 tn_guardrail_openai_agno_live_8,committee_review_tn_guardrail_agno_openai_live_8,8,4,0.500,6,0.750,0,OpenAI Agno plus external evidence rerun on the same TN guardrail 8 case sample matched deterministic labels with no failures
 fn_escalation_guardrail_deterministic_8,committee_review_fn_escalation_guardrail_deterministic_8,8,6,0.750,8,1.000,0,Tightened TN overhold guardrail so near-threshold FN cases with cashflow or profitability stress escalate to boundary hold
+fn_escalation_openai_agno_rerun_8,committee_review_fn_escalation_agno_openai_live_8,8,6,0.750,8,1.000,0,OpenAI Agno path rerun after tightened FN escalation guardrail; only the two missed FN labels changed to boundary hold
