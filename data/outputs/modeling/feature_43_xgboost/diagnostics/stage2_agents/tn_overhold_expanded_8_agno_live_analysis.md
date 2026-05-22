@@ -51,9 +51,10 @@ Agno live 결과를 반영해 단일 medium 자금조달 공시와 반복·고�
 
 같은 8건과 같은 외부근거 캐시로 deterministic committee replay를 수행한 결과는 다음과 같다.
 
-| 실행 | 엄격 기준 | Review-safe | 적격 | 보류 | 비고 |
-| --- | ---: | ---: | ---: | ---: | --- |
-| Agno live no-cache before follow-up | 2/8 = 25.0% | 8/8 = 100.0% | 2 | 6 | 단일 전환사채 공시가 있는 머큐리도 risk_hold |
-| Cached-evidence replay after follow-up | 3/8 = 37.5% | 8/8 = 100.0% | 3 | 5 | 머큐리만 적격으로 개선, 반복 자금조달 레몬은 보류 유지 |
+| 실행 | 엄격 기준 | Review-safe | 적격 | 보류 | Wall time | 비고 |
+| --- | ---: | ---: | ---: | ---: | ---: | --- |
+| Agno live no-cache before follow-up | 2/8 = 25.0% | 8/8 = 100.0% | 2 | 6 | 87.9967 sec | 단일 전환사채 공시가 있는 머큐리도 risk_hold |
+| Cached-evidence replay after follow-up | 3/8 = 37.5% | 8/8 = 100.0% | 3 | 5 | 1.7129 sec | 머큐리만 적격으로 개선, 반복 자금조달 레몬은 보류 유지 |
+| Agno live no-cache after follow-up | 3/8 = 37.5% | 8/8 = 100.0% | 3 | 5 | 95.4372 sec | cache hit 0, 머큐리 적격 개선 live 확인 |
 
-이 재평가는 LLM live 재호출이 아니라 committee_view 로직 회귀검증이다. 따라서 "Agno live에서도 개선 유지"를 최종 증거로 쓰려면 같은 8건을 OpenAI Agno no-cache로 한 번 더 돌려 확인하는 것이 좋다.
+최종 live 재실행에서도 cache hit는 0건이었다. `(주)머큐리`는 단일 medium 전환사채 공시만으로는 보류 보강 근거가 충분하지 않아 `적격`으로 내려갔고, `(주)레몬`은 반복 유상증자/전환사채 공시가 있어 `보류`로 남았다. 따라서 이 guardrail은 "자금조달 공시를 무시"하는 방식이 아니라, 단일 medium 공시와 반복·고위험 자금조달 공시를 분리하는 방식으로 작동한다.
