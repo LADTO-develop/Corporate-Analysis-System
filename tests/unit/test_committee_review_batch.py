@@ -48,6 +48,18 @@ def test_sample_model_replay_skips_pre_replay_stage2(
             "conflict_resolution": "샘플 모델값 기준으로 재검토했습니다.",
             "final_review_memo": "샘플 replay",
         }
+        updated["stage2_runtime_diagnostics"] = {
+            "backend_name": "agno",
+            "cache_hit": False,
+            "stage2_total_elapsed_seconds": 12.3,
+            "agent_elapsed_seconds_sum": 11.7,
+            "agent_elapsed_seconds": {
+                "quant_credit": 4.1,
+                "evidence_audit": 5.2,
+                "chair_report": 2.4,
+            },
+            "parallel_independent_agents": True,
+        }
         return updated
 
     monkeypatch.setattr(batch_module, "run_once", fail_run_once)
@@ -71,6 +83,10 @@ def test_sample_model_replay_skips_pre_replay_stage2(
     assert calls == {"pre_stage": 1, "replay": 1}
     assert results.loc[0, "committee_effect"] == "fn_escalated"
     assert results.loc[0, "final_committee_label"] == "보류"
+    assert results.loc[0, "stage2_backend_name"] == "agno"
+    assert results.loc[0, "stage2_total_elapsed_seconds"] == 12.3
+    assert results.loc[0, "stage2_evidence_audit_elapsed_seconds"] == 5.2
+    assert bool(results.loc[0, "stage2_parallel_independent_agents"]) is True
     assert results.loc[0, "prior_credit_rating"] == "BB+"
     assert results.loc[0, "prior_rating_agency"] == "한국신용평가"
 

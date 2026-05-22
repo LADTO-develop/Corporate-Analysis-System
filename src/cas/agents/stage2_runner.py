@@ -7,8 +7,9 @@ outputs without changing committee_node orchestration.
 
 from __future__ import annotations
 
+import time
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from importlib import import_module
 from typing import Any, Protocol, cast
 
@@ -91,6 +92,7 @@ class _TripletAgentModule(Protocol):
         chair_model_provider: str | None,
         chair_model_name: str | None,
         max_tokens: int,
+        diagnostics: dict[str, Any] | None = None,
     ) -> Stage2RunnerOutputs:
         """Run the Agno Stage 2 triplet agents."""
 
@@ -148,6 +150,7 @@ class AgnoStage2AgentRunner:
     fallback_on_error: bool = True
     last_run_backend_name: str = "agno"
     last_error_message: str = ""
+    last_run_diagnostics: dict[str, Any] = field(default_factory=dict)
 
     def run(
         self,
@@ -157,6 +160,7 @@ class AgnoStage2AgentRunner:
         confidence: float,
     ) -> Stage2RunnerOutputs:
         """Run Stage 2 through the Agno triplet agents or an injected LLM client."""
+        run_started_at = time.perf_counter()
         try:
             cache_key = stable_cache_key(
                 _stage2_cache_payload(
@@ -171,9 +175,16 @@ class AgnoStage2AgentRunner:
                 response, cached_backend_name = cached_response
                 self.last_run_backend_name = cached_backend_name
                 self.last_error_message = ""
+                self.last_run_diagnostics = _stage2_run_diagnostics(
+                    backend_name=cached_backend_name,
+                    cache_hit=True,
+                    cache_key=cache_key,
+                    started_at=run_started_at,
+                )
                 return response.as_outputs()
 
             if self.llm_client is not None:
+                client_started_at = time.perf_counter()
                 prompt_payload = _build_prompt_payload(
                     bundle=bundle,
                     recommendation=recommendation,
@@ -185,7 +196,10 @@ class AgnoStage2AgentRunner:
                     output_schema=Stage2LLMResponse,
                 )
                 successful_backend_name = self.backend_name
+                agent_timings = {"llm_client": round(time.perf_counter() - client_started_at, 4)}
+                runner_diagnostics: dict[str, Any] = {"agent_elapsed_seconds": agent_timings}
             else:
+                runner_diagnostics = {}
                 raw_response = _run_triplet_agents_with_agno(
                     bundle=bundle,
                     recommendation=recommendation,
@@ -199,6 +213,7 @@ class AgnoStage2AgentRunner:
                     chair_model_provider=self._role_provider("chair_report"),
                     chair_model_name=self._role_model_name("chair_report"),
                     max_tokens=self.max_tokens,
+                    diagnostics=runner_diagnostics,
                 )
                 successful_backend_name = self.backend_name
             response = _coerce_llm_response(raw_response)
@@ -210,17 +225,35 @@ class AgnoStage2AgentRunner:
             outputs = response.as_outputs()
             self.last_run_backend_name = successful_backend_name
             self.last_error_message = ""
+            self.last_run_diagnostics = _stage2_run_diagnostics(
+                backend_name=successful_backend_name,
+                cache_hit=False,
+                cache_key=cache_key,
+                started_at=run_started_at,
+                agent_timings=_coerce_agent_timings(
+                    runner_diagnostics.get("agent_elapsed_seconds")
+                ),
+                extra=runner_diagnostics,
+            )
             return outputs
         except Exception as error:
             if self.deterministic_runner is None or not self.fallback_on_error:
                 raise
             self.last_run_backend_name = "agno_fallback_deterministic"
             self.last_error_message = str(error)
-            return self.deterministic_runner.run(
+            outputs = self.deterministic_runner.run(
                 bundle=bundle,
                 recommendation=recommendation,
                 confidence=confidence,
             )
+            self.last_run_diagnostics = _stage2_run_diagnostics(
+                backend_name="agno_fallback_deterministic",
+                cache_hit=False,
+                cache_key=cache_key if "cache_key" in locals() else "",
+                started_at=run_started_at,
+                extra={"error_message": str(error)},
+            )
+            return outputs
 
     def _draft_outputs(
         self,
@@ -398,6 +431,43 @@ def _write_stage2_cached_response(
     )
 
 
+def _stage2_run_diagnostics(
+    *,
+    backend_name: str,
+    cache_hit: bool,
+    cache_key: str,
+    started_at: float,
+    agent_timings: dict[str, float] | None = None,
+    extra: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    timings = agent_timings or {}
+    diagnostics = {
+        "backend_name": backend_name,
+        "cache_hit": cache_hit,
+        "cache_key": cache_key,
+        "stage2_total_elapsed_seconds": round(time.perf_counter() - started_at, 4),
+        "agent_elapsed_seconds": timings,
+        "agent_elapsed_seconds_sum": round(sum(timings.values()), 4),
+    }
+    if extra:
+        for key, value in extra.items():
+            if key != "agent_elapsed_seconds":
+                diagnostics[key] = value
+    return diagnostics
+
+
+def _coerce_agent_timings(value: object) -> dict[str, float]:
+    if not isinstance(value, dict):
+        return {}
+    timings: dict[str, float] = {}
+    for role, elapsed in value.items():
+        try:
+            timings[str(role)] = round(float(elapsed), 4)
+        except (TypeError, ValueError):
+            continue
+    return timings
+
+
 def _run_triplet_agents_with_agno(
     *,
     bundle: Stage2InputBundle,
@@ -412,6 +482,7 @@ def _run_triplet_agents_with_agno(
     chair_model_provider: str | None,
     chair_model_name: str | None,
     max_tokens: int,
+    diagnostics: dict[str, Any] | None = None,
 ) -> Stage2LLMResponse:
     try:
         triplet_module = cast(
@@ -436,6 +507,7 @@ def _run_triplet_agents_with_agno(
         chair_model_provider=chair_model_provider,
         chair_model_name=chair_model_name,
         max_tokens=max_tokens,
+        diagnostics=diagnostics,
     )
     if not isinstance(raw_outputs, tuple) or len(raw_outputs) != 3:
         raise TypeError("Agno triplet agents must return exactly three Stage 2 outputs.")

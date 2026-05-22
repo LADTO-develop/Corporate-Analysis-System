@@ -57,6 +57,8 @@ Agno Stage 2 preflight passed.
 
 외부 뉴스/공시 수집까지 함께 켤 때는 `OPENDART_API_KEY`, `NAVER_CLIENT_ID`, `NAVER_CLIENT_SECRET`, `TAVILY_API_KEY`를 `.env`에 설정한 뒤 `--live-external-evidence`를 추가한다.
 
+배치 결과 CSV에는 Stage 2 실행 진단 컬럼이 함께 남는다. 주요 컬럼은 `stage2_backend_name`, `stage2_llm_cache_hit`, `stage2_total_elapsed_seconds`, `stage2_agent_elapsed_seconds_sum`, `stage2_quant_credit_elapsed_seconds`, `stage2_evidence_audit_elapsed_seconds`, `stage2_chair_report_elapsed_seconds`, `stage2_parallel_independent_agents`다. 실제 API 속도를 측정할 때는 `stage2_llm_cache_hit=False`인 행을 기준으로 보고, 캐시 재사용 여부를 제거하려면 위 예시처럼 `--no-stage2-llm-cache`를 붙인다.
+
 ## Deterministic vs OpenAI Agno 설명 품질 비교
 
 Codex 세션 안에서는 실제 기업-회계연도 평가 맥락을 OpenAI API로 보내는 실행이 차단될 수 있다. 팀/프로젝트 기준으로 외부 전송을 승인한 경우, 아래 명령은 Codex 밖의 로컬 터미널에서 직접 실행한다.
@@ -122,6 +124,7 @@ cd "/Users/inji/Documents/금융 데이터 분서�
 - `quality_delta_mean`이 양수면 Agno 설명이 deterministic 설명보다 메모 길이, 핵심 용어, 수치 포함 측면에서 더 풍부해졌다는 뜻이다.
 - 최종 판단 라벨은 더 좋아졌는데 설명 품질이 낮아질 수도 있고, 반대로 라벨은 같지만 설명 품질만 좋아질 수도 있으므로 두 지표를 함께 본다.
 - 이 비교는 4건 smoke test이므로 성능 일반화 지표가 아니라 “실제 LLM 설명 품질 확인용”으로 해석한다.
+- 속도 비교가 필요하면 `committee_review_batch_results.csv`의 Stage 2 실행 진단 컬럼을 함께 확인한다. `single` 모드는 OpenAI 한 provider를 쓰는 3-agent 실행이므로, 역할별 지연은 QuantCredit/EvidenceAudit/ChairReport 컬럼에 나뉘어 기록된다.
 
 ## Multi-LLM Committee를 꼭 쓸 때
 

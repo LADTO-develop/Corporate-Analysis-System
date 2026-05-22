@@ -92,6 +92,9 @@ def run(state: AgentState) -> dict[str, Any]:
         confidence=rule_confidence,
     )
     runtime_backend_name = str(getattr(runner, "last_run_backend_name", runner.backend_name))
+    runtime_diagnostics = dict(getattr(runner, "last_run_diagnostics", {}) or {})
+    runtime_diagnostics.setdefault("backend_name", runtime_backend_name)
+    runtime_diagnostics.setdefault("cache_hit", False)
     agents = [output.to_agent_output() for output in structured_outputs]
     _validate_agent_order(agents)
     reviews = [
@@ -129,8 +132,15 @@ def run(state: AgentState) -> dict[str, Any]:
             }
             for agent in agents
         },
+        "runtime": runtime_diagnostics,
     }
 
+    audit_metrics = {
+        "n_agents": float(len(agents)),
+        "rule_confidence": rule_confidence,
+        "final_confidence": committee_confidence,
+    }
+    audit_metrics.update(_runtime_diagnostic_metrics(runtime_diagnostics))
     audit = AuditEntry(
         node="agno_agents",
         timestamp=_now(),
@@ -138,22 +148,38 @@ def run(state: AgentState) -> dict[str, Any]:
             f"Three-agent Stage 2 scaffold completed via {runtime_backend_name} runner: "
             f"{', '.join(agent.role for agent in agents)}"
         ),
-        metrics={
-            "n_agents": float(len(agents)),
-            "rule_confidence": rule_confidence,
-            "final_confidence": committee_confidence,
-        },
+        metrics=audit_metrics,
     )
     return {
         "agent_outputs": agents,
         "committee_reviews": reviews,
         "agent_summary": agent_summary,
         "committee_view": committee_view,
+        "stage2_runtime_diagnostics": runtime_diagnostics,
         "credit_policy_snapshot": credit_policy_snapshot,
         "final_recommendation": recommendation,
         "final_confidence": committee_confidence,
         "audit": [audit],
     }
+
+
+def _runtime_diagnostic_metrics(diagnostics: dict[str, Any]) -> dict[str, float]:
+    metrics: dict[str, float] = {}
+    for source_key, metric_key in (
+        ("stage2_total_elapsed_seconds", "stage2_total_elapsed_seconds"),
+        ("agent_elapsed_seconds_sum", "stage2_agent_elapsed_seconds_sum"),
+    ):
+        value = _safe_float(diagnostics.get(source_key))
+        if value is not None:
+            metrics[metric_key] = value
+    agent_timings = diagnostics.get("agent_elapsed_seconds")
+    if isinstance(agent_timings, dict):
+        for role in ("quant_credit", "evidence_audit", "chair_report", "llm_client"):
+            value = _safe_float(agent_timings.get(role))
+            if value is not None:
+                metrics[f"stage2_{role}_elapsed_seconds"] = value
+    metrics["stage2_llm_cache_hit"] = 1.0 if diagnostics.get("cache_hit") is True else 0.0
+    return metrics
 
 
 def _validate_agent_order(agents: list[AgentOutput]) -> None:

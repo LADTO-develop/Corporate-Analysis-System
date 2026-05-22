@@ -387,6 +387,8 @@ def _result_row(
     sample: dict[str, Any], *, state: dict[str, Any], error_message: str
 ) -> dict[str, Any]:
     committee_view = _dict_value(state.get("committee_view"))
+    stage2_runtime = _dict_value(state.get("stage2_runtime_diagnostics"))
+    stage2_agent_timings = _dict_value(stage2_runtime.get("agent_elapsed_seconds"))
     evidence = _dict_value(state.get("news_cache_snapshot"))
     xgboost_result = _dict_value(state.get("xgboost_result"))
     final_label = str(committee_view.get("final_committee_label") or "")
@@ -443,6 +445,17 @@ def _result_row(
         "committee_effect": effect,
         "committee_review_safe_success": review_safe_success,
         "committee_review_safe_effect": review_safe_effect,
+        "stage2_backend_name": stage2_runtime.get("backend_name"),
+        "stage2_llm_cache_hit": bool(stage2_runtime.get("cache_hit", False)),
+        "stage2_total_elapsed_seconds": stage2_runtime.get("stage2_total_elapsed_seconds"),
+        "stage2_agent_elapsed_seconds_sum": stage2_runtime.get("agent_elapsed_seconds_sum"),
+        "stage2_quant_credit_elapsed_seconds": stage2_agent_timings.get("quant_credit"),
+        "stage2_evidence_audit_elapsed_seconds": stage2_agent_timings.get("evidence_audit"),
+        "stage2_chair_report_elapsed_seconds": stage2_agent_timings.get("chair_report"),
+        "stage2_parallel_independent_agents": bool(
+            stage2_runtime.get("parallel_independent_agents", False)
+        ),
+        "stage2_error_message": stage2_runtime.get("error_message", ""),
         "veto_triggered": bool(committee_view.get("veto_triggered", False)),
         "hidden_tail_risk_flag": bool(committee_view.get("hidden_tail_risk_flag", False)),
         "evidence_status": evidence.get("status"),
@@ -662,6 +675,18 @@ def _summary(results: pd.DataFrame) -> dict[str, Any]:
                 round(len(results) / wall_seconds * 60.0, 4) if wall_seconds > 0 else None
             ),
         }
+    if "stage2_total_elapsed_seconds" in results.columns and len(results):
+        stage2_elapsed = pd.to_numeric(results["stage2_total_elapsed_seconds"], errors="coerce")
+        if not stage2_elapsed.dropna().empty:
+            summary["stage2_speed"] = {
+                "stage2_total_elapsed_seconds_sum": round(float(stage2_elapsed.sum()), 4),
+                "stage2_total_elapsed_seconds_mean": round(float(stage2_elapsed.mean()), 4),
+                "stage2_total_elapsed_seconds_median": round(float(stage2_elapsed.median()), 4),
+                "stage2_total_elapsed_seconds_max": round(float(stage2_elapsed.max()), 4),
+                "stage2_llm_cache_hit_rows": int(
+                    results.get("stage2_llm_cache_hit", pd.Series(dtype=bool)).fillna(False).sum()
+                ),
+            }
     return summary
 
 
@@ -692,6 +717,7 @@ def _report(results: pd.DataFrame, summary: dict[str, Any]) -> str:
             f"- Strict committee success rate: {summary['success_rate']:.1%}",
             f"- Review-safe success rate: {summary['review_safe_success_rate']:.1%}",
             _speed_report_line(summary),
+            _stage2_speed_report_line(summary),
             "",
             "## Result Preview",
             "",
@@ -722,6 +748,18 @@ def _speed_report_line(summary: dict[str, Any]) -> str:
         f"wall `{speed.get('batch_wall_time_seconds')}` sec, "
         f"mean case `{speed.get('case_elapsed_seconds_mean')}` sec, "
         f"throughput `{speed.get('throughput_cases_per_minute')}` cases/min"
+    )
+
+
+def _stage2_speed_report_line(summary: dict[str, Any]) -> str:
+    speed = summary.get("stage2_speed")
+    if not isinstance(speed, dict):
+        return "- Stage 2 LLM speed: not measured"
+    return (
+        "- Stage 2 LLM speed: "
+        f"mean `{speed.get('stage2_total_elapsed_seconds_mean')}` sec, "
+        f"max `{speed.get('stage2_total_elapsed_seconds_max')}` sec, "
+        f"cache hits `{speed.get('stage2_llm_cache_hit_rows')}`"
     )
 
 

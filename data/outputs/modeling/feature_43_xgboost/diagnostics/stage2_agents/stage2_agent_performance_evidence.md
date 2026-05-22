@@ -192,6 +192,8 @@ OpenAI Agno 재검증에서 드러난 FN 미상승 원인은 정상기업 과잉
 
 속도/검증 신뢰도 쪽 문제도 함께 확인했다. `single` 모드는 OpenAI 단일 provider라는 뜻이지 LLM 1회 호출이 아니어서 케이스당 QuantCredit, EvidenceAudit, ChairReport 호출이 발생한다. 이 구조가 3에이전트 성능 증빙에 더 맞으므로 유지하고, live latency 측정 시 캐시 재사용을 피할 수 있도록 batch CLI에 `--no-stage2-llm-cache`를 추가했다. 따라서 앞으로 실제 API 속도를 잴 때는 `single + --no-stage2-llm-cache` 기준으로 측정한다.
 
+추가로 batch 결과 CSV에 Stage 2 실행 진단 컬럼을 남기도록 했다. 주요 컬럼은 `stage2_backend_name`, `stage2_llm_cache_hit`, `stage2_total_elapsed_seconds`, `stage2_agent_elapsed_seconds_sum`, `stage2_quant_credit_elapsed_seconds`, `stage2_evidence_audit_elapsed_seconds`, `stage2_chair_report_elapsed_seconds`, `stage2_parallel_independent_agents`다. 따라서 앞으로는 전체 배치 wall time뿐 아니라 케이스별 Stage 2 LLM 시간, 역할별 병목, 캐시 재사용 여부를 같은 결과 파일에서 바로 확인할 수 있다.
+
 ## Agno 실행 기준 보류 세분화 결과
 
 deterministic 묶음은 규칙 변경이 깨지지 않았는지 보는 내부 sanity check로만 사용하고, 발표/공유용 성능은 Agno/Claude 실행 기준을 우선한다. 아래 표는 `보류`를 하나의 위험 라벨로 보지 않고, `위험 보류`, `과민경고 완화 보류`, `확인필요 보류`로 세분화한 뒤 재계산한 결과다.
