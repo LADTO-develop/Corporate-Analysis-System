@@ -1,0 +1,98 @@
+{
+  "generated_at_utc": "2026-05-22T04:34:00Z",
+  "source_statuses": [
+    {
+      "name": "stage2_agent_agno_hold_subtype_metrics.csv",
+      "path": "data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents/stage2_agent_agno_hold_subtype_metrics.csv",
+      "exists": true,
+      "rows": 12,
+      "columns": 13,
+      "modified_at_utc": "2026-05-22T02:12:38Z"
+    },
+    {
+      "name": "stage2_agent_error_risk_10_agno_metrics.csv",
+      "path": "data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents/stage2_agent_error_risk_10_agno_metrics.csv",
+      "exists": true,
+      "rows": 4,
+      "columns": 11,
+      "modified_at_utc": "2026-05-22T02:12:38Z"
+    },
+    {
+      "name": "stage2_agent_performance_experiment_log.csv",
+      "path": "data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents/stage2_agent_performance_experiment_log.csv",
+      "exists": true,
+      "rows": 23,
+      "columns": 9,
+      "modified_at_utc": "2026-05-22T02:12:38Z"
+    },
+    {
+      "name": "stage2_agent_speed_experiment_log.csv",
+      "path": "data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents/stage2_agent_speed_experiment_log.csv",
+      "exists": true,
+      "rows": 10,
+      "columns": 12,
+      "modified_at_utc": "2026-05-22T02:12:38Z"
+    },
+    {
+      "name": "stage2_agent_all_pilots_recomputed_summary.csv",
+      "path": "data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents/stage2_agent_all_pilots_recomputed_summary.csv",
+      "exists": true,
+      "rows": 22,
+      "columns": 8,
+      "modified_at_utc": "2026-05-22T02:12:38Z"
+    },
+    {
+      "name": "committee_review_batch_results.csv",
+      "path": "data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents/committee_review_batch_results.csv",
+      "exists": true,
+      "rows": 12,
+      "columns": 38,
+      "modified_at_utc": "2026-05-21T00:42:41Z"
+    },
+    {
+      "name": "stage2_validation_test_policy_metrics.csv",
+      "path": "data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents/stage2_validation_test_policy_metrics.csv",
+      "exists": true,
+      "rows": 18,
+      "columns": 15,
+      "modified_at_utc": "2026-05-22T04:33:45Z"
+    },
+    {
+      "name": "stage2_validation_test_trace_gate_contribution.csv",
+      "path": "data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents/stage2_validation_test_trace_gate_contribution.csv",
+      "exists": true,
+      "rows": 12,
+      "columns": 15,
+      "modified_at_utc": "2026-05-22T04:33:45Z"
+    },
+    {
+      "name": "stage2_openai_agno_explanation_comparison_details.csv",
+      "path": "data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents/stage2_openai_agno_explanation_comparison_details.csv",
+      "exists": true,
+      "rows": 4,
+      "columns": 19,
+      "modified_at_utc": "2026-05-22T04:33:41Z"
+    }
+  ],
+  "combined_metric_rows": 16,
+  "run_summary_rows": 4,
+  "latest_batch_metric_rows": 4,
+  "trace_gate_contribution_rows": 12,
+  "headline": {
+    "best_risk_signal_run": "agno_random_rolling_10",
+    "best_risk_signal_f1": 1.0,
+    "best_risk_signal_precision": 1.0,
+    "best_risk_signal_recall": 1.0,
+    "best_review_recall_run": "agno_random_rolling_10",
+    "best_review_recall": 1.0,
+    "latest_batch_review_recall": 0.8333,
+    "top_fn_gate": "부적격 확정 게이트",
+    "top_fn_count": 8,
+    "top_fp_gate": "과민경고 완화 점검",
+    "top_fp_count": 57
+  },
+  "outputs": {
+    "report": "data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents/stage2_evaluation_report.md",
+    "combined_metrics": "data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents/stage2_evaluation_report_combined_metrics.csv"
+  }
+}

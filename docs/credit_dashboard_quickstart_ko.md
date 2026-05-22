@@ -39,7 +39,9 @@ cd Corporate-Analysis-System
 /opt/anaconda3/envs/aura/bin/python scripts/import_feature_43_inference_2026_aux.py
 /opt/anaconda3/envs/aura/bin/python scripts/build_feature_43_inference_2026.py
 /opt/anaconda3/envs/aura/bin/python scripts/collect_opendart_financial_statements.py --source-kind inference --target-fiscal-year 2025 --fallback-ofs
-/opt/anaconda3/envs/aura/bin/python scripts/apply_opendart_inference_financial_supplements.py
+/opt/anaconda3/envs/aura/bin/python scripts/export_inference_2026_missing_2024_lag_targets.py
+/opt/anaconda3/envs/aura/bin/python scripts/collect_opendart_financial_statements.py --source data/raw/opendart/inference_2026_missing_2024_lag_targets.csv --source-kind inference --target-fiscal-year 2025 --opendart-bsns-year 2024 --fallback-ofs --output-dir data/raw/opendart/lag_2024_tmp
+/opt/anaconda3/envs/aura/bin/python scripts/apply_opendart_inference_financial_supplements.py --lag-raw-supplement data/raw/opendart/lag_2024_tmp/financial_statements_inference_2024_cfs_with_ofs_fallback_raw.csv
 /opt/anaconda3/envs/aura/bin/python scripts/build_feature_43_inference_2026.py --check-only
 /opt/anaconda3/envs/aura/bin/python scripts/export_feature_43_inference_2026_dashboard_artifacts.py
 ```

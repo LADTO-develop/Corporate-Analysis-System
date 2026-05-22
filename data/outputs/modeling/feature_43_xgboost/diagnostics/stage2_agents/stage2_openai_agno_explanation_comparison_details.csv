@@ -1,0 +1,5 @@
+﻿market,stock_code,corp_name,fiscal_year,eval_year,model_error_type,actual_label_name,stage1_label,deterministic_label,agno_label,label_changed,deterministic_success,agno_success,success_changed,deterministic_memo_chars,agno_memo_chars,deterministic_quality_score,agno_quality_score,quality_delta
+KOSDAQ,086890,(주)이수앱지스,2024,2025,false_negative,투기등급,투자적격,보류,보류,False,True,True,False,373,539,0.775,0.775,0.0
+KOSDAQ,219130,(주)타이거일렉,2023,2024,false_positive,투자적격,투기등급,보류,보류,False,True,True,False,255,373,0.7729,1.0,0.2271
+KOSDAQ,032790,(주)엠젠솔루션,2023,2024,true_positive,투기등급,투기등급,보류,보류,False,True,True,False,230,358,0.6236,0.7981,0.1745
+KOSDAQ,405000,(주)플라즈맵,2023,2024,true_positive,투기등급,투기등급,부적격,부적격,False,True,True,False,499,720,0.925,1.0,0.075

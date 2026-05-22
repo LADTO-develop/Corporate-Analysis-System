@@ -207,6 +207,10 @@ def build_committee_view_model(
         risk_factors=risk_factors,
         mitigating_factors=mitigating_factors,
     )
+    final_review_memo = _with_chair_report_memo(
+        final_review_memo,
+        _chair_report_memo_seed(agents),
+    )
     risk_factors = _clean_text_items(risk_factors)
     mitigating_factors = _clean_text_items(mitigating_factors)
     evidence_summary = _clean_evidence_summary_items(evidence_summary)
@@ -1905,6 +1909,48 @@ def _final_review_memo(
         f"부채/유동성 교차 검증, 외부 근거 상태를 함께 검토해 최종 의견을 "
         f"{committee_label}로 정리했습니다. {risk_note}. {mitigation_note}."
     )
+
+
+def _chair_report_memo_seed(agents: list[AgentOutput]) -> str:
+    chair = next((agent for agent in agents if agent.role == "chair_report"), None)
+    if chair is None:
+        return ""
+    candidates = [*chair.findings[::-1], chair.summary]
+    for candidate in candidates:
+        cleaned = cast(str, _clean_korean_review_text(str(candidate or "")))
+        if _is_informative_chair_report_memo(cleaned):
+            return cleaned
+    return ""
+
+
+def _is_informative_chair_report_memo(text: str) -> bool:
+    if len(text.strip()) < 40:
+        return False
+    generic_markers = (
+        "ChairReportAgent는 정량 해석과 검증 근거를 사람이 읽는 심사 메모로 연결합니다",
+        "정량 판단은 model_view로 보존",
+        "committee_view에서는 해석과 보완 의견만 추가합니다",
+        "최종 보고서는 적격/보류/부적격 3단 위원회 의견",
+        "Agno ",
+        "chair label=",
+        "ChairReportAgent는 모델 원판단",
+        "현재 서비스 recommendation은",
+    )
+    return not any(marker in text for marker in generic_markers)
+
+
+def _with_chair_report_memo(base_memo: str, chair_memo_seed: str) -> str:
+    base = cast(str, _clean_korean_review_text(base_memo))
+    seed = cast(str, _clean_korean_review_text(chair_memo_seed))
+    if not seed:
+        return base
+    normalized_base = " ".join(base.split())
+    normalized_seed = " ".join(seed.split())
+    if normalized_seed in normalized_base:
+        return base
+    if normalized_base in normalized_seed:
+        return seed
+    return f"{base} 위원회 보강 의견: {seed}"
 
 
 __all__ = ["build_committee_view", "build_committee_view_model"]

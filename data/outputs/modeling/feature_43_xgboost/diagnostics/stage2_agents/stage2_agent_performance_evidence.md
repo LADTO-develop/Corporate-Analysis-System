@@ -226,24 +226,17 @@ random rolling 10건 Agno live 실행은 실제 Claude/Agno 및 외부근거 API
 
 | 용도 | 파일 |
 | --- | --- |
-| 전체 실험 로그 CSV | `data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agent_performance_experiment_log.csv` |
-| 속도 실험 로그 CSV | `data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agent_speed_experiment_log.csv` |
-| 새 holdout 8건 샘플 | `data/outputs/modeling/feature_43_xgboost/diagnostics/committee_review_holdout_unseen_8_samples.csv` |
-| 새 holdout deterministic baseline | `data/outputs/modeling/feature_43_xgboost/diagnostics/committee_review_holdout_unseen_deterministic_speed_baseline/committee_review_batch_results.csv` |
-| 새 holdout guardrail 개선 결과 | `data/outputs/modeling/feature_43_xgboost/diagnostics/committee_review_holdout_unseen_guardrail_speed_batch/committee_review_batch_results.csv` |
-| 실패 파일럿 삭제 후 전체 재계산 요약 | `data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agent_all_pilots_recomputed_summary.csv` |
-| 최종 holdout guardrail 재검증 | `data/outputs/modeling/feature_43_xgboost/diagnostics/rerun_check_holdout_guardrail/committee_review_batch_results.csv` |
-| 최종 Agno round 2 재검증 | `data/outputs/modeling/feature_43_xgboost/diagnostics/rerun_check_round2_agno/committee_review_batch_results.csv` |
-| 최종 Agno round 3 재검증 | `data/outputs/modeling/feature_43_xgboost/diagnostics/rerun_check_round3_after_guardrail/committee_review_batch_results.csv` |
-| 랜덤 10건 샘플 | `data/outputs/modeling/feature_43_xgboost/diagnostics/committee_review_random_rolling_10_samples.csv` |
-| 랜덤 10건 안전성 점검 결과 | `data/outputs/modeling/feature_43_xgboost/diagnostics/rerun_check_random_rolling_10/committee_review_batch_results.csv` |
-| 랜덤 10건 Agno live 실행 결과 | `data/outputs/modeling/feature_43_xgboost/diagnostics/rerun_check_random_rolling_10_agno_live/committee_review_batch_results.csv` |
-| Agno 보류 세분화 성능표 | `data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agent_agno_hold_subtype_metrics.csv` |
-| Agno 보류 세부유형 건수표 | `data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agent_agno_hold_subtype_counts.csv` |
-| 판단 오류 위험 10건 샘플 | `data/outputs/modeling/feature_43_xgboost/diagnostics/committee_review_error_risk_10_samples.csv` |
-| 판단 오류 위험 10건 Agno 실행 결과 | `data/outputs/modeling/feature_43_xgboost/diagnostics/committee_review_error_risk_10_agno_live/committee_review_batch_results.csv` |
-| 판단 오류 위험 10건 Agno 성능표 | `data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agent_error_risk_10_agno_metrics.csv` |
-| 1차 5건 결과 | `data/outputs/modeling/feature_43_xgboost/diagnostics/committee_review_rolling_validation_batch/committee_review_batch_results.csv` |
-| 추가 10건 결과 | `data/outputs/modeling/feature_43_xgboost/diagnostics/committee_review_rolling_validation_agno_claude_round2_batch/committee_review_batch_results.csv` |
-| 추가 10건 요약 리포트 | `data/outputs/modeling/feature_43_xgboost/diagnostics/committee_review_rolling_validation_agno_claude_round2_batch/committee_review_batch_report.md` |
-| 추가 10건 요약 JSON | `data/outputs/modeling/feature_43_xgboost/diagnostics/committee_review_rolling_validation_agno_claude_round2_batch/committee_review_batch_summary.json` |
+| 전체 실험 로그 CSV | `data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents/stage2_agent_performance_experiment_log.csv` |
+| 속도 실험 로그 CSV | `data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents/stage2_agent_speed_experiment_log.csv` |
+| 실패 파일럿 삭제 후 전체 재계산 요약 | `data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents/stage2_agent_all_pilots_recomputed_summary.csv` |
+| 통합 Stage 2 평가 리포트 | `data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents/stage2_evaluation_report.md` |
+| validation/test 정책 평가 리포트 | `data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents/stage2_validation_test_policy_report.md` |
+| decision trace 게이트 기여도 | `data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents/stage2_validation_test_trace_gate_contribution.csv` |
+| OpenAI Agno 설명 비교 리포트 | `data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents/stage2_openai_agno_explanation_comparison.md` |
+| Agno 보류 세분화 성능표 | `data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents/stage2_agent_agno_hold_subtype_metrics.csv` |
+| Agno 보류 세부유형 건수표 | `data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents/stage2_agent_agno_hold_subtype_counts.csv` |
+| 판단 오류 위험 10건 샘플 | `data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents/committee_review_error_risk_10_samples.csv` |
+| 판단 오류 위험 10건 Agno 성능표 | `data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents/stage2_agent_error_risk_10_agno_metrics.csv` |
+| holdout 8건 샘플 | `data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents/committee_review_holdout_unseen_8_samples.csv` |
+| 랜덤 10건 샘플 | `data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents/committee_review_random_rolling_10_samples.csv` |
+| OpenAI Agno 비교 실행 결과 | `data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents/committee_review_openai_agno_comparison_agno/committee_review_batch_results.csv` |

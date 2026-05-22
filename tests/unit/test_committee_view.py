@@ -421,6 +421,50 @@ def test_committee_view_holds_investment_model_with_secondary_review_trigger() -
     assert "경계" in committee_view["final_review_memo"]
 
 
+def test_committee_view_appends_informative_chair_report_memo() -> None:
+    state: AgentState = {
+        "company_id": "311390",
+        "company_name": "(주)네오크레마",
+        "model_view": {
+            "prediction_label": "투자적격",
+            "probability_speculative": 0.2836,
+            "threshold": 0.315,
+            "stage2_secondary_trigger": True,
+            "stage2_review_priority": "medium",
+            "trigger_reason": "45개 보조 변수셋이 추가 검토 대상으로 올렸습니다.",
+        },
+        "xgboost_result": {
+            "prediction_label": "투자적격",
+            "probability_speculative": 0.2836,
+            "threshold": 0.315,
+        },
+        "news_cache_snapshot": {"status": "disabled", "items": []},
+    }
+    chair_memo = (
+        "위원회는 추가 검토 필요성은 인정하지만, 현재 공개 근거만으로 부적격을 확정하기보다 "
+        "재무 방어력과 다음 공시를 함께 확인하는 보류 의견이 적절하다고 판단했습니다."
+    )
+    agents = [
+        AgentOutput(role="quant_credit", summary="정량 결과", findings=[], confidence=0.8),
+        AgentOutput(role="evidence_audit", summary="근거 검토", findings=[], confidence=0.6),
+        AgentOutput(
+            role="chair_report",
+            summary="종합",
+            findings=["모델 보존", "위원회 범위", chair_memo],
+            confidence=0.7,
+        ),
+    ]
+
+    committee_view = build_committee_view(
+        bundle=build_stage2_input_bundle(state),
+        recommendation="priority",
+        agents=agents,
+    )
+
+    assert "위원회 보강 의견" in committee_view["final_review_memo"]
+    assert chair_memo in committee_view["final_review_memo"]
+
+
 def test_committee_view_keeps_low_probability_secondary_liquidity_watch_eligible() -> None:
     state: AgentState = {
         "company_id": "086670",

@@ -1,0 +1,69 @@
+{
+  "generated_at_utc": "2026-05-22T04:09:32.918953+00:00",
+  "rows": 4,
+  "success_rate": 1.0,
+  "review_safe_success_rate": 1.0,
+  "by_error_type": [
+    {
+      "model_error_type": "false_negative",
+      "committee_effect": "fn_escalated",
+      "rows": 1
+    },
+    {
+      "model_error_type": "false_positive",
+      "committee_effect": "fp_mitigated",
+      "rows": 1
+    },
+    {
+      "model_error_type": "true_positive",
+      "committee_effect": "tp_risk_supported",
+      "rows": 2
+    }
+  ],
+  "by_review_safe_effect": [
+    {
+      "model_error_type": "false_negative",
+      "committee_review_safe_effect": "review_safe_fn_escalated",
+      "rows": 1
+    },
+    {
+      "model_error_type": "false_positive",
+      "committee_review_safe_effect": "review_safe_fp_not_rejected",
+      "rows": 1
+    },
+    {
+      "model_error_type": "true_positive",
+      "committee_review_safe_effect": "review_safe_tp_supported",
+      "rows": 2
+    }
+  ],
+  "by_final_label": [
+    {
+      "final_committee_label": "보류",
+      "rows": 3
+    },
+    {
+      "final_committee_label": "부적격",
+      "rows": 1
+    }
+  ],
+  "by_evidence_status": [
+    {
+      "evidence_status": "disabled",
+      "rows": 4
+    }
+  ],
+  "speed": {
+    "batch_wall_time_seconds": 1.1491,
+    "case_elapsed_seconds_sum": 1.1486,
+    "case_elapsed_seconds_mean": 0.2872,
+    "case_elapsed_seconds_median": 0.0364,
+    "case_elapsed_seconds_max": 1.0402,
+    "throughput_cases_per_minute": 208.8591
+  },
+  "paths": {
+    "details": "data/outputs/modeling/feature_43_xgboost/diagnostics/committee_review_openai_agno_comparison_deterministic/committee_review_batch_results.csv",
+    "summary": "data/outputs/modeling/feature_43_xgboost/diagnostics/committee_review_openai_agno_comparison_deterministic/committee_review_batch_summary.json",
+    "report": "data/outputs/modeling/feature_43_xgboost/diagnostics/committee_review_openai_agno_comparison_deterministic/committee_review_batch_report.md"
+  }
+}

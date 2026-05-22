@@ -17,7 +17,9 @@ from typing import Any
 import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[1]
-DIAGNOSTICS_DIR = ROOT / "data/outputs/modeling/feature_43_xgboost/diagnostics"
+DIAGNOSTICS_DIR = (
+    ROOT / "data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents"
+)
 DEFAULT_OUTPUT_PREFIX = DIAGNOSTICS_DIR / "stage2_evaluation_report"
 
 AGNO_HOLD_METRICS = "stage2_agent_agno_hold_subtype_metrics.csv"
@@ -27,6 +29,8 @@ SPEED_LOG = "stage2_agent_speed_experiment_log.csv"
 RECOMPUTED_SUMMARY = "stage2_agent_all_pilots_recomputed_summary.csv"
 LATEST_BATCH_RESULTS = "committee_review_batch_results.csv"
 VALIDATION_TEST_POLICY_METRICS = "stage2_validation_test_policy_metrics.csv"
+TRACE_GATE_CONTRIBUTION = "stage2_validation_test_trace_gate_contribution.csv"
+OPENAI_AGNO_COMPARISON_DETAILS = "stage2_openai_agno_explanation_comparison_details.csv"
 
 POSITIVE_LABELS = {"투기등급", "부적격", "speculative", "1", "true"}
 REVIEW_OR_REJECT_LABELS = {"보류", "부적격"}
@@ -241,6 +245,8 @@ def write_outputs(
     speed_log: pd.DataFrame,
     recomputed_summary: pd.DataFrame,
     validation_policy_metrics: pd.DataFrame,
+    trace_gate_contribution: pd.DataFrame,
+    openai_agno_comparison: pd.DataFrame,
 ) -> dict[str, Path]:
     """Write the report, summary JSON, and combined CSV."""
     output_prefix = output_prefix.resolve()
@@ -255,6 +261,7 @@ def write_outputs(
         combined_metrics=combined_metrics,
         run_summary=run_summary,
         latest_batch=latest_batch,
+        trace_gate_contribution=trace_gate_contribution,
         metrics_path=metrics_path,
         report_path=report_path,
     )
@@ -269,6 +276,8 @@ def write_outputs(
             speed_log=speed_log,
             recomputed_summary=recomputed_summary,
             validation_policy_metrics=validation_policy_metrics,
+            trace_gate_contribution=trace_gate_contribution,
+            openai_agno_comparison=openai_agno_comparison,
             summary=summary,
         ),
         encoding="utf-8",
@@ -286,6 +295,7 @@ def build_summary(
     combined_metrics: pd.DataFrame,
     run_summary: pd.DataFrame,
     latest_batch: pd.DataFrame,
+    trace_gate_contribution: pd.DataFrame,
     metrics_path: Path,
     report_path: Path,
 ) -> dict[str, Any]:
@@ -298,6 +308,7 @@ def build_summary(
     )
     if not latest_review.empty:
         headline["latest_batch_review_recall"] = float(latest_review.iloc[0]["Recall"])
+    headline.update(_trace_gate_headline(trace_gate_contribution))
     return {
         "generated_at_utc": datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z"),
         "source_statuses": [
@@ -314,6 +325,7 @@ def build_summary(
         "combined_metric_rows": len(combined_metrics),
         "run_summary_rows": len(run_summary),
         "latest_batch_metric_rows": len(latest_batch),
+        "trace_gate_contribution_rows": len(trace_gate_contribution),
         "headline": headline,
         "outputs": {
             "report": _relative(report_path),
@@ -332,6 +344,8 @@ def build_report(
     speed_log: pd.DataFrame,
     recomputed_summary: pd.DataFrame,
     validation_policy_metrics: pd.DataFrame,
+    trace_gate_contribution: pd.DataFrame,
+    openai_agno_comparison: pd.DataFrame,
     summary: dict[str, Any],
 ) -> str:
     """Build a presentation-ready Stage 2 evaluation report."""
@@ -388,6 +402,20 @@ def build_report(
         "",
         _markdown_table(_report_validation_policy_columns(validation_policy_metrics)),
         "",
+        "## Decision Trace 게이트 기여도",
+        "",
+        "아래 표는 deterministic committee replay의 `decision_trace`를 이용해, 어떤 게이트가 1차 모델의 FN 끌어올림 또는 FP 완화에 함께 작동했는지 집계한 결과다.",
+        "한 기업에서 여러 게이트가 동시에 켜질 수 있으므로 게이트별 건수는 서로 배타적이지 않다.",
+        "",
+        _markdown_table(_report_trace_gate_contribution_columns(trace_gate_contribution)),
+        "",
+        "## OpenAI Agno 설명 품질 비교",
+        "",
+        "같은 샘플을 deterministic과 OpenAI Agno로 각각 실행한 뒤 저장된 결과가 있으면, 최종 라벨 변화와 설명 품질 점수를 비교한다.",
+        "현재 Codex 세션에서 실제 OpenAI 호출이 차단된 경우 이 표는 비어 있을 수 있다.",
+        "",
+        _markdown_table(_report_openai_agno_comparison_columns(openai_agno_comparison)),
+        "",
         "## 해석 가이드",
         "",
         "- `2차 검토대상(보류+부적격)`은 조기경보 관점의 넓은 그물이다. Recall이 높을수록 위험 기업을 검토망에 올리는 능력이 좋다.",
@@ -425,6 +453,18 @@ def _headline_lines(headline: dict[str, Any]) -> list[str]:
         lines.append(
             f"- 최신 배치 기준 검토대상 Recall: {headline['latest_batch_review_recall']:.4f}"
         )
+    if headline.get("top_fn_gate"):
+        lines.append(
+            "- validation/test trace 기준 FN 보완 최다 게이트: "
+            f"`{headline['top_fn_gate']}` "
+            f"{headline['top_fn_count']}건"
+        )
+    if headline.get("top_fp_gate"):
+        lines.append(
+            "- validation/test trace 기준 FP 완화 최다 게이트: "
+            f"`{headline['top_fp_gate']}` "
+            f"{headline['top_fp_count']}건"
+        )
     return lines or ["- 아직 요약 가능한 Stage 2 성능표가 없습니다."]
 
 
@@ -454,6 +494,29 @@ def _headline_metrics(run_summary: pd.DataFrame) -> dict[str, Any]:
                 "best_review_recall": float(best_review["review_recall"]),
             }
         )
+    return output
+
+
+def _trace_gate_headline(frame: pd.DataFrame) -> dict[str, Any]:
+    if frame.empty:
+        return {}
+    output: dict[str, Any] = {}
+    fn_frame = frame.loc[pd.to_numeric(frame.get("fn_escalated_count"), errors="coerce").gt(0)]
+    if not fn_frame.empty:
+        best_fn = fn_frame.sort_values(
+            ["fn_escalated_count", "triggered_count"],
+            ascending=False,
+        ).iloc[0]
+        output["top_fn_gate"] = str(best_fn.get("gate_label") or best_fn.get("gate"))
+        output["top_fn_count"] = int(best_fn["fn_escalated_count"])
+    fp_frame = frame.loc[pd.to_numeric(frame.get("fp_softened_count"), errors="coerce").gt(0)]
+    if not fp_frame.empty:
+        best_fp = fp_frame.sort_values(
+            ["fp_softened_count", "triggered_count"],
+            ascending=False,
+        ).iloc[0]
+        output["top_fp_gate"] = str(best_fp.get("gate_label") or best_fp.get("gate"))
+        output["top_fp_count"] = int(best_fp["fp_softened_count"])
     return output
 
 
@@ -616,6 +679,42 @@ def _report_validation_policy_columns(frame: pd.DataFrame) -> pd.DataFrame:
     return frame.head(20)
 
 
+def _report_trace_gate_contribution_columns(frame: pd.DataFrame) -> pd.DataFrame:
+    preferred = [
+        "split",
+        "gate_label",
+        "triggered_count",
+        "fn_escalated_count",
+        "fn_escalation_share",
+        "fp_softened_count",
+        "fp_softening_share",
+        "dominant_effect",
+    ]
+    if not set(preferred).issubset(frame.columns):
+        return frame.head(20)
+    output = frame.loc[:, preferred].copy()
+    output["_split_order"] = output["split"].map({"valid": 0, "test": 1}).fillna(9)
+    output = output.sort_values(
+        ["_split_order", "fn_escalated_count", "fp_softened_count", "triggered_count"],
+        ascending=[True, False, False, False],
+    )
+    return output.drop(columns=["_split_order"]).head(20)
+
+
+def _report_openai_agno_comparison_columns(frame: pd.DataFrame) -> pd.DataFrame:
+    preferred = [
+        "corp_name",
+        "model_error_type",
+        "stage1_label",
+        "deterministic_label",
+        "agno_label",
+        "deterministic_quality_score",
+        "agno_quality_score",
+        "quality_delta",
+    ]
+    return _select_columns(frame, preferred).head(20)
+
+
 def _select_columns(frame: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
     if frame.empty:
         return pd.DataFrame(columns=columns)
@@ -681,6 +780,8 @@ def main() -> None:
         RECOMPUTED_SUMMARY,
         LATEST_BATCH_RESULTS,
         VALIDATION_TEST_POLICY_METRICS,
+        TRACE_GATE_CONTRIBUTION,
+        OPENAI_AGNO_COMPARISON_DETAILS,
     ]:
         frame, status = read_source(diagnostics_dir, filename)
         sources[filename] = frame
@@ -703,6 +804,8 @@ def main() -> None:
         speed_log=sources[SPEED_LOG],
         recomputed_summary=sources[RECOMPUTED_SUMMARY],
         validation_policy_metrics=sources[VALIDATION_TEST_POLICY_METRICS],
+        trace_gate_contribution=sources[TRACE_GATE_CONTRIBUTION],
+        openai_agno_comparison=sources[OPENAI_AGNO_COMPARISON_DETAILS],
     )
     print(json.dumps({key: _relative(value) for key, value in outputs.items()}, ensure_ascii=False))
 

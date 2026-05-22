@@ -12,7 +12,9 @@ from typing import Any
 import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[1]
-DIAGNOSTICS_DIR = ROOT / "data/outputs/modeling/feature_43_xgboost/diagnostics"
+DIAGNOSTICS_DIR = (
+    ROOT / "data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents"
+)
 DEFAULT_INPUT = (
     DIAGNOSTICS_DIR
     / "committee_review_balanced_error_risk_30_agno_live_v6"

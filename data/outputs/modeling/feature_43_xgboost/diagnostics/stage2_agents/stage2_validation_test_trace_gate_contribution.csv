@@ -1,0 +1,13 @@
+﻿split,gate,gate_label,triggered_count,triggered_positive_count,triggered_negative_count,stage1_fn_total,fn_escalated_count,fn_escalation_share,stage1_fp_total,fp_softened_count,fp_unsoftened_count,fp_softening_share,net_help_count,dominant_effect
+test,overwarning_mitigation,과민경고 완화 점검,131,74,57,30,0,0.0,74,57,0,0.7703,57,fp_softening
+test,boundary_rating_review,경계등급 점검,17,7,10,30,1,0.0333,74,9,0,0.1216,10,fn_and_fp
+test,reject_confirmation,부적격 확정 게이트,727,79,648,30,8,0.2667,74,0,1,0.0,8,fn_escalation
+test,secondary_review_trigger,2차 보조 레이더,11,1,10,30,1,0.0333,74,0,0,0.0,1,fn_escalation
+test,veto_rule,강제 경고 게이트,0,0,0,30,0,0.0,74,0,0,0.0,0,none
+test,hidden_tail_risk,숨은 꼬리위험 점검,0,0,0,30,0,0.0,74,0,0,0.0,0,none
+valid,overwarning_mitigation,과민경고 완화 점검,106,64,42,25,0,0.0,56,42,0,0.75,42,fp_softening
+valid,reject_confirmation,부적격 확정 게이트,518,71,447,25,6,0.24,56,1,2,0.0179,7,fn_and_fp
+valid,boundary_rating_review,경계등급 점검,12,7,5,25,1,0.04,56,4,0,0.0714,5,fn_and_fp
+valid,secondary_review_trigger,2차 보조 레이더,4,3,1,25,3,0.12,56,0,0,0.0,3,fn_escalation
+valid,veto_rule,강제 경고 게이트,0,0,0,25,0,0.0,56,0,0,0.0,0,none
+valid,hidden_tail_risk,숨은 꼬리위험 점검,0,0,0,25,0,0.0,56,0,0,0.0,0,none

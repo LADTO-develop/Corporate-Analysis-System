@@ -20,6 +20,29 @@ DEFAULT_MODEL_V1_PATH = (
 DEFAULT_CORP_CODE_PATH = ROOT / "data" / "external" / "opendart" / "corp_codes.csv"
 DEFAULT_OUTPUT_DIR = ROOT / "data" / "raw" / "opendart"
 OPENDART_FINANCIAL_URL = "https://opendart.fss.or.kr/api/fnlttSinglAcntAll.json"
+INFERENCE_SUPPLEMENT_MISSING_THRESHOLD = 8
+INFERENCE_SUPPLEMENT_CRITICAL_FEATURES = [
+    "current_ratio",
+    "cash_ratio",
+    "equity_ratio",
+    "debt_ratio",
+    "total_borrowings_ratio",
+    "net_margin",
+    "interest_coverage_ratio",
+    "pretax_roa",
+    "operating_roa",
+    "pretax_roe",
+    "ocf_to_total_liabilities",
+    "ocf_to_total_borrowings",
+    "ocf_to_sales",
+    "cashflow_coverage_ratio",
+    "accruals_ratio",
+    "intangible_assets_ratio",
+    "total_debt_turnover",
+    "short_term_borrowings_share",
+    "total_assets_growth",
+    "net_margin_diff",
+]
 
 KEY_ACCOUNT_CANDIDATES = {
     "assets_total": {
@@ -158,7 +181,12 @@ def load_inference_targets(args: argparse.Namespace) -> pd.DataFrame:
         source = source.loc[source["stock_code"].isin(requested)].copy()
 
     if not args.include_all:
-        source = source.loc[missing_financial_statement_source(source)].copy()
+        target_mask = (
+            inference_financial_supplement_target(source)
+            if args.source_kind == "inference"
+            else missing_financial_statement_source(source)
+        )
+        source = source.loc[target_mask].copy()
 
     if args.limit is not None:
         source = source.head(args.limit).copy()
@@ -172,6 +200,23 @@ def missing_financial_statement_source(frame: pd.DataFrame) -> pd.Series:
     cash_missing = pd.to_numeric(frame.get("cash_ratio"), errors="coerce").isna()
     net_margin_missing = pd.to_numeric(frame.get("net_margin"), errors="coerce").isna()
     return assets_zero & gross_profit_zero & current_missing & cash_missing & net_margin_missing
+
+
+def inference_financial_supplement_target(frame: pd.DataFrame) -> pd.Series:
+    """Select 2026 inference rows that need OpenDART financial supplements.
+
+    The inference table can have partial TS2000 fields: broad absolute values such
+    as assets_total may exist, while liquidity, leverage, and cash-flow ratios are
+    still missing because their source accounts were unavailable.  For inference,
+    collect OpenDART rows when enough critical Stage 1 features are missing.
+    """
+    available = [column for column in INFERENCE_SUPPLEMENT_CRITICAL_FEATURES if column in frame]
+    if not available:
+        return missing_financial_statement_source(frame)
+    critical_missing_count = frame[available].apply(
+        lambda column: pd.to_numeric(column, errors="coerce").isna()
+    ).sum(axis=1)
+    return critical_missing_count.ge(INFERENCE_SUPPLEMENT_MISSING_THRESHOLD)
 
 
 def load_corp_code_map(path: Path) -> dict[str, dict[str, str]]:
@@ -196,19 +241,26 @@ def collect_financial_rows(
     reprt_code: str,
     fs_div: str,
 ) -> tuple[str, str, list[dict[str, Any]]]:
-    response = requests.get(
-        OPENDART_FINANCIAL_URL,
-        params={
-            "crtfc_key": api_key,
-            "corp_code": corp_code,
-            "bsns_year": str(bsns_year),
-            "reprt_code": reprt_code,
-            "fs_div": fs_div,
-        },
-        timeout=30,
-    )
-    response.raise_for_status()
-    payload = response.json()
+    params = {
+        "crtfc_key": api_key,
+        "corp_code": corp_code,
+        "bsns_year": str(bsns_year),
+        "reprt_code": reprt_code,
+        "fs_div": fs_div,
+    }
+    last_error = ""
+    for attempt in range(1, 4):
+        try:
+            response = requests.get(OPENDART_FINANCIAL_URL, params=params, timeout=30)
+            response.raise_for_status()
+            payload = response.json()
+            break
+        except requests.RequestException as exc:
+            last_error = f"{type(exc).__name__}: {exc}".replace(api_key, "***")
+            if attempt < 3:
+                time.sleep(0.5 * attempt)
+    else:
+        return "request_error", last_error, []
     status = str(payload.get("status") or "")
     message = str(payload.get("message") or "")
     rows = payload.get("list") if isinstance(payload.get("list"), list) else []

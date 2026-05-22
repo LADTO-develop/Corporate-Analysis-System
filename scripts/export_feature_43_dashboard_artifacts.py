@@ -1370,7 +1370,9 @@ Rolling validation은 단일 1년 validation에 대한 과신을 줄이기 위�
 /opt/anaconda3/envs/aura/bin/python scripts/import_feature_43_inference_2026_aux.py
 /opt/anaconda3/envs/aura/bin/python scripts/build_feature_43_inference_2026.py
 /opt/anaconda3/envs/aura/bin/python scripts/collect_opendart_financial_statements.py --source-kind inference --target-fiscal-year 2025 --fallback-ofs
-/opt/anaconda3/envs/aura/bin/python scripts/apply_opendart_inference_financial_supplements.py
+/opt/anaconda3/envs/aura/bin/python scripts/export_inference_2026_missing_2024_lag_targets.py
+/opt/anaconda3/envs/aura/bin/python scripts/collect_opendart_financial_statements.py --source data/raw/opendart/inference_2026_missing_2024_lag_targets.csv --source-kind inference --target-fiscal-year 2025 --opendart-bsns-year 2024 --fallback-ofs --output-dir data/raw/opendart/lag_2024_tmp
+/opt/anaconda3/envs/aura/bin/python scripts/apply_opendart_inference_financial_supplements.py --lag-raw-supplement data/raw/opendart/lag_2024_tmp/financial_statements_inference_2024_cfs_with_ofs_fallback_raw.csv
 /opt/anaconda3/envs/aura/bin/python scripts/build_feature_43_inference_2026.py --check-only
 /opt/anaconda3/envs/aura/bin/python scripts/export_feature_43_dashboard_artifacts.py
 ```
@@ -1455,7 +1457,7 @@ Stage 2 에이전트 고도화 결과는 아래 문서에 요약되어 있습니
 실행 디렉터리는 보관하지 않고, PR/발표에 필요한 성능 변화와 해석만 남깁니다.
 
 ```text
-data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agent_improvement_summary.md
+data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents/stage2_agent_improvement_summary.md
 ```
 """
     (model_output_dir / "README.md").write_text(content, encoding="utf-8")

@@ -247,6 +247,7 @@ Corporate Analysis System은 상위 작업공간이나 외부 로컬 폴더를 �
 | `data/input/credit_43_features/feature_43_inference_2026.csv` | 2026 예측용 CAS 내부 추론 입력 테이블 |
 | `data/outputs/modeling/feature_43_xgboost/` | Stage 1 XGBoost 모델 artifact 및 팀 공유용 모델링 산출물 |
 | `data/outputs/modeling/feature_43_xgboost/diagnostics/` | Stage 1 성능 진단 리포트, segment/threshold/calibration/error-case 테이블 |
+| `data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents/` | Stage 2 에이전트/위원회 진단 리포트, 파일럿 배치, Agno 비교 산출물 |
 | `data/outputs/dashboard/feature_43_mvp/` | 대시보드용 예측, SHAP, 요약 산출물 |
 
 신용등급 타겟 전처리 규칙은 본 문서에 고정하고, CAS 실행 기준은 아래 내부
@@ -257,6 +258,7 @@ Corporate Analysis System은 상위 작업공간이나 외부 로컬 폴더를 �
 | `scripts/collect_opendart_financial_statements.py` | CFS 누락 기업-연도에 대해 OpenDART 사업보고서 계정 행 수집, CFS 부재 시 OFS fallback |
 | `scripts/apply_opendart_financial_supplements.py` | OpenDART 보강값을 Model V1에 반영하고 재무 파생변수 재계산 |
 | `scripts/apply_opendart_inference_financial_supplements.py` | OpenDART 보강값을 2026 추론 입력에 반영하고 과거 패널을 이용해 lag/diff 변수 재계산 |
+| `scripts/export_inference_2026_missing_2024_lag_targets.py` | 2026 추론 대상 중 Model V1에 2024 행이 없는 기업만 OpenDART lag 수집 대상으로 추출 |
 | `scripts/rebuild_feature_43_dataset.py` | Corporate Analysis System의 공식 43개 입력셋 재생성 |
 | `scripts/import_feature_43_inference_2026_aux.py` | 2026 추론 입력 보정을 위한 최소 2025 보조 원천 생성 |
 | `scripts/build_feature_43_inference_2026.py` | CAS 내부 2026 추론 입력 테이블 보정, 검증 및 정렬 |
