@@ -148,7 +148,7 @@ guardrail, 선택형 Agno runner, 외부근거 수집 노드가 연결되어 있
 정리되어 있습니다.
 
 정상기업 과잉 보류를 줄이기 위해 `투자적격 + 기준선 아래 + 외부 치명근거 없음 +
-유동성/현금흐름/자본 중 2개 이상 방어적` 조건의 TN guardrail도 추가했습니다.
+현금흐름을 포함한 유동성/현금흐름/자본 중 2개 이상 방어적` 조건의 TN guardrail도 추가했습니다.
 관련 로컬 회귀 결과는
 `data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents/stage2_agent_performance_evidence.md`에
 기록되어 있습니다.

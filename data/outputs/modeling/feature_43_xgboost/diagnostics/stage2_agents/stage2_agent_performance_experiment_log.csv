@@ -24,3 +24,4 @@ rerun_check_round3_after_guardrail,rerun_check_round3_after_guardrail,10,9,0.900
 rerun_check_random_rolling_10,rerun_check_random_rolling_10,10,10,1.000,10,1.000,0,Random rolling validation sanity check after FP mitigation; 8 true-negative safe firms stayed eligible and 1 high-probability FP moved from reject to hold
 tn_guardrail_deterministic_8,committee_review_tn_guardrail_deterministic_8,8,4,0.500,6,0.750,0,Local deterministic baseline for TN guardrail 8 case sample before OpenAI Agno live rerun
 tn_guardrail_openai_agno_live_8,committee_review_tn_guardrail_agno_openai_live_8,8,4,0.500,6,0.750,0,OpenAI Agno plus external evidence rerun on the same TN guardrail 8 case sample matched deterministic labels with no failures
+fn_escalation_guardrail_deterministic_8,committee_review_fn_escalation_guardrail_deterministic_8,8,6,0.750,8,1.000,0,Tightened TN overhold guardrail so near-threshold FN cases with cashflow or profitability stress escalate to boundary hold

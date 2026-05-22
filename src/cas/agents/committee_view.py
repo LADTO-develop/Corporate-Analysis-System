@@ -539,6 +539,8 @@ def _secondary_overhold_guardrail_reason(bundle: Stage2InputBundle) -> str:
         return ""
     if _has_extreme_financial_distress_signal(bundle.source_feature_row):
         return ""
+    if _has_secondary_overhold_guardrail_blocker(bundle.source_feature_row):
+        return ""
     if _has_secondary_rule_liquidity_watch_signal(bundle):
         return ""
     if _overwarning_blocking_external_items(bundle.news_cache_snapshot):
@@ -549,7 +551,7 @@ def _secondary_overhold_guardrail_reason(bundle: Stage2InputBundle) -> str:
         return ""
 
     supports = _secondary_overhold_guardrail_supports(bundle.source_feature_row)
-    if len(supports) < 2:
+    if len(supports) < 2 or "현금흐름" not in supports:
         return ""
 
     return (
@@ -571,14 +573,13 @@ def _secondary_overhold_guardrail_supports(row: dict[str, Any]) -> list[str]:
         supports.append("유동성")
 
     cashflow_signal = (
-        _metric_at_least(row, "cashflow_coverage_ratio", 0.0)
-        or _metric_at_least(row, "ocf_to_total_liabilities", 0.0)
+        _metric_at_least(row, "cashflow_coverage_ratio", 1.0)
+        or _metric_at_least(row, "ocf_to_total_liabilities", 0.05)
         or _metric_at_least(row, "ocf_to_sales", 0.0)
-        or _flag_is_false(row.get("is_2y_consecutive_ocf_deficit"))
     )
-    interest_service_signal = _metric_at_least(
-        row, "interest_coverage_ratio", 1.0
-    ) or _flag_is_false(row.get("icr_under_1"))
+    interest_service_signal = _metric_at_least(row, "interest_coverage_ratio", 1.0) and not (
+        _flag_is_true(row.get("icr_under_1"))
+    )
     if cashflow_signal and interest_service_signal:
         supports.append("현금흐름")
 
@@ -593,6 +594,21 @@ def _secondary_overhold_guardrail_supports(row: dict[str, Any]) -> list[str]:
     if capital_support:
         supports.append("자본")
     return supports
+
+
+def _has_secondary_overhold_guardrail_blocker(row: dict[str, Any]) -> bool:
+    """Return moderate stress signals that should keep a near-boundary FN on hold."""
+    if _metric_below(row, "net_margin", -0.10):
+        return True
+    if _metric_below(row, "ocf_to_sales", 0.0) and _metric_below(
+        row, "ocf_to_total_liabilities", 0.0
+    ):
+        return True
+    weak_interest_cover = _metric_below(row, "interest_coverage_ratio", 3.0)
+    weak_capital_buffer = _metric_below(row, "equity_ratio", 0.40) and _metric_above(
+        row, "debt_ratio", 1.50
+    )
+    return bool(weak_interest_cover and weak_capital_buffer)
 
 
 def _has_financial_statement_missing_placeholder(row: dict[str, Any]) -> bool:

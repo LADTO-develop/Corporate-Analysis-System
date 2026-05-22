@@ -509,6 +509,118 @@ def test_committee_view_keeps_defensive_secondary_radar_case_eligible() -> None:
     assert "경계등급 보류" not in committee_view["conflict_resolution"]
 
 
+def test_committee_view_holds_secondary_radar_case_with_negative_cashflow() -> None:
+    state: AgentState = {
+        "company_id": "250930",
+        "company_name": "(주)예선테크",
+        "source_feature_row": {
+            "stock_code": "250930",
+            "current_ratio": 2.60,
+            "cash_ratio": 0.23,
+            "cashflow_coverage_ratio": -2.88,
+            "ocf_to_sales": -0.018,
+            "ocf_to_total_liabilities": -0.031,
+            "interest_coverage_ratio": 13.78,
+            "equity_ratio": 0.53,
+            "debt_ratio": 0.90,
+            "total_borrowings_ratio": 0.32,
+            "capital_impairment_ratio": 0.0,
+            "net_margin": 0.03,
+            "icr_under_1": 0,
+            "is_2y_consecutive_operating_loss": 0,
+            "is_2y_consecutive_ocf_deficit": 0,
+        },
+        "model_view": {
+            "prediction_label": "투자적격",
+            "probability_speculative": 0.3141,
+            "threshold": 0.325,
+            "stage2_secondary_trigger": True,
+            "stage2_review_priority": "high",
+            "trigger_reason": "45개 보조 레이더가 기준선 근처로 추가 검토를 요구했습니다.",
+        },
+        "xgboost_result": {
+            "prediction_label": "투자적격",
+            "probability_speculative": 0.3141,
+            "threshold": 0.325,
+        },
+        "rule_result": {"risk_band": "stable", "recommendation": "priority"},
+        "news_cache_snapshot": {"status": "ready", "items": []},
+    }
+    agents = [
+        AgentOutput(role="quant_credit", summary="정량 결과", findings=[], confidence=0.8),
+        AgentOutput(role="evidence_audit", summary="근거 검토", findings=[], confidence=0.7),
+        AgentOutput(role="chair_report", summary="종합", findings=[], confidence=0.7),
+    ]
+
+    committee_view = build_committee_view(
+        bundle=build_stage2_input_bundle(state),
+        recommendation="priority",
+        agents=agents,
+    )
+
+    assert committee_view["final_committee_label"] == "보류"
+    assert committee_view["committee_decision_type"] == "boundary_hold"
+    assert "정상기업 과잉 보류 방어 guardrail" not in " ".join(
+        committee_view["mitigating_factors"]
+    )
+
+
+def test_committee_view_holds_secondary_radar_case_with_profitability_stress() -> None:
+    state: AgentState = {
+        "company_id": "009900",
+        "company_name": "명신산업(주)",
+        "source_feature_row": {
+            "stock_code": "009900",
+            "current_ratio": 1.27,
+            "cash_ratio": 0.39,
+            "cashflow_coverage_ratio": 1.46,
+            "ocf_to_sales": 0.06,
+            "ocf_to_total_liabilities": 0.16,
+            "interest_coverage_ratio": 2.00,
+            "equity_ratio": 0.39,
+            "debt_ratio": 1.59,
+            "total_borrowings_ratio": 0.20,
+            "capital_impairment_ratio": 0.0,
+            "net_margin": -0.11,
+            "icr_under_1": 0,
+            "is_2y_consecutive_operating_loss": 0,
+            "is_2y_consecutive_ocf_deficit": 0,
+        },
+        "model_view": {
+            "prediction_label": "투자적격",
+            "probability_speculative": 0.3110,
+            "threshold": 0.325,
+            "stage2_secondary_trigger": True,
+            "stage2_review_priority": "high",
+            "trigger_reason": "45개 보조 레이더가 기준선 근처로 추가 검토를 요구했습니다.",
+        },
+        "xgboost_result": {
+            "prediction_label": "투자적격",
+            "probability_speculative": 0.3110,
+            "threshold": 0.325,
+        },
+        "rule_result": {"risk_band": "stable", "recommendation": "priority"},
+        "news_cache_snapshot": {"status": "ready", "items": []},
+    }
+    agents = [
+        AgentOutput(role="quant_credit", summary="정량 결과", findings=[], confidence=0.8),
+        AgentOutput(role="evidence_audit", summary="근거 검토", findings=[], confidence=0.7),
+        AgentOutput(role="chair_report", summary="종합", findings=[], confidence=0.7),
+    ]
+
+    committee_view = build_committee_view(
+        bundle=build_stage2_input_bundle(state),
+        recommendation="priority",
+        agents=agents,
+    )
+
+    assert committee_view["final_committee_label"] == "보류"
+    assert committee_view["committee_decision_type"] == "boundary_hold"
+    assert "정상기업 과잉 보류 방어 guardrail" not in " ".join(
+        committee_view["mitigating_factors"]
+    )
+
+
 def test_committee_view_appends_informative_chair_report_memo() -> None:
     state: AgentState = {
         "company_id": "311390",
