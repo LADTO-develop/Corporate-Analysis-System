@@ -19,6 +19,7 @@
 | isolated ICR TN guardrail | 8 | 7/8 = 87.5% | 8/8 = 100.0% | 이자보상 단일 플래그 TN 1건 개선 |
 | OpenAI single 3-agent no-cache live | 8 | 7/8 = 87.5% | 8/8 = 100.0% | 캐시 hit 0, 역할별 실행시간 8/8건 기록 |
 | TN 과잉 보류 30건 확대 | 30 | 22/30 = 73.3% | 30/30 = 100.0% | 레몬 1건 보류→적격, 남은 보류 8건은 재무 차단 신호 보유 |
+| TN 과잉 보류 8건 OpenAI Agno live | 8 | 2/8 = 25.0% | 8/8 = 100.0% | 캐시 hit 0, 외부근거 ready 8/8, 자금조달 공시 민감도 발견 |
 
 개선 폭은 1차 5건 대비 추가 10건에서 엄격 기준 +30.0%p, review-safe 기준 +20.0%p다. 합산 기준으로도 review-safe 성공률은 93.3%까지 올라왔다.
 
@@ -113,6 +114,7 @@ round 3 live 결과에서는 FN 2건은 모두 보류로 끌어올렸고, FP 3�
 | OpenAI single 3-agent no-cache live | `committee_review_openai_single_3agent_no_cache_live_8` | 8 | 7/8 = 87.5% | 8/8 = 100.0% | 0 | OpenAI 단일 provider 3-agent live 실행, 캐시 hit 0 |
 | TN overhold expanded before liquidity buffer | `committee_review_tn_overhold_expanded_30_deterministic` | 30 | 21/30 = 70.0% | 30/30 = 100.0% | 0 | 기존 TN 검토 7건 제외 후 새 TN 30건 확대 분석 |
 | TN overhold expanded after liquidity buffer | `committee_review_tn_overhold_expanded_30_after_liquidity_buffer` | 30 | 22/30 = 73.3% | 30/30 = 100.0% | 0 | 현금흐름 방어 current-ratio watch 예외 후 레몬 1건 적격 개선 |
+| TN overhold expanded OpenAI Agno live no-cache | `committee_review_tn_overhold_expanded_8_agno_openai_live_no_cache` | 8 | 2/8 = 25.0% | 8/8 = 100.0% | 0 | TN 확대 샘플 대표 8건 Agno live 검증, 자금조달 공시가 보수적 보류를 유발 |
 
 Historical 12건 계열은 동일 기업 12건을 반복 검증한 산출물이다. 이 계열에서는 초기 75.0%에서 secondary signal connected 기준 100.0%까지 개선됐다. Rolling validation 계열은 샘플 구성과 평가지표가 달라 별도로 보며, 최종 추가 10건에서 90.0%/100.0%를 기록했다.
 
@@ -215,6 +217,18 @@ OpenAI Agno 재검증에서 드러난 FN 미상승 원인은 정상기업 과잉
 확대 분석 결과, 기존 로직에서 보류 9건 중 8건은 이자보상배율 1 미만, OCF 동시 음수, 순이익률 -10% 미만, 약한 자본/이자보상 조합, 단기차입 압력 중 하나 이상이 있어 보류 유지가 합리적이었다. 반면 `(주)레몬` 2020은 current ratio가 0.7443으로 낮지만 cash ratio 0.2969, OCF/매출 0.2612, OCF/총부채 0.5441, cashflow coverage 24.3625, ICR 18.7971, 자기자본비율 0.6099로 유동성·현금흐름·자본 방어축이 모두 확인됐다. 이에 따라 current ratio watch가 있어도 현금비율·OCF·ICR·자본이 강하고 총차입금 부담이 낮은 경우에는 TN 과잉 보류 guardrail을 막지 않도록 아주 좁은 예외를 추가했다.
 
 수정 후 같은 30건에서 `(주)레몬`만 `보류 → 적격`으로 내려갔고, 남은 보류 8건은 모두 재무 차단 신호를 보유했다. 따라서 휴맥스형 케이스는 계속 보류로 남기고, 방어축이 확실한 current-ratio 단독 watch 케이스만 적격으로 낮추는 방향이 안전하다고 본다. 세부 분석 파일은 `tn_overhold_expanded_30_analysis.md`, `tn_overhold_expanded_30_analysis.csv`, `tn_overhold_expanded_30_analysis_summary.json`에 저장했다.
+
+## TN 과잉 보류 8건 OpenAI Agno live no-cache
+
+위 30건 중 대표 8건을 골라 OpenAI single provider 3-agent Agno 경로로 live 재검증했다. 샘플은 `committee_review_tn_overhold_expanded_8_agno_live_samples.csv`이며, 새 guardrail로 적격 전환된 `(주)레몬`, 재무 차단 신호가 있는 보류 유지 후보 4건, 재무 방어축이 강한 적격 유지 후보 3건으로 구성했다. 실행은 `--stage2-runner agno --stage2-agno-mode single --stage2-model-provider openai --no-stage2-llm-cache --live-external-evidence --workers 2` 조건이며, LLM cache hit는 0건이었다.
+
+| 실행 | Runner | 건수 | 엄격 기준 | Review-safe | 보류 | 적격 | Wall time | 평균 case time | Stage 2 평균 |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| TN overhold expanded Agno live no-cache | OpenAI Agno 3-agent | 8 | 2/8 = 25.0% | 8/8 = 100.0% | 6 | 2 | 87.9967초 | 20.4052초 | 18.3034초 |
+
+deterministic 결과와 비교하면 6/8건은 같은 최종 라벨을 유지했다. `(주)엔에프씨`, `(주)휴니드테크놀러지스`는 계속 적격으로 남았고, 현대무벡스·한울반도체·화승알앤에이·하나투어는 보류로 남았다. 바뀐 2건은 `(주)머큐리`와 `(주)레몬`으로, deterministic에서는 재무 방어축이 강해 적격이었지만 Agno live에서는 DART 기반 전환사채/유상증자 공시가 수집되면서 보류로 올라갔다.
+
+이 결과는 Agno 경로가 TN을 모두 적격으로 낮춘다는 증거가 아니라, live 외부근거까지 넣으면 자금조달성 공시에 매우 보수적으로 반응한다는 증거다. 특히 `(주)머큐리`는 전환사채 공시 1건만으로 보류가 되었고, chair memo는 외부 증거가 낮은 위험 수준을 뒷받침해 투자적격 판단을 유지한다고 적었지만 최종 라벨은 보류였다. 따라서 다음 개선은 단일 medium 자금조달 공시와 반복·고위험 자금조달 공시를 분리하고, 최종 라벨과 chair memo가 충돌하지 않도록 설명 합성 로직을 정리하는 쪽이 적합하다. 세부 분석은 `tn_overhold_expanded_8_agno_live_analysis.md`에 별도로 저장했다.
 
 ## Agno 실행 기준 보류 세분화 결과
 
