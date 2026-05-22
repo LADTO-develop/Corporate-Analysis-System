@@ -15,6 +15,10 @@ def test_stage2_input_bundle_normalizes_state_for_agents() -> None:
         "model_view": {"y_proba": 0.21},
         "xgboost_result": {"prediction_label": "투자적격"},
         "source_feature_row": {"market": "KOSPI", "current_ratio": 2.1},
+        "prior_rating_reference": {
+            "has_prior_rating": True,
+            "prior_credit_rating": "BBB-",
+        },
         "peer_comparison_rows": [
             {"feature": "current_ratio", "industry_median": 1.5},
             {"feature": None, "industry_median": 0.0},
@@ -29,6 +33,7 @@ def test_stage2_input_bundle_normalizes_state_for_agents() -> None:
     assert bundle.probability_speculative == 0.21
     assert bundle.news_status == "not_implemented"
     assert set(bundle.peer_rows_by_feature) == {"current_ratio"}
+    assert bundle.prior_rating_reference["prior_credit_rating"] == "BBB-"
     assert bundle.credit_policy_snapshot == {}
 
 
@@ -82,3 +87,31 @@ def test_stage2_input_bundle_includes_credit_policy_snapshot() -> None:
     assert bundle.credit_policy_snapshot["risk_signal_count"] == 0
     assert payload["credit_policy_snapshot"]["label_override_allowed"] is False
     assert payload["credit_policy_snapshot"]["critical_signal_count"] == 0
+
+
+def test_stage2_input_bundle_preserves_prior_rating_reference_fallbacks() -> None:
+    profile_state: AgentState = {
+        "company_id": "KOSPI-000000-2024",
+        "company_profile": {
+            "prior_rating_reference": {
+                "has_prior_rating": True,
+                "prior_credit_rating": "BB+",
+            }
+        },
+    }
+    profile_bundle = build_stage2_input_bundle(profile_state)
+
+    assert profile_bundle.prior_rating_reference["prior_credit_rating"] == "BB+"
+
+    model_view_state: AgentState = {
+        "company_id": "KOSPI-000001-2024",
+        "model_view": {
+            "prior_rating_reference": {
+                "has_prior_rating": True,
+                "prior_credit_rating": "BBB-",
+            }
+        },
+    }
+    model_view_bundle = build_stage2_input_bundle(model_view_state)
+
+    assert model_view_bundle.prior_rating_reference["prior_credit_rating"] == "BBB-"

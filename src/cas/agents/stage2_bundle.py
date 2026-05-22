@@ -126,7 +126,7 @@ def build_stage2_input_bundle(state: AgentState) -> Stage2InputBundle:
         source_feature_row=source_feature_row,
         peer_comparison_rows=_as_dict_tuple(state.get("peer_comparison_rows")),
         news_cache_snapshot=_as_dict(state.get("news_cache_snapshot")),
-        prior_rating_reference=_as_dict(state.get("prior_rating_reference")),
+        prior_rating_reference=prior_rating_reference,
         credit_policy_snapshot=_as_dict(state.get("credit_policy_snapshot")),
     )
 

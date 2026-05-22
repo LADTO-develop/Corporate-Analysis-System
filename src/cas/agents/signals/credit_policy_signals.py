@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 from pathlib import Path
 from typing import Any, Literal
 
@@ -216,16 +217,18 @@ def _optional_float(value: object) -> float | None:
     if isinstance(value, bool):
         return float(value)
     try:
-        return float(str(value).strip())
+        number = float(str(value).strip())
     except (TypeError, ValueError):
         return None
+    return number if math.isfinite(number) else None
 
 
 def _truthy(value: object) -> bool:
     if isinstance(value, bool):
         return value
     if isinstance(value, int | float):
-        return bool(value)
+        number = _optional_float(value)
+        return number is not None and bool(number)
     text = str(value or "").strip().lower()
     return text in {"1", "1.0", "true", "yes", "y", "on"}
 
