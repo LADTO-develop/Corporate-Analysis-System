@@ -140,6 +140,7 @@ class AgentState(TypedDict, total=False):
     company_profile: dict[str, Any]
     raw_financials: dict[str, Any]
     source_feature_row: dict[str, Any]
+    prior_rating_reference: dict[str, Any]
     peer_comparison_rows: list[dict[str, Any]]
     normalized_features: dict[str, float]
     model_features: dict[str, float]

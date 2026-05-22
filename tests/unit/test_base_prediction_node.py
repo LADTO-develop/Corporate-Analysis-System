@@ -118,7 +118,7 @@ def test_stage2_review_signals_are_attached_to_model_view(
             }
         ]
     ).to_csv(signals_path, index=False, encoding="utf-8-sig")
-    monkeypatch.setattr(base_prediction_node, "_STAGE2_REVIEW_SIGNALS_PATH", signals_path)
+    monkeypatch.setattr(base_prediction_node, "_STAGE2_REVIEW_SIGNALS_PATHS", [signals_path])
     base_prediction_node._load_stage2_review_signals.cache_clear()
 
     payload = base_prediction_node._stage2_review_signal_payload(

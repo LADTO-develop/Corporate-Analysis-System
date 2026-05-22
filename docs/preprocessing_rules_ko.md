@@ -15,7 +15,8 @@ flowchart LR
     B --> F
     D --> F
     F --> G["Model_V1 모델용 원본"]
-    G --> H["credit_43_features 입력셋"]
+    G --> G2["OpenDART CFS/OFS 보강"]
+    G2 --> H["credit_43_features 입력셋"]
     H --> I["XGBoost / 대시보드 산출물"]
 ```
 
@@ -24,6 +25,7 @@ flowchart LR
 | 신용등급 타겟 처리 | `Target_Processed.csv`, `Target_Processed_audit.csv` | 기업-평가연도별 대표 신용등급과 이진 라벨 생성 |
 | 재무/거시 결합 | `TS2000_Credit_Model_Dataset.csv` | 타겟, 재무제표, 시장/배당, 거시지표 결합 |
 | 모델용 원본 정리 | `TS2000_Credit_Model_Dataset_Model_V1.csv` | 모델 학습에 필요한 ID, 시점, 변수, 타겟만 남김 |
+| OpenDART 재무 보강 | `data/raw/opendart/*`, `model_v1_opendart_supplement_audit.csv` | CFS가 비어 있는 기업-연도에 대해 CFS 우선, 없으면 OFS fallback으로 원천 재무값 보강 |
 | 43개 입력셋 생성 | `feature_43_master.csv`, `xgb_train.csv`, `xgb_valid.csv`, `xgb_test.csv` | XGBoost 학습 및 대시보드 입력 생성 |
 
 ## 2. 신용등급 타겟 전처리 기준
@@ -113,6 +115,33 @@ Moody's 계열 등급처럼 표기 체계가 다른 경우에는 국내 등급 �
 기업-연도 중심으로 구성한다. 이후 타겟 및 거시지표와 결합할 때도 기준 키가
 맞지 않는 행은 모델 학습용 데이터에서 제외된다.
 
+### 3.1 OpenDART CFS/OFS 보강 기준
+
+TS2000 원천에서 연결재무제표(CFS) 값이 비어 있어 자산총계와 매출총이익이 `0`,
+주요 재무비율이 `NaN`으로 들어간 기업-연도는 OpenDART 사업보고서(`reprt_code=11011`)
+기준으로 보강한다. 보강은 다음 순서로만 수행한다.
+
+| 순서 | 기준 | 설명 |
+|---:|---|---|
+| 1 | CFS 조회 | OpenDART 연결재무제표가 있으면 CFS 값을 사용 |
+| 2 | OFS fallback | CFS가 없거나 계정 행이 없으면 개별재무제표(OFS)를 사용 |
+| 3 | 미매칭 유지 | OpenDART `corp_code`가 없거나 해당 연도 사업보고서가 없으면 원래 결측 상태 유지 |
+
+OpenDART 금액 단위는 `원`이고 Model V1 원천 단위는 `천원`이므로, 보강 시
+`원 / 1,000`으로 변환한다. 보강 후에는 자산/부채/자본, 매출/이익, 현금흐름
+원천값을 바탕으로 재무비율, 증감률, 연속 손실 플래그, 산업 내 백분위 등 관련
+파생변수를 전체 패널 기준으로 다시 계산한다.
+
+현재 반영된 보강 결과는 다음과 같다.
+
+| 대상 | 보강 전 누락 후보 | OpenDART 반영 | 사용 재무제표 | 보강 후 누락 후보 |
+|---|---:|---:|---|---:|
+| Model V1 / 학습 기준 데이터 | 741행 | 669행 | CFS 5행, OFS 664행 | 73행 |
+| 2026 추론 입력 | 424행 | 422행 | CFS 1행, OFS 421행 | 2행 |
+
+2026 추론 입력에서 남은 2행은 OpenDART `corp_code`가 매칭되지 않는 특수 종목코드
+기업이다.
+
 ## 4. 파생 변수 생성 기준
 
 재무 원천값에서 안정성, 수익성, 현금흐름, 성장성, 시장 관련 파생 변수를 만든다.
@@ -192,6 +221,16 @@ Model V1의 후보 칼럼으로만 보존하고, 비교 기록은 43개 모델 d
 | 토마토시스템 포함 여부 | 포함 |
 | 토마토시스템 라벨 행 수 | 1행 |
 | 2026 예측 대상 데이터 | 2,427개 기업-연도 |
+| Model V1 재무제표 누락 후보 | 73행 |
+| 2026 추론 입력 재무제표 누락 후보 | 2행 |
+
+OpenDART OFS fallback 보강 후 재학습한 현재 43-feature XGBoost artifact의 test
+성능은 다음과 같다.
+
+| 기준 | PR-AUC | ROC-AUC | Precision | Recall | F1 |
+|---|---:|---:|---:|---:|---:|
+| Threshold 0.5 | 0.8329 | 0.9415 | 0.7737 | 0.7241 | 0.7481 |
+| Tuned threshold 0.32 | 0.8329 | 0.9415 | 0.7004 | 0.8522 | 0.7689 |
 
 ## 8. CAS 내부 처리 기준
 
@@ -202,6 +241,7 @@ Corporate Analysis System은 상위 작업공간이나 외부 로컬 폴더를 �
 | 내부 경로 | 역할 |
 |---|---|
 | `data/raw/ts2000/TS2000_Credit_Model_Dataset_Model_V1.csv` | 공식 43개 입력셋을 재생성하는 CAS 기준 원본 |
+| `data/raw/opendart/` | OpenDART CFS/OFS 보강 원천, 요약, audit 파일 |
 | `data/raw/ts2000/feature_43_inference_2026_aux.csv` | 2026 추론 입력의 기업규모와 `market_to_book` 보정을 위한 최소 2025 보조 원천 |
 | `data/input/credit_43_features/feature_43_master.csv` | 전체 라벨 기업-연도 기준 입력 테이블 |
 | `data/input/credit_43_features/feature_43_inference_2026.csv` | 2026 예측용 CAS 내부 추론 입력 테이블 |
@@ -214,6 +254,9 @@ Corporate Analysis System은 상위 작업공간이나 외부 로컬 폴더를 �
 
 | 스크립트 | 역할 |
 |---|---|
+| `scripts/collect_opendart_financial_statements.py` | CFS 누락 기업-연도에 대해 OpenDART 사업보고서 계정 행 수집, CFS 부재 시 OFS fallback |
+| `scripts/apply_opendart_financial_supplements.py` | OpenDART 보강값을 Model V1에 반영하고 재무 파생변수 재계산 |
+| `scripts/apply_opendart_inference_financial_supplements.py` | OpenDART 보강값을 2026 추론 입력에 반영하고 과거 패널을 이용해 lag/diff 변수 재계산 |
 | `scripts/rebuild_feature_43_dataset.py` | Corporate Analysis System의 공식 43개 입력셋 재생성 |
 | `scripts/import_feature_43_inference_2026_aux.py` | 2026 추론 입력 보정을 위한 최소 2025 보조 원천 생성 |
 | `scripts/build_feature_43_inference_2026.py` | CAS 내부 2026 추론 입력 테이블 보정, 검증 및 정렬 |

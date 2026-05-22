@@ -34,6 +34,47 @@ Key diagnostic fields:
 
 Use this file for BBB-/BB+ boundary analysis and error diagnostics only.
 
+## `prior_rating_reference.csv`
+
+Non-leaky prior credit-rating reference for Stage 2 agent context.
+
+This file is different from `target_label_reference.csv`.
+
+- `target_label_reference.csv`: the rating that becomes the answer label for
+  evaluation.
+- `prior_rating_reference.csv`: the latest rating already public as of each
+  row's financial-statement cutoff date.
+
+As-of policy:
+
+- `as_of_date = fiscal_year-12-31`
+- Keep only rating history rows where `rating_date <= as_of_date`
+- Choose the latest `rating_date`; if multiple ratings have the same date,
+  choose the worst `credit_rating_rank`
+
+Current row counts:
+
+- Total rows: 7,878
+- Model V1 rows: 5,451
+- Model V1 rows with prior rating: 4,437
+- 2026 inference rows: 2,427
+- 2026 inference rows with prior rating: 947
+
+Boundary context counts:
+
+- Exact BBB-/BB+ prior boundary rows: 778
+- Near BBB/BB prior boundary rows: 865
+- Rows without prior public rating: 2,494
+
+Leakage policy:
+
+- This file may be used as Stage 2 context because it excludes ratings
+  published after the row-level `as_of_date`.
+- It must remain separate from target labels used to score model or committee
+  correctness.
+- Do not use `target_label_reference.csv` directly as an agent input for
+  historical rows.
+
 ## `credit_rating_labels_2026.csv`
 
 External validation labels for the 2026 prediction task.

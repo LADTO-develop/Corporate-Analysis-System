@@ -13,6 +13,9 @@ from cas.dashboard.data_loader import DEFAULT_ARTIFACT_DIR
 ROOT = Path(__file__).resolve().parents[3]
 APP_PATH = ROOT / "src" / "cas" / "dashboard" / "credit_app.py"
 EXPORT_SCRIPT_PATH = ROOT / "scripts" / "export_feature_43_dashboard_artifacts.py"
+INFERENCE_2026_EXPORT_SCRIPT_PATH = (
+    ROOT / "scripts" / "export_feature_43_inference_2026_dashboard_artifacts.py"
+)
 
 REQUIRED_DASHBOARD_ARTIFACTS = (
     "company_universe.csv",
@@ -157,12 +160,17 @@ def missing_dashboard_artifacts(artifact_dir: Path) -> list[str]:
 
 def export_dashboard_artifacts(artifact_dir: Path) -> None:
     """Generate dashboard artifacts through the existing export script."""
+    export_script = (
+        INFERENCE_2026_EXPORT_SCRIPT_PATH
+        if artifact_dir.name == "feature_43_inference_2026"
+        else EXPORT_SCRIPT_PATH
+    )
     command = [
         sys.executable,
-        str(EXPORT_SCRIPT_PATH),
-        "--output-dir",
-        str(artifact_dir),
+        str(export_script),
     ]
+    if export_script == EXPORT_SCRIPT_PATH:
+        command.extend(["--output-dir", str(artifact_dir)])
     result = subprocess.run(command, cwd=ROOT, check=False)
     if result.returncode != 0:
         raise SystemExit(

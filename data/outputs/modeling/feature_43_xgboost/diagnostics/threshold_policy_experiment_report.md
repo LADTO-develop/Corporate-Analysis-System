@@ -6,33 +6,33 @@ validation split에서 선택한 뒤 test에 적용했습니다.
 
 ## 1. 핵심 결과
 
-- 현재 artifact threshold 정책: `0.315000`
-- 현재 test 성능: Precision `0.6603`,
-  Recall `0.8522`, F1 `0.7441`,
-  FP `89`, FN `30`
-- 이번 실험의 test F1 최상위 정책: `industry_valid_best_f1_by_segment`
-- 최상위 정책 test 성능: Precision `0.6787`,
-  Recall `0.8325`, F1 `0.7478`,
-  FP `80`, FN `34`
-- 현재 대비 변화: F1 `+0.0037`, FP `-9`, FN `+4`
+- 현재 artifact threshold 정책: `0.320000`
+- 현재 test 성능: Precision `0.7004`,
+  Recall `0.8522`, F1 `0.7689`,
+  FP `74`, FN `30`
+- 이번 실험의 test F1 최상위 정책: `global_valid_precision_at_recall_0.75`
+- 최상위 정책 test 성능: Precision `0.7547`,
+  Recall `0.7882`, F1 `0.7711`,
+  FP `52`, FN `43`
+- 현재 대비 변화: F1 `+0.0022`, FP `-22`, FN `+13`
 
 ## 2. Test 정책 비교
 
 | Policy | Threshold | Precision | Recall | F1 | FP | FN |
 | --- | --- | ---: | ---: | ---: | ---: | ---: |
-| industry_valid_best_f1_by_segment | it_services:0.310; manufacturing:0.335; wholesale_retail:0.500; fallback:0.285 | 0.6787 | 0.8325 | 0.7478 | 80 | 34 |
-| kosdaq_conservative_recall_0.85 | market=KOSDAQ:0.330; fallback:0.315 | 0.6733 | 0.8325 | 0.7445 | 82 | 34 |
-| targeted_kosdaq_it_mfg_conservative_recall_0.85 | market=KOSDAQ:0.330; industry_macro_category=it_services:0.315; industry_macro_category=manufacturing:0.320; fallback:0.315 | 0.6733 | 0.8325 | 0.7445 | 82 | 34 |
-| current_artifact_threshold | 0.315000 | 0.6603 | 0.8522 | 0.7441 | 89 | 30 |
-| global_valid_precision_at_recall_0.85 | 0.315000 | 0.6603 | 0.8522 | 0.7441 | 89 | 30 |
-| kosdaq_conservative_recall_0.80 | market=KOSDAQ:0.350; fallback:0.315 | 0.6789 | 0.8227 | 0.7439 | 79 | 36 |
-| targeted_kosdaq_it_mfg_conservative_recall_0.80 | market=KOSDAQ:0.350; industry_macro_category=it_services:0.315; industry_macro_category=manufacturing:0.345; fallback:0.315 | 0.6803 | 0.8177 | 0.7427 | 78 | 37 |
-| global_valid_precision_at_recall_0.80 | 0.350000 | 0.6818 | 0.8128 | 0.7416 | 77 | 38 |
-| market_valid_best_f1_by_segment | KOSDAQ:0.335; KOSPI:0.265; fallback:0.285 | 0.6667 | 0.8276 | 0.7385 | 84 | 35 |
-| global_valid_best_f1_grid | 0.285000 | 0.6327 | 0.8571 | 0.7280 | 101 | 29 |
-| global_valid_precision_at_recall_0.75 | 0.410000 | 0.6920 | 0.7635 | 0.7260 | 69 | 48 |
-| global_valid_precision_at_recall_0.90 | 0.230000 | 0.5980 | 0.9015 | 0.7191 | 123 | 20 |
-| default_0_5 | 0.500000 | 0.7302 | 0.6798 | 0.7041 | 51 | 65 |
+| global_valid_precision_at_recall_0.75 | 0.435000 | 0.7547 | 0.7882 | 0.7711 | 52 | 43 |
+| current_artifact_threshold | 0.320000 | 0.7004 | 0.8522 | 0.7689 | 74 | 30 |
+| global_valid_precision_at_recall_0.85 | 0.320000 | 0.7004 | 0.8522 | 0.7689 | 74 | 30 |
+| kosdaq_conservative_recall_0.85 | market=KOSDAQ:0.335; fallback:0.320 | 0.7054 | 0.8374 | 0.7658 | 71 | 33 |
+| targeted_kosdaq_it_mfg_conservative_recall_0.85 | market=KOSDAQ:0.335; industry_macro_category=it_services:0.320; industry_macro_category=manufacturing:0.320; fallback:0.320 | 0.7054 | 0.8374 | 0.7658 | 71 | 33 |
+| kosdaq_conservative_recall_0.80 | market=KOSDAQ:0.375; fallback:0.320 | 0.7155 | 0.8177 | 0.7632 | 66 | 37 |
+| global_valid_precision_at_recall_0.80 | 0.375000 | 0.7225 | 0.8079 | 0.7628 | 63 | 39 |
+| market_valid_best_f1_by_segment | KOSDAQ:0.280; KOSPI:0.310; fallback:0.280 | 0.6756 | 0.8719 | 0.7613 | 85 | 26 |
+| targeted_kosdaq_it_mfg_conservative_recall_0.80 | market=KOSDAQ:0.375; industry_macro_category=it_services:0.375; industry_macro_category=manufacturing:0.385; fallback:0.320 | 0.7193 | 0.8079 | 0.7610 | 64 | 39 |
+| global_valid_best_f1_grid | 0.280000 | 0.6717 | 0.8768 | 0.7607 | 87 | 25 |
+| industry_valid_best_f1_by_segment | it_services:0.345; manufacturing:0.285; wholesale_retail:0.435; fallback:0.280 | 0.6757 | 0.8621 | 0.7576 | 84 | 28 |
+| global_valid_precision_at_recall_0.90 | 0.240000 | 0.6487 | 0.8916 | 0.7510 | 98 | 22 |
+| default_0_5 | 0.500000 | 0.7737 | 0.7241 | 0.7481 | 43 | 56 |
 
 ## 3. 세그먼트 Threshold
 
@@ -44,22 +44,22 @@ fallback했습니다.
 
 | Policy | Segment | Threshold | Fallback | Valid Rows | Valid Positives | Valid F1 |
 | --- | --- | ---: | --- | ---: | ---: | ---: |
-| industry_valid_best_f1_by_segment | industry_macro_category=construction | 0.285 | yes | 34 | 4 | 0.7500 |
-| industry_valid_best_f1_by_segment | industry_macro_category=it_services | 0.310 | no | 129 | 23 | 0.6667 |
-| industry_valid_best_f1_by_segment | industry_macro_category=manufacturing | 0.335 | no | 450 | 136 | 0.7625 |
-| industry_valid_best_f1_by_segment | industry_macro_category=other | 0.285 | yes | 11 | 0 | 0.0000 |
-| industry_valid_best_f1_by_segment | industry_macro_category=transport_storage | 0.285 | yes | 11 | 1 | 1.0000 |
-| industry_valid_best_f1_by_segment | industry_macro_category=wholesale_retail | 0.500 | no | 41 | 12 | 0.9565 |
-| kosdaq_conservative_recall_0.80 | market=KOSDAQ | 0.350 | no | 403 | 143 | 0.7452 |
-| kosdaq_conservative_recall_0.85 | market=KOSDAQ | 0.330 | no | 403 | 143 | 0.7508 |
-| market_valid_best_f1_by_segment | market=KOSDAQ | 0.335 | no | 403 | 143 | 0.7516 |
-| market_valid_best_f1_by_segment | market=KOSPI | 0.265 | no | 273 | 33 | 0.8000 |
-| targeted_kosdaq_it_mfg_conservative_recall_0.80 | industry_macro_category=it_services | 0.315 | no | 129 | 23 | 0.6667 |
-| targeted_kosdaq_it_mfg_conservative_recall_0.80 | industry_macro_category=manufacturing | 0.345 | no | 450 | 136 | 0.7619 |
-| targeted_kosdaq_it_mfg_conservative_recall_0.80 | market=KOSDAQ | 0.350 | no | 403 | 143 | 0.7452 |
-| targeted_kosdaq_it_mfg_conservative_recall_0.85 | industry_macro_category=it_services | 0.315 | yes | 129 | 23 | 0.6667 |
-| targeted_kosdaq_it_mfg_conservative_recall_0.85 | industry_macro_category=manufacturing | 0.320 | no | 450 | 136 | 0.7573 |
-| targeted_kosdaq_it_mfg_conservative_recall_0.85 | market=KOSDAQ | 0.330 | no | 403 | 143 | 0.7508 |
+| industry_valid_best_f1_by_segment | industry_macro_category=construction | 0.280 | yes | 34 | 4 | 0.4444 |
+| industry_valid_best_f1_by_segment | industry_macro_category=it_services | 0.345 | no | 129 | 23 | 0.7917 |
+| industry_valid_best_f1_by_segment | industry_macro_category=manufacturing | 0.285 | no | 450 | 136 | 0.8000 |
+| industry_valid_best_f1_by_segment | industry_macro_category=other | 0.280 | yes | 11 | 0 | 0.0000 |
+| industry_valid_best_f1_by_segment | industry_macro_category=transport_storage | 0.280 | yes | 11 | 1 | 1.0000 |
+| industry_valid_best_f1_by_segment | industry_macro_category=wholesale_retail | 0.435 | no | 41 | 12 | 0.9565 |
+| kosdaq_conservative_recall_0.80 | market=KOSDAQ | 0.375 | no | 403 | 143 | 0.7855 |
+| kosdaq_conservative_recall_0.85 | market=KOSDAQ | 0.335 | no | 403 | 143 | 0.7910 |
+| market_valid_best_f1_by_segment | market=KOSDAQ | 0.280 | no | 403 | 143 | 0.7975 |
+| market_valid_best_f1_by_segment | market=KOSPI | 0.310 | no | 273 | 33 | 0.7714 |
+| targeted_kosdaq_it_mfg_conservative_recall_0.80 | industry_macro_category=it_services | 0.375 | no | 129 | 23 | 0.7917 |
+| targeted_kosdaq_it_mfg_conservative_recall_0.80 | industry_macro_category=manufacturing | 0.385 | no | 450 | 136 | 0.7703 |
+| targeted_kosdaq_it_mfg_conservative_recall_0.80 | market=KOSDAQ | 0.375 | no | 403 | 143 | 0.7855 |
+| targeted_kosdaq_it_mfg_conservative_recall_0.85 | industry_macro_category=it_services | 0.320 | yes | 129 | 23 | 0.7600 |
+| targeted_kosdaq_it_mfg_conservative_recall_0.85 | industry_macro_category=manufacturing | 0.320 | no | 450 | 136 | 0.7959 |
+| targeted_kosdaq_it_mfg_conservative_recall_0.85 | market=KOSDAQ | 0.335 | no | 403 | 143 | 0.7910 |
 
 ## 4. FP 집중 구간 변화
 
@@ -68,27 +68,27 @@ fallback했습니다.
 
 | Policy | Segment | Precision | Recall | F1 | FP | FP Δ | FN | FN Δ |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| current_artifact_threshold | market=KOSDAQ | 0.6587 | 0.8405 | 0.7385 | 71 | +0 | 26 | +0 |
-| current_artifact_threshold | industry_macro_category=it_services | 0.5294 | 0.8571 | 0.6545 | 16 | +0 | 3 | +0 |
-| current_artifact_threshold | industry_macro_category=manufacturing | 0.6733 | 0.8395 | 0.7473 | 66 | +0 | 26 | +0 |
-| market_valid_best_f1_by_segment | market=KOSDAQ | 0.6769 | 0.8098 | 0.7374 | 63 | -8 | 31 | +5 |
-| market_valid_best_f1_by_segment | industry_macro_category=it_services | 0.5161 | 0.7619 | 0.6154 | 15 | -1 | 5 | +2 |
-| market_valid_best_f1_by_segment | industry_macro_category=manufacturing | 0.6856 | 0.8210 | 0.7472 | 61 | -5 | 29 | +3 |
-| industry_valid_best_f1_by_segment | market=KOSDAQ | 0.6802 | 0.8221 | 0.7444 | 63 | -8 | 29 | +3 |
-| industry_valid_best_f1_by_segment | industry_macro_category=it_services | 0.5294 | 0.8571 | 0.6545 | 16 | +0 | 3 | +0 |
-| industry_valid_best_f1_by_segment | industry_macro_category=manufacturing | 0.6947 | 0.8148 | 0.7500 | 58 | -8 | 30 | +4 |
-| kosdaq_conservative_recall_0.85 | market=KOSDAQ | 0.6751 | 0.8160 | 0.7389 | 64 | -7 | 30 | +4 |
-| kosdaq_conservative_recall_0.85 | industry_macro_category=it_services | 0.5312 | 0.8095 | 0.6415 | 15 | -1 | 4 | +1 |
-| kosdaq_conservative_recall_0.85 | industry_macro_category=manufacturing | 0.6891 | 0.8210 | 0.7493 | 60 | -6 | 29 | +3 |
-| kosdaq_conservative_recall_0.80 | market=KOSDAQ | 0.6823 | 0.8037 | 0.7380 | 61 | -10 | 32 | +6 |
-| kosdaq_conservative_recall_0.80 | industry_macro_category=it_services | 0.5000 | 0.7143 | 0.5882 | 15 | -1 | 6 | +3 |
-| kosdaq_conservative_recall_0.80 | industry_macro_category=manufacturing | 0.6963 | 0.8210 | 0.7535 | 58 | -8 | 29 | +3 |
-| targeted_kosdaq_it_mfg_conservative_recall_0.85 | market=KOSDAQ | 0.6751 | 0.8160 | 0.7389 | 64 | -7 | 30 | +4 |
-| targeted_kosdaq_it_mfg_conservative_recall_0.85 | industry_macro_category=it_services | 0.5312 | 0.8095 | 0.6415 | 15 | -1 | 4 | +1 |
-| targeted_kosdaq_it_mfg_conservative_recall_0.85 | industry_macro_category=manufacturing | 0.6891 | 0.8210 | 0.7493 | 60 | -6 | 29 | +3 |
-| targeted_kosdaq_it_mfg_conservative_recall_0.80 | market=KOSDAQ | 0.6823 | 0.8037 | 0.7380 | 61 | -10 | 32 | +6 |
-| targeted_kosdaq_it_mfg_conservative_recall_0.80 | industry_macro_category=it_services | 0.5000 | 0.7143 | 0.5882 | 15 | -1 | 6 | +3 |
-| targeted_kosdaq_it_mfg_conservative_recall_0.80 | industry_macro_category=manufacturing | 0.6984 | 0.8148 | 0.7521 | 57 | -9 | 30 | +4 |
+| current_artifact_threshold | market=KOSDAQ | 0.7113 | 0.8466 | 0.7731 | 56 | +0 | 25 | +0 |
+| current_artifact_threshold | industry_macro_category=it_services | 0.6400 | 0.7619 | 0.6957 | 9 | +0 | 5 | +0 |
+| current_artifact_threshold | industry_macro_category=manufacturing | 0.7041 | 0.8519 | 0.7709 | 58 | +0 | 24 | +0 |
+| market_valid_best_f1_by_segment | market=KOSDAQ | 0.6827 | 0.8712 | 0.7655 | 66 | +10 | 21 | -4 |
+| market_valid_best_f1_by_segment | industry_macro_category=it_services | 0.6154 | 0.7619 | 0.6809 | 10 | +1 | 5 | +0 |
+| market_valid_best_f1_by_segment | industry_macro_category=manufacturing | 0.6794 | 0.8765 | 0.7655 | 67 | +9 | 20 | -4 |
+| industry_valid_best_f1_by_segment | market=KOSDAQ | 0.6847 | 0.8528 | 0.7596 | 64 | +8 | 24 | -1 |
+| industry_valid_best_f1_by_segment | industry_macro_category=it_services | 0.6250 | 0.7143 | 0.6667 | 9 | +0 | 6 | +1 |
+| industry_valid_best_f1_by_segment | industry_macro_category=manufacturing | 0.6762 | 0.8765 | 0.7634 | 68 | +10 | 20 | -4 |
+| kosdaq_conservative_recall_0.85 | market=KOSDAQ | 0.7181 | 0.8282 | 0.7692 | 53 | -3 | 28 | +3 |
+| kosdaq_conservative_recall_0.85 | industry_macro_category=it_services | 0.6250 | 0.7143 | 0.6667 | 9 | +0 | 6 | +1 |
+| kosdaq_conservative_recall_0.85 | industry_macro_category=manufacturing | 0.7135 | 0.8457 | 0.7740 | 55 | -3 | 25 | +1 |
+| kosdaq_conservative_recall_0.80 | market=KOSDAQ | 0.7318 | 0.8037 | 0.7661 | 48 | -8 | 32 | +7 |
+| kosdaq_conservative_recall_0.80 | industry_macro_category=it_services | 0.6364 | 0.6667 | 0.6512 | 8 | -1 | 7 | +2 |
+| kosdaq_conservative_recall_0.80 | industry_macro_category=manufacturing | 0.7258 | 0.8333 | 0.7759 | 51 | -7 | 27 | +3 |
+| targeted_kosdaq_it_mfg_conservative_recall_0.85 | market=KOSDAQ | 0.7181 | 0.8282 | 0.7692 | 53 | -3 | 28 | +3 |
+| targeted_kosdaq_it_mfg_conservative_recall_0.85 | industry_macro_category=it_services | 0.6250 | 0.7143 | 0.6667 | 9 | +0 | 6 | +1 |
+| targeted_kosdaq_it_mfg_conservative_recall_0.85 | industry_macro_category=manufacturing | 0.7135 | 0.8457 | 0.7740 | 55 | -3 | 25 | +1 |
+| targeted_kosdaq_it_mfg_conservative_recall_0.80 | market=KOSDAQ | 0.7318 | 0.8037 | 0.7661 | 48 | -8 | 32 | +7 |
+| targeted_kosdaq_it_mfg_conservative_recall_0.80 | industry_macro_category=it_services | 0.6364 | 0.6667 | 0.6512 | 8 | -1 | 7 | +2 |
+| targeted_kosdaq_it_mfg_conservative_recall_0.80 | industry_macro_category=manufacturing | 0.7308 | 0.8210 | 0.7733 | 49 | -9 | 29 | +5 |
 
 ## 5. 해석
 

@@ -6,16 +6,16 @@
 ## 1. Overall Test Performance
 
 - Rows/positive rate: `924` / `22.0%`
-- PR-AUC/ROC-AUC: `0.7930` / `0.9286`
-- Precision/Recall/F1: `0.6603` / `0.8522` / `0.7441`
-- FP/FN: `89` / `30`
+- PR-AUC/ROC-AUC: `0.8329` / `0.9415`
+- Precision/Recall/F1: `0.7004` / `0.8522` / `0.7689`
+- FP/FN: `74` / `30`
 
 ## 2. Market Split
 
 | Market | Rows | Pos rate | PR-AUC | Precision | Recall | F1 | FP | FN |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| KOSDAQ | 427 | 38.2% | 0.8004 | 0.6587 | 0.8405 | 0.7385 | 71 | 26 |
-| KOSPI | 497 | 8.0% | 0.7670 | 0.6667 | 0.9000 | 0.7660 | 18 | 4 |
+| KOSDAQ | 427 | 38.2% | 0.8427 | 0.7113 | 0.8466 | 0.7731 | 56 | 25 |
+| KOSPI | 497 | 8.0% | 0.7908 | 0.6604 | 0.8750 | 0.7527 | 18 | 5 |
 
 ## 3. Rating Boundary Split
 
@@ -25,38 +25,38 @@ BBB-/BB+ 주변은 투자적격과 투기등급이 갈리는 경계라, 모델�
 
 | Boundary group | Rows | Pos rate | PR-AUC | Precision | Recall | F1 | FP | FN |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| deep_speculative_B_plus_or_lower | 66 | 98.5% | 1.0000 | 1.0000 | 0.9538 | 0.9764 | 0 | 3 |
+| deep_speculative_B_plus_or_lower | 66 | 98.5% | 1.0000 | 1.0000 | 0.9846 | 0.9922 | 0 | 1 |
 | missing_rating | 8 | 0.0% | - | 0.0000 | 0.0000 | 0.0000 | 0 | 0 |
-| near_investment_BBB_plus_to_BBB_minus | 260 | 0.0% | - | 0.0000 | 0.0000 | 0.0000 | 71 | 0 |
-| near_speculative_BB_plus_to_BB_minus | 140 | 98.6% | 0.9991 | 1.0000 | 0.8043 | 0.8916 | 0 | 27 |
-| upper_investment_A_or_above | 450 | 0.0% | - | 0.0000 | 0.0000 | 0.0000 | 18 | 0 |
+| near_investment_BBB_plus_to_BBB_minus | 260 | 0.0% | - | 0.0000 | 0.0000 | 0.0000 | 65 | 0 |
+| near_speculative_BB_plus_to_BB_minus | 140 | 98.6% | 0.9990 | 1.0000 | 0.7899 | 0.8826 | 0 | 29 |
+| upper_investment_A_or_above | 450 | 0.0% | - | 0.0000 | 0.0000 | 0.0000 | 9 | 0 |
 
 ### Exact BBB-/BB+ Boundary
 
 | BBB-/BB+ | Rows | Pos rate | Precision | Recall | F1 | FP | FN |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| False | 804 | 18.3% | 0.6649 | 0.8776 | 0.7566 | 65 | 18 |
-| True | 120 | 46.7% | 0.6471 | 0.7857 | 0.7097 | 24 | 12 |
+| False | 804 | 18.3% | 0.7253 | 0.8980 | 0.8024 | 50 | 15 |
+| True | 120 | 46.7% | 0.6308 | 0.7321 | 0.6777 | 24 | 15 |
 
 ### Individual Credit Ratings
 
 | Rating | Rows | Pos rate | Precision | Recall | F1 | FP | FN |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| A | 108 | 0.0% | 0.0000 | 0.0000 | 0.0000 | 9 | 0 |
-| A+ | 101 | 0.0% | 0.0000 | 0.0000 | 0.0000 | 2 | 0 |
-| A- | 71 | 0.0% | 0.0000 | 0.0000 | 0.0000 | 7 | 0 |
+| A | 108 | 0.0% | 0.0000 | 0.0000 | 0.0000 | 2 | 0 |
+| A+ | 101 | 0.0% | 0.0000 | 0.0000 | 0.0000 | 1 | 0 |
+| A- | 71 | 0.0% | 0.0000 | 0.0000 | 0.0000 | 6 | 0 |
 | AA | 43 | 0.0% | 0.0000 | 0.0000 | 0.0000 | 0 | 0 |
 | AA+ | 22 | 0.0% | 0.0000 | 0.0000 | 0.0000 | 0 | 0 |
 | AA- | 93 | 0.0% | 0.0000 | 0.0000 | 0.0000 | 0 | 0 |
 | AAA | 12 | 0.0% | 0.0000 | 0.0000 | 0.0000 | 0 | 0 |
-| B | 19 | 100.0% | 1.0000 | 1.0000 | 1.0000 | 0 | 0 |
-| B+ | 23 | 95.7% | 1.0000 | 0.8636 | 0.9268 | 0 | 3 |
+| B | 19 | 100.0% | 1.0000 | 0.9474 | 0.9730 | 0 | 1 |
+| B+ | 23 | 95.7% | 1.0000 | 1.0000 | 1.0000 | 0 | 0 |
 | B- | 17 | 100.0% | 1.0000 | 1.0000 | 1.0000 | 0 | 0 |
 | BB | 54 | 100.0% | 1.0000 | 0.7593 | 0.8632 | 0 | 13 |
-| BB+ | 58 | 96.6% | 1.0000 | 0.7857 | 0.8800 | 0 | 12 |
-| BB- | 28 | 100.0% | 1.0000 | 0.9286 | 0.9630 | 0 | 2 |
-| BBB | 94 | 0.0% | 0.0000 | 0.0000 | 0.0000 | 23 | 0 |
-| BBB+ | 104 | 0.0% | 0.0000 | 0.0000 | 0.0000 | 24 | 0 |
+| BB+ | 58 | 96.6% | 1.0000 | 0.7321 | 0.8454 | 0 | 15 |
+| BB- | 28 | 100.0% | 1.0000 | 0.9643 | 0.9818 | 0 | 1 |
+| BBB | 94 | 0.0% | 0.0000 | 0.0000 | 0.0000 | 25 | 0 |
+| BBB+ | 104 | 0.0% | 0.0000 | 0.0000 | 0.0000 | 16 | 0 |
 | BBB- | 62 | 0.0% | 0.0000 | 0.0000 | 0.0000 | 24 | 0 |
 | C | 3 | 100.0% | 1.0000 | 1.0000 | 1.0000 | 0 | 0 |
 | CCC | 3 | 100.0% | 1.0000 | 1.0000 | 1.0000 | 0 | 0 |
@@ -67,9 +67,9 @@ BBB-/BB+ 주변은 투자적격과 투기등급이 갈리는 경계라, 모델�
 
 | Agency group | Rows | Pos rate | Precision | Recall | F1 | FP | FN |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| BIG3 | 482 | 12.4% | 0.7353 | 0.8333 | 0.7812 | 18 | 10 |
+| BIG3 | 482 | 12.4% | 0.7656 | 0.8167 | 0.7903 | 15 | 11 |
 | FOREIGN | 3 | 0.0% | 0.0000 | 0.0000 | 0.0000 | 0 | 0 |
-| OTHER | 431 | 33.2% | 0.6340 | 0.8601 | 0.7300 | 71 | 20 |
+| OTHER | 431 | 33.2% | 0.6776 | 0.8671 | 0.7607 | 59 | 19 |
 | nan | 8 | 0.0% | 0.0000 | 0.0000 | 0.0000 | 0 | 0 |
 
 ## 4. Weak Recall Segments
@@ -78,20 +78,20 @@ BBB-/BB+ 주변은 투자적격과 투기등급이 갈리는 경계라, 모델�
 
 | Industry | Rows | Pos | FN | FN rate | Recall | F1 |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| manufacturing | 598 | 162 | 26 | 16.0% | 0.8395 | 0.7473 |
-| it_services | 176 | 21 | 3 | 14.3% | 0.8571 | 0.6545 |
-| wholesale_retail | 63 | 14 | 1 | 7.1% | 0.9286 | 0.8387 |
-| construction | 44 | 6 | 0 | 0.0% | 1.0000 | 0.8571 |
+| it_services | 176 | 21 | 5 | 23.8% | 0.7619 | 0.6957 |
+| construction | 44 | 6 | 1 | 16.7% | 0.8333 | 0.7143 |
+| manufacturing | 598 | 162 | 24 | 14.8% | 0.8519 | 0.7709 |
+| wholesale_retail | 63 | 14 | 0 | 0.0% | 1.0000 | 0.9333 |
 
 | Firm size | Rows | Pos | FN | FN rate | Recall | F1 |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| mid_sized | 434 | 95 | 25 | 26.3% | 0.7368 | 0.7216 |
-| small_and_medium | 232 | 107 | 5 | 4.7% | 0.9533 | 0.7698 |
+| mid_sized | 434 | 95 | 27 | 28.4% | 0.7158 | 0.7273 |
+| small_and_medium | 232 | 107 | 3 | 2.8% | 0.9720 | 0.8157 |
 
 | Fiscal year | Rows | Pos | FN | FN rate | Recall | F1 |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| 2024 | 287 | 42 | 8 | 19.0% | 0.8095 | 0.8000 |
-| 2023 | 637 | 161 | 22 | 13.7% | 0.8634 | 0.7316 |
+| 2024 | 287 | 42 | 7 | 16.7% | 0.8333 | 0.8140 |
+| 2023 | 637 | 161 | 23 | 14.3% | 0.8571 | 0.7582 |
 
 ## 5. False Positive Concentration
 
@@ -99,29 +99,29 @@ BBB-/BB+ 주변은 투자적격과 투기등급이 갈리는 경계라, 모델�
 
 | Industry | Rows | Neg | FP | FP share | FP rate | Precision |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| manufacturing | 598 | 436 | 66 | 74.2% | 15.1% | 0.6733 |
-| it_services | 176 | 155 | 16 | 18.0% | 10.3% | 0.5294 |
-| wholesale_retail | 63 | 49 | 4 | 4.5% | 8.2% | 0.7647 |
-| construction | 44 | 38 | 2 | 2.2% | 5.3% | 0.7500 |
-| other | 22 | 22 | 1 | 1.1% | 4.5% | 0.0000 |
-| transport_storage | 21 | 21 | 0 | 0.0% | 0.0% | 0.0000 |
+| manufacturing | 598 | 436 | 58 | 78.4% | 13.3% | 0.7041 |
+| it_services | 176 | 155 | 9 | 12.2% | 5.8% | 0.6400 |
+| construction | 44 | 38 | 3 | 4.1% | 7.9% | 0.6250 |
+| wholesale_retail | 63 | 49 | 2 | 2.7% | 4.1% | 0.8750 |
+| other | 22 | 22 | 1 | 1.4% | 4.5% | 0.0000 |
+| transport_storage | 21 | 21 | 1 | 1.4% | 4.8% | 0.0000 |
 
 ## 6. Cross-Segment Error Concentration
 
 | Dimension | Segment | Rows | FP | FN | Error count | FP share | FN share |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| market_x_industry | KOSDAQ / manufacturing | 302 | 51 | 22 | 73 | 57.3% | 73.3% |
-| market_x_firm_size | KOSDAQ / small_and_medium | 223 | 56 | 5 | 61 | 62.9% | 16.7% |
-| market_x_firm_size | KOSDAQ / mid_sized | 184 | 15 | 21 | 36 | 16.9% | 70.0% |
-| market_x_industry | KOSPI / manufacturing | 296 | 15 | 4 | 19 | 16.9% | 13.3% |
-| market_x_industry | KOSDAQ / it_services | 82 | 16 | 3 | 19 | 18.0% | 10.0% |
-| market_x_firm_size | KOSPI / mid_sized | 250 | 14 | 4 | 18 | 15.7% | 13.3% |
-| market_x_industry | KOSDAQ / wholesale_retail | 22 | 3 | 1 | 4 | 3.4% | 3.3% |
-| market_x_firm_size | KOSPI / large | 237 | 4 | 0 | 4 | 4.5% | 0.0% |
-| market_x_industry | KOSPI / construction | 29 | 2 | 0 | 2 | 2.2% | 0.0% |
-| market_x_industry | KOSDAQ / other | 4 | 1 | 0 | 1 | 1.1% | 0.0% |
-| market_x_industry | KOSPI / wholesale_retail | 41 | 1 | 0 | 1 | 1.1% | 0.0% |
-| market_x_industry | KOSDAQ / construction | 15 | 0 | 0 | 0 | 0.0% | 0.0% |
+| market_x_industry | KOSDAQ / manufacturing | 302 | 43 | 20 | 63 | 58.1% | 66.7% |
+| market_x_firm_size | KOSDAQ / small_and_medium | 223 | 44 | 3 | 47 | 59.5% | 10.0% |
+| market_x_firm_size | KOSDAQ / mid_sized | 184 | 12 | 22 | 34 | 16.2% | 73.3% |
+| market_x_industry | KOSPI / manufacturing | 296 | 15 | 4 | 19 | 20.3% | 13.3% |
+| market_x_firm_size | KOSPI / mid_sized | 250 | 12 | 5 | 17 | 16.2% | 16.7% |
+| market_x_industry | KOSDAQ / it_services | 82 | 9 | 5 | 14 | 12.2% | 16.7% |
+| market_x_firm_size | KOSPI / large | 237 | 6 | 0 | 6 | 8.1% | 0.0% |
+| market_x_industry | KOSPI / construction | 29 | 2 | 1 | 3 | 2.7% | 3.3% |
+| market_x_industry | KOSDAQ / wholesale_retail | 22 | 2 | 0 | 2 | 2.7% | 0.0% |
+| market_x_industry | KOSDAQ / construction | 15 | 1 | 0 | 1 | 1.4% | 0.0% |
+| market_x_industry | KOSDAQ / other | 4 | 1 | 0 | 1 | 1.4% | 0.0% |
+| market_x_industry | KOSPI / transport_storage | 19 | 1 | 0 | 1 | 1.4% | 0.0% |
 | market_x_industry | KOSDAQ / transport_storage | 2 | 0 | 0 | 0 | 0.0% | 0.0% |
 | market_x_industry | KOSPI / it_services | 94 | 0 | 0 | 0 | 0.0% | 0.0% |
 | market_x_industry | KOSPI / other | 18 | 0 | 0 | 0 | 0.0% | 0.0% |
@@ -132,18 +132,18 @@ FN은 실제 투기등급인데 모델이 안정적으로 본 사례입니다. �
 
 | Feature | FN median | TP median | Std delta | FN miss | TP miss |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| net_margin | 0.0288 | -0.0683 | 1.3873 | 13.3% | 13.3% |
-| pretax_roe | 0.0807 | -0.0999 | 1.3647 | 13.3% | 13.3% |
-| pretax_roa | 0.0353 | -0.0506 | 1.2418 | 13.3% | 13.3% |
-| operating_roa | 0.0325 | -0.0213 | 1.0388 | 13.3% | 13.3% |
-| dividend_payer | 1.0000 | 0.0000 | 1.0000 | 0.0% | 0.0% |
+| net_margin | 0.0270 | -0.0729 | 1.3686 | 0.0% | 0.0% |
+| pretax_roe | 0.0661 | -0.0991 | 1.2837 | 0.0% | 0.0% |
+| pretax_roa | 0.0336 | -0.0518 | 1.2173 | 0.0% | 0.0% |
 | icr_under_1 | 0.0000 | 1.0000 | -1.0000 | 0.0% | 0.0% |
-| ocf_to_sales | 0.0860 | 0.0047 | 0.8077 | 13.3% | 13.3% |
-| ocf_to_total_liabilities | 0.1398 | 0.0069 | 0.6972 | 13.3% | 13.3% |
-| ocf_to_total_borrowings | 0.3882 | 0.0253 | 0.6540 | 13.3% | 17.3% |
-| capital_impairment_ratio | -21.5459 | -4.5578 | -0.5200 | 13.3% | 13.3% |
-| net_margin_diff | 0.0063 | -0.0237 | 0.4721 | 16.7% | 20.8% |
-| market_to_book | 0.8370 | 1.2348 | -0.3935 | 13.3% | 13.3% |
+| dividend_payer | 1.0000 | 0.0000 | 1.0000 | 0.0% | 0.0% |
+| operating_roa | 0.0264 | -0.0204 | 0.8896 | 0.0% | 0.0% |
+| ocf_to_sales | 0.0656 | 0.0025 | 0.6106 | 0.0% | 0.0% |
+| ocf_to_total_borrowings | 0.3581 | 0.0183 | 0.5804 | 3.3% | 7.5% |
+| capital_impairment_ratio | -21.1356 | -3.6300 | -0.5647 | 0.0% | 0.0% |
+| market_to_book | 0.7188 | 1.2655 | -0.5408 | 6.7% | 14.5% |
+| ocf_to_total_liabilities | 0.1048 | 0.0033 | 0.5100 | 0.0% | 0.0% |
+| interest_coverage_ratio | 2.3524 | -0.7960 | 0.4603 | 0.0% | 0.0% |
 
 ## 8. Feature Profile: FP vs TN
 
@@ -151,18 +151,18 @@ FP는 실제 투자적격인데 모델이 위험하다고 본 사례입니다. �
 
 | Feature | FP median | TN median | Std delta | FP miss | TN miss |
 | --- | ---: | ---: | ---: | ---: | ---: |
+| icr_under_1 | 1.0000 | 0.0000 | 1.0000 | 0.0% | 0.0% |
 | dividend_payer | 0.0000 | 1.0000 | -1.0000 | 0.0% | 0.0% |
-| ocf_to_sales | -0.0092 | 0.0797 | -0.8838 | 36.0% | 6.3% |
-| net_margin | -0.0259 | 0.0329 | -0.8399 | 36.0% | 6.3% |
-| operating_roa | -0.0011 | 0.0406 | -0.8073 | 36.0% | 6.3% |
-| ocf_to_total_liabilities | -0.0116 | 0.1298 | -0.7418 | 36.0% | 6.3% |
-| pretax_roe | -0.0213 | 0.0764 | -0.7382 | 36.0% | 6.3% |
-| pretax_roa | -0.0153 | 0.0355 | -0.7336 | 36.0% | 6.3% |
-| ocf_to_total_borrowings | -0.0200 | 0.3060 | -0.5876 | 40.4% | 13.3% |
-| listed_year | 2015.0000 | 2003.0000 | 0.5714 | 0.0% | 0.0% |
-| short_term_borrowings_share | 0.7776 | 0.4594 | 0.5452 | 40.4% | 13.3% |
-| capital_impairment_ratio | -5.8012 | -22.3042 | 0.5052 | 36.0% | 6.3% |
-| depreciation | 1696457.0000 | 39725701.0000 | -0.4733 | 0.0% | 0.0% |
+| operating_roa | -0.0015 | 0.0409 | -0.8066 | 1.4% | 0.0% |
+| ocf_to_sales | 0.0074 | 0.0791 | -0.6930 | 1.4% | 0.2% |
+| ocf_to_total_liabilities | 0.0130 | 0.1363 | -0.6195 | 1.4% | 0.0% |
+| pretax_roe | -0.0005 | 0.0759 | -0.5930 | 1.4% | 0.0% |
+| interest_coverage_ratio | -0.0750 | 3.8056 | -0.5673 | 0.0% | 0.0% |
+| ocf_to_total_borrowings | -0.0142 | 0.3115 | -0.5563 | 14.9% | 11.9% |
+| pretax_roa | -0.0022 | 0.0369 | -0.5563 | 1.4% | 0.0% |
+| short_term_borrowings_share | 0.7693 | 0.4446 | 0.5388 | 14.9% | 11.9% |
+| cashflow_coverage_ratio | 0.4221 | 5.4631 | -0.5122 | 0.0% | 0.0% |
+| capital_impairment_ratio | -5.8012 | -21.1634 | 0.4956 | 1.4% | 0.2% |
 
 ## 9. Threshold Distance
 
@@ -170,11 +170,11 @@ threshold 바로 근처 오류는 threshold 조정으로 개선 여지가 있고
 
 | Distance | Rows | FP | FN | Precision | Recall | F1 |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| <=0.02 | 27 | 9 | 1 | 0.4000 | 0.8571 | 0.5455 |
-| 0.02-0.05 | 23 | 5 | 3 | 0.5455 | 0.6667 | 0.6000 |
-| 0.05-0.10 | 41 | 6 | 6 | 0.5000 | 0.5000 | 0.5000 |
-| 0.10-0.20 | 100 | 19 | 7 | 0.5000 | 0.7308 | 0.5938 |
-| >0.20 | 733 | 50 | 13 | 0.7312 | 0.9128 | 0.8119 |
+| <=0.02 | 15 | 5 | 0 | 0.4444 | 1.0000 | 0.6154 |
+| 0.02-0.05 | 23 | 6 | 5 | 0.4545 | 0.5000 | 0.4762 |
+| 0.05-0.10 | 30 | 9 | 5 | 0.1000 | 0.1667 | 0.1250 |
+| 0.10-0.20 | 92 | 13 | 6 | 0.6176 | 0.7778 | 0.6885 |
+| >0.20 | 764 | 41 | 14 | 0.7760 | 0.9103 | 0.8378 |
 
 ## 10. High-Confidence Error Examples
 
@@ -184,31 +184,31 @@ threshold 바로 근처 오류는 threshold 조정으로 개선 여지가 있고
 
 | Company | Market | FY | Industry | Size | Prob | Threshold |
 | --- | --- | ---: | --- | --- | ---: | ---: |
-| 케이지모빌리티(주) | KOSPI | 2,024 | manufacturing | mid_sized | 0.0096 | 0.3150 |
-| 제이엠티(주) | KOSDAQ | 2,023 | manufacturing | small_and_medium | 0.0123 | 0.3150 |
-| (주)엑시콘 | KOSDAQ | 2,023 | manufacturing | mid_sized | 0.0168 | 0.3150 |
-| 케이지모빌리티(주) | KOSPI | 2,023 | manufacturing | mid_sized | 0.0307 | 0.3150 |
-| (주)톱텍 | KOSDAQ | 2,024 | manufacturing | mid_sized | 0.0314 | 0.3150 |
-| (주)서진시스템 | KOSDAQ | 2,024 | manufacturing | mid_sized | 0.0455 | 0.3150 |
-| 코리아에프티(주) | KOSDAQ | 2,023 | manufacturing | mid_sized | 0.0488 | 0.3150 |
-| 케이지케미칼(주) | KOSPI | 2,023 | manufacturing | mid_sized | 0.0570 | 0.3150 |
-| (주)디알비동일 | KOSPI | 2,023 | manufacturing | mid_sized | 0.0610 | 0.3150 |
-| (주)에이엘티 | KOSDAQ | 2,023 | manufacturing | small_and_medium | 0.0656 | 0.3150 |
+| 케이지모빌리티(주) | KOSPI | 2,024 | manufacturing | mid_sized | 0.0183 | 0.3200 |
+| 케이지모빌리티(주) | KOSPI | 2,023 | manufacturing | mid_sized | 0.0232 | 0.3200 |
+| (주)엑시콘 | KOSDAQ | 2,023 | manufacturing | mid_sized | 0.0250 | 0.3200 |
+| (주)톱텍 | KOSDAQ | 2,024 | manufacturing | mid_sized | 0.0327 | 0.3200 |
+| 아진산업(주) | KOSDAQ | 2,024 | manufacturing | mid_sized | 0.0341 | 0.3200 |
+| 제이엠티(주) | KOSDAQ | 2,023 | manufacturing | small_and_medium | 0.0374 | 0.3200 |
+| (주)디알비동일 | KOSPI | 2,023 | manufacturing | mid_sized | 0.0421 | 0.3200 |
+| (주)서진시스템 | KOSDAQ | 2,024 | manufacturing | mid_sized | 0.0501 | 0.3200 |
+| 삼보모터스(주) | KOSDAQ | 2,023 | manufacturing | mid_sized | 0.0536 | 0.3200 |
+| 케이지케미칼(주) | KOSPI | 2,023 | manufacturing | mid_sized | 0.0557 | 0.3200 |
 
 ### False Positive
 
 | Company | Market | FY | Industry | Size | Prob | Threshold |
 | --- | --- | ---: | --- | --- | ---: | ---: |
-| (주)라닉스 | KOSDAQ | 2,023 | manufacturing | small_and_medium | 0.9559 | 0.3150 |
-| (주)푸드나무 | KOSDAQ | 2,023 | wholesale_retail | small_and_medium | 0.9168 | 0.3150 |
-| 브이엠(주) | KOSDAQ | 2,023 | manufacturing | small_and_medium | 0.8973 | 0.3150 |
-| 유니온머티리얼(주) | KOSPI | 2,023 | manufacturing | mid_sized | 0.8523 | 0.3150 |
-| 범양건영(주) | KOSPI | 2,023 | construction | mid_sized | 0.8511 | 0.3150 |
-| 한국맥널티(주) | KOSDAQ | 2,023 | manufacturing | small_and_medium | 0.8425 | 0.3150 |
-| (주)웹스 | KOSDAQ | 2,023 | manufacturing | small_and_medium | 0.8104 | 0.3150 |
-| (주)엑스페릭스 | KOSDAQ | 2,023 | manufacturing | small_and_medium | 0.8033 | 0.3150 |
-| (주)케이엑스하이텍 | KOSDAQ | 2,023 | manufacturing | small_and_medium | 0.7939 | 0.3150 |
-| 알에스오토메이션(주) | KOSDAQ | 2,023 | manufacturing | small_and_medium | 0.7819 | 0.3150 |
+| (주)라닉스 | KOSDAQ | 2,023 | manufacturing | small_and_medium | 0.9715 | 0.3200 |
+| 한국맥널티(주) | KOSDAQ | 2,023 | manufacturing | small_and_medium | 0.8995 | 0.3200 |
+| 유니온머티리얼(주) | KOSPI | 2,023 | manufacturing | mid_sized | 0.8687 | 0.3200 |
+| (주)웹스 | KOSDAQ | 2,023 | manufacturing | small_and_medium | 0.8567 | 0.3200 |
+| (주)푸드나무 | KOSDAQ | 2,023 | wholesale_retail | small_and_medium | 0.8513 | 0.3200 |
+| 알에스오토메이션(주) | KOSDAQ | 2,023 | manufacturing | small_and_medium | 0.8178 | 0.3200 |
+| 한국맥널티(주) | KOSDAQ | 2,024 | manufacturing | small_and_medium | 0.7965 | 0.3200 |
+| 브이엠(주) | KOSDAQ | 2,023 | manufacturing | small_and_medium | 0.7915 | 0.3200 |
+| (주)에스에너지 | KOSDAQ | 2,023 | manufacturing | mid_sized | 0.7723 | 0.3200 |
+| (주)엑스페릭스 | KOSDAQ | 2,023 | manufacturing | small_and_medium | 0.7711 | 0.3200 |
 
 ## 11. Rating Boundary Availability
 

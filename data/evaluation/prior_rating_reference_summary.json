@@ -1,0 +1,120 @@
+{
+  "generated_at_utc": "2026-05-21T06:29:22.199596+00:00",
+  "purpose": "Non-leaky prior credit-rating reference for Stage 2 agent inputs. Each row keeps only ratings public on or before fiscal_year-12-31.",
+  "as_of_policy": "as_of_date = fiscal_year-12-31",
+  "selection_rule": "latest rating_date on/before as_of_date; if tied, choose worst rating",
+  "source_rating_history": "data/evaluation/target_label_reference.csv",
+  "source_rating_history_rows": 5443,
+  "rows": 7878,
+  "rows_by_universe": {
+    "inference_2026": 2427,
+    "model_v1": 5451
+  },
+  "matched_prior_rows_by_universe": {
+    "inference_2026": 947,
+    "model_v1": 4437
+  },
+  "coverage_by_universe": {
+    "inference_2026": 0.3902,
+    "model_v1": 0.814
+  },
+  "coverage_by_universe_eval_year": [
+    {
+      "universe": "inference_2026",
+      "eval_year": 2026,
+      "coverage": 0.3902
+    },
+    {
+      "universe": "model_v1",
+      "eval_year": 2015,
+      "coverage": 0.0
+    },
+    {
+      "universe": "model_v1",
+      "eval_year": 2016,
+      "coverage": 0.8478
+    },
+    {
+      "universe": "model_v1",
+      "eval_year": 2017,
+      "coverage": 0.8303
+    },
+    {
+      "universe": "model_v1",
+      "eval_year": 2018,
+      "coverage": 0.8314
+    },
+    {
+      "universe": "model_v1",
+      "eval_year": 2019,
+      "coverage": 0.8043
+    },
+    {
+      "universe": "model_v1",
+      "eval_year": 2020,
+      "coverage": 0.8188
+    },
+    {
+      "universe": "model_v1",
+      "eval_year": 2021,
+      "coverage": 0.8806
+    },
+    {
+      "universe": "model_v1",
+      "eval_year": 2022,
+      "coverage": 0.8886
+    },
+    {
+      "universe": "model_v1",
+      "eval_year": 2023,
+      "coverage": 0.9423
+    },
+    {
+      "universe": "model_v1",
+      "eval_year": 2024,
+      "coverage": 0.9294
+    },
+    {
+      "universe": "model_v1",
+      "eval_year": 2025,
+      "coverage": 0.8049
+    }
+  ],
+  "prior_rating_boundary_group_counts": {
+    "investment_grade_non_boundary": 3162,
+    "no_prior_rating": 2494,
+    "near_bbb_bb_boundary": 865,
+    "exact_bbb_minus_bb_plus_boundary": 778,
+    "speculative_grade_non_boundary": 579
+  },
+  "prior_rating_agency_group_counts": {
+    "OTHER": 3065,
+    "BIG3": 2297,
+    "FOREIGN": 22
+  },
+  "columns": [
+    "universe",
+    "market",
+    "stock_code",
+    "corp_name",
+    "fiscal_year",
+    "eval_year",
+    "as_of_date",
+    "has_prior_rating",
+    "prior_credit_rating",
+    "prior_credit_rating_rank",
+    "prior_is_speculative",
+    "prior_rating_boundary_group",
+    "prior_rating_date",
+    "prior_rating_age_days",
+    "prior_rating_agency",
+    "prior_rating_agency_group",
+    "prior_rating_target",
+    "prior_source_eval_year",
+    "prior_source_label_set",
+    "prior_selection_scope",
+    "prior_selection_rule",
+    "prior_reference_rule"
+  ],
+  "leakage_policy": "This file may be used as Stage 2 context because it excludes ratings published after the row-level as_of_date. It is separate from target labels used to score model or committee correctness."
+}
