@@ -103,6 +103,9 @@ def build_committee_view_model(
     if secondary_review_risk.triggered:
         risk_factors = [secondary_review_risk.reason, *risk_factors]
     mitigating_factors = _collect_committee_factors(agents, target="mitigation")
+    secondary_overhold_guardrail_reason = _secondary_overhold_guardrail_reason(bundle)
+    if secondary_overhold_guardrail_reason:
+        mitigating_factors = [secondary_overhold_guardrail_reason, *mitigating_factors]
     if not veto_triggered:
         committee_label = _committee_label_with_evidence_escalation(
             committee_label,
@@ -153,7 +156,7 @@ def build_committee_view_model(
     )
     if prior_boundary_reason and (
         committee_label == "부적격" or _prior_rating_boundary_requires_hold(bundle)
-    ):
+    ) and not secondary_overhold_guardrail_reason:
         committee_label = "보류"
     reject_confirmation = _reject_confirmation_assessment(
         bundle,
@@ -370,6 +373,8 @@ def _committee_label_with_model_alignment(
         return committee_label
     if not _external_evidence_unavailable(bundle.news_status):
         return committee_label
+    if _secondary_overhold_guardrail_reason(bundle):
+        return "적격"
     if _secondary_review_requires_hold(bundle):
         return committee_label
     if _has_blocking_flags(bundle):
@@ -401,6 +406,8 @@ def _committee_label_with_investment_evidence_alignment(
         return committee_label
     if _external_evidence_unavailable(bundle.news_status):
         return committee_label
+    if _secondary_overhold_guardrail_reason(bundle):
+        return "적격"
     if _secondary_review_requires_hold(bundle):
         return committee_label
     if _has_blocking_flags(bundle):
@@ -452,6 +459,8 @@ def _has_stage2_secondary_trigger(bundle: Stage2InputBundle) -> bool:
 def _secondary_review_requires_hold(bundle: Stage2InputBundle) -> bool:
     """Return whether a secondary trigger is strong enough to block eligible alignment."""
     if not _has_stage2_secondary_trigger(bundle):
+        return False
+    if _secondary_overhold_guardrail_reason(bundle):
         return False
     probability = bundle.probability_speculative
     threshold = _model_threshold(bundle)
@@ -511,6 +520,79 @@ def _has_secondary_rule_liquidity_watch_signal(bundle: Stage2InputBundle) -> boo
     ):
         return True
     return bool(has_reported_liquidity_weakness)
+
+
+def _secondary_overhold_guardrail_reason(bundle: Stage2InputBundle) -> str:
+    """Keep defensive investment-grade cases from being held by secondary radar alone."""
+    if bundle.prediction_label != "투자적격" or not _has_stage2_secondary_trigger(bundle):
+        return ""
+
+    probability = bundle.probability_speculative
+    threshold = _model_threshold(bundle)
+    if probability >= threshold:
+        return ""
+    if not bundle.source_feature_row:
+        return ""
+    if _has_blocking_flags(bundle):
+        return ""
+    if _has_severe_financial_watch_signal(bundle.source_feature_row):
+        return ""
+    if _has_extreme_financial_distress_signal(bundle.source_feature_row):
+        return ""
+    if _has_secondary_rule_liquidity_watch_signal(bundle):
+        return ""
+    if _overwarning_blocking_external_items(bundle.news_cache_snapshot):
+        return ""
+    if _repeated_financing_evidence_count(bundle.news_cache_snapshot) >= 1:
+        return ""
+    if _prior_rating_is_speculative(bundle.prior_rating_reference):
+        return ""
+
+    supports = _secondary_overhold_guardrail_supports(bundle.source_feature_row)
+    if len(supports) < 2:
+        return ""
+
+    return (
+        "정상기업 과잉 보류 방어 guardrail: 1차 모델은 투자적격이고 "
+        f"투기등급 확률 {probability:.1%}가 기준선 {threshold:.1%} 아래입니다. "
+        "직접 검증된 외부 치명근거와 강한 재무 부실 신호가 없고 "
+        f"{', '.join(supports[:3])} 축이 방어적이어서 45개 보조 레이더 단독 신호만으로는 "
+        "위험 보류나 경계 보류로 올리지 않습니다."
+    )
+
+
+def _secondary_overhold_guardrail_supports(row: dict[str, Any]) -> list[str]:
+    """Return broad financial-defense categories for TN over-hold prevention."""
+    supports: list[str] = []
+    liquidity_support = _metric_at_least(row, "current_ratio", 1.2) or _metric_at_least(
+        row, "cash_ratio", 0.15
+    )
+    if liquidity_support:
+        supports.append("유동성")
+
+    cashflow_signal = (
+        _metric_at_least(row, "cashflow_coverage_ratio", 0.0)
+        or _metric_at_least(row, "ocf_to_total_liabilities", 0.0)
+        or _metric_at_least(row, "ocf_to_sales", 0.0)
+        or _flag_is_false(row.get("is_2y_consecutive_ocf_deficit"))
+    )
+    interest_service_signal = _metric_at_least(
+        row, "interest_coverage_ratio", 1.0
+    ) or _flag_is_false(row.get("icr_under_1"))
+    if cashflow_signal and interest_service_signal:
+        supports.append("현금흐름")
+
+    capital_support = (
+        _metric_at_least(row, "equity_ratio", 0.40)
+        and (
+            _metric_at_most(row, "debt_ratio", 1.50)
+            or _metric_at_most(row, "total_borrowings_ratio", 0.50)
+        )
+        and not _metric_above(row, "capital_impairment_ratio", 0.0)
+    )
+    if capital_support:
+        supports.append("자본")
+    return supports
 
 
 def _has_financial_statement_missing_placeholder(row: dict[str, Any]) -> bool:
@@ -598,6 +680,8 @@ def _secondary_review_risk_assessment(bundle: Stage2InputBundle) -> SecondaryRev
     rule_liquidity_watch = secondary_liquidity_watch and (
         meets_probability_floor or (threshold >= 0.28 and _rule_confidence_at_least(bundle, 0.60))
     )
+    if _secondary_overhold_guardrail_reason(bundle):
+        return SecondaryReviewRiskAssessment(False, "", review_priority)
     risk_signal_floor = max(0.28, threshold - 0.04)
     risk_signal_corroborated = _secondary_review_risk_signal_corroborated(
         bundle,

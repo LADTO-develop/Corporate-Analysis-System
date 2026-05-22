@@ -15,6 +15,16 @@ CAS의 Stage 2는 다음 3개 역할로 정리한다.
 2. `EvidenceAuditAgent`: 외부 근거와 숨은 꼬리 위험을 검증한다.
 3. `ChairReportAgent`: 두 관점을 종합해 최종 위원회 의견을 작성한다.
 
+현재 구현 상태는 설계 초안이 아니라, deterministic runner와 선택형 Agno runner가
+같은 `Stage2AgentRunner` 계약으로 동작하는 파일럿 검증 단계다. `committee_view`
+strict schema, 보류 세부 유형, `committee_risk_signal`, decision trace, live API
+runbook, 성능 리포트 산출물까지 연결되어 있다.
+
+파일럿 성능은 전체 기업 모집단 정확도가 아니라, FN/FP/경계등급/TP/TN을 의도적으로
+섞은 hard sample에서 Stage 2가 1차 모델 판단을 얼마나 보완하는지 보는 지표다.
+30건 stress sample 기준 1차 모델 F1은 `0.4243`, 2차 위험신호 F1은 `0.6666`,
+2차 검토대상(`보류+부적격`) Recall은 `1.0000`이다.
+
 ## 2. 기본 원칙
 
 Stage 2는 Stage 1 모델 결과를 덮어쓰지 않는다.
@@ -211,11 +221,18 @@ OpenDART `corpCode.xml` 캐시에서 `stock_code -> corp_code`를 자동 보강�
 외부감사관련, 거래소공시, 정기공시로 나누고, 횡령·배임·감사의견·상장폐지 등
 위험 공시는 `provider_relevance=risk`로 우선 검토한다.
 
-Agno/Claude 추론은 기본 실행에서는 꺼 둔다.
-`CAS_STAGE2_RUNNER=deterministic`이면 현재 코드의 규칙 기반 scaffold가 실행되고,
-`CAS_STAGE2_RUNNER=agno`로 바꾸면 `Stage2AgentRunner` 인터페이스를 통해
-Agno structured output 기반 실행으로 교체된다. 이때 모델 판단은 계속
-`model_view`에 보존하고, Agno 결과는 `committee_view`를 설명·보완하는 용도로만 사용한다.
+Agno/LLM 추론은 CI와 일반 재현 실행에서는 꺼 둔다.
+`CAS_STAGE2_RUNNER=deterministic`이면 규칙 기반 scaffold가 실행되고,
+`CAS_STAGE2_RUNNER=agno`로 바꾸면 `Stage2AgentRunner` 인터페이스를 통해 Agno
+structured output 기반 실행으로 교체된다. 기본 live 모드는
+`CAS_STAGE2_AGNO_MODE=single`이며 provider/model은 `CAS_STAGE2_MODEL_PROVIDER`,
+`CAS_STAGE2_MODEL` 또는 batch CLI의 `--stage2-model-provider`, `--stage2-model`로
+선택한다. 여러 LLM 관점을 비교할 때만 `multi_llm_committee` 모드를 사용한다.
+
+이때 모델 판단은 계속 `model_view`에 보존하고, Agno 결과는 `committee_view`를
+설명·보완하는 용도로만 사용한다. 실제 기업-회계연도와 외부근거 질의를 API로
+전송하는 live batch는 로컬 opt-in 실행으로 분리하며, Codex/CI 환경에서는 정책과
+재현성 때문에 deterministic 경로 또는 기존 캐시 산출물을 사용한다.
 
 ## 6. 최종 출력 구조
 
@@ -229,8 +246,7 @@ Agno structured output 기반 실행으로 교체된다. 이때 모델 판단은
 
 ### committee_view
 
-`committee_view`는 팀원 repo의 구현 코드를 직접 가져오지 않고,
-최종 위원회 결과를 설명하기 위한 출력 필드 아이디어만 반영한다.
+`committee_view`는 최종 위원회 결과를 설명하기 위한 구현된 출력 계약이다.
 
 ```json
 {
@@ -279,13 +295,13 @@ Agno structured output 기반 실행으로 교체된다. 이때 모델 판단은
 
 ## 7. 코드 구조
 
-현재 구현은 실제 LLM 호출을 바로 붙이기보다, CI에서 안정적으로 검증 가능한
-결정론적 scaffold와 향후 Agno에 넘길 역할 명세를 분리한다.
+현재 구현은 CI에서 안정적으로 검증 가능한 결정론적 scaffold와 선택형 Agno runner를
+분리한다.
 
-- `src/cas/agents/stage2_specs.py`: 3개 에이전트의 역할, 필수 입력, 출력 필드, 향후 Agno instruction 계약
+- `src/cas/agents/stage2_specs.py`: 3개 에이전트의 역할, 필수 입력, 출력 필드, Agno instruction 계약
 - `src/cas/agents/stage2_bundle.py`: LangGraph `AgentState`를 Stage 2 전용 입력 번들로 정규화
 - `src/cas/agents/stage2_outputs.py`: Agent별 Pydantic 출력 schema를 정의하고 공통 `AgentOutput`으로 변환
-- `src/cas/agents/stage2_runner.py`: deterministic runner와 향후 Agno runner가 공유할 실행 adapter 인터페이스
+- `src/cas/agents/stage2_runner.py`: deterministic runner와 Agno runner가 공유할 실행 adapter 인터페이스
 - `src/cas/agents/committee_schema.py`: `committee_view` Pydantic strict schema 정의
 - `src/cas/agents/signals/debt_liquidity_signals.py`: 부채상환능력, 유동성, 현금흐름 신호 계산
 - `src/cas/agents/signals/macro_signals.py`: 거시·시장 맥락 신호 계산
@@ -295,35 +311,36 @@ Agno structured output 기반 실행으로 교체된다. 이때 모델 판단은
 - `src/cas/veto_rules.py`: `configs/agent/committee.yaml`의 veto rule을 읽어 강제 경고 기준을 공유
 - `src/cas/evidence/collectors.py`: Naver, Tavily, OpenDART 기반 외부 근거 수집 기능
 
-이렇게 나누면 나중에 Claude/Agno 호출을 붙일 때도 `committee_view` 출력 형식과
-대시보드 계약은 유지하면서, 각 agent 내부 구현만 LLM 기반으로 교체할 수 있다.
-특히 `Stage2InputBundle.to_prompt_payload()`는 향후 Agno agent에 넘길 입력
-payload의 기준 형태로 사용할 수 있고, `CommitteeViewPayload`는 LLM이 만든
-최종 의견도 반드시 같은 출력 형식으로 검증하는 기준이 된다.
+이렇게 나누면 `committee_view` 출력 형식과 대시보드 계약은 유지하면서, 각 agent
+내부 구현만 deterministic 또는 LLM 기반으로 선택할 수 있다. 특히
+`Stage2InputBundle.to_prompt_payload()`는 Agno agent에 넘길 입력 payload의 기준
+형태이고, `CommitteeViewPayload`는 LLM이 만든 최종 의견도 반드시 같은 출력 형식으로
+검증하는 기준이다.
 횡령, 배임, 상장폐지, fraud 같은 강제 경고 키워드는 코드가 아니라
 `configs/agent/committee.yaml`의 `veto_rules`에서 관리한다.
-현재 실행은 `DeterministicStage2AgentRunner`를 사용하며, 향후 Claude/Agno 호출을
-붙일 때는 같은 `Stage2AgentRunner` 인터페이스를 구현하는 runner로 교체한다.
+현재 기본 실행은 `DeterministicStage2AgentRunner`를 사용하며, live 실험에서는 같은
+인터페이스의 `AgnoStage2AgentRunner`를 선택한다.
 
-## 8. 구현 순서
+## 8. 구현 및 검증 상태
 
-### 1단계
+### 완료
 
 - Stage 1 결과를 `QuantCreditAgent` 입력 번들로 정리
 - `EvidenceAuditAgent`가 사용할 뉴스/공시/거시/산업/부채 신호 필드 정의
-- `committee_view` 기본 JSON 구조 정의
+- `committee_view` strict schema와 decision subtype 정의
+- deterministic runner와 선택형 Agno runner 연결
+- Naver, Tavily, OpenDART 기반 외부근거 수집 노드 연결
+- rolling/historical hard sample 성능 리포트와 속도 로그 생성
+- `보류`를 `위험 보류`, `경계등급 보류`, `과민경고 완화 보류`, `확인필요 보류`로 분리
+- 30건 stress sample 기준 1차 모델 대비 2차 위험신호 F1 개선 확인
+- 정상기업 과잉 보류 guardrail 구현 및 로컬 회귀 검증
 
-### 2단계
+### 남은 개선 후보
 
-- 뉴스/공시/주석 수집 파이프라인 연결
-- Evidence bundle 신뢰도 필드 정의
-- 샘플 기업 기준 로컬 테스트 수행
-
-### 3단계
-
-- `ChairReportAgent` 종합 메모 구현
-- 대시보드와 연결
-- 심사 메모 다운로드 및 보고서 형식 연동
+- 정상기업 과잉 보류 guardrail의 live Agno/Claude 표본 재검증 확대
+- 대시보드에서 decision subtype과 decision trace를 더 직관적으로 표시
+- live Agno 설명 품질 비교 표본 확대
+- 운영 환경에서 live API 호출 권한과 데이터 전송 승인 절차를 프로젝트 문서에 더 명확히 분리
 
 ## 9. 요약 메시지
 

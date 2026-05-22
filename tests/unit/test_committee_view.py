@@ -421,6 +421,94 @@ def test_committee_view_holds_investment_model_with_secondary_review_trigger() -
     assert "경계" in committee_view["final_review_memo"]
 
 
+def test_committee_view_keeps_defensive_secondary_radar_case_eligible() -> None:
+    state: AgentState = {
+        "company_id": "115160",
+        "company_name": "(주)휴맥스",
+        "source_feature_row": {
+            "stock_code": "115160",
+            "current_ratio": 1.36,
+            "cash_ratio": 0.18,
+            "cashflow_coverage_ratio": 0.12,
+            "ocf_to_sales": 0.04,
+            "ocf_to_total_liabilities": 0.03,
+            "interest_coverage_ratio": 3.8,
+            "equity_ratio": 0.47,
+            "debt_ratio": 1.12,
+            "total_borrowings_ratio": 0.34,
+            "capital_impairment_ratio": 0.0,
+            "icr_under_1": 0,
+            "is_2y_consecutive_operating_loss": 0,
+            "is_2y_consecutive_ocf_deficit": 0,
+        },
+        "prior_rating_reference": {
+            "has_prior_rating": True,
+            "prior_credit_rating": "BBB-",
+            "prior_credit_rating_rank": 10,
+            "prior_rating_boundary_group": "exact_bbb_minus_bb_plus_boundary",
+            "prior_rating_date": "2021-06-30",
+            "prior_rating_age_days": 184,
+            "prior_rating_agency": "NICE평가정보주식회사",
+        },
+        "model_view": {
+            "prediction_label": "투자적격",
+            "probability_speculative": 0.3042,
+            "threshold": 0.31,
+            "stage2_secondary_trigger": True,
+            "stage2_review_priority": "high",
+            "trigger_reason": "45개 보조 레이더가 기준선 근처로 추가 검토를 요구했습니다.",
+        },
+        "xgboost_result": {
+            "prediction_label": "투자적격",
+            "probability_speculative": 0.3042,
+            "threshold": 0.31,
+        },
+        "rule_result": {
+            "risk_band": "stable",
+            "recommendation": "priority",
+            "reasons": ["model_probability_speculative=0.304"],
+            "blocking_flags": [],
+        },
+        "news_cache_snapshot": {
+            "status": "ready",
+            "items": [
+                {
+                    "source": "opendart",
+                    "title": "사업보고서",
+                    "summary": "(주)휴맥스 직접 관련 정기 공시입니다.",
+                    "company_match": True,
+                    "provider_relevance": "routine",
+                    "disclosure_severity": "routine",
+                    "critical_terms": [],
+                    "evidence_quality": "high",
+                    "evidence_score": 0.88,
+                }
+            ],
+        },
+    }
+    agents = [
+        AgentOutput(role="quant_credit", summary="정량 결과", findings=[], confidence=0.8),
+        AgentOutput(role="evidence_audit", summary="근거 검토", findings=[], confidence=0.7),
+        AgentOutput(role="chair_report", summary="종합", findings=[], confidence=0.7),
+    ]
+
+    committee_view = build_committee_view(
+        bundle=build_stage2_input_bundle(state),
+        recommendation="priority",
+        agents=agents,
+    )
+
+    assert committee_view["final_committee_label"] == "적격"
+    assert committee_view["committee_decision_type"] == "eligible"
+    assert committee_view["committee_risk_signal"] is False
+    assert committee_view["key_risk_factors"] == [
+        "현재 scaffold 기준 추가 위험 요인은 제한적입니다."
+    ]
+    assert "정상기업 과잉 보류 방어 guardrail" in committee_view["mitigating_factors"][0]
+    assert "Stage 2는 판단을 덮어쓰기보다" in committee_view["conflict_resolution"]
+    assert "경계등급 보류" not in committee_view["conflict_resolution"]
+
+
 def test_committee_view_appends_informative_chair_report_memo() -> None:
     state: AgentState = {
         "company_id": "311390",
