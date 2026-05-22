@@ -509,6 +509,30 @@ def _has_isolated_interest_cover_row_defense(row: dict[str, Any]) -> bool:
     )
 
 
+def _has_isolated_icr_review_buffer(row: dict[str, Any]) -> bool:
+    """Downgrade risk display when an ICR dip is offset by OCF, capital, and low debt."""
+    if not (
+        _flag_is_true(row.get("icr_under_1"))
+        or _metric_below(row, "interest_coverage_ratio", 1.0)
+    ):
+        return False
+    if _flag_is_true(row.get("is_2y_consecutive_operating_loss")) or _flag_is_true(
+        row.get("is_2y_consecutive_ocf_deficit")
+    ):
+        return False
+    if _metric_above(row, "capital_impairment_ratio", 0.0):
+        return False
+    if _metric_below(row, "net_margin", -0.05):
+        return False
+    return bool(
+        _metric_at_least(row, "cashflow_coverage_ratio", 1.0)
+        and _metric_at_least(row, "ocf_to_total_liabilities", 0.05)
+        and _metric_at_least(row, "equity_ratio", 0.70)
+        and _metric_at_most(row, "debt_ratio", 0.50)
+        and _metric_at_most(row, "total_borrowings_ratio", 0.20)
+    )
+
+
 def _has_secondary_rule_liquidity_watch_signal(bundle: Stage2InputBundle) -> bool:
     """Preserve hold for low-but-near-threshold eligible calls with liquidity rule watch."""
     if not _has_stage2_secondary_trigger(bundle):
@@ -825,7 +849,7 @@ def _secondary_review_risk_signal_corroborated(
 ) -> bool:
     """Require corroboration before showing a secondary review hold as a risk signal."""
     if severe_watch:
-        return True
+        return not _has_isolated_icr_review_buffer(bundle.source_feature_row)
     if _overwarning_blocking_external_items(bundle.news_cache_snapshot):
         return True
     if _material_financing_evidence_blocks_tn_hold(bundle.news_cache_snapshot):
@@ -1582,9 +1606,33 @@ def _is_resolved_procedural_trading_halt_item(
     )
     if any(marker in text for marker in procedural_capital_action_markers):
         return True
+    if _is_resolved_spac_merger_halt_item(text, news_cache):
+        return True
     if "우회상장" not in text:
         return False
     return _has_resolved_reverse_listing_halt(news_cache)
+
+
+def _is_resolved_spac_merger_halt_item(text: str, news_cache: dict[str, Any]) -> bool:
+    if "합병" not in text:
+        return False
+    spac_markers = ("spac", "스팩", "기업인수목적")
+    if not any(marker in text.lower() for marker in spac_markers):
+        return False
+    return _has_resolved_spac_merger_halt(news_cache)
+
+
+def _has_resolved_spac_merger_halt(news_cache: dict[str, Any]) -> bool:
+    raw_items = news_cache.get("items", [])
+    if not isinstance(raw_items, list):
+        return False
+    for raw_item in raw_items:
+        if not isinstance(raw_item, dict) or raw_item.get("company_match") is not True:
+            continue
+        text = _compact_text(" ".join(str(raw_item.get(key, "")) for key in ("title", "summary")))
+        if "거래정지해제" in text and "상장예비심사결과" in text and "승인" in text:
+            return True
+    return False
 
 
 def _has_resolved_reverse_listing_halt(news_cache: dict[str, Any]) -> bool:

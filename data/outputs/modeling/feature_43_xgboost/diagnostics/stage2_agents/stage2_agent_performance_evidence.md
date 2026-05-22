@@ -22,6 +22,7 @@
 | TN 과잉 보류 8건 OpenAI Agno live | 8 | 2/8 = 25.0% | 8/8 = 100.0% | 캐시 hit 0, 외부근거 ready 8/8, 자금조달 공시 민감도 발견 |
 | TN 자금조달 guardrail 재평가 | 8 | 3/8 = 37.5% | 8/8 = 100.0% | 같은 외부근거 캐시 재평가, 머큐리 1건 보류→적격 |
 | TN 자금조달 guardrail OpenAI Agno live | 8 | 3/8 = 37.5% | 8/8 = 100.0% | 캐시 hit 0, 머큐리 보류→적격 live 확인 |
+| TN SPAC 절차성 guardrail 재평가 | 8 | 3/8 = 37.5% | 8/8 = 100.0% | 같은 외부근거 캐시 재평가, 현대무벡스 risk_hold→boundary_hold |
 
 개선 폭은 1차 5건 대비 추가 10건에서 엄격 기준 +30.0%p, review-safe 기준 +20.0%p다. 합산 기준으로도 review-safe 성공률은 93.3%까지 올라왔다.
 
@@ -119,6 +120,7 @@ round 3 live 결과에서는 FN 2건은 모두 보류로 끌어올렸고, FP 3�
 | TN overhold expanded OpenAI Agno live no-cache | `committee_review_tn_overhold_expanded_8_agno_openai_live_no_cache` | 8 | 2/8 = 25.0% | 8/8 = 100.0% | 0 | TN 확대 샘플 대표 8건 Agno live 검증, 자금조달 공시가 보수적 보류를 유발 |
 | TN overhold expanded financing guardrail cached evidence | `committee_review_tn_overhold_expanded_8_after_financing_guardrail_cached_evidence` | 8 | 3/8 = 37.5% | 8/8 = 100.0% | 0 | 단일 medium 자금조달 공시 예외 후 머큐리 1건 적격 개선, 반복 자금조달 레몬은 보류 유지 |
 | TN overhold expanded financing guardrail OpenAI Agno live no-cache | `committee_review_tn_overhold_expanded_8_after_financing_guardrail_agno_openai_live_no_cache` | 8 | 3/8 = 37.5% | 8/8 = 100.0% | 0 | 같은 대표 8건 OpenAI Agno live 재실행, cache hit 0, 머큐리 적격 개선 확인 |
+| TN overhold expanded SPAC procedural guardrail cached evidence | `committee_review_tn_overhold_expanded_8_after_spac_guardrail_cached_evidence` | 8 | 3/8 = 37.5% | 8/8 = 100.0% | 0 | 해소된 SPAC 합병 거래정지를 절차성 공시로 분리, 현대무벡스 위험 보류를 경계 보류로 낮춤 |
 
 Historical 12건 계열은 동일 기업 12건을 반복 검증한 산출물이다. 이 계열에서는 초기 75.0%에서 secondary signal connected 기준 100.0%까지 개선됐다. Rolling validation 계열은 샘플 구성과 평가지표가 달라 별도로 보며, 최종 추가 10건에서 90.0%/100.0%를 기록했다.
 
@@ -237,6 +239,8 @@ deterministic 결과와 비교하면 6/8건은 같은 최종 라벨을 유지했
 후속 개선에서는 단일 medium 자금조달 공시를 `risk_hold` 보강 근거에서 제외하고, 반복 자금조달 2건 이상 또는 high-risk/adverse 자금조달 근거만 TN overhold guardrail을 막도록 조정했다. 같은 8건과 같은 외부근거 캐시로 deterministic committee replay를 수행한 결과, `(주)머큐리`만 `보류 → 적격`으로 내려갔고 `(주)레몬`은 반복 유상증자/전환사채 공시 때문에 보류로 유지됐다. 엄격 기준은 2/8 = 25.0%에서 3/8 = 37.5%로 개선됐고, review-safe는 8/8 = 100.0%를 유지했다.
 
 이후 같은 대표 8건을 OpenAI Agno 3-agent no-cache live로 재실행해 live 경로에서도 같은 개선이 재현되는지 확인했다. 결과는 엄격 기준 3/8 = 37.5%, review-safe 8/8 = 100.0%, LLM cache hit 0건이었다. `(주)머큐리`는 단일 전환사채 공시에도 재무 방어축이 강해 `적격`으로 내려갔고, `(주)레몬`은 반복 유상증자/전환사채 공시가 있어 `보류`로 유지됐다. 속도는 wall 95.4372초, 평균 case 22.3430초, Stage 2 LLM 평균 20.3821초였다.
+
+추가로 현대무벡스처럼 SPAC 합병 예비심사 때문에 발생한 거래정지가 이후 `거래정지해제(상장예비심사결과 통지(승인))`로 해소된 경우에는 외부 꼬리위험으로 보지 않도록 분리했다. 단, 현대무벡스는 ICR 1 미만이어서 적격으로 내리지는 않고, OCF/총부채 7.6%, cashflow coverage 3.26배, 자기자본비율 84.0%, 부채비율 19.1%, 총차입금 비중 15.6%로 방어축이 있는 단일 ICR 약점 케이스로 보아 `위험 보류`가 아닌 `경계등급 보류`로 낮췄다. 같은 외부근거 캐시 재평가에서 엄격 기준과 review-safe는 3/8, 8/8로 유지됐지만, `committee_risk_signal=True`인 TN 과잉 위험신호는 3건에서 2건으로 줄었다.
 
 ## Agno 실행 기준 보류 세분화 결과
 

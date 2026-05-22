@@ -2008,6 +2008,86 @@ def test_committee_view_softens_resolved_reverse_listing_halt_boundary_warning()
     assert "경계등급 과민경고 완화" in committee_view["mitigating_factors"][0]
 
 
+def test_committee_view_treats_resolved_spac_merger_halt_as_procedural_context() -> None:
+    state: AgentState = {
+        "company_id": "319400",
+        "company_name": "현대무벡스(주)",
+        "source_feature_row": {
+            "stock_code": "319400",
+            "cashflow_coverage_ratio": 3.2559,
+            "ocf_to_total_liabilities": 0.0758,
+            "interest_coverage_ratio": -0.5055,
+            "equity_ratio": 0.8399,
+            "debt_ratio": 0.1907,
+            "total_borrowings_ratio": 0.1560,
+            "short_term_borrowings_share": 0.0,
+            "capital_impairment_ratio": 0.0,
+            "icr_under_1": 1,
+            "is_2y_consecutive_operating_loss": 0,
+            "is_2y_consecutive_ocf_deficit": 0,
+        },
+        "model_view": {
+            "prediction_label": "투자적격",
+            "probability_speculative": 0.3113,
+            "threshold": 0.325,
+            "stage2_secondary_trigger": True,
+            "stage2_review_priority": "high",
+            "trigger_reason": "45개 보조 레이더가 기준선 근처로 추가 검토를 요구했습니다.",
+        },
+        "xgboost_result": {
+            "prediction_label": "투자적격",
+            "probability_speculative": 0.3113,
+            "threshold": 0.325,
+        },
+        "rule_result": {"risk_band": "stable", "recommendation": "priority"},
+        "news_cache_snapshot": {
+            "status": "ready",
+            "items": [
+                {
+                    "source": "opendart",
+                    "title": "주권매매거래정지(SPAC 합병(예비심사청구대상))",
+                    "summary": "현대무벡스(주) OpenDART 거래소공시 공시입니다.",
+                    "company_match": True,
+                    "provider_relevance": "risk",
+                    "disclosure_severity": "adverse",
+                    "critical_terms": ["거래정지"],
+                    "critical_context_confirmed": True,
+                    "veto_candidate": True,
+                    "evidence_quality": "high",
+                    "evidence_score": 1.0,
+                },
+                {
+                    "source": "opendart",
+                    "title": "주권매매거래정지해제(상장예비심사결과 통지(승인))",
+                    "summary": "현대무벡스(주) OpenDART 거래소공시 공시입니다.",
+                    "company_match": True,
+                    "provider_relevance": "caution",
+                    "disclosure_severity": "caution",
+                    "evidence_quality": "medium",
+                    "evidence_score": 0.68,
+                },
+            ],
+        },
+    }
+    agents = [
+        AgentOutput(role="quant_credit", summary="정량 결과", findings=[], confidence=0.8),
+        AgentOutput(role="evidence_audit", summary="근거 검토", findings=[], confidence=0.6),
+        AgentOutput(role="chair_report", summary="종합", findings=[], confidence=0.7),
+    ]
+
+    committee_view = build_committee_view(
+        bundle=build_stage2_input_bundle(state),
+        recommendation="priority",
+        agents=agents,
+    )
+
+    assert committee_view["final_committee_label"] == "보류"
+    assert committee_view["committee_decision_type"] == "boundary_hold"
+    assert committee_view["committee_decision_type_label"] == "경계등급 보류"
+    assert committee_view["committee_risk_signal"] is False
+    assert committee_view["hidden_tail_risk_flag"] is False
+
+
 def test_committee_view_treats_bonus_issue_trading_halt_as_procedural_context() -> None:
     state: AgentState = {
         "company_id": "059120",

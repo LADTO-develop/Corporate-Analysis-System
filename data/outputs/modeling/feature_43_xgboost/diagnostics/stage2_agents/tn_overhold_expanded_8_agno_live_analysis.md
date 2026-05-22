@@ -58,3 +58,14 @@ Agno live 결과를 반영해 단일 medium 자금조달 공시와 반복·고�
 | Agno live no-cache after follow-up | 3/8 = 37.5% | 8/8 = 100.0% | 3 | 5 | 95.4372 sec | cache hit 0, 머큐리 적격 개선 live 확인 |
 
 최종 live 재실행에서도 cache hit는 0건이었다. `(주)머큐리`는 단일 medium 전환사채 공시만으로는 보류 보강 근거가 충분하지 않아 `적격`으로 내려갔고, `(주)레몬`은 반복 유상증자/전환사채 공시가 있어 `보류`로 남았다. 따라서 이 guardrail은 "자금조달 공시를 무시"하는 방식이 아니라, 단일 medium 공시와 반복·고위험 자금조달 공시를 분리하는 방식으로 작동한다.
+
+## SPAC Procedural Halt Follow-up
+
+남은 `risk_hold` 중 현대무벡스는 SPAC 합병 예비심사 때문에 거래정지가 발생했고, 같은 평가 기준일 이전에 `거래정지해제(상장예비심사결과 통지(승인))`가 확인됐다. 이를 상장폐지·관리종목·감사의견 이슈와 같은 실질 부실 이벤트가 아니라 절차성 거래정지로 분리했다. 다만 ICR 1 미만은 남아 있으므로 적격으로 낮추지는 않고, OCF/총부채·cashflow coverage·자본비율·차입 부담이 방어적인 단일 ICR 약점 케이스로 보아 `risk_hold` 대신 `boundary_hold`로 표시한다.
+
+| 실행 | 엄격 기준 | Review-safe | 적격 | 보류 | Risk signal TN holds | 비고 |
+| --- | ---: | ---: | ---: | ---: | ---: | --- |
+| Agno live after financing guardrail | 3/8 = 37.5% | 8/8 = 100.0% | 3 | 5 | 3 | 현대무벡스는 SPAC 거래정지 때문에 risk_hold |
+| Cached-evidence replay after SPAC guardrail | 3/8 = 37.5% | 8/8 = 100.0% | 3 | 5 | 2 | 현대무벡스 risk_hold→boundary_hold, hidden tail risk 해제 |
+
+이 개선은 strict TN 성공률을 올리는 변화가 아니라, 정상기업을 과도하게 `위험 보류`로 표시하는 문제를 줄이는 subtype 품질 개선이다.

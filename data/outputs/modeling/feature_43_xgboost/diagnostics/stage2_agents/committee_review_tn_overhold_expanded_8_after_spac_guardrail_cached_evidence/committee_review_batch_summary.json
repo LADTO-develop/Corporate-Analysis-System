@@ -1,0 +1,54 @@
+{
+  "generated_at_utc": "2026-05-22T09:08:12.181745+00:00",
+  "rows": 8,
+  "success_rate": 0.375,
+  "review_safe_success_rate": 1.0,
+  "by_error_type": [
+    {
+      "model_error_type": "true_negative",
+      "committee_effect": "tn_escalated",
+      "rows": 5
+    },
+    {
+      "model_error_type": "true_negative",
+      "committee_effect": "tn_kept_eligible",
+      "rows": 3
+    }
+  ],
+  "by_review_safe_effect": [
+    {
+      "model_error_type": "true_negative",
+      "committee_review_safe_effect": "review_safe_tn_not_rejected",
+      "rows": 8
+    }
+  ],
+  "by_final_label": [
+    {
+      "final_committee_label": "보류",
+      "rows": 5
+    },
+    {
+      "final_committee_label": "적격",
+      "rows": 3
+    }
+  ],
+  "by_evidence_status": [
+    {
+      "evidence_status": "ready",
+      "rows": 8
+    }
+  ],
+  "speed": {
+    "batch_wall_time_seconds": 1.6835,
+    "case_elapsed_seconds_sum": 6.7148,
+    "case_elapsed_seconds_mean": 0.8394,
+    "case_elapsed_seconds_median": 0.8401,
+    "case_elapsed_seconds_max": 1.5378,
+    "throughput_cases_per_minute": 285.1203
+  },
+  "paths": {
+    "details": "data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents/committee_review_tn_overhold_expanded_8_after_spac_guardrail_cached_evidence/committee_review_batch_results.csv",
+    "summary": "data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents/committee_review_tn_overhold_expanded_8_after_spac_guardrail_cached_evidence/committee_review_batch_summary.json",
+    "report": "data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents/committee_review_tn_overhold_expanded_8_after_spac_guardrail_cached_evidence/committee_review_batch_report.md"
+  }
+}
