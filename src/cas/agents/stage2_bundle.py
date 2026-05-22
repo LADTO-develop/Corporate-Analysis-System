@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, cast
 
 from cas.agents.state import AgentState
@@ -28,6 +28,7 @@ class Stage2InputBundle:
     source_feature_row: dict[str, Any]
     peer_comparison_rows: tuple[dict[str, Any], ...]
     news_cache_snapshot: dict[str, Any]
+    credit_policy_snapshot: dict[str, Any] = field(default_factory=dict)
 
     @property
     def prediction_label(self) -> str:
@@ -77,6 +78,7 @@ class Stage2InputBundle:
             "source_feature_row": self.source_feature_row,
             "peer_comparison_rows": list(self.peer_comparison_rows),
             "news_cache_snapshot": self.news_cache_snapshot,
+            "credit_policy_snapshot": self.credit_policy_snapshot,
         }
 
 
@@ -115,6 +117,7 @@ def build_stage2_input_bundle(state: AgentState) -> Stage2InputBundle:
         source_feature_row=source_feature_row,
         peer_comparison_rows=_as_dict_tuple(state.get("peer_comparison_rows")),
         news_cache_snapshot=_as_dict(state.get("news_cache_snapshot")),
+        credit_policy_snapshot=_as_dict(state.get("credit_policy_snapshot")),
     )
 
 

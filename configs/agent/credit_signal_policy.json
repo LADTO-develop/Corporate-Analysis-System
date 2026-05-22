@@ -1,0 +1,26 @@
+{
+  "policy_version": "credit_signal_policy_v1",
+  "label_override_allowed": false,
+  "criteria": [
+    {
+      "criterion_id": "coverage.icr.under_1",
+      "feature": "interest_coverage_ratio",
+      "operator": "<",
+      "threshold": 1.0,
+      "direction": "risk_increasing",
+      "severity": "critical",
+      "reason_kr": "이자보상배율이 1.0 미만으로 이자비용 충당능력에 대한 강한 관찰 신호입니다.",
+      "basis": ["accounting_ratio_distress_literature", "internal_validation_required"]
+    },
+    {
+      "criterion_id": "liquidity.current_ratio.strong",
+      "feature": "current_ratio",
+      "operator": ">=",
+      "threshold": 2.0,
+      "direction": "risk_mitigating",
+      "severity": "low",
+      "reason_kr": "유동비율이 2.0 이상으로 단기 유동성 완충 요인으로 해석됩니다.",
+      "basis": ["accounting_ratio_distress_literature", "internal_validation_required"]
+    }
+  ]
+}

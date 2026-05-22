@@ -147,6 +147,7 @@ class AgentState(TypedDict, total=False):
     processed_company_list_ref: str
     feature_store_snapshot: dict[str, Any]
     news_cache_snapshot: dict[str, Any]
+    credit_policy_snapshot: dict[str, Any]
     model_registry_ref: dict[str, Any]
 
     base_assessments: Annotated[dict[str, BaseAssessment], merge_dict]
