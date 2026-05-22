@@ -53,6 +53,10 @@ def test_committee_view_maps_review_to_hold_label() -> None:
         "단기 유동성 추가 점검이 필요합니다.",
     ]
     assert committee_view["mitigating_factors"] == ["배당 이력이 있습니다."]
+    trace = committee_view["decision_trace"]
+    assert trace[0]["gate"] == "stage1_model_view"
+    assert trace[-1]["gate"] == "final_committee_decision"
+    assert trace[-1]["summary"] == "최종 위원회 판단은 보류이며, 세부 유형은 확인필요 보류입니다."
 
 
 def test_committee_view_moves_debt_liquidity_support_to_mitigation() -> None:
@@ -218,6 +222,39 @@ def test_committee_view_surfaces_evidence_limitations_in_summary() -> None:
     ]
     assert limitation_items
     assert "날짜 미확인 근거 2건" in limitation_items[0]["summary"]
+
+
+def test_committee_view_decision_trace_marks_gate_statuses() -> None:
+    state: AgentState = {
+        "xgboost_result": {
+            "prediction_label": "부적격",
+            "probability_speculative": 0.95,
+            "threshold": 0.31,
+        },
+        "source_feature_row": {
+            "icr_under_1": 1,
+            "capital_impairment_ratio": 0.6,
+            "interest_coverage_ratio": 0.4,
+        },
+        "news_cache_snapshot": {"status": "ready", "items": []},
+    }
+    agents = [
+        AgentOutput(role="quant_credit", summary="정량 결과", findings=[], confidence=0.8),
+        AgentOutput(role="evidence_audit", summary="근거 검토", findings=[], confidence=0.6),
+        AgentOutput(role="chair_report", summary="종합", findings=[], confidence=0.7),
+    ]
+
+    committee_view = build_committee_view(
+        bundle=build_stage2_input_bundle(state),
+        recommendation="reject",
+        agents=agents,
+    )
+
+    trace_by_gate = {item["gate"]: item for item in committee_view["decision_trace"]}
+    assert trace_by_gate["stage1_model_view"]["triggered"] is True
+    assert trace_by_gate["stage1_model_view"]["severity"] == "risk"
+    assert trace_by_gate["reject_confirmation"]["triggered"] is True
+    assert trace_by_gate["final_committee_decision"]["severity"] == "risk"
 
 
 def test_committee_view_flags_hidden_tail_risk_from_direct_external_adverse_evidence() -> None:

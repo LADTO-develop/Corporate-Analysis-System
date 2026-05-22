@@ -123,16 +123,17 @@ class AgnoStage2AgentRunner:
     This path is intentionally opt-in. If the ``agno`` package is unavailable,
     install the optional LLM dependencies or inject a ``Stage2LLMClient`` in
     tests/local experiments. Without an injected client, the runner executes
-    the three Agno triplet agents. The default routing remains a single Claude
-    model for backward compatibility; ``multi_llm_committee`` routes
-    Claude/GPT/Gemini across the committee roles.
+    the three Agno triplet agents. The default routing is a single OpenAI model
+    so local demos can run with only ``OPENAI_API_KEY``. ``multi_llm_committee``
+    remains available for Claude/GPT/Gemini role routing when all provider keys
+    are configured.
     """
 
     deterministic_runner: DeterministicStage2AgentRunner | None = None
     llm_client: Stage2LLMClient | None = None
     routing_mode: str = "single"
-    model_provider: str = "anthropic"
-    model_name: str = "claude-sonnet-4-5-20250929"
+    model_provider: str = "openai"
+    model_name: str = "gpt-4.1-mini"
     quant_model_provider: str | None = None
     quant_model_name: str | None = None
     evidence_model_provider: str | None = None

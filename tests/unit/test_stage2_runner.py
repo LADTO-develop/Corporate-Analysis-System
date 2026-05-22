@@ -138,6 +138,14 @@ def test_agno_stage2_runner_accepts_structured_llm_client() -> None:
     assert outputs[0].quant_summary == "LLM 정량 요약"
 
 
+def test_agno_stage2_runner_defaults_to_openai_single_model() -> None:
+    runner = AgnoStage2AgentRunner(deterministic_runner=_deterministic_runner())
+
+    assert runner.routing_mode == "single"
+    assert runner.model_provider == "openai"
+    assert runner.model_name == "gpt-4.1-mini"
+
+
 def test_agno_stage2_runner_uses_triplet_agents(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

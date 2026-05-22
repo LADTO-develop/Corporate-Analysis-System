@@ -2,13 +2,58 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Any, Literal, cast
 
+from cas.agents.committee_assessments import (
+    ADVERSE_EVIDENCE_QUALITY,
+    ADVERSE_PROVIDER_RELEVANCE,
+    FINANCING_EVIDENCE_TERMS,
+    BoundaryReviewAssessment,
+    FinancialResilienceAssessment,
+    HiddenTailRiskAssessment,
+    NoncriticalEvidenceAssessment,
+    OverwarningMitigationAssessment,
+    RejectConfirmationAssessment,
+    SecondaryReviewRiskAssessment,
+)
 from cas.agents.committee_schema import (
     CommitteeDecisionType,
     CommitteeLabel,
     CommitteeViewPayload,
+    DecisionTraceItem,
+)
+from cas.agents.committee_utils import (
+    clean_evidence_summary_items as _clean_evidence_summary_items,
+)
+from cas.agents.committee_utils import (
+    clean_korean_review_text as _clean_korean_review_text,
+)
+from cas.agents.committee_utils import (
+    clean_text_items as _clean_text_items,
+)
+from cas.agents.committee_utils import (
+    flag_is_false as _flag_is_false,
+)
+from cas.agents.committee_utils import (
+    flag_is_true as _flag_is_true,
+)
+from cas.agents.committee_utils import (
+    metric_above as _metric_above,
+)
+from cas.agents.committee_utils import (
+    metric_at_least as _metric_at_least,
+)
+from cas.agents.committee_utils import (
+    metric_at_most as _metric_at_most,
+)
+from cas.agents.committee_utils import (
+    metric_below as _metric_below,
+)
+from cas.agents.committee_utils import (
+    safe_float as _safe_float,
+)
+from cas.agents.committee_utils import (
+    safe_int as _safe_int,
 )
 from cas.agents.stage2_bundle import Stage2InputBundle
 from cas.agents.state import AgentOutput, Recommendation
@@ -19,88 +64,6 @@ from cas.veto_rules import (
     flag_contains_veto_marker,
     load_veto_rules,
 )
-
-_ADVERSE_PROVIDER_RELEVANCE = {"risk"}
-_ADVERSE_EVIDENCE_QUALITY = {"medium", "high"}
-_FINANCING_EVIDENCE_TERMS = (
-    "전환사채",
-    "전환사채권발행",
-    "유상증자",
-    "신주인수권",
-    "신주인수권부사채",
-    "증권예탁증권",
-    "dr발행",
-    "자금조달",
-)
-
-
-@dataclass(frozen=True)
-class HiddenTailRiskAssessment:
-    """Model-aware external-evidence flag for likely false-negative risk."""
-
-    triggered: bool
-    reason: str
-    adverse_item_count: int
-    verified_adverse_item_count: int
-
-
-@dataclass(frozen=True)
-class SecondaryReviewRiskAssessment:
-    """Model-aware Stage 2 review flag for near-threshold false-negative risk."""
-
-    triggered: bool
-    reason: str
-    review_priority: str
-    risk_signal: bool = False
-
-
-@dataclass(frozen=True)
-class BoundaryReviewAssessment:
-    """Hold subtype for model decisions close to the investment/speculative boundary."""
-
-    triggered: bool
-    reason: str
-
-
-@dataclass(frozen=True)
-class OverwarningMitigationAssessment:
-    """Model-aware mitigation flag for likely false-positive review cases."""
-
-    triggered: bool
-    reason: str
-
-
-@dataclass(frozen=True)
-class FinancialResilienceAssessment:
-    """Financial-defense screen for high-probability over-warning cases."""
-
-    triggered: bool
-    reason: str
-    support_count: int
-    blocker_count: int
-
-
-@dataclass(frozen=True)
-class NoncriticalEvidenceAssessment:
-    """External-evidence screen for severe model warnings without decisive corroboration."""
-
-    triggered: bool
-    reason: str
-    direct_item_count: int
-    blocking_item_count: int
-
-
-@dataclass(frozen=True)
-class RejectConfirmationAssessment:
-    """Hard-reject gate that separates reject from risk hold."""
-
-    confirmed: bool
-    triggered: bool
-    reason: str
-    signal_count: int
-    signals: tuple[str, ...]
-    review_risk_signal: bool = False
-    review_risk_reason: str = ""
 
 
 def build_committee_view(
@@ -272,6 +235,17 @@ def build_committee_view_model(
         mitigating_factors=mitigating_factors
         or ["현재 scaffold 기준 명시적 완화 요인은 제한적입니다."],
         evidence_summary=evidence_summary,
+        decision_trace=_decision_trace_items(
+            bundle=bundle,
+            committee_label=committee_label,
+            decision_type=decision_type,
+            veto_triggered=veto_triggered,
+            hidden_tail_risk=hidden_tail_risk,
+            boundary_review=boundary_review,
+            secondary_review_risk=secondary_review_risk,
+            overwarning_mitigation=overwarning_mitigation,
+            reject_confirmation=reject_confirmation,
+        ),
         final_review_memo=final_review_memo,
     )
 
@@ -532,7 +506,7 @@ def _has_secondary_rule_liquidity_watch_signal(bundle: Stage2InputBundle) -> boo
         and has_reported_liquidity_weakness
     ):
         return True
-    return has_reported_liquidity_weakness
+    return bool(has_reported_liquidity_weakness)
 
 
 def _has_financial_statement_missing_placeholder(row: dict[str, Any]) -> bool:
@@ -1079,7 +1053,7 @@ def _repeated_financing_evidence_count(news_cache: dict[str, Any]) -> int:
         if str(item.get("source", "")).lower() != "opendart":
             continue
         text = _compact_text(" ".join(str(item.get(key, "")) for key in ("title", "summary")))
-        if any(term in text for term in _FINANCING_EVIDENCE_TERMS):
+        if any(term in text for term in FINANCING_EVIDENCE_TERMS):
             count += 1
     return count
 
@@ -1089,7 +1063,7 @@ def _prior_rating_is_speculative(prior: dict[str, Any]) -> bool:
         return False
     rank = _safe_int(prior.get("prior_credit_rating_rank"))
     if rank is not None:
-        return rank >= 11
+        return bool(rank >= 11)
     rating = str(prior.get("prior_credit_rating") or "").strip().upper()
     return rating in {"BB+", "BB", "BB-", "B+", "B", "B-", "CCC+", "CCC", "CCC-", "CC", "C", "D"}
 
@@ -1358,12 +1332,12 @@ def _is_adverse_external_item(item: dict[str, Any]) -> bool:
         return False
     if item.get("critical_context_confirmed") is True:
         return True
-    if str(item.get("provider_relevance", "")).lower() in _ADVERSE_PROVIDER_RELEVANCE:
+    if str(item.get("provider_relevance", "")).lower() in ADVERSE_PROVIDER_RELEVANCE:
         return True
     terms = _item_critical_terms(item)
     if not terms:
         return False
-    return str(item.get("evidence_quality", "")).lower() in _ADVERSE_EVIDENCE_QUALITY
+    return str(item.get("evidence_quality", "")).lower() in ADVERSE_EVIDENCE_QUALITY
 
 
 def _is_blocking_external_adverse_item(item: dict[str, Any]) -> bool:
@@ -1439,7 +1413,7 @@ def _has_resolved_reverse_listing_halt(news_cache: dict[str, Any]) -> bool:
 
 def _is_verified_adverse_external_item(item: dict[str, Any]) -> bool:
     quality = str(item.get("evidence_quality", "")).lower()
-    if quality in _ADVERSE_EVIDENCE_QUALITY:
+    if quality in ADVERSE_EVIDENCE_QUALITY:
         return True
     score = _safe_float(item.get("evidence_score"))
     return score is not None and score >= 0.55
@@ -1458,7 +1432,7 @@ def _model_threshold(bundle: Stage2InputBundle) -> float:
         for key in ("threshold", "threshold_tuned", "decision_threshold"):
             value = _safe_float(source.get(key))
             if value is not None and value > 0:
-                return value
+                return float(value)
     return 0.315
 
 
@@ -1662,6 +1636,121 @@ def _evidence_summary_items(
     return items
 
 
+def _decision_trace_items(
+    *,
+    bundle: Stage2InputBundle,
+    committee_label: CommitteeLabel,
+    decision_type: CommitteeDecisionType,
+    veto_triggered: bool,
+    hidden_tail_risk: HiddenTailRiskAssessment,
+    boundary_review: BoundaryReviewAssessment,
+    secondary_review_risk: SecondaryReviewRiskAssessment,
+    overwarning_mitigation: OverwarningMitigationAssessment,
+    reject_confirmation: RejectConfirmationAssessment,
+) -> list[DecisionTraceItem]:
+    """Build an auditable deterministic gate trace for Stage 2 decisions."""
+    probability = bundle.probability_speculative
+    threshold = _model_threshold(bundle)
+    review_priority = _stage2_review_priority(bundle)
+    trigger_reason = _stage2_trigger_reason(bundle)
+    trace = [
+        DecisionTraceItem(
+            gate="stage1_model_view",
+            label="1차 모델 원판단",
+            triggered=bundle.prediction_label == "부적격",
+            severity="risk" if bundle.prediction_label == "부적격" else "info",
+            summary=(
+                f"1차 모델은 {bundle.prediction_label}으로 판단했습니다 "
+                f"(투기등급 확률 {probability:.1%}, 기준선 {threshold:.1%})."
+            ),
+        ),
+        DecisionTraceItem(
+            gate="veto_rule",
+            label="강제 경고 게이트",
+            triggered=veto_triggered,
+            severity="risk" if veto_triggered else "info",
+            summary=(
+                "다중 출처 또는 고신뢰 치명 근거가 확인되어 강제 경고 조건을 충족했습니다."
+                if veto_triggered
+                else "강제 경고 조건은 충족하지 않았습니다."
+            ),
+        ),
+        DecisionTraceItem(
+            gate="hidden_tail_risk",
+            label="숨은 꼬리위험 점검",
+            triggered=hidden_tail_risk.triggered,
+            severity="risk" if hidden_tail_risk.triggered else "info",
+            summary=hidden_tail_risk.reason
+            or "직접 관련 외부 위험 근거로 모델 투자적격 판단을 뒤집을 신호는 제한적입니다.",
+        ),
+        DecisionTraceItem(
+            gate="secondary_review_trigger",
+            label="2차 보조 레이더",
+            triggered=secondary_review_risk.triggered,
+            severity="risk"
+            if secondary_review_risk.risk_signal
+            else ("watch" if secondary_review_risk.triggered else "info"),
+            summary=secondary_review_risk.reason
+            or (
+                "보조 검토 우선순위는 "
+                f"{review_priority or 'none'}입니다."
+                + (f" 사유: {trigger_reason}" if trigger_reason else "")
+            ),
+        ),
+        DecisionTraceItem(
+            gate="boundary_rating_review",
+            label="경계등급 점검",
+            triggered=boundary_review.triggered,
+            severity="watch" if boundary_review.triggered else "info",
+            summary=boundary_review.reason
+            or "이전 공개등급 또는 확률 기준의 BBB-/BB+ 경계 보류 조건은 제한적입니다.",
+        ),
+        DecisionTraceItem(
+            gate="overwarning_mitigation",
+            label="과민경고 완화 점검",
+            triggered=overwarning_mitigation.triggered,
+            severity="mitigation" if overwarning_mitigation.triggered else "info",
+            summary=overwarning_mitigation.reason
+            or "모델 과민경고를 완화할 만큼의 방어력/비위험 근거는 제한적입니다.",
+        ),
+        DecisionTraceItem(
+            gate="reject_confirmation",
+            label="부적격 확정 게이트",
+            triggered=reject_confirmation.confirmed,
+            severity="risk"
+            if reject_confirmation.confirmed
+            else ("watch" if reject_confirmation.triggered else "info"),
+            summary=reject_confirmation.reason
+            or "부적격 확정을 위한 복수의 강한 근거 조건은 충족하지 않았습니다.",
+        ),
+        DecisionTraceItem(
+            gate="final_committee_decision",
+            label="최종 위원회 판단",
+            triggered=True,
+            severity=_decision_trace_final_severity(decision_type),
+            summary=(
+                f"최종 위원회 판단은 {committee_label}이며, "
+                f"세부 유형은 {_committee_decision_type_label(decision_type)}입니다."
+            ),
+        ),
+    ]
+    return trace
+
+
+def _decision_trace_final_severity(
+    decision_type: CommitteeDecisionType,
+) -> Literal["info", "watch", "risk", "mitigation"]:
+    if decision_type == "reject":
+        return "risk"
+    if decision_type == "risk_hold":
+        return "risk"
+    if decision_type == "mitigation_hold":
+        return "mitigation"
+    if decision_type in {"boundary_hold", "review_hold"}:
+        return "watch"
+    return "info"
+
+
 def _evidence_limitations_from_agents(agents: list[AgentOutput]) -> list[str]:
     evidence_agent = next((agent for agent in agents if agent.role == "evidence_audit"), None)
     if evidence_agent is None:
@@ -1816,99 +1905,6 @@ def _final_review_memo(
         f"부채/유동성 교차 검증, 외부 근거 상태를 함께 검토해 최종 의견을 "
         f"{committee_label}로 정리했습니다. {risk_note}. {mitigation_note}."
     )
-
-
-def _safe_float(value: object) -> float | None:
-    try:
-        if value is None or not isinstance(value, int | float | str):
-            return None
-        numeric = float(value)
-        if numeric != numeric:
-            return None
-        return numeric
-    except (TypeError, ValueError):
-        return None
-
-
-def _safe_int(value: object) -> int | None:
-    numeric = _safe_float(value)
-    if numeric is None:
-        return None
-    return int(numeric)
-
-
-def _metric_at_least(row: dict[str, Any], key: str, threshold: float) -> bool:
-    value = _safe_float(row.get(key))
-    return value is not None and value >= threshold
-
-
-def _metric_at_most(row: dict[str, Any], key: str, threshold: float) -> bool:
-    value = _safe_float(row.get(key))
-    return value is not None and value <= threshold
-
-
-def _metric_above(row: dict[str, Any], key: str, threshold: float) -> bool:
-    value = _safe_float(row.get(key))
-    return value is not None and value > threshold
-
-
-def _metric_below(row: dict[str, Any], key: str, threshold: float) -> bool:
-    value = _safe_float(row.get(key))
-    return value is not None and value < threshold
-
-
-def _flag_is_true(value: object) -> bool:
-    if isinstance(value, bool):
-        return value
-    numeric = _safe_float(value)
-    if numeric is not None:
-        return numeric >= 0.5
-    return str(value).strip().lower() in {"true", "yes", "y", "on"}
-
-
-def _flag_is_false(value: object) -> bool:
-    if isinstance(value, bool):
-        return not value
-    numeric = _safe_float(value)
-    if numeric is not None:
-        return numeric < 0.5
-    return str(value).strip().lower() in {"false", "no", "n", "off"}
-
-
-def _clean_text_items(items: list[str]) -> list[str]:
-    return [_clean_korean_review_text(item) for item in items]
-
-
-def _clean_evidence_summary_items(items: list[dict[str, str]]) -> list[dict[str, str]]:
-    return [
-        {
-            **item,
-            "summary": _clean_korean_review_text(str(item.get("summary", ""))),
-        }
-        for item in items
-    ]
-
-
-def _clean_korean_review_text(text: str) -> str:
-    """Clean committee prose for Korean report output."""
-    cleaned = str(text).strip()
-    replacements = {
-        "적격로": "적격으로",
-        "부적격로": "부적격으로",
-        "투자적격 등급을 확정합니다": "투자적격 검토 의견을 제시합니다",
-        "부적격 등급을 확정합니다": "부적격 검토 의견을 제시합니다",
-        "신용등급을 확정합니다": "신용위험 검토 의견을 제시합니다",
-        "등급을 확정합니다": "검토 의견을 제시합니다",
-        "최종 승인합니다": "검토 의견으로 정리합니다",
-        "최종 승인": "검토 의견",
-        "확정합니다": "검토 의견을 제시합니다",
-        "승인합니다": "의견을 제시합니다",
-    }
-    for old, new in replacements.items():
-        cleaned = cleaned.replace(old, new)
-    while ".." in cleaned:
-        cleaned = cleaned.replace("..", ".")
-    return cleaned
 
 
 __all__ = ["build_committee_view", "build_committee_view_model"]

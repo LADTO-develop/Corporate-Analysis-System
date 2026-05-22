@@ -4,6 +4,13 @@ from __future__ import annotations
 
 from cas.dashboard.committee_copy import committee_decision_type_info
 from cas.dashboard.formatting import COVERAGE_CAP_LABEL, format_ratio_value
+from cas.dashboard.labels import (
+    format_stage2_risk_band,
+    to_committee_base_label,
+    to_industry_label,
+    to_market_display_label,
+    to_stage2_risk_band,
+)
 
 
 def test_coverage_ratios_are_displayed_as_multiples() -> None:
@@ -35,3 +42,12 @@ def test_committee_decision_copy_is_user_friendly() -> None:
     assert "BBB-/BB+" in boundary["detail"]
     assert "바로 부적격으로 단정하긴 이릅니다" in mitigation["body"]
     assert "SHAP" in mitigation["action"]
+
+
+def test_dashboard_label_helpers_match_user_facing_copy() -> None:
+    assert to_market_display_label("KOSPI") == "코스피"
+    assert to_industry_label("it_services") == "IT·서비스업"
+    assert to_committee_base_label("투자적격") == "적격"
+    assert to_committee_base_label("unknown") == "보류"
+    assert to_stage2_risk_band("고위험") == "high_risk"
+    assert format_stage2_risk_band("watch") == "관찰"

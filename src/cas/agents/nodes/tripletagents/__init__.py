@@ -20,7 +20,7 @@ def run_triplet_agents(
     recommendation: Recommendation,
     confidence: float,
     model_name: str,
-    model_provider: str = "anthropic",
+    model_provider: str = "openai",
     quant_model_provider: str | None = None,
     quant_model_name: str | None = None,
     evidence_model_provider: str | None = None,

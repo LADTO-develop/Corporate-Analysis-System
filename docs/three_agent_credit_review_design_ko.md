@@ -187,13 +187,15 @@ Stage 2는 Stage 1 모델 결과를 덮어쓰지 않는다.
 ```bash
 CAS_ENABLE_EXTERNAL_EVIDENCE=1
 CAS_STAGE2_RUNNER=deterministic
-CAS_STAGE2_MODEL=claude-sonnet-4-5-20250929
+CAS_STAGE2_AGNO_MODE=single
+CAS_STAGE2_MODEL_PROVIDER=openai
+CAS_STAGE2_MODEL=gpt-4.1-mini
 OPENDART_API_KEY=...
 NAVER_CLIENT_ID=...
 NAVER_CLIENT_SECRET=...
 TAVILY_API_KEY=...
 # Keep real API keys out of commits and PR bodies.
-ANTHROPIC_API_KEY=
+OPENAI_API_KEY=
 ```
 
 현재 CAS는 `news_cache` 노드에서 Naver 뉴스, Tavily 검색, OpenDART 공시를
