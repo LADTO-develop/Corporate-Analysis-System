@@ -781,7 +781,21 @@ def test_committee_view_allows_single_medium_financing_when_defensive_tn() -> No
     assert "정상기업 과잉 보류 방어 guardrail" in committee_view["mitigating_factors"][0]
 
 
-def test_committee_view_blocks_overhold_guardrail_for_repeated_financing() -> None:
+@pytest.mark.parametrize(
+    "conflicting_chair_memo",
+    [
+        "Stage 1 모델의 투자적격 판단을 유지하되, 단기 유동성 취약점은 관찰합니다.",
+        (
+            "Stage 1 모델의 투자적격 판단과 외부 증거의 낮은 위험 수준이 일치하여, "
+            "모델 라벨을 유지하되 단기 유동성 취약점과 현금흐름 변동성에 대한 "
+            "주의가 필요함을 명확히 함."
+        ),
+        "최종 라벨은 투자적격 유지하되 조건부 검토 필요로 명시함.",
+    ],
+)
+def test_committee_view_blocks_overhold_guardrail_for_repeated_financing(
+    conflicting_chair_memo: str,
+) -> None:
     state: AgentState = {
         "company_id": "294140",
         "company_name": "(주)레몬",
@@ -848,9 +862,6 @@ def test_committee_view_blocks_overhold_guardrail_for_repeated_financing() -> No
             ],
         },
     }
-    conflicting_chair_memo = (
-        "Stage 1 모델의 투자적격 판단을 유지하되, 단기 유동성 취약점은 관찰합니다."
-    )
     agents = [
         AgentOutput(role="quant_credit", summary="정량 결과", findings=[], confidence=0.8),
         AgentOutput(role="evidence_audit", summary="근거 검토", findings=[], confidence=0.7),

@@ -69,3 +69,9 @@ Agno live 결과를 반영해 단일 medium 자금조달 공시와 반복·고�
 | Cached-evidence replay after SPAC guardrail | 3/8 = 37.5% | 8/8 = 100.0% | 3 | 5 | 2 | 현대무벡스 risk_hold→boundary_hold, hidden tail risk 해제 |
 
 이 개선은 strict TN 성공률을 올리는 변화가 아니라, 정상기업을 과도하게 `위험 보류`로 표시하는 문제를 줄이는 subtype 품질 개선이다.
+
+## Agno Chair Memo Consistency Follow-up
+
+Agno live 결과에서 최종 위원회 라벨은 `보류`인데 chair memo가 "모델 라벨을 유지하되" 또는 "최종 라벨은 투자적격 유지하되"처럼 읽히는 표현이 남을 수 있음을 확인했다. 따라서 최종 라벨이 `적격`이 아닌 경우에는 `투자적격 판단을 유지`, `모델 라벨을 유지`, `모델 라벨을 존중`, `최종 라벨은 투자적격` 계열 문장을 보강 메모로 붙이지 않도록 필터를 확장했다.
+
+이 변경은 최종 라벨이나 strict/review-safe 성능을 바꾸는 guardrail이 아니라, Agno 3-agent 출력이 사용자에게 전달될 때 최종 판단과 설명 문구가 충돌하지 않도록 하는 설명 품질 개선이다. 회귀 테스트에는 `(주)레몬` 반복 자금조달 보류 케이스를 사용했고, 실제 Agno live에서 관찰된 표현 변형을 함께 추가했다.

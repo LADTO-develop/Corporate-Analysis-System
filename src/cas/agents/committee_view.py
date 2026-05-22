@@ -2193,6 +2193,13 @@ def _chair_report_memo_conflicts_with_final_label(
         "투자적격 라벨을 유지",
         "투자적격 등급을 유지",
         "투자적격 분류를 유지",
+        "투자적격 유지",
+        "모델 라벨을 유지",
+        "모델 라벨 유지",
+        "모델 라벨을 존중",
+        "모델 라벨 존중",
+        "최종 라벨은 투자적격",
+        "최종 라벨을 투자적격",
         "기존 투자적격",
     )
     return any(marker in text for marker in investment_keep_markers)
