@@ -6,6 +6,9 @@ CAS is organized around the runtime structure in the system diagram:
 
 - Offline preparation builds a selectable company universe, a company feature store,
   and a model registry.
+- Missing TS2000 consolidated financial statement values are supplemented with
+  OpenDART annual filings before feature-store exports are rebuilt. The rule is
+  CFS first and OFS fallback only when CFS is unavailable.
 - Online service code accepts a selected company, loads features,
   runs realtime XGBoost inference, applies deterministic rules, runs role-fixed
   multi-agent explanation, validates a strict JSON response, and renders the web
@@ -23,6 +26,11 @@ The web-to-pipeline input contract starts in `docs/pipeline/data_pipeline.md`.
 | Source data          | ---> | Preprocessing pipeline  |
 | finance/market/info  |      +-------------------------+
 +----------------------+                 |
+          ^                              v
+          |                   +-------------------------+
+          +------------------ | OpenDART CFS/OFS patch  |
+                              +-------------------------+
+                                         |
                                          v
                               +-------------------------+
                               | Processed company list  |
@@ -47,6 +55,10 @@ The web-to-pipeline input contract starts in `docs/pipeline/data_pipeline.md`.
 
 Local equivalents:
 
+- `data/raw/ts2000/TS2000_Credit_Model_Dataset_Model_V1.csv`: canonical TS2000
+  model source after credit-rating label consolidation and OpenDART financial
+  statement supplementation.
+- `data/raw/opendart/`: OpenDART raw rows, summaries, and supplement audit logs.
 - `data/input/companies/*.yaml`: processed company selection records
 - `configs/runtime/analysis.yaml`: feature ranges, registry metadata, rules
 - `data/outputs/dashboard/*`: exported dashboard feature/model artifacts

@@ -7,6 +7,8 @@ CAS 데이터 파이프라인 관련 문서를 모아 둔 디렉토리다.
 - 웹 리스팅 기업 선택값을 `company_selection` 계약으로 정규화한다.
 - 정규화된 입력을 `AgentState` 시작 상태로 변환한다.
 - `data` 노드는 `company_selection`을 feature master/inference row로 해석한다.
+- feature master와 inference row는 TS2000 원천에 OpenDART CFS/OFS 보강을 반영한
+  공식 43개 입력셋을 기준으로 한다.
 - 기존 `company_id` 기반 실행 경로는 유지한다.
 - 로컬에 `xgboost`가 없거나 모델 artifact를 읽을 수 없는 경우 Stage 1 deterministic fallback으로 이어진다.
 

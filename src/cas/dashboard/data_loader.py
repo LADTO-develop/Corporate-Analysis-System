@@ -11,7 +11,10 @@ from cas.utils.io import read_json
 
 ROOT = Path(__file__).resolve().parents[3]
 FEATURE43_ARTIFACT_DIR = ROOT / "data" / "outputs" / "dashboard" / "feature_43_mvp"
-DEFAULT_ARTIFACT_DIR = FEATURE43_ARTIFACT_DIR
+FEATURE43_INFERENCE_2026_ARTIFACT_DIR = (
+    ROOT / "data" / "outputs" / "dashboard" / "feature_43_inference_2026"
+)
+DEFAULT_ARTIFACT_DIR = FEATURE43_INFERENCE_2026_ARTIFACT_DIR
 
 
 @dataclass(slots=True)
@@ -39,16 +42,28 @@ def _read_optional_csv(path: Path) -> pd.DataFrame | None:
     """Read a CSV if it exists, otherwise return None."""
     if not path.exists():
         return None
-    return pd.read_csv(path, encoding="utf-8-sig")
+    return pd.read_csv(path, encoding="utf-8-sig", dtype={"stock_code": str})
 
 
 def load_dashboard_artifacts(artifact_dir: Path | None = None) -> DashboardArtifacts:
     """Load dashboard artifacts from disk."""
     base_dir = artifact_dir or DEFAULT_ARTIFACT_DIR
 
-    company_universe = pd.read_csv(base_dir / "company_universe.csv", encoding="utf-8-sig")
-    company_latest = pd.read_csv(base_dir / "company_latest.csv", encoding="utf-8-sig")
-    peer_percentiles = pd.read_csv(base_dir / "peer_percentiles.csv", encoding="utf-8-sig")
+    company_universe = pd.read_csv(
+        base_dir / "company_universe.csv",
+        encoding="utf-8-sig",
+        dtype={"stock_code": str},
+    )
+    company_latest = pd.read_csv(
+        base_dir / "company_latest.csv",
+        encoding="utf-8-sig",
+        dtype={"stock_code": str},
+    )
+    peer_percentiles = pd.read_csv(
+        base_dir / "peer_percentiles.csv",
+        encoding="utf-8-sig",
+        dtype={"stock_code": str},
+    )
     feature_dictionary = pd.read_csv(
         base_dir / "feature_dictionary.csv",
         encoding="utf-8-sig",

@@ -23,12 +23,27 @@
 ## 43-feature 산출물 재생성
 
 ```bash
+python scripts/collect_opendart_financial_statements.py --source-kind model-v1 --all-years --fallback-ofs
+python scripts/apply_opendart_financial_supplements.py
 python scripts/rebuild_feature_43_dataset.py
+python scripts/import_feature_43_inference_2026_aux.py
 python scripts/build_feature_43_inference_2026.py
+python scripts/collect_opendart_financial_statements.py --source-kind inference --target-fiscal-year 2025 --fallback-ofs
+python scripts/apply_opendart_inference_financial_supplements.py
+python scripts/build_feature_43_inference_2026.py --check-only
 python scripts/export_feature_43_dashboard_artifacts.py
 python scripts/export_feature_43_model_diagnostics.py
 python scripts/export_feature_43_threshold_policy_experiments.py
 ```
+
+## 현재 모델 기준 성능
+
+OpenDART CFS/OFS 보강 후 43-feature XGBoost 모델을 재생성한 기준입니다.
+
+| 기준선 | PR-AUC | ROC-AUC | Precision | Recall | F1 |
+|---|---:|---:|---:|---:|---:|
+| threshold=0.5 | 0.8329 | 0.9415 | 0.7737 | 0.7241 | 0.7481 |
+| tuned threshold=0.32 | 0.8329 | 0.9415 | 0.7004 | 0.8522 | 0.7689 |
 
 ## 정리 기준
 

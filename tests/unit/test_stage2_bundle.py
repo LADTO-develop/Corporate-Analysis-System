@@ -44,6 +44,7 @@ def test_stage2_input_bundle_exports_prompt_payload() -> None:
     assert payload["company"]["company_name"] == "삼천당제약(주)"
     assert payload["company"]["market"] == "KOSDAQ"
     assert "model_view" in payload
+    assert "prior_rating_reference" in payload
     assert payload["credit_policy_snapshot"] == {}
 
 

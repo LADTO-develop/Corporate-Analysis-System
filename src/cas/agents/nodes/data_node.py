@@ -15,6 +15,7 @@ from cas.agents.contracts import (
     normalize_company_selection,
 )
 from cas.agents.state import AgentState, AuditEntry
+from cas.ratings import lookup_prior_rating_reference
 from cas.utils.io import read_yaml
 from cas.utils.logging import get_logger
 
@@ -281,6 +282,12 @@ def _dataset_backed_payload(
     size_group = str(dataset_row.get("firm_size_group") or "unknown")
     industry = str(dataset_row.get("industry_macro_category") or "unknown")
     source_path = str(dataset_row.get("__source_path") or _FEATURE_MASTER_PATH)
+    prior_rating_reference = lookup_prior_rating_reference(
+        stock_code=normalized_stock_code,
+        fiscal_year=fiscal_year,
+        eval_year=analysis_year,
+        universe="inference_2026" if "inference_2026" in source_path else "model_v1",
+    )
     company_id = (
         _build_snapshot_company_id(
             market=market,
@@ -337,6 +344,7 @@ def _dataset_backed_payload(
                 "market": market,
                 "summary": summary,
             },
+            "prior_rating_reference": prior_rating_reference,
             "financials": {},
             "qualitative": {},
             "market_context": {},
@@ -347,6 +355,7 @@ def _dataset_backed_payload(
         # source_feature_row는 Stage 1이 바로 모델 입력 벡터를 만들 때 쓰는 원본 row다.
         # peer_comparison_rows는 Stage 2 QuantCreditAgent가 산업/시장 비교 문장을 만들 때 쓴다.
         "source_feature_row": dataset_row,
+        "prior_rating_reference": prior_rating_reference,
         "peer_comparison_rows": peer_rows,
         "insufficient_data": False,
         "audit": [audit],
