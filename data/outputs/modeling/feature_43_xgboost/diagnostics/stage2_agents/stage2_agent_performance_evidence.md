@@ -190,7 +190,7 @@ OpenAI Agno 재검증에서 드러난 FN 미상승 원인은 정상기업 과잉
 
 추가 진단에서는 남은 TN 과잉 보류 중 데이타솔루션 2020이 `interest_coverage_under_1` 단일 blocking flag에 과하게 묶인 것으로 확인됐다. 이 케이스는 ICR이 1배 미만이지만 OCF/총부채 15.7%, cashflow coverage 7.83배, 현금비율 34.0%, 총차입금 비중 7.6%로 현금흐름과 차입 부담이 방어적이었다. 이에 따라 blocking flag가 이자보상 단일 항목이고, OCF·현금·저차입 조건이 동시에 충족되는 경우에만 정상기업 과잉 보류 guardrail을 허용했다. 같은 8건 deterministic 재평가에서 데이타솔루션은 `경계등급 보류`에서 `적격`으로 개선됐고, FN 2건은 계속 `경계등급 보류`, 휴맥스는 음수 OCF와 음수 ICR 때문에 보류로 남았다. 결과는 엄격 기준 7/8 = 87.5%, review-safe 8/8 = 100.0%다.
 
-속도/검증 신뢰도 쪽 문제도 함께 확인했다. 기존 `single` 모드는 OpenAI 단일 provider라는 뜻이지 LLM 1회 호출이 아니어서 케이스당 QuantCredit, EvidenceAudit, ChairReport 호출이 발생한다. 빠른 smoke test를 위해 `CAS_STAGE2_AGNO_MODE=single_call`을 추가했고, live latency 측정 시 캐시 재사용을 피할 수 있도록 batch CLI에 `--no-stage2-llm-cache`를 추가했다. 따라서 앞으로 실제 API 속도를 잴 때는 `single_call + --no-stage2-llm-cache`와 기존 `single + --no-stage2-llm-cache`를 나란히 비교한다.
+속도/검증 신뢰도 쪽 문제도 함께 확인했다. `single` 모드는 OpenAI 단일 provider라는 뜻이지 LLM 1회 호출이 아니어서 케이스당 QuantCredit, EvidenceAudit, ChairReport 호출이 발생한다. 이 구조가 3에이전트 성능 증빙에 더 맞으므로 유지하고, live latency 측정 시 캐시 재사용을 피할 수 있도록 batch CLI에 `--no-stage2-llm-cache`를 추가했다. 따라서 앞으로 실제 API 속도를 잴 때는 `single + --no-stage2-llm-cache` 기준으로 측정한다.
 
 ## Agno 실행 기준 보류 세분화 결과
 

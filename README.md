@@ -197,10 +197,9 @@ Stage 2는 CI와 기본 로컬 실행에서 `CAS_STAGE2_RUNNER=deterministic`을
 Agno 기반 로컬 데모에서는 optional dependency를 설치한 뒤 `CAS_STAGE2_RUNNER=agno`를
 설정합니다. 기본 Agno 모드는 `CAS_STAGE2_AGNO_MODE=single`이며,
 `CAS_STAGE2_MODEL_PROVIDER=openai`, `CAS_STAGE2_MODEL=gpt-4.1-mini` 기준으로
-`OPENAI_API_KEY`만 있으면 실행할 수 있게 맞췄습니다. 속도 점검이나 smoke test에서는
-`CAS_STAGE2_AGNO_MODE=single_call`을 선택해 세 역할 출력을 OpenAI structured output
-1회 호출로 받을 수 있습니다. live 지연시간을 재려면 `CAS_STAGE2_LLM_CACHE_ENABLED=0`
-또는 batch CLI의 `--no-stage2-llm-cache`를 같이 사용합니다. 여러 모델 관점을 비교하고 싶을 때만
+`OPENAI_API_KEY`만 있으면 세 역할 agent를 모두 OpenAI로 실행할 수 있게 맞췄습니다.
+live 지연시간을 재려면 `CAS_STAGE2_LLM_CACHE_ENABLED=0` 또는 batch CLI의
+`--no-stage2-llm-cache`를 같이 사용합니다. 여러 모델 관점을 비교하고 싶을 때만
 `CAS_STAGE2_AGNO_MODE=multi_llm_committee`를 선택해 Claude가 정량 관점,
 GPT가 외부근거/반론 관점, Gemini가 최종 종합을 맡도록 확장합니다. 이 멀티 모드에는
 `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GOOGLE_API_KEY` 또는 `GEMINI_API_KEY`가 필요합니다.

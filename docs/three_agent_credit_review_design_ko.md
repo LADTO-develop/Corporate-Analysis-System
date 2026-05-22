@@ -227,9 +227,8 @@ Agno/LLM 추론은 CI와 일반 재현 실행에서는 꺼 둔다.
 structured output 기반 실행으로 교체된다. 기본 live 모드는
 `CAS_STAGE2_AGNO_MODE=single`이며 provider/model은 `CAS_STAGE2_MODEL_PROVIDER`,
 `CAS_STAGE2_MODEL` 또는 batch CLI의 `--stage2-model-provider`, `--stage2-model`로
-선택한다. 속도 점검이나 smoke test에서는 `single_call` 모드를 사용해
-QuantCredit/EvidenceAudit/ChairReport 출력을 한 번의 structured output 호출로 받을 수
-있다. live 지연시간을 측정할 때는 LLM 응답 캐시를 끄기 위해
+선택한다. `single` 모드는 한 provider를 쓰되 QuantCredit/EvidenceAudit/ChairReport
+세 역할 agent를 분리 실행한다. live 지연시간을 측정할 때는 LLM 응답 캐시를 끄기 위해
 `CAS_STAGE2_LLM_CACHE_ENABLED=0` 또는 batch CLI의 `--no-stage2-llm-cache`를 사용한다.
 여러 LLM 관점을 비교할 때만 `multi_llm_committee` 모드를 사용한다.
 

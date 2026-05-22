@@ -82,8 +82,6 @@ def parse_args() -> argparse.Namespace:
         "--stage2-agno-mode",
         choices=[
             "single",
-            "single_call",
-            "single_agent",
             "multi",
             "multi_llm",
             "multi_llm_committee",
@@ -91,8 +89,7 @@ def parse_args() -> argparse.Namespace:
         default=os.environ.get("CAS_STAGE2_AGNO_MODE", "single"),
         help=(
             "Agno routing mode for --stage2-runner agno. Default single uses one "
-            "provider across the three role agents. single_call uses one structured "
-            "LLM request for faster smoke tests. OpenAI-only API runs do not require "
+            "provider across the three role agents. OpenAI-only API runs do not require "
             "Claude/Gemini credentials."
         ),
     )

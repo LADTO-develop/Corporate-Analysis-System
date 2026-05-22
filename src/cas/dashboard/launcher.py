@@ -87,11 +87,10 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--stage2-agno-mode",
-        choices=("single", "single_call", "single_agent", "multi_llm_committee"),
+        choices=("single", "multi_llm_committee"),
         default=None,
         help=(
-            "Route Agno Stage 2 through one provider, one fast structured call, "
-            "or Claude/GPT/Gemini committee mode."
+            "Route Agno Stage 2 through one provider or Claude/GPT/Gemini committee mode."
         ),
     )
     parser.add_argument(

@@ -28,7 +28,7 @@ EvidenceAuditFn = Callable[[Stage2InputBundle], EvidenceAuditOutput]
 ChairReportFn = Callable[[Stage2InputBundle, Recommendation, float], ChairReportOutput]
 Stage2RunnerOutputs = tuple[QuantCreditOutput, EvidenceAuditOutput, ChairReportOutput]
 STAGE2_LLM_CACHE_VERSION = "stage2_llm_response_v2"
-STAGE2_SINGLE_CALL_PROMPT_VERSION = "stage2_single_call_prompt_v1"
+STAGE2_LLM_CLIENT_PROMPT_VERSION = "stage2_llm_client_prompt_v1"
 STAGE2_TRIPLET_PROMPT_VERSION = "stage2_triplet_prompt_v1"
 
 
@@ -185,17 +185,6 @@ class AgnoStage2AgentRunner:
                     output_schema=Stage2LLMResponse,
                 )
                 successful_backend_name = self.backend_name
-            elif self._uses_single_call_agent():
-                raw_response = _run_single_call_agent_with_agno(
-                    bundle=bundle,
-                    recommendation=recommendation,
-                    confidence=confidence,
-                    model_provider=self.model_provider,
-                    model_name=self.model_name,
-                    max_tokens=self.max_tokens,
-                    draft_outputs=self._draft_outputs(bundle, recommendation, confidence),
-                )
-                successful_backend_name = "agno_single_call"
             else:
                 raw_response = _run_triplet_agents_with_agno(
                     bundle=bundle,
@@ -287,13 +276,6 @@ class AgnoStage2AgentRunner:
     def _uses_multi_llm_committee(self) -> bool:
         return self.routing_mode.strip().lower() in {"multi", "multi_llm", "multi_llm_committee"}
 
-    def _uses_single_call_agent(self) -> bool:
-        return self.routing_mode.strip().lower() in {
-            "single_call",
-            "single_agent",
-            "single_llm_response",
-        }
-
 
 def _build_prompt_payload(
     *,
@@ -365,15 +347,15 @@ def _stage2_cache_payload(
         "stage2_input_bundle": bundle.to_prompt_payload(),
         "deterministic_draft_outputs": (
             runner._draft_outputs(bundle, recommendation, confidence)
-            if runner.llm_client is not None or runner._uses_single_call_agent()
+            if runner.llm_client is not None
             else {}
         ),
     }
 
 
 def _prompt_contract_version(runner: AgnoStage2AgentRunner) -> str:
-    if runner.llm_client is not None or runner._uses_single_call_agent():
-        return STAGE2_SINGLE_CALL_PROMPT_VERSION
+    if runner.llm_client is not None:
+        return STAGE2_LLM_CLIENT_PROMPT_VERSION
     return STAGE2_TRIPLET_PROMPT_VERSION
 
 
@@ -414,58 +396,6 @@ def _write_stage2_cached_response(
         env_var="CAS_STAGE2_LLM_CACHE_ENABLED",
         default=True,
     )
-
-
-def _run_single_call_agent_with_agno(
-    *,
-    bundle: Stage2InputBundle,
-    recommendation: Recommendation,
-    confidence: float,
-    model_provider: str,
-    model_name: str,
-    max_tokens: int,
-    draft_outputs: dict[str, Any],
-) -> Stage2LLMResponse:
-    """Run one structured Agno call for all Stage 2 role outputs."""
-    try:
-        runtime_module = import_module("cas.agents.nodes.tripletagents.runtime")
-    except ImportError as error:
-        raise RuntimeError(
-            "CAS_STAGE2_AGNO_MODE=single_call could not import the Agno runtime helpers."
-        ) from error
-
-    provider_label = runtime_module.provider_label(model_provider)
-    agent = runtime_module.build_agno_agent(
-        name=f"{provider_label}_Stage2_SingleCall_Agent",
-        model_provider=model_provider,
-        model_name=model_name,
-        max_tokens=max_tokens,
-        response_model=Stage2LLMResponse,
-        instructions=[
-            "You are the CAS Stage 2 credit-review committee in a single structured call.",
-            "Fill quant_credit, evidence_audit, and chair_report as three distinct roles.",
-            "Use deterministic_draft_outputs as a baseline, but correct wording when supplied evidence requires it.",
-            "Preserve Stage 1 prediction_label and probability; do not produce an official credit rating.",
-            "Use only supplied evidence and state limitations when evidence is unavailable or weak.",
-            "Return only the Stage2LLMResponse object.",
-        ],
-    )
-    prompt_payload = _build_prompt_payload(
-        bundle=bundle,
-        recommendation=recommendation,
-        confidence=confidence,
-        draft_outputs=draft_outputs,
-    )
-    raw_response = runtime_module.run_structured_agent(
-        agent=agent,
-        query=(
-            "Run CAS Stage 2 in fast single-call mode. "
-            "Return quant_credit, evidence_audit, and chair_report only.\n\n"
-            f"{runtime_module.json_payload(prompt_payload)}"
-        ),
-        response_model=Stage2LLMResponse,
-    )
-    return Stage2LLMResponse.model_validate(raw_response)
 
 
 def _run_triplet_agents_with_agno(

@@ -135,13 +135,13 @@ def test_configure_runtime_can_disable_stage2_llm_cache(
     batch_module.configure_runtime(
         live_external_evidence=False,
         stage2_runner="agno",
-        stage2_agno_mode="single_call",
+        stage2_agno_mode="single",
         stage2_model_provider="openai",
         stage2_model="gpt-4.1-mini",
         stage2_llm_cache=False,
     )
 
-    assert batch_module.os.environ["CAS_STAGE2_AGNO_MODE"] == "single_call"
+    assert batch_module.os.environ["CAS_STAGE2_AGNO_MODE"] == "single"
     assert batch_module.os.environ["CAS_STAGE2_LLM_CACHE_ENABLED"] == "0"
 
 
