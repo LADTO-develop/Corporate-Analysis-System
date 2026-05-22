@@ -22,7 +22,7 @@ def build_agno_agent[ModelT: BaseModel](
     *,
     name: str,
     model_name: str,
-    model_provider: str = "anthropic",
+    model_provider: str = "openai",
     max_tokens: int,
     response_model: type[ModelT],
     instructions: list[str],

@@ -58,7 +58,7 @@ def run_evidence_audit_agent(
     *,
     bundle: Stage2InputBundle,
     model_name: str,
-    model_provider: str = "anthropic",
+    model_provider: str = "openai",
     max_tokens: int,
 ) -> EvidenceAuditOutput:
     """Run the Agno EvidenceAuditAgent and map it to the CAS Stage 2 schema."""

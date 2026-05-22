@@ -163,6 +163,89 @@ def render_committee_metric_guide() -> None:
     )
 
 
+def render_committee_decision_trace(
+    decision_trace: list[dict[str, object]],
+    *,
+    expanded: bool = False,
+) -> None:
+    """Render the deterministic Stage 2 gate trace in a user-friendly timeline."""
+    clean_items = [
+        item
+        for item in decision_trace
+        if isinstance(item, dict) and str(item.get("summary") or "").strip()
+    ]
+    if not clean_items:
+        return
+
+    trace_cards = []
+    for index, item in enumerate(clean_items, start=1):
+        severity = str(item.get("severity") or "info").strip().lower()
+        tone = severity if severity in {"info", "watch", "risk", "mitigation"} else "info"
+        triggered = bool(item.get("triggered", False))
+        status_label = "작동" if triggered else "확인"
+        label = str(item.get("label") or item.get("gate") or f"{index}단계")
+        summary = _normalize_committee_text(item.get("summary"))
+        trace_cards.append(
+            "<div class='committee-trace-card "
+            f"{escape(tone)} {'triggered' if triggered else 'muted'}'>"
+            "<div class='committee-trace-head'>"
+            f"<span class='committee-trace-step'>{index}</span>"
+            f"<span class='committee-trace-title'>{escape(label)}</span>"
+            f"<span class='committee-trace-status'>{escape(status_label)}</span>"
+            "</div>"
+            f"<div class='committee-trace-body'>{escape(summary)}</div>"
+            "</div>"
+        )
+
+    with st.expander("판단 과정 보기", expanded=expanded):
+        st.caption(
+            "2차 위원회가 결론을 내릴 때 확인한 기준들을 순서대로 보여줍니다. "
+            "`작동`은 해당 기준이 실제 판단에 영향을 준 신호이고, `확인`은 점검했지만 "
+            "강하게 켜지지는 않은 기준입니다."
+        )
+        st.markdown(
+            (
+                "<style>"
+                ".committee-trace-flow{display:grid;gap:0.65rem;margin-top:0.7rem;}"
+                ".committee-trace-card{padding:0.9rem 1rem;border-radius:16px;"
+                "background:var(--cas-card-bg);border:1px solid var(--cas-border-soft);"
+                "box-shadow:var(--cas-card-shadow);}"
+                ".committee-trace-card.muted{opacity:0.78;}"
+                ".committee-trace-card.risk.triggered{border-color:var(--cas-risk-border);"
+                "box-shadow:var(--cas-card-shadow),inset 4px 0 0 var(--cas-risk);}"
+                ".committee-trace-card.watch.triggered{border-color:var(--cas-warning-border);"
+                "box-shadow:var(--cas-card-shadow),inset 4px 0 0 var(--cas-warning);}"
+                ".committee-trace-card.mitigation.triggered{border-color:var(--cas-success-border);"
+                "box-shadow:var(--cas-card-shadow),inset 4px 0 0 var(--cas-success);}"
+                ".committee-trace-card.info.triggered{border-color:var(--cas-neutral-border);"
+                "box-shadow:var(--cas-card-shadow),inset 4px 0 0 var(--cas-neutral);}"
+                ".committee-trace-head{display:flex;align-items:center;gap:0.55rem;flex-wrap:wrap;"
+                "margin-bottom:0.45rem;}"
+                ".committee-trace-step{display:inline-flex;align-items:center;justify-content:center;"
+                "width:1.7rem;height:1.7rem;border-radius:999px;background:var(--cas-neutral-soft);"
+                "color:var(--cas-text);font-size:0.82rem;font-weight:800;}"
+                ".committee-trace-title{font-weight:800;color:var(--cas-text);}"
+                ".committee-trace-status{margin-left:auto;padding:0.18rem 0.55rem;border-radius:999px;"
+                "font-size:0.78rem;font-weight:800;background:var(--cas-neutral-soft);"
+                "border:1px solid var(--cas-neutral-border);color:var(--cas-text);}"
+                ".committee-trace-card.risk.triggered .committee-trace-status{"
+                "background:var(--cas-risk-soft);border-color:var(--cas-risk-border);"
+                "color:var(--cas-risk);}"
+                ".committee-trace-card.watch.triggered .committee-trace-status{"
+                "background:var(--cas-warning-soft);border-color:var(--cas-warning-border);"
+                "color:var(--cas-warning);}"
+                ".committee-trace-card.mitigation.triggered .committee-trace-status{"
+                "background:var(--cas-success-soft);border-color:var(--cas-success-border);"
+                "color:var(--cas-success);}"
+                ".committee-trace-body{font-size:0.94rem;line-height:1.62;color:var(--cas-muted);"
+                "word-break:keep-all;}"
+                "</style>"
+                f"<div class='committee-trace-flow'>{''.join(trace_cards)}</div>"
+            ),
+            unsafe_allow_html=True,
+        )
+
+
 def _normalize_committee_text(text: object) -> str:
     """Normalize committee text while preserving its full meaning."""
     return re.sub(r"\s+", " ", str(text or "")).strip()

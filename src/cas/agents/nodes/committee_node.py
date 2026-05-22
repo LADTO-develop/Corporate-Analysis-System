@@ -294,9 +294,9 @@ def _stage2_runner() -> Stage2AgentRunner:
     if runner_name == "agno":
         return AgnoStage2AgentRunner(
             deterministic_runner=deterministic_runner,
-            routing_mode=os.environ.get("CAS_STAGE2_AGNO_MODE", "multi_llm_committee"),
-            model_provider=os.environ.get("CAS_STAGE2_MODEL_PROVIDER", "anthropic"),
-            model_name=os.environ.get("CAS_STAGE2_MODEL", "claude-sonnet-4-5-20250929"),
+            routing_mode=os.environ.get("CAS_STAGE2_AGNO_MODE", "single"),
+            model_provider=os.environ.get("CAS_STAGE2_MODEL_PROVIDER", "openai"),
+            model_name=os.environ.get("CAS_STAGE2_MODEL", "gpt-4.1-mini"),
             quant_model_provider=os.environ.get("CAS_STAGE2_QUANT_PROVIDER") or None,
             quant_model_name=os.environ.get("CAS_STAGE2_QUANT_MODEL") or None,
             evidence_model_provider=os.environ.get("CAS_STAGE2_EVIDENCE_PROVIDER") or None,

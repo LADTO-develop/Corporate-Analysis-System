@@ -76,17 +76,17 @@ def parse_args() -> argparse.Namespace:
         default=os.environ.get("CAS_STAGE2_AGNO_MODE", "single"),
         help=(
             "Agno routing mode for --stage2-runner agno. Default is single so "
-            "Claude-only API runs do not require Gemini/OpenAI credentials."
+            "OpenAI-only API runs do not require Claude/Gemini credentials."
         ),
     )
     parser.add_argument(
         "--stage2-model-provider",
-        default=os.environ.get("CAS_STAGE2_MODEL_PROVIDER", "anthropic"),
+        default=os.environ.get("CAS_STAGE2_MODEL_PROVIDER", "openai"),
         help="Provider for single-model Agno mode: anthropic/claude, openai/gpt, or google/gemini.",
     )
     parser.add_argument(
         "--stage2-model",
-        default=os.environ.get("CAS_STAGE2_MODEL", "claude-sonnet-4-5-20250929"),
+        default=os.environ.get("CAS_STAGE2_MODEL", "gpt-4.1-mini"),
         help="Model id for single-model Agno mode.",
     )
     parser.add_argument(
@@ -139,8 +139,8 @@ def configure_runtime(
     live_external_evidence: bool,
     stage2_runner: str,
     stage2_agno_mode: str = "single",
-    stage2_model_provider: str = "anthropic",
-    stage2_model: str = "claude-sonnet-4-5-20250929",
+    stage2_model_provider: str = "openai",
+    stage2_model: str = "gpt-4.1-mini",
 ) -> None:
     load_dotenv(ROOT / ".env")
     os.environ["CAS_STAGE2_RUNNER"] = stage2_runner

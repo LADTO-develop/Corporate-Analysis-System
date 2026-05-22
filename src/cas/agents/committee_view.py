@@ -20,6 +20,7 @@ from cas.agents.committee_schema import (
     CommitteeDecisionType,
     CommitteeLabel,
     CommitteeViewPayload,
+    DecisionTraceItem,
 )
 from cas.agents.committee_utils import (
     clean_evidence_summary_items as _clean_evidence_summary_items,
@@ -234,6 +235,17 @@ def build_committee_view_model(
         mitigating_factors=mitigating_factors
         or ["현재 scaffold 기준 명시적 완화 요인은 제한적입니다."],
         evidence_summary=evidence_summary,
+        decision_trace=_decision_trace_items(
+            bundle=bundle,
+            committee_label=committee_label,
+            decision_type=decision_type,
+            veto_triggered=veto_triggered,
+            hidden_tail_risk=hidden_tail_risk,
+            boundary_review=boundary_review,
+            secondary_review_risk=secondary_review_risk,
+            overwarning_mitigation=overwarning_mitigation,
+            reject_confirmation=reject_confirmation,
+        ),
         final_review_memo=final_review_memo,
     )
 
@@ -1622,6 +1634,121 @@ def _evidence_summary_items(
                 }
             )
     return items
+
+
+def _decision_trace_items(
+    *,
+    bundle: Stage2InputBundle,
+    committee_label: CommitteeLabel,
+    decision_type: CommitteeDecisionType,
+    veto_triggered: bool,
+    hidden_tail_risk: HiddenTailRiskAssessment,
+    boundary_review: BoundaryReviewAssessment,
+    secondary_review_risk: SecondaryReviewRiskAssessment,
+    overwarning_mitigation: OverwarningMitigationAssessment,
+    reject_confirmation: RejectConfirmationAssessment,
+) -> list[DecisionTraceItem]:
+    """Build an auditable deterministic gate trace for Stage 2 decisions."""
+    probability = bundle.probability_speculative
+    threshold = _model_threshold(bundle)
+    review_priority = _stage2_review_priority(bundle)
+    trigger_reason = _stage2_trigger_reason(bundle)
+    trace = [
+        DecisionTraceItem(
+            gate="stage1_model_view",
+            label="1차 모델 원판단",
+            triggered=bundle.prediction_label == "부적격",
+            severity="risk" if bundle.prediction_label == "부적격" else "info",
+            summary=(
+                f"1차 모델은 {bundle.prediction_label}으로 판단했습니다 "
+                f"(투기등급 확률 {probability:.1%}, 기준선 {threshold:.1%})."
+            ),
+        ),
+        DecisionTraceItem(
+            gate="veto_rule",
+            label="강제 경고 게이트",
+            triggered=veto_triggered,
+            severity="risk" if veto_triggered else "info",
+            summary=(
+                "다중 출처 또는 고신뢰 치명 근거가 확인되어 강제 경고 조건을 충족했습니다."
+                if veto_triggered
+                else "강제 경고 조건은 충족하지 않았습니다."
+            ),
+        ),
+        DecisionTraceItem(
+            gate="hidden_tail_risk",
+            label="숨은 꼬리위험 점검",
+            triggered=hidden_tail_risk.triggered,
+            severity="risk" if hidden_tail_risk.triggered else "info",
+            summary=hidden_tail_risk.reason
+            or "직접 관련 외부 위험 근거로 모델 투자적격 판단을 뒤집을 신호는 제한적입니다.",
+        ),
+        DecisionTraceItem(
+            gate="secondary_review_trigger",
+            label="2차 보조 레이더",
+            triggered=secondary_review_risk.triggered,
+            severity="risk"
+            if secondary_review_risk.risk_signal
+            else ("watch" if secondary_review_risk.triggered else "info"),
+            summary=secondary_review_risk.reason
+            or (
+                "보조 검토 우선순위는 "
+                f"{review_priority or 'none'}입니다."
+                + (f" 사유: {trigger_reason}" if trigger_reason else "")
+            ),
+        ),
+        DecisionTraceItem(
+            gate="boundary_rating_review",
+            label="경계등급 점검",
+            triggered=boundary_review.triggered,
+            severity="watch" if boundary_review.triggered else "info",
+            summary=boundary_review.reason
+            or "이전 공개등급 또는 확률 기준의 BBB-/BB+ 경계 보류 조건은 제한적입니다.",
+        ),
+        DecisionTraceItem(
+            gate="overwarning_mitigation",
+            label="과민경고 완화 점검",
+            triggered=overwarning_mitigation.triggered,
+            severity="mitigation" if overwarning_mitigation.triggered else "info",
+            summary=overwarning_mitigation.reason
+            or "모델 과민경고를 완화할 만큼의 방어력/비위험 근거는 제한적입니다.",
+        ),
+        DecisionTraceItem(
+            gate="reject_confirmation",
+            label="부적격 확정 게이트",
+            triggered=reject_confirmation.confirmed,
+            severity="risk"
+            if reject_confirmation.confirmed
+            else ("watch" if reject_confirmation.triggered else "info"),
+            summary=reject_confirmation.reason
+            or "부적격 확정을 위한 복수의 강한 근거 조건은 충족하지 않았습니다.",
+        ),
+        DecisionTraceItem(
+            gate="final_committee_decision",
+            label="최종 위원회 판단",
+            triggered=True,
+            severity=_decision_trace_final_severity(decision_type),
+            summary=(
+                f"최종 위원회 판단은 {committee_label}이며, "
+                f"세부 유형은 {_committee_decision_type_label(decision_type)}입니다."
+            ),
+        ),
+    ]
+    return trace
+
+
+def _decision_trace_final_severity(
+    decision_type: CommitteeDecisionType,
+) -> Literal["info", "watch", "risk", "mitigation"]:
+    if decision_type == "reject":
+        return "risk"
+    if decision_type == "risk_hold":
+        return "risk"
+    if decision_type == "mitigation_hold":
+        return "mitigation"
+    if decision_type in {"boundary_hold", "review_hold"}:
+        return "watch"
+    return "info"
 
 
 def _evidence_limitations_from_agents(agents: list[AgentOutput]) -> list[str]:

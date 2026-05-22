@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 CommitteeLabel = Literal["적격", "보류", "부적격"]
 CommitteeDecisionType = Literal[
@@ -29,6 +29,16 @@ class EvidenceSummaryItem(_StrictModel):
     reliability: str
 
 
+class DecisionTraceItem(_StrictModel):
+    """One deterministic gate check behind the committee decision."""
+
+    gate: str
+    label: str
+    triggered: bool
+    severity: Literal["info", "watch", "risk", "mitigation"] = "info"
+    summary: str
+
+
 class CommitteeViewPayload(_StrictModel):
     """Final committee-facing decision-support view."""
 
@@ -43,6 +53,7 @@ class CommitteeViewPayload(_StrictModel):
     key_risk_factors: list[str]
     mitigating_factors: list[str]
     evidence_summary: list[EvidenceSummaryItem]
+    decision_trace: list[DecisionTraceItem] = Field(default_factory=list)
     final_review_memo: str
 
 
@@ -50,5 +61,6 @@ __all__ = [
     "CommitteeDecisionType",
     "CommitteeLabel",
     "CommitteeViewPayload",
+    "DecisionTraceItem",
     "EvidenceSummaryItem",
 ]

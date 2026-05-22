@@ -43,6 +43,7 @@ from cas.dashboard.cards import (
 from cas.dashboard.committee_copy import committee_user_reason_label, committee_user_stage_label
 from cas.dashboard.committee_panel import (
     CommitteePanelRenderers,
+    render_committee_decision_trace,
     render_committee_full_review,
     render_committee_key_highlights,
     render_committee_loading_state,
@@ -3059,6 +3060,16 @@ def render_committee_view_tab(
             decision_type_label=committee_decision_type_label,
             risk_signal=committee_risk_signal,
             renderers=committee_panel_renderers,
+        )
+        raw_decision_trace = committee_view.get("decision_trace")
+        decision_trace = (
+            [item for item in raw_decision_trace if isinstance(item, dict)]
+            if isinstance(raw_decision_trace, list)
+            else []
+        )
+        render_committee_decision_trace(
+            decision_trace,
+            expanded=selected_output_format == "detailed",
         )
 
     with factor_tab:

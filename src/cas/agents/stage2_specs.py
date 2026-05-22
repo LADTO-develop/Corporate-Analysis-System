@@ -111,6 +111,7 @@ STAGE2_AGENT_SPECS: tuple[Stage2AgentSpec, ...] = (
             "key_risk_factors",
             "mitigating_factors",
             "evidence_summary",
+            "decision_trace",
             "final_review_memo",
         ),
         future_agno_instruction=(
