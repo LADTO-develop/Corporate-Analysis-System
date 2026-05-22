@@ -1,6 +1,6 @@
 # Stage 2 Evaluation Report
 
-- 생성시각(UTC): `2026-05-22T02:17:50Z`
+- 생성시각(UTC): `2026-05-22T04:34:00Z`
 - 목적: Stage 2 에이전트 위원회의 보완 효과, 위험신호 성능, 실행 안정성, 속도 개선을 한 번에 점검한다.
 
 ## 해석 주의
@@ -16,6 +16,8 @@
 - 파일럿 표본 내 위험신호 F1 최고값: `agno_random_rolling_10` F1 1.0000, Precision 1.0000, Recall 1.0000
 - 파일럿 표본 내 검토대상 Recall 최고값: `agno_random_rolling_10` Recall 1.0000
 - 최신 배치 기준 검토대상 Recall: 0.8333
+- validation/test trace 기준 FN 보완 최다 게이트: `부적격 확정 게이트` 8건
+- validation/test trace 기준 FP 완화 최다 게이트: `과민경고 완화 점검` 57건
 
 ## Stage 2 성능 요약
 
@@ -136,24 +138,56 @@
 
 | split | policy                             | precision | recall | f1     | tp  | fp  | fn  | tn  | predicted_count | delta_fp_vs_stage1 | delta_fn_vs_stage1 | delta_recall_vs_stage1 | delta_precision_vs_stage1 | delta_f1_vs_stage1 |
 | ----- | ---------------------------------- | --------- | ------ | ------ | --- | --- | --- | --- | --------------- | ------------------ | ------------------ | ---------------------- | ------------------------- | ------------------ |
-| test  | current_committee_hold_or_reject   | 0.4674    | 0.8818 | 0.6109 | 179 | 204 | 24  | 517 | 383             | 115                | -6                 | 0.0296                 | -0.1929                   | -0.1332            |
-| test  | current_committee_reject_only      | 0.8276    | 0.4729 | 0.6019 | 96  | 20  | 107 | 701 | 116             | -69                | 77                 | -0.3793                | 0.1673                    | -0.1422            |
-| test  | stage1_minus_overwarning_candidate | 0.6793    | 0.7931 | 0.7318 | 161 | 76  | 42  | 645 | 237             | -13                | 12                 | -0.0591                | 0.0190                    | -0.0123            |
-| test  | stage1_model                       | 0.6603    | 0.8522 | 0.7441 | 173 | 89  | 30  | 632 | 262             | 0                  | 0                  | 0.0000                 | 0.0000                    | 0.0000             |
-| test  | stage1_or_45                       | 0.6460    | 0.8719 | 0.7421 | 177 | 97  | 26  | 624 | 274             | 8                  | -4                 | 0.0197                 | -0.0143                   | -0.0019            |
-| test  | stage1_or_45_high_margin           | 0.6578    | 0.8522 | 0.7425 | 173 | 90  | 30  | 631 | 263             | 1                  | 0                  | 0.0000                 | -0.0025                   | -0.0016            |
-| test  | stage1_or_45_no_it_low_threshold   | 0.6471    | 0.8670 | 0.7411 | 176 | 96  | 27  | 625 | 272             | 7                  | -3                 | 0.0148                 | -0.0132                   | -0.0030            |
-| test  | stage1_or_45_or_it_low_threshold   | 0.6312    | 0.8768 | 0.7340 | 178 | 104 | 25  | 617 | 282             | 15                 | -5                 | 0.0246                 | -0.0291                   | -0.0101            |
-| test  | stage1_or_it_low_threshold         | 0.6434    | 0.8621 | 0.7368 | 175 | 97  | 28  | 624 | 272             | 8                  | -2                 | 0.0099                 | -0.0169                   | -0.0072            |
-| valid | current_committee_hold_or_reject   | 0.5576    | 0.8807 | 0.6828 | 155 | 123 | 21  | 377 | 278             | 47                 | -4                 | 0.0227                 | -0.1076                   | -0.0666            |
-| valid | current_committee_reject_only      | 0.8491    | 0.5114 | 0.6383 | 90  | 16  | 86  | 484 | 106             | -60                | 61                 | -0.3466                | 0.1839                    | -0.1111            |
-| valid | stage1_minus_overwarning_candidate | 0.7000    | 0.8352 | 0.7617 | 147 | 63  | 29  | 437 | 210             | -13                | 4                  | -0.0227                | 0.0348                    | 0.0123             |
-| valid | stage1_model                       | 0.6652    | 0.8580 | 0.7494 | 151 | 76  | 25  | 424 | 227             | 0                  | 0                  | 0.0000                 | 0.0000                    | 0.0000             |
-| valid | stage1_or_45                       | 0.6540    | 0.8807 | 0.7506 | 155 | 82  | 21  | 418 | 237             | 6                  | -4                 | 0.0227                 | -0.0112                   | 0.0012             |
-| valid | stage1_or_45_high_margin           | 0.6667    | 0.8636 | 0.7525 | 152 | 76  | 24  | 424 | 228             | 0                  | -1                 | 0.0057                 | 0.0015                    | 0.0031             |
-| valid | stage1_or_45_no_it_low_threshold   | 0.6568    | 0.8807 | 0.7524 | 155 | 81  | 21  | 419 | 236             | 5                  | -4                 | 0.0227                 | -0.0084                   | 0.0030             |
-| valid | stage1_or_45_or_it_low_threshold   | 0.6434    | 0.8920 | 0.7476 | 157 | 87  | 19  | 413 | 244             | 11                 | -6                 | 0.0341                 | -0.0218                   | -0.0018            |
-| valid | stage1_or_it_low_threshold         | 0.6511    | 0.8693 | 0.7445 | 153 | 82  | 23  | 418 | 235             | 6                  | -2                 | 0.0114                 | -0.0141                   | -0.0049            |
+| test  | current_committee_hold_or_reject   | 0.4879    | 0.8916 | 0.6307 | 181 | 190 | 22  | 531 | 371             | 116                | -8                 | 0.0394                 | -0.2125                   | -0.1382            |
+| test  | current_committee_reject_only      | 0.9800    | 0.2414 | 0.3874 | 49  | 1   | 154 | 720 | 50              | -73                | 124                | -0.6108                | 0.2796                    | -0.3815            |
+| test  | stage1_minus_overwarning_candidate | 0.7042    | 0.8325 | 0.7630 | 169 | 71  | 34  | 650 | 240             | -3                 | 4                  | -0.0197                | 0.0038                    | -0.0059            |
+| test  | stage1_model                       | 0.7004    | 0.8522 | 0.7689 | 173 | 74  | 30  | 647 | 247             | 0                  | 0                  | 0.0000                 | 0.0000                    | 0.0000             |
+| test  | stage1_or_45                       | 0.6797    | 0.8571 | 0.7582 | 174 | 82  | 29  | 639 | 256             | 8                  | -1                 | 0.0049                 | -0.0207                   | -0.0107            |
+| test  | stage1_or_45_high_margin           | 0.6948    | 0.8522 | 0.7655 | 173 | 76  | 30  | 645 | 249             | 2                  | 0                  | 0.0000                 | -0.0056                   | -0.0034            |
+| test  | stage1_or_45_no_it_low_threshold   | 0.6797    | 0.8571 | 0.7582 | 174 | 82  | 29  | 639 | 256             | 8                  | -1                 | 0.0049                 | -0.0207                   | -0.0107            |
+| test  | stage1_or_45_or_it_low_threshold   | 0.6718    | 0.8571 | 0.7532 | 174 | 85  | 29  | 636 | 259             | 11                 | -1                 | 0.0049                 | -0.0286                   | -0.0156            |
+| test  | stage1_or_it_low_threshold         | 0.6920    | 0.8522 | 0.7638 | 173 | 77  | 30  | 644 | 250             | 3                  | 0                  | 0.0000                 | -0.0084                   | -0.0051            |
+| valid | current_committee_hold_or_reject   | 0.5880    | 0.8920 | 0.7088 | 157 | 110 | 19  | 390 | 267             | 54                 | -6                 | 0.0341                 | -0.1415                   | -0.0797            |
+| valid | current_committee_reject_only      | 0.9583    | 0.2614 | 0.4107 | 46  | 2   | 130 | 498 | 48              | -54                | 105                | -0.5966                | 0.2289                    | -0.3778            |
+| valid | stage1_minus_overwarning_candidate | 0.7363    | 0.8409 | 0.7851 | 148 | 53  | 28  | 447 | 201             | -3                 | 3                  | -0.0170                | 0.0068                    | -0.0034            |
+| valid | stage1_model                       | 0.7295    | 0.8580 | 0.7885 | 151 | 56  | 25  | 444 | 207             | 0                  | 0                  | 0.0000                 | 0.0000                    | 0.0000             |
+| valid | stage1_or_45                       | 0.7273    | 0.8636 | 0.7896 | 152 | 57  | 24  | 443 | 209             | 1                  | -1                 | 0.0057                 | -0.0022                   | 0.0011             |
+| valid | stage1_or_45_high_margin           | 0.7308    | 0.8636 | 0.7917 | 152 | 56  | 24  | 444 | 208             | 0                  | -1                 | 0.0057                 | 0.0013                    | 0.0032             |
+| valid | stage1_or_45_no_it_low_threshold   | 0.7308    | 0.8636 | 0.7917 | 152 | 56  | 24  | 444 | 208             | 0                  | -1                 | 0.0057                 | 0.0013                    | 0.0032             |
+| valid | stage1_or_45_or_it_low_threshold   | 0.7264    | 0.8750 | 0.7938 | 154 | 58  | 22  | 442 | 212             | 2                  | -3                 | 0.0170                 | -0.0031                   | 0.0053             |
+| valid | stage1_or_it_low_threshold         | 0.7251    | 0.8693 | 0.7907 | 153 | 58  | 23  | 442 | 211             | 2                  | -2                 | 0.0114                 | -0.0044                   | 0.0022             |
+
+## Decision Trace 게이트 기여도
+
+아래 표는 deterministic committee replay의 `decision_trace`를 이용해, 어떤 게이트가 1차 모델의 FN 끌어올림 또는 FP 완화에 함께 작동했는지 집계한 결과다.
+한 기업에서 여러 게이트가 동시에 켜질 수 있으므로 게이트별 건수는 서로 배타적이지 않다.
+
+| split | gate_label | triggered_count | fn_escalated_count | fn_escalation_share | fp_softened_count | fp_softening_share | dominant_effect |
+| ----- | ---------- | --------------- | ------------------ | ------------------- | ----------------- | ------------------ | --------------- |
+| valid | 부적격 확정 게이트 | 518             | 6                  | 0.2400              | 1                 | 0.0179             | fn_and_fp       |
+| valid | 2차 보조 레이더  | 4               | 3                  | 0.1200              | 0                 | 0.0000             | fn_escalation   |
+| valid | 경계등급 점검    | 12              | 1                  | 0.0400              | 4                 | 0.0714             | fn_and_fp       |
+| valid | 과민경고 완화 점검 | 106             | 0                  | 0.0000              | 42                | 0.7500             | fp_softening    |
+| valid | 강제 경고 게이트  | 0               | 0                  | 0.0000              | 0                 | 0.0000             | none            |
+| valid | 숨은 꼬리위험 점검 | 0               | 0                  | 0.0000              | 0                 | 0.0000             | none            |
+| test  | 부적격 확정 게이트 | 727             | 8                  | 0.2667              | 0                 | 0.0000             | fn_escalation   |
+| test  | 경계등급 점검    | 17              | 1                  | 0.0333              | 9                 | 0.1216             | fn_and_fp       |
+| test  | 2차 보조 레이더  | 11              | 1                  | 0.0333              | 0                 | 0.0000             | fn_escalation   |
+| test  | 과민경고 완화 점검 | 131             | 0                  | 0.0000              | 57                | 0.7703             | fp_softening    |
+| test  | 강제 경고 게이트  | 0               | 0                  | 0.0000              | 0                 | 0.0000             | none            |
+| test  | 숨은 꼬리위험 점검 | 0               | 0                  | 0.0000              | 0                 | 0.0000             | none            |
+
+## OpenAI Agno 설명 품질 비교
+
+같은 샘플을 deterministic과 OpenAI Agno로 각각 실행한 뒤 저장된 결과가 있으면, 최종 라벨 변화와 설명 품질 점수를 비교한다.
+현재 Codex 세션에서 실제 OpenAI 호출이 차단된 경우 이 표는 비어 있을 수 있다.
+
+| corp_name | model_error_type | stage1_label | deterministic_label | agno_label | deterministic_quality_score | agno_quality_score | quality_delta |
+| --------- | ---------------- | ------------ | ------------------- | ---------- | --------------------------- | ------------------ | ------------- |
+| (주)이수앱지스  | false_negative   | 투자적격         | 보류                  | 보류         | 0.7750                      | 0.7750             | 0.0000        |
+| (주)타이거일렉  | false_positive   | 투기등급         | 보류                  | 보류         | 0.7729                      | 1.0000             | 0.2271        |
+| (주)엠젠솔루션  | true_positive    | 투기등급         | 보류                  | 보류         | 0.6236                      | 0.7981             | 0.1745        |
+| (주)플라즈맵   | true_positive    | 투기등급         | 부적격                 | 부적격        | 0.9250                      | 1.0000             | 0.0750        |
 
 ## 해석 가이드
 
@@ -164,12 +198,14 @@
 
 ## 입력 파일 상태
 
-| file                                           | exists | rows | columns | modified_at_utc      |
-| ---------------------------------------------- | ------ | ---- | ------- | -------------------- |
-| stage2_agent_agno_hold_subtype_metrics.csv     | True   | 12   | 13      | 2026-05-22T02:12:38Z |
-| stage2_agent_error_risk_10_agno_metrics.csv    | True   | 4    | 11      | 2026-05-22T02:12:38Z |
-| stage2_agent_performance_experiment_log.csv    | True   | 23   | 9       | 2026-05-22T02:12:38Z |
-| stage2_agent_speed_experiment_log.csv          | True   | 10   | 12      | 2026-05-22T02:12:38Z |
-| stage2_agent_all_pilots_recomputed_summary.csv | True   | 22   | 8       | 2026-05-22T02:12:38Z |
-| committee_review_batch_results.csv             | True   | 12   | 38      | 2026-05-21T00:42:41Z |
-| stage2_validation_test_policy_metrics.csv      | True   | 18   | 15      | 2026-05-21T00:42:41Z |
+| file                                                  | exists | rows | columns | modified_at_utc      |
+| ----------------------------------------------------- | ------ | ---- | ------- | -------------------- |
+| stage2_agent_agno_hold_subtype_metrics.csv            | True   | 12   | 13      | 2026-05-22T02:12:38Z |
+| stage2_agent_error_risk_10_agno_metrics.csv           | True   | 4    | 11      | 2026-05-22T02:12:38Z |
+| stage2_agent_performance_experiment_log.csv           | True   | 23   | 9       | 2026-05-22T02:12:38Z |
+| stage2_agent_speed_experiment_log.csv                 | True   | 10   | 12      | 2026-05-22T02:12:38Z |
+| stage2_agent_all_pilots_recomputed_summary.csv        | True   | 22   | 8       | 2026-05-22T02:12:38Z |
+| committee_review_batch_results.csv                    | True   | 12   | 38      | 2026-05-21T00:42:41Z |
+| stage2_validation_test_policy_metrics.csv             | True   | 18   | 15      | 2026-05-22T04:33:45Z |
+| stage2_validation_test_trace_gate_contribution.csv    | True   | 12   | 15      | 2026-05-22T04:33:45Z |
+| stage2_openai_agno_explanation_comparison_details.csv | True   | 4    | 19      | 2026-05-22T04:33:41Z |

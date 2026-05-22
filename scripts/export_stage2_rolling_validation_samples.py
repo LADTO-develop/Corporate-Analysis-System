@@ -36,7 +36,7 @@ from export_feature_43_candidate_feature_pack_experiments import (
 ROOT = Path(__file__).resolve().parents[1]
 MASTER_PATH = INPUT_DIR / "feature_43_master.csv"
 TARGET_LABEL_REFERENCE_PATH = ROOT / "data/evaluation/target_label_reference.csv"
-OUTPUT_DIR = ROOT / "data/outputs/modeling/feature_43_xgboost/diagnostics"
+OUTPUT_DIR = ROOT / "data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents"
 ROLLING_EVAL_YEARS = [2019, 2020, 2021, 2022]
 ID_COLUMNS = [
     "market",

@@ -171,6 +171,7 @@ def sum_amount_by_name(
     rows: pd.DataFrame,
     *,
     statements: Iterable[str],
+    account_ids: Iterable[str] = (),
     include_terms: Iterable[str],
     exclude_terms: Iterable[str] = (),
 ) -> float | None:
@@ -181,6 +182,9 @@ def sum_amount_by_name(
         return None
     names = subset["account_nm"].astype(str)
     include_mask = pd.Series(False, index=subset.index)
+    id_set = set(account_ids)
+    if id_set:
+        include_mask = include_mask | subset["account_id"].astype(str).isin(id_set)
     for term in include_terms:
         include_mask = include_mask | names.str.contains(term, regex=False, na=False)
     exclude_mask = pd.Series(False, index=subset.index)
@@ -373,19 +377,46 @@ def extract_statement_values(rows: pd.DataFrame) -> dict[str, float | None]:
     values_won["short_term_borrowings"] = sum_amount_by_name(
         rows,
         statements=["BS"],
-        include_terms=["단기차입금", "유동성장기차입금", "유동성사채", "유동성전환사채"],
-        exclude_terms=["상환", "발행"],
+        account_ids=[
+            "ifrs-full_ShorttermBorrowings",
+            "ifrs-full_CurrentBorrowingsAndCurrentPortionOfNoncurrentBorrowings",
+            "ifrs-full_CurrentPortionOfLongtermBorrowings",
+            "ifrs-full_CurrentLoansReceivedAndCurrentPortionOfNoncurrentLoansReceived",
+            "dart_CurrentPortionOfConvertibleBonds",
+            "dart_CurrentPortionOfBondWithWarrant",
+        ],
+        include_terms=[
+            "단기차입금",
+            "유동 차입금",
+            "단기차입부채",
+            "유동성장기차입금",
+            "유동성장기부채",
+            "유동성사채",
+            "유동성전환사채",
+        ],
+        exclude_terms=["상환", "발행", "대여금"],
     )
     values_won["long_term_borrowings"] = sum_amount_by_name(
         rows,
         statements=["BS"],
-        include_terms=["장기차입금"],
+        account_ids=[
+            "ifrs-full_LongtermBorrowings",
+            "dart_LongTermBorrowingsGross",
+            "ifrs-full_NoncurrentPortionOfNoncurrentLoansReceived",
+        ],
+        include_terms=["장기차입금", "장기차입부채", "비유동차입금", "비유동 차입금"],
         exclude_terms=["대여금", "유동성"],
     )
     values_won["bonds_payable"] = sum_amount_by_name(
         rows,
         statements=["BS"],
-        include_terms=["사채", "전환사채", "신주인수권부사채"],
+        account_ids=[
+            "ifrs-full_NoncurrentPortionOfNoncurrentBondsIssued",
+            "dart_ConvertibleBonds",
+            "dart_ConvertibleBondsNet",
+            "dart_ExchangeableBondsNet",
+        ],
+        include_terms=["사채", "전환사채", "신주인수권부사채", "교환사채"],
         exclude_terms=["유동성", "상환", "발행"],
     )
     return {column: won_to_thousand(value) for column, value in values_won.items()}
@@ -488,8 +519,11 @@ def recompute_derived_columns(panel: pd.DataFrame) -> pd.DataFrame:
             output[column] = converted
     output = output.copy()
 
-    output["total_borrowings"] = (
-        output["short_term_borrowings"] + output["long_term_borrowings"] + output["bonds_payable"]
+    output["total_borrowings"] = output[
+        ["short_term_borrowings", "long_term_borrowings", "bonds_payable"]
+    ].sum(
+        axis=1,
+        min_count=1,
     )
     output["intangible_amortization"] = (
         output["amortization_dev_cost"] + output["amortization_other_intangibles"]

@@ -29,12 +29,12 @@ from cas.agents.nodes import (
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_SAMPLES_PATH = (
     ROOT
-    / "data/outputs/modeling/feature_43_xgboost/diagnostics/"
+    / "data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents/"
     / "committee_review_rolling_validation_tuning_samples.csv"
 )
 DEFAULT_OUTPUT_DIR = (
     ROOT
-    / "data/outputs/modeling/feature_43_xgboost/diagnostics/"
+    / "data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents/"
     / "committee_review_rolling_validation_batch"
 )
 DEFAULT_POLICY = "rolling_stage1_or_near_threshold_0_10"
@@ -45,6 +45,14 @@ CATEGORY_ORDER = [
     "true_positive_risk_explanation",
     "true_negative_overescalation_guardrail",
 ]
+TRACE_GATES = (
+    "veto_rule",
+    "hidden_tail_risk",
+    "secondary_review_trigger",
+    "boundary_rating_review",
+    "overwarning_mitigation",
+    "reject_confirmation",
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -380,7 +388,9 @@ def _result_row(
     )
     provider_statuses = _provider_statuses(evidence.get("providers"))
     evidence_titles = _evidence_titles(evidence.get("items", []))
-    return {
+    decision_trace = _decision_trace_items(committee_view)
+    trace_by_gate = _decision_trace_by_gate(decision_trace)
+    result = {
         "run_timestamp_utc": datetime.now(UTC).isoformat(),
         "evaluation_mode": sample.get("evaluation_mode"),
         "committee_policy": sample.get("committee_policy"),
@@ -411,6 +421,7 @@ def _result_row(
         "committee_decision_type": committee_view.get("committee_decision_type"),
         "committee_decision_type_label": committee_view.get("committee_decision_type_label"),
         "committee_risk_signal": bool(committee_view.get("committee_risk_signal", False)),
+        "decision_trace": json.dumps(decision_trace, ensure_ascii=False, sort_keys=True),
         "committee_success": success,
         "committee_effect": effect,
         "committee_review_safe_success": review_safe_success,
@@ -430,6 +441,27 @@ def _result_row(
         "final_review_memo": committee_view.get("final_review_memo"),
         "error_message": error_message,
     }
+    for gate in TRACE_GATES:
+        trace_item = trace_by_gate.get(gate, {})
+        result[f"trace_{gate}_triggered"] = bool(trace_item.get("triggered", False))
+        result[f"trace_{gate}_severity"] = str(trace_item.get("severity") or "")
+    return result
+
+
+def _decision_trace_items(committee_view: dict[str, Any]) -> list[dict[str, Any]]:
+    raw_trace = committee_view.get("decision_trace")
+    if not isinstance(raw_trace, list):
+        return []
+    return [dict(item) for item in raw_trace if isinstance(item, dict)]
+
+
+def _decision_trace_by_gate(trace: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    output: dict[str, dict[str, Any]] = {}
+    for item in trace:
+        gate = str(item.get("gate") or "").strip()
+        if gate:
+            output[gate] = item
+    return output
 
 
 def _committee_success(*, model_error_type: str, final_label: str) -> tuple[bool, str]:
