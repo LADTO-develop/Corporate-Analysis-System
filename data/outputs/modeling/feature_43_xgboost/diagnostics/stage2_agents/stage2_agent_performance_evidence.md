@@ -1,8 +1,9 @@
 # Stage 2 Agent Performance Evidence
 
 - 작성일: 2026-05-21
-- 범위: 지금까지의 committee-review agent 실험 로그, rolling validation 핵심 증빙 15건, 새 holdout 8건 속도/성능 재검증
-- 목적: Claude API + Agno 기반 Stage 2 committee가 1차 모델 오류를 얼마나 보완했는지 수치로 남긴다.
+- 최종 업데이트: 2026-05-22
+- 범위: 지금까지의 committee-review agent 실험 로그, rolling validation 핵심 증빙 15건, 새 holdout 8건 속도/성능 재검증, OpenAI single 3-agent no-cache live 재검증
+- 목적: Claude/OpenAI API + Agno 기반 Stage 2 committee가 1차 모델 오류를 얼마나 보완했는지 수치로 남긴다.
 - 주의: 아래 수치는 전체 기업 모집단 정확도가 아니라, Stage 2 검토가 필요한 hard sample/replay 샘플에 대한 위원회 보완 성능이다.
 
 ## 핵심 요약
@@ -16,6 +17,7 @@
 | 추가 Agno/Claude round 3 | 10 | 8/10 = 80.0% | 10/10 = 100.0% | 새 기업-회계연도, workers=3 실제 API 실행 |
 | round 3 저확률 guardrail 재평가 | 10 | 9/10 = 90.0% | 10/10 = 100.0% | 같은 샘플 캐시 재평가, TN 1건 개선 |
 | isolated ICR TN guardrail | 8 | 7/8 = 87.5% | 8/8 = 100.0% | 이자보상 단일 플래그 TN 1건 개선 |
+| OpenAI single 3-agent no-cache live | 8 | 7/8 = 87.5% | 8/8 = 100.0% | 캐시 hit 0, 역할별 실행시간 8/8건 기록 |
 
 개선 폭은 1차 5건 대비 추가 10건에서 엄격 기준 +30.0%p, review-safe 기준 +20.0%p다. 합산 기준으로도 review-safe 성공률은 93.3%까지 올라왔다.
 
@@ -107,6 +109,7 @@ round 3 live 결과에서는 FN 2건은 모두 보류로 끌어올렸고, FP 3�
 | Rolling Agno/Claude round 2 | `committee_review_rolling_validation_agno_claude_round2_batch` | 10 | 9/10 = 90.0% | 10/10 = 100.0% | 0 | 안정화 후 추가 10건 검증 |
 | Holdout unseen deterministic speed baseline | `committee_review_holdout_unseen_deterministic_speed_baseline` | 8 | 6/8 = 75.0% | 6/8 = 75.0% | 0 | 기존 결과와 겹치지 않는 새 holdout 8건의 로컬 기준선 |
 | Holdout unseen liquidity guardrail | `committee_review_holdout_unseen_guardrail_speed_batch` | 8 | 8/8 = 100.0% | 8/8 = 100.0% | 0 | FN 2건을 보류로 끌어올리고 FP/TP 판단 유지 |
+| OpenAI single 3-agent no-cache live | `committee_review_openai_single_3agent_no_cache_live_8` | 8 | 7/8 = 87.5% | 8/8 = 100.0% | 0 | OpenAI 단일 provider 3-agent live 실행, 캐시 hit 0 |
 
 Historical 12건 계열은 동일 기업 12건을 반복 검증한 산출물이다. 이 계열에서는 초기 75.0%에서 secondary signal connected 기준 100.0%까지 개선됐다. Rolling validation 계열은 샘플 구성과 평가지표가 달라 별도로 보며, 최종 추가 10건에서 90.0%/100.0%를 기록했다.
 
@@ -177,8 +180,9 @@ Claude/Agno Stage 2는 FN 보완과 FP 완화에는 이미 효과가 있다. 특
 | TN guardrail OpenAI Agno 8 | OpenAI Agno single `gpt-4.1-mini` | ready 8/8 | 4/8 = 50.0% | 6/8 = 75.0% | 0 | 70.8385초 | 17.5339초 | 6.7760건/분 |
 | FN escalation OpenAI Agno rerun 8 | OpenAI Agno single `gpt-4.1-mini` | ready 8/8 | 6/8 = 75.0% | 8/8 = 100.0% | 0 | 1.5040초 | 0.3758초 | 319.1489건/분 |
 | Isolated ICR guardrail deterministic 8 | deterministic | disabled | 7/8 = 87.5% | 8/8 = 100.0% | 0 | 1.8684초 | 0.4666초 | 256.9043건/분 |
+| OpenAI single 3-agent no-cache live 8 | OpenAI Agno single `gpt-4.1-mini` | ready 8/8 | 7/8 = 87.5% | 8/8 = 100.0% | 0 | 67.6725초 | 16.8457초 | 7.0930건/분 |
 
-OpenAI Agno 결과는 deterministic과 최종 라벨이 8/8건 동일했다. FN 2건은 둘 다 `적격`으로 남아 missed, FP 2건은 `과민경고 완화 보류`, TP 1건은 `부적격`, TN 3건 중 동성화인텍은 `적격`, 데이타솔루션과 휴맥스는 `경계등급 보류`였다. 모든 케이스의 `evidence_status`는 `ready`였고 `error_message`는 비어 있었다.
+초기 OpenAI Agno 결과는 deterministic과 최종 라벨이 8/8건 동일했다. FN 2건은 둘 다 `적격`으로 남아 missed, FP 2건은 `과민경고 완화 보류`, TP 1건은 `부적격`, TN 3건 중 동성화인텍은 `적격`, 데이타솔루션과 휴맥스는 `경계등급 보류`였다. 모든 케이스의 `evidence_status`는 `ready`였고 `error_message`는 비어 있었다.
 
 따라서 이번 OpenAI Agno 재검증은 실행 안정성·외부근거 수집·속도 측정 증거로는 유효하지만, 라벨 개선은 deterministic 대비 추가되지 않았다. 다음 모델 고도화는 LLM provider 교체보다 FN 2건처럼 외부근거가 ready여도 숨은 위험으로 올라가지 않는 케이스의 secondary trigger/FN escalation 기준을 조정하는 쪽이 더 직접적이다.
 
@@ -186,13 +190,15 @@ OpenAI Agno 재검증에서 드러난 FN 미상승 원인은 정상기업 과잉
 
 수정 후 같은 8건 deterministic 재평가에서는 엄격 기준이 4/8 = 50.0%에서 6/8 = 75.0%로, review-safe 기준이 6/8 = 75.0%에서 8/8 = 100.0%로 개선됐다. FN 2건은 모두 `경계등급 보류`로 끌어올렸고, FP 2건은 `과민경고 완화 보류`, TP 1건은 `부적격`, TN 3건은 동성화인텍 `적격`, 데이타솔루션·휴맥스 `경계등급 보류`로 유지됐다. 속도는 wall time 1.4459초, 평균 case time 0.5330초, 처리량 331.9732건/분이었다.
 
-수정 후 OpenAI Agno 경로 재실행에서도 엄격 기준 6/8 = 75.0%, review-safe 8/8 = 100.0%로 같은 개선이 확인됐다. 수정 전 OpenAI Agno 결과와 비교하면 예선테크와 명신산업 2건만 `적격`에서 `경계등급 보류`로 바뀌었고, FP/TP/TN 라벨은 그대로 유지됐다. 다만 wall time 1.5040초, 평균 case time 0.3758초로 이전 live API 실행보다 매우 짧아 Agno/외부근거 캐시 재사용 가능성이 높다. 따라서 이 행은 수정 후 최종 라벨 회귀 확인으로 사용하고, 실제 live API 지연시간 대표값은 앞선 70.8385초 실행을 함께 참고한다.
+수정 후 OpenAI Agno 경로 재실행에서도 엄격 기준 6/8 = 75.0%, review-safe 8/8 = 100.0%로 같은 개선이 확인됐다. 수정 전 OpenAI Agno 결과와 비교하면 예선테크와 명신산업 2건만 `적격`에서 `경계등급 보류`로 바뀌었고, FP/TP/TN 라벨은 그대로 유지됐다. 다만 wall time 1.5040초, 평균 case time 0.3758초로 이전 live API 실행보다 매우 짧아 Agno/외부근거 캐시 재사용 가능성이 높다. 따라서 이 행은 수정 후 최종 라벨 회귀 확인으로 사용하고, 실제 live API 지연시간 대표값은 이후 `--no-stage2-llm-cache`로 실행한 OpenAI single 3-agent no-cache live 8 결과를 기준으로 본다.
 
 추가 진단에서는 남은 TN 과잉 보류 중 데이타솔루션 2020이 `interest_coverage_under_1` 단일 blocking flag에 과하게 묶인 것으로 확인됐다. 이 케이스는 ICR이 1배 미만이지만 OCF/총부채 15.7%, cashflow coverage 7.83배, 현금비율 34.0%, 총차입금 비중 7.6%로 현금흐름과 차입 부담이 방어적이었다. 이에 따라 blocking flag가 이자보상 단일 항목이고, OCF·현금·저차입 조건이 동시에 충족되는 경우에만 정상기업 과잉 보류 guardrail을 허용했다. 같은 8건 deterministic 재평가에서 데이타솔루션은 `경계등급 보류`에서 `적격`으로 개선됐고, FN 2건은 계속 `경계등급 보류`, 휴맥스는 음수 OCF와 음수 ICR 때문에 보류로 남았다. 결과는 엄격 기준 7/8 = 87.5%, review-safe 8/8 = 100.0%다.
 
 속도/검증 신뢰도 쪽 문제도 함께 확인했다. `single` 모드는 OpenAI 단일 provider라는 뜻이지 LLM 1회 호출이 아니어서 케이스당 QuantCredit, EvidenceAudit, ChairReport 호출이 발생한다. 이 구조가 3에이전트 성능 증빙에 더 맞으므로 유지하고, live latency 측정 시 캐시 재사용을 피할 수 있도록 batch CLI에 `--no-stage2-llm-cache`를 추가했다. 따라서 앞으로 실제 API 속도를 잴 때는 `single + --no-stage2-llm-cache` 기준으로 측정한다.
 
 추가로 batch 결과 CSV에 Stage 2 실행 진단 컬럼을 남기도록 했다. 주요 컬럼은 `stage2_backend_name`, `stage2_llm_cache_hit`, `stage2_total_elapsed_seconds`, `stage2_agent_elapsed_seconds_sum`, `stage2_quant_credit_elapsed_seconds`, `stage2_evidence_audit_elapsed_seconds`, `stage2_chair_report_elapsed_seconds`, `stage2_parallel_independent_agents`다. 따라서 앞으로는 전체 배치 wall time뿐 아니라 케이스별 Stage 2 LLM 시간, 역할별 병목, 캐시 재사용 여부를 같은 결과 파일에서 바로 확인할 수 있다.
+
+이 진단 컬럼을 붙인 뒤 같은 8건을 `--no-stage2-llm-cache`로 다시 실행해 실제 OpenAI single 3-agent live 증거를 남겼다. 결과는 엄격 기준 7/8 = 87.5%, review-safe 8/8 = 100.0%였고, `stage2_llm_cache_hit=False`가 8/8건, `stage2_backend_name=agno`가 8/8건, `stage2_parallel_independent_agents=True`가 8/8건이었다. 역할별 실행시간도 8/8건 모두 채워졌으며 평균은 QuantCredit 9.8721초, EvidenceAudit 6.9654초, ChairReport 6.6039초였다. `stage2_total_elapsed_seconds` 평균은 16.4786초, 최대는 19.8059초였고, batch wall time은 67.6725초였다. 역할별 시간 합계가 Stage 2 총시간보다 큰 것은 QuantCredit과 EvidenceAudit을 독립 병렬 실행하기 때문이다.
 
 ## Agno 실행 기준 보류 세분화 결과
 
