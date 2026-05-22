@@ -166,6 +166,19 @@ Claude/Agno Stage 2는 FN 보완과 FP 완화에는 이미 효과가 있다. 특
 
 휴맥스 2021 단건 재실행은 `보류(경계등급 보류)`로 남았다. 로컬 입력 기준 유동성은 방어적이지만 이자보상배율 -3.626, OCF/매출액 -0.024, OCF/총부채 -0.027, 자기자본비율 0.388, 부채비율 1.579로 현금흐름·자본 축이 guardrail 기준을 충족하지 않았기 때문이다. 이 케이스는 부적격 확정이나 위험 보류가 아니라 `committee_risk_signal=False`인 경계등급 보류로 두어 추가 확인 대상으로 분리한다.
 
+## TN Guardrail OpenAI Agno 재검증
+
+정상기업 과잉 보류 guardrail을 OpenAI 단일모델 Agno 경로에서도 확인하기 위해 FN 2건, FP 2건, TP 1건, TN 3건으로 구성한 8건 샘플을 만들었다. 샘플 파일은 `committee_review_tn_guardrail_agno_8_samples.csv`이며, 같은 샘플을 deterministic과 OpenAI Agno + 외부근거 수집으로 각각 실행했다.
+
+| 실행 | Runner | 외부근거 | 엄격 기준 | Review-safe | 실패/파싱 오류 | Wall time | 평균 case time | 처리량 |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| TN guardrail deterministic 8 | deterministic | disabled | 4/8 = 50.0% | 6/8 = 75.0% | 0 | 1.9270초 | 0.7124초 | 249.0919건/분 |
+| TN guardrail OpenAI Agno 8 | OpenAI Agno single `gpt-4.1-mini` | ready 8/8 | 4/8 = 50.0% | 6/8 = 75.0% | 0 | 70.8385초 | 17.5339초 | 6.7760건/분 |
+
+OpenAI Agno 결과는 deterministic과 최종 라벨이 8/8건 동일했다. FN 2건은 둘 다 `적격`으로 남아 missed, FP 2건은 `과민경고 완화 보류`, TP 1건은 `부적격`, TN 3건 중 동성화인텍은 `적격`, 데이타솔루션과 휴맥스는 `경계등급 보류`였다. 모든 케이스의 `evidence_status`는 `ready`였고 `error_message`는 비어 있었다.
+
+따라서 이번 OpenAI Agno 재검증은 실행 안정성·외부근거 수집·속도 측정 증거로는 유효하지만, 라벨 개선은 deterministic 대비 추가되지 않았다. 다음 모델 고도화는 LLM provider 교체보다 FN 2건처럼 외부근거가 ready여도 숨은 위험으로 올라가지 않는 케이스의 secondary trigger/FN escalation 기준을 조정하는 쪽이 더 직접적이다.
+
 ## Agno 실행 기준 보류 세분화 결과
 
 deterministic 묶음은 규칙 변경이 깨지지 않았는지 보는 내부 sanity check로만 사용하고, 발표/공유용 성능은 Agno/Claude 실행 기준을 우선한다. 아래 표는 `보류`를 하나의 위험 라벨로 보지 않고, `위험 보류`, `과민경고 완화 보류`, `확인필요 보류`로 세분화한 뒤 재계산한 결과다.

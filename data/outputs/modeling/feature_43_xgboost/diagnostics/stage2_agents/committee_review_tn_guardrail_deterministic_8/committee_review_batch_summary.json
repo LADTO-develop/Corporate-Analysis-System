@@ -1,0 +1,88 @@
+{
+  "generated_at_utc": "2026-05-22T06:55:46.412474+00:00",
+  "rows": 8,
+  "success_rate": 0.5,
+  "review_safe_success_rate": 0.75,
+  "by_error_type": [
+    {
+      "model_error_type": "false_negative",
+      "committee_effect": "fn_not_escalated",
+      "rows": 2
+    },
+    {
+      "model_error_type": "false_positive",
+      "committee_effect": "fp_mitigated",
+      "rows": 2
+    },
+    {
+      "model_error_type": "true_negative",
+      "committee_effect": "tn_escalated",
+      "rows": 2
+    },
+    {
+      "model_error_type": "true_negative",
+      "committee_effect": "tn_kept_eligible",
+      "rows": 1
+    },
+    {
+      "model_error_type": "true_positive",
+      "committee_effect": "tp_risk_supported",
+      "rows": 1
+    }
+  ],
+  "by_review_safe_effect": [
+    {
+      "model_error_type": "false_negative",
+      "committee_review_safe_effect": "review_safe_fn_missed",
+      "rows": 2
+    },
+    {
+      "model_error_type": "false_positive",
+      "committee_review_safe_effect": "review_safe_fp_not_rejected",
+      "rows": 2
+    },
+    {
+      "model_error_type": "true_negative",
+      "committee_review_safe_effect": "review_safe_tn_not_rejected",
+      "rows": 3
+    },
+    {
+      "model_error_type": "true_positive",
+      "committee_review_safe_effect": "review_safe_tp_supported",
+      "rows": 1
+    }
+  ],
+  "by_final_label": [
+    {
+      "final_committee_label": "보류",
+      "rows": 4
+    },
+    {
+      "final_committee_label": "부적격",
+      "rows": 1
+    },
+    {
+      "final_committee_label": "적격",
+      "rows": 3
+    }
+  ],
+  "by_evidence_status": [
+    {
+      "evidence_status": "disabled",
+      "rows": 8
+    }
+  ],
+  "speed": {
+    "batch_wall_time_seconds": 1.927,
+    "case_elapsed_seconds_sum": 5.6994,
+    "case_elapsed_seconds_mean": 0.7124,
+    "case_elapsed_seconds_median": 0.1174,
+    "case_elapsed_seconds_max": 1.733,
+    "throughput_cases_per_minute": 249.0919
+  },
+  "paths": {
+    "details": "data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents/committee_review_tn_guardrail_deterministic_8/committee_review_batch_results.csv",
+    "summary": "data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents/committee_review_tn_guardrail_deterministic_8/committee_review_batch_summary.json",
+    "report": "data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents/committee_review_tn_guardrail_deterministic_8/committee_review_batch_report.md"
+  }
+}

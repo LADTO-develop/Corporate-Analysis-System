@@ -9,3 +9,5 @@ rerun_check_holdout_guardrail,rerun_check_holdout_guardrail,deterministic,8,comp
 rerun_check_round2_agno,rerun_check_round2_agno,agno,10,completed_cached_replay,1.2696,3.7382,0.3738,0.1001,1.0358,472.5898,Final cached Agno rerun of round 2 after failed pilot cleanup
 rerun_check_round3_after_guardrail,rerun_check_round3_after_guardrail,agno,10,completed_cached_replay,1.2387,3.6438,0.3644,0.1011,1.0034,484.3788,Final cached Agno rerun of round 3 guardrail after failed pilot cleanup
 rerun_check_random_rolling_10,rerun_check_random_rolling_10,deterministic,10,completed,1.6494,6.4506,0.6451,0.1395,1.4396,363.7686,Random rolling validation sanity check after FP mitigation with hold subtype fields and workers=4
+tn_guardrail_deterministic_8,committee_review_tn_guardrail_deterministic_8,deterministic,8,completed,1.9270,5.6994,0.7124,0.1174,1.7330,249.0919,Local deterministic baseline for TN guardrail 8 case sample
+tn_guardrail_openai_agno_live_8,committee_review_tn_guardrail_agno_openai_live_8,agno_openai,8,completed,70.8385,140.2713,17.5339,17.6684,24.3091,6.7760,OpenAI Agno single model plus external evidence no parse failures labels unchanged
