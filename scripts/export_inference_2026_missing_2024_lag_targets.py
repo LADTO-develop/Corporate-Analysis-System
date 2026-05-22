@@ -54,9 +54,7 @@ def main() -> None:
     targets["_stock_code_key"] = targets["stock_code"].map(normalize_stock_code)
     missing_lag_mask = [
         (market, stock_code) not in existing_keys
-        for market, stock_code in zip(
-            targets["market"], targets["_stock_code_key"], strict=False
-        )
+        for market, stock_code in zip(targets["market"], targets["_stock_code_key"], strict=False)
     ]
     targets = targets.loc[missing_lag_mask].drop(columns=["_stock_code_key"])
 

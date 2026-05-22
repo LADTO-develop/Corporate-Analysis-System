@@ -18,15 +18,14 @@ from typing import Any
 import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[1]
-DIAGNOSTICS_DIR = (
-    ROOT / "data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents"
-)
+DIAGNOSTICS_DIR = ROOT / "data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents"
 DEFAULT_DETERMINISTIC_RESULTS = (
     DIAGNOSTICS_DIR
     / "committee_review_openai_agno_comparison_deterministic/committee_review_batch_results.csv"
 )
 DEFAULT_AGNO_RESULTS = (
-    DIAGNOSTICS_DIR / "committee_review_openai_agno_comparison_agno/committee_review_batch_results.csv"
+    DIAGNOSTICS_DIR
+    / "committee_review_openai_agno_comparison_agno/committee_review_batch_results.csv"
 )
 DEFAULT_OUTPUT_PREFIX = DIAGNOSTICS_DIR / "stage2_openai_agno_explanation_comparison"
 
@@ -197,9 +196,7 @@ def build_summary(
     }
     if detail.empty:
         output["status"] = (
-            "agno_results_missing_or_unmatched"
-            if agno.empty
-            else "no_common_company_year_rows"
+            "agno_results_missing_or_unmatched" if agno.empty else "no_common_company_year_rows"
         )
         return output
     output["status"] = "compared"

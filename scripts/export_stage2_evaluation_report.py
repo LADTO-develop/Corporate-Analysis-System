@@ -17,9 +17,7 @@ from typing import Any
 import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[1]
-DIAGNOSTICS_DIR = (
-    ROOT / "data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents"
-)
+DIAGNOSTICS_DIR = ROOT / "data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents"
 DEFAULT_OUTPUT_PREFIX = DIAGNOSTICS_DIR / "stage2_evaluation_report"
 
 AGNO_HOLD_METRICS = "stage2_agent_agno_hold_subtype_metrics.csv"

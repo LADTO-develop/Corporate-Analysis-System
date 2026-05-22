@@ -201,15 +201,11 @@ def add_current_committee_replay(frame: pd.DataFrame) -> pd.DataFrame:
             "current_committee_risk_signal": bool(
                 committee_view.get("committee_risk_signal", False)
             ),
-            "current_committee_veto_triggered": bool(
-                committee_view.get("veto_triggered", False)
-            ),
+            "current_committee_veto_triggered": bool(committee_view.get("veto_triggered", False)),
             "current_committee_hidden_tail_risk_flag": bool(
                 committee_view.get("hidden_tail_risk_flag", False)
             ),
-            "current_committee_conflict_resolution": committee_view.get(
-                "conflict_resolution", ""
-            ),
+            "current_committee_conflict_resolution": committee_view.get("conflict_resolution", ""),
             "current_committee_decision_trace": json.dumps(
                 decision_trace,
                 ensure_ascii=False,
@@ -220,9 +216,7 @@ def add_current_committee_replay(frame: pd.DataFrame) -> pd.DataFrame:
             trace_item = trace_by_gate.get(gate, {})
             replay_row[f"trace_{gate}_triggered"] = bool(trace_item.get("triggered", False))
             replay_row[f"trace_{gate}_severity"] = str(trace_item.get("severity") or "")
-        rows.append(
-            replay_row
-        )
+        rows.append(replay_row)
     committee = pd.DataFrame(rows)
     output = frame.merge(committee, on=KEY_COLUMNS, how="left", validate="one_to_one")
     output["policy_current_committee_hold_or_reject"] = output["current_committee_label"].isin(
@@ -443,8 +437,8 @@ def build_trace_gate_contribution(frame: pd.DataFrame) -> pd.DataFrame:
             continue
         actual_positive = split_frame["is_speculative"].astype(int).eq(1)
         stage1_positive = bool_series(split_frame["policy_stage1_model"])
-        committee_review = split_frame["current_committee_label"].astype(str).isin(
-            {"보류", "부적격"}
+        committee_review = (
+            split_frame["current_committee_label"].astype(str).isin({"보류", "부적격"})
         )
         committee_softened = _committee_softened_stage1_fp(split_frame)
         stage1_fn = actual_positive & (~stage1_positive)
@@ -469,7 +463,9 @@ def build_trace_gate_contribution(frame: pd.DataFrame) -> pd.DataFrame:
                     "triggered_negative_count": int((gate_triggered & ~actual_positive).sum()),
                     "stage1_fn_total": int(stage1_fn.sum()),
                     "fn_escalated_count": int(fn_escalated.sum()),
-                    "fn_escalation_share": _safe_divide(int(fn_escalated.sum()), int(stage1_fn.sum())),
+                    "fn_escalation_share": _safe_divide(
+                        int(fn_escalated.sum()), int(stage1_fn.sum())
+                    ),
                     "stage1_fp_total": int(stage1_fp.sum()),
                     "fp_softened_count": int(fp_softened.sum()),
                     "fp_unsoftened_count": int(fp_unsoftened.sum()),
@@ -488,7 +484,9 @@ def build_trace_gate_contribution(frame: pd.DataFrame) -> pd.DataFrame:
         return _empty_trace_gate_contribution()
     return (
         pd.DataFrame(rows)
-        .sort_values(["split", "net_help_count", "fn_escalated_count"], ascending=[True, False, False])
+        .sort_values(
+            ["split", "net_help_count", "fn_escalated_count"], ascending=[True, False, False]
+        )
         .reset_index(drop=True)
     )
 

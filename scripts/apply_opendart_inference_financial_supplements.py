@@ -105,9 +105,11 @@ def inference_financial_supplement_target(frame: pd.DataFrame) -> pd.Series:
     available = [column for column in INFERENCE_SUPPLEMENT_CRITICAL_FEATURES if column in frame]
     if not available:
         return pd.Series(False, index=frame.index)
-    critical_missing_count = frame[available].apply(
-        lambda column: pd.to_numeric(column, errors="coerce").isna()
-    ).sum(axis=1)
+    critical_missing_count = (
+        frame[available]
+        .apply(lambda column: pd.to_numeric(column, errors="coerce").isna())
+        .sum(axis=1)
+    )
     return critical_missing_count.ge(INFERENCE_SUPPLEMENT_MISSING_THRESHOLD)
 
 
@@ -207,10 +209,9 @@ def build_lag_history_frame(
         )
     )
 
-    inference_meta = (
-        inference_full.assign(_stock_code_key=inference_full["stock_code"].map(normalize_stock_code))
-        .set_index(["market", "_stock_code_key"], drop=False)
-    )
+    inference_meta = inference_full.assign(
+        _stock_code_key=inference_full["stock_code"].map(normalize_stock_code)
+    ).set_index(["market", "_stock_code_key"], drop=False)
 
     records: list[dict[str, object]] = []
     audit_records: list[dict[str, object]] = []
@@ -317,7 +318,9 @@ def main() -> None:
     print(f"[Supplements] raw_rows={len(raw):,}, rows={len(supplements):,}")
     print(f"[Applied] inference_rows={len(audit):,}")
     if args.lag_raw_supplement is not None:
-        print(f"[Lag supplements] rows={len(lag_supplements):,}, added_history_rows={len(lag_history):,}")
+        print(
+            f"[Lag supplements] rows={len(lag_supplements):,}, added_history_rows={len(lag_history):,}"
+        )
     if not audit.empty:
         print(
             audit[

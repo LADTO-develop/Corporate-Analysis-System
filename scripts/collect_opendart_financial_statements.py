@@ -213,9 +213,11 @@ def inference_financial_supplement_target(frame: pd.DataFrame) -> pd.Series:
     available = [column for column in INFERENCE_SUPPLEMENT_CRITICAL_FEATURES if column in frame]
     if not available:
         return missing_financial_statement_source(frame)
-    critical_missing_count = frame[available].apply(
-        lambda column: pd.to_numeric(column, errors="coerce").isna()
-    ).sum(axis=1)
+    critical_missing_count = (
+        frame[available]
+        .apply(lambda column: pd.to_numeric(column, errors="coerce").isna())
+        .sum(axis=1)
+    )
     return critical_missing_count.ge(INFERENCE_SUPPLEMENT_MISSING_THRESHOLD)
 
 
