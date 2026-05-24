@@ -5,7 +5,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
-Stage2AgentRole = Literal["quant_credit", "evidence_audit", "chair_report"]
+Stage2AgentRole = Literal[
+    "quant_credit",
+    "evidence_audit",
+    "chair_report",
+    "review_qa",
+    "risk_recall_qa",
+]
 
 
 @dataclass(frozen=True)
@@ -24,6 +30,11 @@ STAGE2_AGENT_ROLES: tuple[Stage2AgentRole, ...] = (
     "quant_credit",
     "evidence_audit",
     "chair_report",
+)
+
+STAGE2_OPTIONAL_AGENT_ROLES: tuple[Stage2AgentRole, ...] = (
+    "review_qa",
+    "risk_recall_qa",
 )
 
 STAGE2_AGENT_SPECS: tuple[Stage2AgentSpec, ...] = (
@@ -123,10 +134,80 @@ STAGE2_AGENT_SPECS: tuple[Stage2AgentSpec, ...] = (
     ),
 )
 
+STAGE2_OPTIONAL_AGENT_SPECS: tuple[Stage2AgentSpec, ...] = (
+    Stage2AgentSpec(
+        role="review_qa",
+        display_name="ReviewQAAgent",
+        purpose=(
+            "Audit the resolved committee_view for label/memo consistency, evidence "
+            "cutoff discipline, over-hold risk, and risk-hold subtype quality."
+        ),
+        required_inputs=(
+            "committee_view",
+            "quant_credit_output",
+            "evidence_audit_output",
+            "chair_report_output",
+            "model_view",
+            "news_cache_snapshot",
+        ),
+        output_fields=(
+            "qa_summary",
+            "trigger_reasons",
+            "label_memo_consistency",
+            "risk_hold_assessment",
+            "evidence_cutoff_check",
+            "overhold_guardrail_assessment",
+            "recommended_action",
+            "confidence",
+        ),
+        future_agno_instruction=(
+            "Treat model_view and committee_view as inputs to audit, not as "
+            "official ratings. Check whether a hold on an investment-grade model "
+            "call is justified by verified pre-cutoff evidence or severe financial "
+            "stress, and recommend keep, subtype downgrade, memo-only fix, or manual review."
+        ),
+    ),
+    Stage2AgentSpec(
+        role="risk_recall_qa",
+        display_name="RiskRecallQAAgent",
+        purpose=(
+            "Audit eligible committee decisions for missed-risk recall safety when the "
+            "model probability, financial axes, external evidence, or rating boundary "
+            "suggest residual downside risk."
+        ),
+        required_inputs=(
+            "committee_view",
+            "quant_credit_output",
+            "evidence_audit_output",
+            "chair_report_output",
+            "model_view",
+            "source_feature_row",
+            "news_cache_snapshot",
+            "prior_rating_reference",
+        ),
+        output_fields=(
+            "qa_summary",
+            "trigger_reasons",
+            "eligible_safety_assessment",
+            "financial_resilience_check",
+            "evidence_recall_check",
+            "rating_boundary_check",
+            "recommended_action",
+            "confidence",
+        ),
+        future_agno_instruction=(
+            "Treat eligible committee decisions as provisional when they are near the "
+            "threshold, financially weak, or supported by ambiguous external evidence. "
+            "Recommend keep, boundary hold, risk hold, manual review, or memo-only fix "
+            "without inventing evidence."
+        ),
+    ),
+)
+
 
 def get_stage2_agent_spec(role: Stage2AgentRole) -> Stage2AgentSpec:
     """Return the fixed role contract for a Stage 2 agent."""
-    for spec in STAGE2_AGENT_SPECS:
+    for spec in (*STAGE2_AGENT_SPECS, *STAGE2_OPTIONAL_AGENT_SPECS):
         if spec.role == role:
             return spec
     raise ValueError(f"Unknown Stage 2 agent role: {role}")
@@ -135,6 +216,8 @@ def get_stage2_agent_spec(role: Stage2AgentRole) -> Stage2AgentSpec:
 __all__ = [
     "STAGE2_AGENT_ROLES",
     "STAGE2_AGENT_SPECS",
+    "STAGE2_OPTIONAL_AGENT_ROLES",
+    "STAGE2_OPTIONAL_AGENT_SPECS",
     "Stage2AgentRole",
     "Stage2AgentSpec",
     "get_stage2_agent_spec",

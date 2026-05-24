@@ -15,6 +15,8 @@ from cas.agents.state import Recommendation
 from .chair_report_agent import run_chair_report_agent
 from .evidence_audit_agent import run_evidence_audit_agent
 from .quant_credit_agent import run_quant_credit_agent
+from .review_qa_agent import run_review_qa_agent
+from .risk_recall_qa_agent import run_risk_recall_qa_agent
 
 OutputT = TypeVar("OutputT")
 
@@ -122,5 +124,7 @@ __all__ = [
     "run_chair_report_agent",
     "run_evidence_audit_agent",
     "run_quant_credit_agent",
+    "run_review_qa_agent",
+    "run_risk_recall_qa_agent",
     "run_triplet_agents",
 ]

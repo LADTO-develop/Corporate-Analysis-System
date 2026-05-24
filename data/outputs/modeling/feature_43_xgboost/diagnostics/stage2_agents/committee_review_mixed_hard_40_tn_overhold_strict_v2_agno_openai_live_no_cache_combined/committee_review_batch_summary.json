@@ -1,0 +1,98 @@
+{
+  "rows": 40,
+  "success_rate": 0.975,
+  "review_safe_success_rate": 1.0,
+  "combined_from": [
+    "data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents/committee_review_mixed_hard_40_tn_overhold_strict_v2_agno_openai_live_no_cache",
+    "data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents/committee_review_mixed_hard_40_tn_overhold_strict_v2_retry_jenic_2021_agno_openai_live_no_cache"
+  ],
+  "replacement": "Replaced (주)제닉 2021 retry row from reject to boundary_hold.",
+  "by_error_type": [
+    {
+      "model_error_type": "false_negative",
+      "committee_effect": "fn_escalated",
+      "rows": 8
+    },
+    {
+      "model_error_type": "false_positive",
+      "committee_effect": "fp_mitigated",
+      "rows": 12
+    },
+    {
+      "model_error_type": "true_negative",
+      "committee_effect": "tn_escalated",
+      "rows": 1
+    },
+    {
+      "model_error_type": "true_negative",
+      "committee_effect": "tn_kept_eligible",
+      "rows": 7
+    },
+    {
+      "model_error_type": "true_positive",
+      "committee_effect": "tp_risk_supported",
+      "rows": 12
+    }
+  ],
+  "by_review_safe_effect": [
+    {
+      "model_error_type": "false_negative",
+      "committee_review_safe_effect": "review_safe_fn_escalated",
+      "rows": 8
+    },
+    {
+      "model_error_type": "false_positive",
+      "committee_review_safe_effect": "review_safe_fp_not_rejected",
+      "rows": 12
+    },
+    {
+      "model_error_type": "true_negative",
+      "committee_review_safe_effect": "review_safe_tn_not_rejected",
+      "rows": 8
+    },
+    {
+      "model_error_type": "true_positive",
+      "committee_review_safe_effect": "review_safe_tp_supported",
+      "rows": 12
+    }
+  ],
+  "by_final_label": [
+    {
+      "final_committee_label": "보류",
+      "rows": 24
+    },
+    {
+      "final_committee_label": "부적격",
+      "rows": 9
+    },
+    {
+      "final_committee_label": "적격",
+      "rows": 7
+    }
+  ],
+  "by_evidence_status": [
+    {
+      "evidence_status": "ready",
+      "rows": 40
+    }
+  ],
+  "speed": {
+    "batch_wall_time_seconds_combined_sequential": 290.783,
+    "case_elapsed_seconds_sum": 1045.908,
+    "case_elapsed_seconds_mean": 26.1477,
+    "case_elapsed_seconds_median": 21.1998,
+    "case_elapsed_seconds_max": 61.7498
+  },
+  "stage2_speed": {
+    "stage2_total_elapsed_seconds_sum": 1035.7484,
+    "stage2_total_elapsed_seconds_mean": 25.8937,
+    "stage2_total_elapsed_seconds_median": 21.1138,
+    "stage2_total_elapsed_seconds_max": 61.6745,
+    "stage2_llm_cache_hit_rows": 0
+  },
+  "paths": {
+    "details": "data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents/committee_review_mixed_hard_40_tn_overhold_strict_v2_agno_openai_live_no_cache_combined/committee_review_batch_results.csv",
+    "summary": "data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents/committee_review_mixed_hard_40_tn_overhold_strict_v2_agno_openai_live_no_cache_combined/committee_review_batch_summary.json",
+    "report": "data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents/committee_review_mixed_hard_40_tn_overhold_strict_v2_agno_openai_live_no_cache_combined/committee_review_batch_report.md"
+  }
+}

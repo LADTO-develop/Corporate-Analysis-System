@@ -4,7 +4,7 @@
 
 ## 문제 원인
 
-현재 Stage 2 Agno 기본 모드는 OpenAI 단일 provider 실행(`CAS_STAGE2_AGNO_MODE=single`, `CAS_STAGE2_MODEL_PROVIDER=openai`)이다. 이 모드는 `OPENAI_API_KEY`만 있으면 preflight가 통과하도록 맞춰져 있다. `single`은 OpenAI 한 provider를 쓰되 QuantCredit/EvidenceAudit/ChairReport 세 역할 agent를 분리 실행하는 모드다. 실제 live latency를 측정할 때는 캐시 재사용을 피하기 위해 `--no-stage2-llm-cache`를 붙인다.
+현재 Stage 2 Agno 기본 모드는 OpenAI 단일 provider 실행(`CAS_STAGE2_AGNO_MODE=single`, `CAS_STAGE2_MODEL_PROVIDER=openai`)이다. 이 모드는 `OPENAI_API_KEY`만 있으면 preflight가 통과하도록 맞춰져 있다. `single`은 OpenAI 한 provider를 쓰되 QuantCredit/EvidenceAudit/ChairReport 세 역할 agent를 분리 실행하는 모드다. Agno live 실행에서는 특정 조건에만 ReviewQAAgent와 RiskRecallQAAgent가 사후 검수로 추가될 수 있다. 실제 live latency를 측정할 때는 캐시 재사용을 피하기 위해 `--no-stage2-llm-cache`를 붙인다.
 
 여러 LLM 관점을 비교하는 `multi_llm_committee`는 선택 사항이다. 이 모드는 역할별로 Claude, GPT, Gemini를 함께 쓰므로 `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GOOGLE_API_KEY` 또는 `GEMINI_API_KEY`가 모두 필요할 수 있다.
 
@@ -41,6 +41,9 @@ Agno Stage 2 preflight passed.
 /usr/bin/env \
   CAS_STAGE2_FALLBACK_ON_ERROR=0 \
   CAS_STAGE2_MAX_TOKENS=6000 \
+  CAS_STAGE2_AGENT_TIMEOUT_SECONDS=30 \
+  CAS_STAGE2_AGENT_RETRIES=2 \
+  CAS_STAGE2_PROVIDER_MAX_RETRIES=0 \
   /opt/anaconda3/envs/aura/bin/python scripts/run_committee_review_evaluation_batch.py \
   --samples data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents/committee_review_holdout_unseen_8_samples.csv \
   --output-dir data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents/committee_review_holdout_unseen_agno_openai_live_batch \
@@ -57,7 +60,35 @@ Agno Stage 2 preflight passed.
 
 외부 뉴스/공시 수집까지 함께 켤 때는 `OPENDART_API_KEY`, `NAVER_CLIENT_ID`, `NAVER_CLIENT_SECRET`, `TAVILY_API_KEY`를 `.env`에 설정한 뒤 `--live-external-evidence`를 추가한다.
 
-배치 결과 CSV에는 Stage 2 실행 진단 컬럼이 함께 남는다. 주요 컬럼은 `stage2_backend_name`, `stage2_llm_cache_hit`, `stage2_total_elapsed_seconds`, `stage2_agent_elapsed_seconds_sum`, `stage2_quant_credit_elapsed_seconds`, `stage2_evidence_audit_elapsed_seconds`, `stage2_chair_report_elapsed_seconds`, `stage2_parallel_independent_agents`다. 실제 API 속도를 측정할 때는 `stage2_llm_cache_hit=False`인 행을 기준으로 보고, 캐시 재사용 여부를 제거하려면 위 예시처럼 `--no-stage2-llm-cache`를 붙인다.
+OpenAI/Claude Agno 호출 지연 outlier를 줄일 때는 `CAS_STAGE2_AGENT_TIMEOUT_SECONDS`를 설정한다. 이 값은 개별 agent HTTP 요청 timeout이며, timeout 또는 일시 오류가 나면 `CAS_STAGE2_AGENT_RETRIES` 횟수만큼 CAS retry 루프가 다시 시도한다. provider SDK 내부 재시도와 CAS 재시도가 겹치면 지연시간이 길어질 수 있으므로, 속도 측정에서는 `CAS_STAGE2_PROVIDER_MAX_RETRIES=0`을 권장한다. timeout을 끄려면 `CAS_STAGE2_AGENT_TIMEOUT_SECONDS=0` 또는 `off`를 사용한다.
+
+OpenDART 공시 분류는 `external_evidence_v6` 캐시 버전을 사용한다. 이 버전부터
+소송/계약해지/자금조달/거래정지 공시를 모두 같은 위험으로 보지 않고,
+`disclosure_severity`, `disclosure_event_class`, `disclosure_materiality`를 함께 남긴다.
+일정금액 미만 소송, 자율공시 단일 계약해지, SPAC 합병 절차성 거래정지는
+`caution/procedural_or_one_off`로 낮춰 EvidenceAuditAgent가 참고 맥락으로만 다루고,
+상장폐지·감사의견 거절·관리종목·영업정지 같은 실질 부실 사건은 `adverse/veto`로 유지한다.
+
+또한 v5부터는 `단일판매ㆍ공급계약해지`와 `영업정지` 후보에 한해 OpenDART 상세 공시를
+추가 조회한다. 영업정지는 `bsnSp.json`의 `sl_vs` 또는 `bsnsp_amt/rsl`을 사용하고,
+계약해지는 `document.xml` 원문 zip에서 매출 대비 비율을 파싱해 `materiality_ratio`,
+`materiality_basis`, `materiality_source`를 남긴다. 매출 대비 3% 미만은
+`procedural_or_one_off`, 3~10%는 `watch_context`, 10% 이상은 `substantive_adverse`로
+분류한다. 이 상세중요도 보강은 기본 활성화이며, 속도 비교에서 끄고 싶으면
+`CAS_OPENDART_DETAIL_MATERIALITY_ENABLED=0`을 추가한다.
+
+v6에서는 `bsnSp.json`에 비율이 없거나 매칭되는 영업정지 행이 없을 때
+`document.xml` 원문 fallback을 한 번 더 수행한다. 이 fallback은 종속회사 영업정지
+공시에서 `최근매출액 대비`, `영업정지금액`, `최근매출액` 같은 원문 표 값을 찾아
+모회사 신용위험으로 볼 만큼 중대한지 다시 분류한다.
+
+배치 결과 CSV에는 Stage 2 실행 진단 컬럼이 함께 남는다. 주요 컬럼은 `stage2_backend_name`, `stage2_llm_cache_hit`, `stage2_total_elapsed_seconds`, `stage2_agent_elapsed_seconds_sum`, `stage2_quant_credit_elapsed_seconds`, `stage2_evidence_audit_elapsed_seconds`, `stage2_chair_report_elapsed_seconds`, `stage2_review_qa_elapsed_seconds`, `stage2_review_qa_triggered`, `stage2_review_qa_trigger_reasons`, `stage2_review_qa_recommended_action`, `stage2_review_qa_advisory_applied`, `stage2_review_qa_advisory_apply_reason`, `stage2_risk_recall_qa_elapsed_seconds`, `stage2_risk_recall_qa_triggered`, `stage2_risk_recall_qa_trigger_reasons`, `stage2_risk_recall_qa_recommended_action`, `stage2_risk_recall_qa_advisory_applied`, `stage2_risk_recall_qa_advisory_apply_reason`, `stage2_parallel_independent_agents`다. 실제 API 속도를 측정할 때는 `stage2_llm_cache_hit=False`인 행을 기준으로 보고, 캐시 재사용 여부를 제거하려면 위 예시처럼 `--no-stage2-llm-cache`를 붙인다.
+
+ReviewQAAgent는 Agno runner에서 기본적으로 켜져 있지만, 모든 기업에 실행되지는 않는다. Stage 1 모델이 `투자적격`인데 최종 라벨이 `보류`인 경우, `risk_hold`가 치명 근거 없이 만들어진 경우, chair memo와 최종 라벨 충돌 가능성이 있는 경우, 또는 자금조달·거래정지·감사보고서처럼 해석이 애매한 공시가 보류 판단에 관여한 경우에만 실행된다. 운영 속도 테스트에서 순수 3-agent 지연시간만 보고 싶으면 `CAS_STAGE2_REVIEW_QA_ENABLED=0`을 추가한다.
+
+ReviewQA는 최종 라벨을 직접 바꾸지 않는다. 다만 `risk_hold`가 과도하다고 권고하고 `veto_triggered=false`, `hidden_tail_risk_flag=false`이면 `committee_decision_type`만 `boundary_hold`로 낮출 수 있다. 또한 ReviewQA가 `risk_hold_without_critical_evidence` 조건에서 downgrade를 권고했고, 외부 공시가 모두 `caution/watch_context/procedural_or_one_off` 수준이며 중대성 비율 10% 이상·veto·hidden-tail-risk가 없으면 같은 subtype 보정을 안정적으로 적용한다. 이 subtype advisory 적용을 끄고 순수 관찰만 하려면 `CAS_STAGE2_REVIEW_QA_APPLY_ADVISORY=0`을 추가한다.
+
+RiskRecallQAAgent는 ReviewQA의 반대편 안전망이다. 최종 라벨이 `적격`일 때도 확률이 기준선 근처라는 이유만으로는 실행하지 않고, 기준선 근처와 재무 취약 2축 이상이 함께 있거나, 재무 취약 3축 이상이거나, 실질 외부 위험 근거가 있을 때만 실행한다. watch 공시나 BBB-/BB+ 경계 맥락은 단독 trigger가 아니라 이 핵심 조건에 붙는 보조 맥락으로만 남긴다. 적격 판단을 유지하기 어렵다고 권고하면 `boundary_hold` 또는 아주 제한적으로 `risk_hold`로 올릴 수 있다. `eligible_with_substantive_evidence` trigger는 routine 감사보고서나 단순 공시가 아니라 `materiality_ratio >= 10%`, `substantive_adverse`, `veto/critical context`, 또는 횡령·배임·상장폐지·감사의견 거절 같은 명시적 치명 제목에만 켜진다. 속도 테스트에서 끄려면 `CAS_STAGE2_RISK_RECALL_QA_ENABLED=0`, 권고 적용만 끄려면 `CAS_STAGE2_RISK_RECALL_QA_APPLY_ADVISORY=0`을 추가한다.
 
 ## Deterministic vs OpenAI Agno 설명 품질 비교
 

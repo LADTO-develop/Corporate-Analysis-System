@@ -781,6 +781,187 @@ def test_committee_view_allows_single_medium_financing_when_defensive_tn() -> No
     assert "정상기업 과잉 보류 방어 guardrail" in committee_view["mitigating_factors"][0]
 
 
+def test_committee_view_lowers_stable_prior_cashflow_tn_boundary_hold_to_eligible() -> None:
+    state: AgentState = {
+        "company_id": "127710",
+        "company_name": "(주)아시아경제",
+        "source_feature_row": {
+            "stock_code": "127710",
+            "current_ratio": 0.76,
+            "cash_ratio": 0.16,
+            "cashflow_coverage_ratio": 52.18,
+            "ocf_to_sales": 0.92,
+            "ocf_to_total_liabilities": 0.15,
+            "interest_coverage_ratio": -0.76,
+            "equity_ratio": 0.26,
+            "debt_ratio": 2.79,
+            "total_borrowings_ratio": 0.50,
+            "short_term_borrowings_share": 0.69,
+            "capital_impairment_ratio": -9.89,
+            "net_margin": 0.20,
+            "icr_under_1": 1,
+            "is_2y_consecutive_operating_loss": 0,
+            "is_2y_consecutive_ocf_deficit": 0,
+        },
+        "prior_rating_reference": {
+            "has_prior_rating": True,
+            "prior_credit_rating": "BBB+",
+            "prior_credit_rating_rank": 8,
+            "prior_rating_boundary_group": "investment_grade_non_boundary",
+            "prior_rating_date": "2021-07-10",
+            "prior_rating_age_days": 539,
+            "prior_rating_agency": "(주)이크레더블",
+        },
+        "model_view": {
+            "prediction_label": "투자적격",
+            "probability_speculative": 0.2422,
+            "threshold": 0.25,
+            "stage2_secondary_trigger": True,
+            "stage2_review_priority": "high",
+            "trigger_reason": "rolling OOT 모델은 투자적격이지만 기준선 근처입니다.",
+        },
+        "xgboost_result": {
+            "prediction_label": "투자적격",
+            "probability_speculative": 0.2422,
+            "threshold": 0.25,
+        },
+        "rule_result": {
+            "risk_band": "high_risk",
+            "recommendation": "defer",
+            "reasons": [
+                "current_ratio=0.76 is below the watch floor",
+                "interest_coverage_ratio=-0.76 indicates potential debt stress",
+            ],
+            "blocking_flags": ["interest_coverage_under_1"],
+        },
+        "news_cache_snapshot": {
+            "status": "ready",
+            "items": [
+                {
+                    "source": "opendart",
+                    "title": "주요사항보고서(전환사채권발행결정)",
+                    "summary": "(주)아시아경제 직접 관련 단일 자금조달성 공시입니다.",
+                    "company_match": True,
+                    "provider_relevance": "caution",
+                    "disclosure_severity": "caution",
+                    "critical_terms": [],
+                    "critical_context_confirmed": False,
+                    "veto_candidate": False,
+                    "evidence_quality": "medium",
+                    "evidence_score": 0.60,
+                }
+            ],
+        },
+    }
+    agents = [
+        AgentOutput(role="quant_credit", summary="정량 결과", findings=[], confidence=0.8),
+        AgentOutput(role="evidence_audit", summary="근거 검토", findings=[], confidence=0.7),
+        AgentOutput(role="chair_report", summary="종합", findings=[], confidence=0.7),
+    ]
+
+    committee_view = build_committee_view(
+        bundle=build_stage2_input_bundle(state),
+        recommendation="defer",
+        agents=agents,
+    )
+
+    assert committee_view["final_committee_label"] == "적격"
+    assert committee_view["committee_decision_type"] == "eligible"
+    assert committee_view["committee_risk_signal"] is False
+    assert "guardrail v2" in committee_view["mitigating_factors"][0]
+    assert "경계등급 보류" not in committee_view["conflict_resolution"]
+
+
+def test_committee_view_keeps_tn_hold_with_substantive_external_risk() -> None:
+    state: AgentState = {
+        "company_id": "039130",
+        "company_name": "(주)하나투어",
+        "source_feature_row": {
+            "stock_code": "039130",
+            "current_ratio": 1.16,
+            "cash_ratio": 0.40,
+            "cashflow_coverage_ratio": -3.63,
+            "ocf_to_sales": -0.09,
+            "ocf_to_total_liabilities": -0.03,
+            "interest_coverage_ratio": -35.91,
+            "equity_ratio": 0.22,
+            "debt_ratio": 3.57,
+            "total_borrowings_ratio": 0.05,
+            "short_term_borrowings_share": 0.65,
+            "capital_impairment_ratio": -11.43,
+            "net_margin": -0.56,
+            "icr_under_1": 1,
+            "is_2y_consecutive_operating_loss": 1,
+            "is_2y_consecutive_ocf_deficit": 1,
+        },
+        "prior_rating_reference": {
+            "has_prior_rating": True,
+            "prior_credit_rating": "BBB+",
+            "prior_credit_rating_rank": 8,
+            "prior_rating_boundary_group": "investment_grade_non_boundary",
+            "prior_rating_date": "2021-12-01",
+            "prior_rating_age_days": 395,
+            "prior_rating_agency": "한국평가데이터",
+        },
+        "model_view": {
+            "prediction_label": "투자적격",
+            "probability_speculative": 0.2353,
+            "threshold": 0.25,
+            "stage2_secondary_trigger": True,
+            "stage2_review_priority": "high",
+            "trigger_reason": "rolling OOT 모델은 투자적격이지만 기준선 근처입니다.",
+        },
+        "xgboost_result": {
+            "prediction_label": "투자적격",
+            "probability_speculative": 0.2353,
+            "threshold": 0.25,
+        },
+        "rule_result": {
+            "risk_band": "high_risk",
+            "recommendation": "defer",
+            "reasons": ["two-year consecutive operating loss flag is active"],
+            "blocking_flags": ["interest_coverage_under_1"],
+        },
+        "news_cache_snapshot": {
+            "status": "ready",
+            "items": [
+                {
+                    "source": "opendart",
+                    "title": "영업정지(종속회사의주요경영사항)",
+                    "summary": "(주)하나투어 직접 관련 영업정지 공시입니다.",
+                    "company_match": True,
+                    "provider_relevance": "risk",
+                    "disclosure_severity": "adverse",
+                    "disclosure_event_class": "substantive_adverse",
+                    "disclosure_materiality": "substantive_adverse",
+                    "materiality_ratio": 0.1137,
+                    "critical_terms": ["영업정지"],
+                    "critical_context_confirmed": True,
+                    "veto_candidate": False,
+                    "evidence_quality": "high",
+                    "evidence_score": 0.95,
+                }
+            ],
+        },
+    }
+    agents = [
+        AgentOutput(role="quant_credit", summary="정량 결과", findings=[], confidence=0.8),
+        AgentOutput(role="evidence_audit", summary="근거 검토", findings=[], confidence=0.7),
+        AgentOutput(role="chair_report", summary="종합", findings=[], confidence=0.7),
+    ]
+
+    committee_view = build_committee_view(
+        bundle=build_stage2_input_bundle(state),
+        recommendation="defer",
+        agents=agents,
+    )
+
+    assert committee_view["final_committee_label"] == "보류"
+    assert committee_view["committee_decision_type"] == "risk_hold"
+    assert committee_view["committee_risk_signal"] is True
+    assert "guardrail v2" not in " ".join(committee_view["mitigating_factors"])
+
+
 @pytest.mark.parametrize(
     "conflicting_chair_memo",
     [

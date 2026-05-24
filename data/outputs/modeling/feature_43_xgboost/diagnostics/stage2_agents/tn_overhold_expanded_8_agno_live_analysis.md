@@ -75,3 +75,37 @@ Agno live 결과를 반영해 단일 medium 자금조달 공시와 반복·고�
 Agno live 결과에서 최종 위원회 라벨은 `보류`인데 chair memo가 "모델 라벨을 유지하되" 또는 "최종 라벨은 투자적격 유지하되"처럼 읽히는 표현이 남을 수 있음을 확인했다. 따라서 최종 라벨이 `적격`이 아닌 경우에는 `투자적격 판단을 유지`, `모델 라벨을 유지`, `모델 라벨을 존중`, `최종 라벨은 투자적격` 계열 문장을 보강 메모로 붙이지 않도록 필터를 확장했다.
 
 이 변경은 최종 라벨이나 strict/review-safe 성능을 바꾸는 guardrail이 아니라, Agno 3-agent 출력이 사용자에게 전달될 때 최종 판단과 설명 문구가 충돌하지 않도록 하는 설명 품질 개선이다. 회귀 테스트에는 `(주)레몬` 반복 자금조달 보류 케이스를 사용했고, 실제 Agno live에서 관찰된 표현 변형을 함께 추가했다.
+
+전체 8건을 다시 OpenAI Agno 3-agent no-cache live로 실행해 설명 충돌 제거를 확인했다.
+
+| 실행 | 건수 | 엄격 기준 | Review-safe | 적격 | 보류 | Risk signal TN holds | Memo conflicts | Wall time | Stage 2 평균 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Agno live no-cache after memo filter | 8 | 3/8 = 37.5% | 8/8 = 100.0% | 3 | 5 | 2 | 0 | 67.3331 sec | 15.0851 sec |
+
+재검증 결과 `stage2_backend_name=agno` 8/8, `stage2_llm_cache_hit=False` 8/8, `stage2_parallel_independent_agents=True` 8/8, 외부근거 `ready` 8/8이었다. 최종 라벨 분포는 SPAC 절차성 거래정지 보정 이후와 동일하게 `적격` 3건, `boundary_hold` 3건, `risk_hold` 2건이며, 최종 라벨이 `보류`인 케이스에서 투자적격 유지처럼 읽히는 chair memo 충돌은 0건이었다.
+
+## Conditional ReviewQA Follow-up
+
+Agno 본심 3-agent 뒤에 조건부 ReviewQAAgent를 추가해 같은 8건을 live no-cache로 재검증했다. 첫 실행에서는 애매한 외부공시만 있어도 QA가 켜져 `적격` 3건까지 포함한 8/8건이 QA를 탔고, wall time은 112.5576초였다. 이후 trigger를 조정해 최종 라벨이 `적격`인 단순 애매공시 케이스는 QA를 건너뛰도록 바꿨다.
+
+| 실행 | 건수 | 엄격 기준 | Review-safe | QA triggered | QA action | Wall time | 평균 case time |
+| --- | ---: | ---: | ---: | ---: | --- | ---: | ---: |
+| ReviewQA before trigger tuning | 8 | 3/8 = 37.5% | 8/8 = 100.0% | 8/8 | keep 6, downgrade risk_hold→boundary_hold 2 | 112.5576 sec | 27.4583 sec |
+| ReviewQA after trigger tuning | 8 | 3/8 = 37.5% | 8/8 = 100.0% | 5/8 | keep 4, downgrade risk_hold→boundary_hold 1 | 83.7142 sec | 19.5163 sec |
+| ReviewQA subtype advisory applied | 8 | 3/8 = 37.5% | 8/8 = 100.0% | 5/8 | applied 1, keep 4 | 241.5522 sec | 57.6304 sec |
+
+Trigger tuning 이후에도 `stage2_backend_name=agno` 8/8, `stage2_llm_cache_hit=False` 8/8, 외부근거 `ready` 8/8, memo conflict 0건을 유지했다. 최종 라벨 분포도 `적격` 3건, `boundary_hold` 3건, `risk_hold` 2건으로 유지됐다. ReviewQA는 `(주)레몬`의 반복 자금조달성 공시 기반 `risk_hold`에 대해 `downgrade_risk_hold_to_boundary_hold`를 권고했고, 하나투어의 영업정지/재무 약점 결합 `risk_hold`는 유지 의견을 냈다. 따라서 ReviewQA는 최종 라벨을 직접 덮어쓰지 않는 advisory layer로 두되, 향후 `risk_hold` subtype 자동 재분류 후보를 찾는 근거로 사용할 수 있다.
+
+ReviewQA subtype advisory 적용 후 live no-cache 재검증에서는 최종 라벨은 그대로 `적격` 3건, `보류` 5건을 유지하면서, `(주)레몬` 1건만 `risk_hold`에서 `boundary_hold`로 낮아졌다. 따라서 `committee_risk_signal=True`인 TN 위험신호 보류는 2건에서 1건으로 줄었고, `stage2_review_qa_advisory_applied=True`는 1/8건이었다. 하나투어는 ReviewQA가 `keep_committee_view`를 권고해 `risk_hold`로 유지됐다. 이번 run의 wall time은 241.5522초로 길었지만, QA 평균은 6.0396초였고 지연은 주로 QuantCredit/ChairReport OpenAI 응답 시간 변동에서 발생했다.
+
+## ReviewQA 20-Case Expansion
+
+이전 8건만으로는 표본이 작아, 같은 TN 과잉 보류 stress 목적의 20건 샘플로 ReviewQA advisory 적용을 확대 검증했다. 샘플은 이전 live 8건, deterministic 보류 TN 추가 4건, 기준선 근처 TN 추가 8건으로 구성했다.
+
+| 실행 | 건수 | 엄격 기준 | Review-safe | 적격 | 보류 | QA triggered | Advisory applied | Wall time | Stage 2 평균 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| ReviewQA advisory applied 20 live no-cache | 20 | 10/20 = 50.0% | 20/20 = 100.0% | 10 | 10 | 10/20 | 2/20 | 190.1121 sec | 17.9042 sec |
+
+확대 실행에서도 `stage2_backend_name=agno` 20/20, `stage2_llm_cache_hit=False` 20/20, 외부근거 `ready` 20/20, 실행 오류 0건이었다. ReviewQA는 최종 `적격` 10건을 건너뛰고 `보류` 10건에만 켜졌다. 권고는 keep 7건, `risk_hold → boundary_hold` 3건이었고, 실제 자동 적용은 `(주)레몬`, `신원종합개발(주)` 2건이었다. `다스코(주)`는 ReviewQA가 downgrade를 권고했지만 `hidden_tail_risk_flag=True`라 자동 적용이 차단되어, 안전장치가 의도대로 작동했다.
+
+이 결과는 ReviewQA를 전체 기업에 항상 붙이는 구조가 아니라, 보류/위험근거 충돌 후보에만 붙이는 구조가 운영상 더 적합하다는 근거다. 세부 분석은 `tn_overhold_expanded_20_reviewqa_live_analysis.md`에 별도 저장했다.

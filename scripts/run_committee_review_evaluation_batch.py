@@ -452,8 +452,50 @@ def _result_row(
         "stage2_quant_credit_elapsed_seconds": stage2_agent_timings.get("quant_credit"),
         "stage2_evidence_audit_elapsed_seconds": stage2_agent_timings.get("evidence_audit"),
         "stage2_chair_report_elapsed_seconds": stage2_agent_timings.get("chair_report"),
+        "stage2_review_qa_elapsed_seconds": stage2_agent_timings.get("review_qa"),
+        "stage2_risk_recall_qa_elapsed_seconds": stage2_agent_timings.get(
+            "risk_recall_qa"
+        ),
         "stage2_parallel_independent_agents": bool(
             stage2_runtime.get("parallel_independent_agents", False)
+        ),
+        "stage2_review_qa_triggered": bool(stage2_runtime.get("review_qa_triggered", False)),
+        "stage2_review_qa_cache_hit": bool(stage2_runtime.get("review_qa_cache_hit", False)),
+        "stage2_review_qa_trigger_reasons": " / ".join(
+            str(item) for item in stage2_runtime.get("review_qa_trigger_reasons", []) or []
+        ),
+        "stage2_review_qa_recommended_action": stage2_runtime.get(
+            "review_qa_recommended_action", ""
+        ),
+        "stage2_review_qa_advisory_applied": bool(
+            stage2_runtime.get("review_qa_advisory_applied", False)
+        ),
+        "stage2_review_qa_adjusted_decision_type": stage2_runtime.get(
+            "review_qa_adjusted_decision_type", ""
+        ),
+        "stage2_review_qa_advisory_apply_reason": stage2_runtime.get(
+            "review_qa_advisory_apply_reason", ""
+        ),
+        "stage2_risk_recall_qa_triggered": bool(
+            stage2_runtime.get("risk_recall_qa_triggered", False)
+        ),
+        "stage2_risk_recall_qa_cache_hit": bool(
+            stage2_runtime.get("risk_recall_qa_cache_hit", False)
+        ),
+        "stage2_risk_recall_qa_trigger_reasons": " / ".join(
+            str(item) for item in stage2_runtime.get("risk_recall_qa_trigger_reasons", []) or []
+        ),
+        "stage2_risk_recall_qa_recommended_action": stage2_runtime.get(
+            "risk_recall_qa_recommended_action", ""
+        ),
+        "stage2_risk_recall_qa_advisory_applied": bool(
+            stage2_runtime.get("risk_recall_qa_advisory_applied", False)
+        ),
+        "stage2_risk_recall_qa_adjusted_decision_type": stage2_runtime.get(
+            "risk_recall_qa_adjusted_decision_type", ""
+        ),
+        "stage2_risk_recall_qa_advisory_apply_reason": stage2_runtime.get(
+            "risk_recall_qa_advisory_apply_reason", ""
         ),
         "stage2_error_message": stage2_runtime.get("error_message", ""),
         "veto_triggered": bool(committee_view.get("veto_triggered", False)),

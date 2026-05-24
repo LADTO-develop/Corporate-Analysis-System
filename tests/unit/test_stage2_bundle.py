@@ -13,7 +13,7 @@ def test_stage2_input_bundle_normalizes_state_for_agents() -> None:
         "market": "KOSPI",
         "analysis_year": 2025,
         "model_view": {"y_proba": 0.21},
-        "xgboost_result": {"prediction_label": "투자적격"},
+        "xgboost_result": {"prediction_label": "투자적격", "threshold": 0.325},
         "source_feature_row": {"market": "KOSPI", "current_ratio": 2.1},
         "prior_rating_reference": {
             "has_prior_rating": True,
@@ -31,10 +31,22 @@ def test_stage2_input_bundle_normalizes_state_for_agents() -> None:
     assert bundle.company_name == "삼성전자"
     assert bundle.prediction_label == "투자적격"
     assert bundle.probability_speculative == 0.21
+    assert bundle.threshold == 0.325
     assert bundle.news_status == "not_implemented"
     assert set(bundle.peer_rows_by_feature) == {"current_ratio"}
     assert bundle.prior_rating_reference["prior_credit_rating"] == "BBB-"
     assert bundle.credit_policy_snapshot == {}
+
+
+def test_stage2_input_bundle_threshold_falls_back_to_model_view() -> None:
+    state: AgentState = {
+        "model_view": {"prediction_label": "투자적격", "threshold": 0.31},
+        "xgboost_result": {},
+    }
+
+    bundle = build_stage2_input_bundle(state)
+
+    assert bundle.threshold == 0.31
 
 
 def test_stage2_input_bundle_exports_prompt_payload() -> None:

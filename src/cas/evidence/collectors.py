@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+import html
 import io
 import os
 import re
@@ -24,6 +25,8 @@ _NAVER_NEWS_URL = "https://openapi.naver.com/v1/search/news.json"
 _TAVILY_SEARCH_URL = "https://api.tavily.com/search"
 _OPENDART_LIST_URL = "https://opendart.fss.or.kr/api/list.json"
 _OPENDART_CORP_CODE_URL = "https://opendart.fss.or.kr/api/corpCode.xml"
+_OPENDART_DOCUMENT_URL = "https://opendart.fss.or.kr/api/document.xml"
+_OPENDART_BUSINESS_SUSPENSION_URL = "https://opendart.fss.or.kr/api/bsnSp.json"
 _OPENDART_DEFAULT_CORP_CODE_CACHE = Path("data/external/opendart/corp_codes.csv")
 _DEFAULT_TIMEOUT_SECONDS = 8.0
 _DEFAULT_MAX_ITEMS = 3
@@ -34,6 +37,8 @@ _MAX_WEAK_WEB_ITEMS = 3
 _OPENDART_LOOKBACK_DAYS = 730
 _OPENDART_PAGE_COUNT = 10
 _OPENDART_MAX_ITEMS = 6
+_OPENDART_MATERIALITY_LOW_RATIO = 0.03
+_OPENDART_MATERIALITY_HIGH_RATIO = 0.10
 _OPENDART_DISCLOSURE_TYPES = {
     "B": "주요사항보고",
     "F": "외부감사관련",
@@ -103,6 +108,45 @@ _BENIGN_TRADING_HALT_TERMS = (
     "액면분할",
     "주식병합",
     "액면병합",
+)
+_HARD_DISTRESS_TERMS = (
+    "횡령",
+    "배임",
+    "감사의견",
+    "상장폐지",
+    "관리종목",
+    "불성실공시",
+    "자본잠식",
+    "영업정지",
+    "회생",
+    "파산",
+    "부도",
+)
+_LITIGATION_DISCLOSURE_TERMS = (
+    "소송등의제기",
+    "소송등의판결",
+    "소송등의결정",
+    "소송등의 판결",
+    "소송 등의 제기",
+    "소송 등의 판결",
+)
+_LOW_MATERIALITY_DISCLOSURE_MARKERS = (
+    "자율공시",
+    "일정금액미만",
+    "일정금액 미만",
+)
+_SUPPLY_CONTRACT_CANCELLATION_TERMS = (
+    "단일판매ㆍ공급계약해지",
+    "단일판매·공급계약해지",
+    "단일판매공급계약해지",
+)
+_PROCEDURAL_MERGER_HALT_MARKERS = (
+    "spac",
+    "스팩",
+    "기업인수목적",
+    "상장예비심사",
+    "예비심사청구대상",
+    "합병예비심사",
 )
 _NAVER_RISK_KEYWORDS = (
     "소송",
@@ -296,11 +340,12 @@ def _external_evidence_cache_key(
     return str(
         stable_cache_key(
             {
-                "cache_version": "external_evidence_v3",
+                "cache_version": "external_evidence_v6",
                 "company_name": company_name,
                 "stock_code": stock_code or "",
                 "corp_code": corp_code or "",
                 "as_of_date": _collection_end_date(as_of_date).isoformat(),
+                "opendart_detail_materiality": _opendart_detail_materiality_enabled(env),
                 "providers": {
                     "naver_news": bool(
                         env.get("NAVER_CLIENT_ID") and env.get("NAVER_CLIENT_SECRET")
@@ -516,6 +561,8 @@ def _collect_opendart(
     begin_date = end_date - timedelta(days=_OPENDART_LOOKBACK_DAYS)
     items: list[dict[str, str]] = []
     provider_errors: list[str] = []
+    detail_materiality_enabled = _opendart_detail_materiality_enabled(env)
+    business_suspension_rows: list[dict[str, object]] | None = None
     for disclosure_type, disclosure_label in _OPENDART_DISCLOSURE_TYPES.items():
         try:
             response = session.get(
@@ -550,25 +597,79 @@ def _collect_opendart(
             receipt_date = str(item.get("rcept_dt", ""))
             severity = _opendart_disclosure_severity(report_name)
             relevance = _opendart_relevance(report_name)
-            items.append(
-                {
-                    "source": "opendart",
-                    "title": report_name,
-                    "summary": (f"{company_name} OpenDART {disclosure_label} 공시: {report_name}"),
-                    "url": f"https://dart.fss.or.kr/dsaf001/main.do?rcpNo={receipt_no}"
-                    if receipt_no
-                    else "",
-                    "published_at": receipt_date,
-                    "reliability": "high",
-                    "corp_code": effective_corp_code,
-                    "rcept_no": receipt_no,
-                    "disclosure_type": disclosure_type,
-                    "disclosure_type_label": disclosure_label,
-                    "provider_relevance": relevance,
-                    "disclosure_severity": severity,
-                    "disclosure_severity_reason": _opendart_severity_reason(severity),
-                }
-            )
+            event_class = _opendart_disclosure_event_class(report_name, severity=severity)
+            evidence_item = {
+                "source": "opendart",
+                "title": report_name,
+                "summary": (f"{company_name} OpenDART {disclosure_label} 공시: {report_name}"),
+                "url": f"https://dart.fss.or.kr/dsaf001/main.do?rcpNo={receipt_no}"
+                if receipt_no
+                else "",
+                "published_at": receipt_date,
+                "reliability": "high",
+                "corp_code": effective_corp_code,
+                "rcept_no": receipt_no,
+                "disclosure_type": disclosure_type,
+                "disclosure_type_label": disclosure_label,
+                "provider_relevance": relevance,
+                "disclosure_severity": severity,
+                "disclosure_severity_reason": _opendart_severity_reason(
+                    severity,
+                    report_name=report_name,
+                ),
+                "disclosure_event_class": event_class,
+                "disclosure_materiality": _opendart_disclosure_materiality(
+                    severity,
+                    event_class=event_class,
+                ),
+            }
+            if detail_materiality_enabled:
+                if _is_business_suspension_candidate(report_name):
+                    if business_suspension_rows is None:
+                        try:
+                            business_suspension_rows = _fetch_opendart_business_suspensions(
+                                api_key=api_key,
+                                corp_code=effective_corp_code,
+                                begin_date=begin_date,
+                                end_date=end_date,
+                                session=session,
+                            )
+                        except Exception as error:
+                            provider_errors.append(f"bsnSp:{error}")
+                            business_suspension_rows = []
+                    evidence_item = _enrich_business_suspension_materiality(
+                        evidence_item,
+                        rows=business_suspension_rows,
+                    )
+                    if not evidence_item.get("materiality_ratio"):
+                        try:
+                            document_text = _fetch_opendart_document_text(
+                                api_key=api_key,
+                                receipt_no=receipt_no,
+                                session=session,
+                            )
+                        except Exception as error:
+                            provider_errors.append(f"document:{receipt_no}:{error}")
+                            document_text = ""
+                        evidence_item = _enrich_business_suspension_document_materiality(
+                            evidence_item,
+                            document_text=document_text,
+                        )
+                elif _is_contract_cancellation_candidate(report_name):
+                    try:
+                        document_text = _fetch_opendart_document_text(
+                            api_key=api_key,
+                            receipt_no=receipt_no,
+                            session=session,
+                        )
+                    except Exception as error:
+                        provider_errors.append(f"document:{receipt_no}:{error}")
+                        document_text = ""
+                    evidence_item = _enrich_contract_cancellation_materiality(
+                        evidence_item,
+                        document_text=document_text,
+                    )
+            items.append(evidence_item)
     items = _prioritized_opendart_items(items)
     if items:
         status = "ready"
@@ -686,6 +787,413 @@ def _corp_code_cache_path(env: Mapping[str, str]) -> Path:
     return Path(configured) if configured else _OPENDART_DEFAULT_CORP_CODE_CACHE
 
 
+def _opendart_detail_materiality_enabled(env: Mapping[str, str]) -> bool:
+    configured = env.get("CAS_OPENDART_DETAIL_MATERIALITY_ENABLED", "")
+    return True if not configured else _truthy(configured)
+
+
+def _is_business_suspension_candidate(report_name: str) -> bool:
+    return "영업정지" in _compact_text(report_name)
+
+
+def _is_contract_cancellation_candidate(report_name: str) -> bool:
+    compact_text = _compact_text(report_name)
+    return any(term in compact_text for term in _compact_terms(_SUPPLY_CONTRACT_CANCELLATION_TERMS))
+
+
+def _fetch_opendart_business_suspensions(
+    *,
+    api_key: str,
+    corp_code: str,
+    begin_date: date,
+    end_date: date,
+    session: HttpClient,
+) -> list[dict[str, object]]:
+    response = session.get(
+        _OPENDART_BUSINESS_SUSPENSION_URL,
+        params={
+            "crtfc_key": api_key,
+            "corp_code": corp_code,
+            "bgn_de": begin_date.strftime("%Y%m%d"),
+            "end_de": end_date.strftime("%Y%m%d"),
+        },
+        timeout=_DEFAULT_TIMEOUT_SECONDS,
+    )
+    response.raise_for_status()
+    payload = response.json()
+    rows = _mapping_value(payload, "list")
+    return [row for row in rows if isinstance(row, dict)] if isinstance(rows, list) else []
+
+
+def _fetch_opendart_document_text(
+    *,
+    api_key: str,
+    receipt_no: str,
+    session: HttpClient,
+) -> str:
+    if not receipt_no:
+        return ""
+    response = session.get(
+        _OPENDART_DOCUMENT_URL,
+        params={"crtfc_key": api_key, "rcept_no": receipt_no},
+        timeout=_DEFAULT_TIMEOUT_SECONDS,
+    )
+    response.raise_for_status()
+    return _opendart_document_bytes_to_text(response.content)
+
+
+def _opendart_document_bytes_to_text(content: bytes) -> str:
+    if not content:
+        return ""
+    try:
+        with zipfile.ZipFile(io.BytesIO(content)) as archive:
+            return "\n".join(
+                _decode_text_bytes(archive.read(name))
+                for name in archive.namelist()
+                if not name.endswith("/")
+            )
+    except zipfile.BadZipFile:
+        return _decode_text_bytes(content)
+
+
+def _decode_text_bytes(content: bytes) -> str:
+    for encoding in ("utf-8-sig", "utf-8", "cp949", "euc-kr"):
+        try:
+            return content.decode(encoding)
+        except UnicodeDecodeError:
+            continue
+    return content.decode("utf-8", errors="ignore")
+
+
+def _enrich_business_suspension_materiality(
+    item: dict[str, str],
+    *,
+    rows: list[dict[str, object]],
+) -> dict[str, str]:
+    row = _matching_opendart_detail_row(rows, receipt_no=str(item.get("rcept_no", "")))
+    if row is None:
+        return item
+    ratio, basis = _business_suspension_materiality_ratio(row)
+    if ratio is None:
+        return item
+    scope = _business_suspension_scope(item=item, row=row)
+    low_event_class = (
+        "subsidiary_business_suspension_low_materiality"
+        if scope == "subsidiary"
+        else "business_suspension_low_materiality"
+    )
+    watch_event_class = (
+        "subsidiary_business_suspension_watch"
+        if scope == "subsidiary"
+        else "business_suspension_watch"
+    )
+    enriched = _apply_opendart_detail_materiality(
+        item,
+        ratio=ratio,
+        basis=basis,
+        detail_source="opendart_bsnSp",
+        confidence="high",
+        low_event_class=low_event_class,
+        watch_event_class=watch_event_class,
+        high_event_class="substantive_adverse",
+    )
+    enriched["business_suspension_scope"] = scope
+    return enriched
+
+
+def _enrich_business_suspension_document_materiality(
+    item: dict[str, str],
+    *,
+    document_text: str,
+) -> dict[str, str]:
+    plain_text = _plain_opendart_document_text(document_text)
+    if not plain_text:
+        return item
+    ratio, basis = _business_suspension_document_materiality_ratio(plain_text)
+    if ratio is None:
+        return item
+    scope = _business_suspension_scope_from_text(item=item, text=plain_text)
+    low_event_class = (
+        "subsidiary_business_suspension_low_materiality"
+        if scope == "subsidiary"
+        else "business_suspension_low_materiality"
+    )
+    watch_event_class = (
+        "subsidiary_business_suspension_watch"
+        if scope == "subsidiary"
+        else "business_suspension_watch"
+    )
+    enriched = _apply_opendart_detail_materiality(
+        item,
+        ratio=ratio,
+        basis=basis,
+        detail_source="opendart_document_xml",
+        confidence="medium",
+        low_event_class=low_event_class,
+        watch_event_class=watch_event_class,
+        high_event_class="substantive_adverse",
+    )
+    enriched["business_suspension_scope"] = scope
+    return enriched
+
+
+def _enrich_contract_cancellation_materiality(
+    item: dict[str, str],
+    *,
+    document_text: str,
+) -> dict[str, str]:
+    plain_text = _plain_opendart_document_text(document_text)
+    if not plain_text:
+        return item
+    ratio, basis = _contract_cancellation_materiality_ratio(plain_text)
+    if ratio is None:
+        return item
+    return _apply_opendart_detail_materiality(
+        item,
+        ratio=ratio,
+        basis=basis,
+        detail_source="opendart_document_xml",
+        confidence="medium",
+        low_event_class="low_materiality_contract_cancellation",
+        watch_event_class="contract_cancellation_watch",
+        high_event_class="material_contract_cancellation",
+    )
+
+
+def _matching_opendart_detail_row(
+    rows: list[dict[str, object]],
+    *,
+    receipt_no: str,
+) -> dict[str, object] | None:
+    for row in rows:
+        if str(row.get("rcept_no", "")).strip() == receipt_no:
+            return row
+    return rows[0] if len(rows) == 1 else None
+
+
+def _business_suspension_materiality_ratio(
+    row: dict[str, object],
+) -> tuple[float | None, str]:
+    ratio = _parse_percent_ratio_value(row.get("sl_vs"))
+    if ratio is not None:
+        return ratio, "영업정지금액 매출액 대비"
+    suspension_amount = _parse_amount_value(row.get("bsnsp_amt"))
+    recent_sales = _parse_amount_value(row.get("rsl"))
+    if suspension_amount is not None and recent_sales and recent_sales > 0:
+        return suspension_amount / recent_sales, "영업정지금액/최근매출총액"
+    return None, ""
+
+
+def _business_suspension_scope(
+    *,
+    item: dict[str, str],
+    row: dict[str, object],
+) -> str:
+    text = " ".join(
+        str(part)
+        for part in (
+            item.get("title", ""),
+            item.get("summary", ""),
+            row.get("bsnsp_rm", ""),
+            row.get("bsnsp_cn", ""),
+            row.get("bsnsp_rs", ""),
+            row.get("bsnsp_af", ""),
+        )
+        if part
+    )
+    compact_text = _compact_text(text)
+    if "종속회사" in compact_text or "자회사" in compact_text:
+        return "subsidiary"
+    return "parent_or_direct"
+
+
+def _business_suspension_scope_from_text(*, item: dict[str, str], text: str) -> str:
+    compact_text = _compact_text(
+        " ".join(
+            part
+            for part in (
+                item.get("title", ""),
+                item.get("summary", ""),
+                text,
+            )
+            if part
+        )
+    )
+    if "종속회사" in compact_text or "자회사" in compact_text:
+        return "subsidiary"
+    return "parent_or_direct"
+
+
+def _business_suspension_document_materiality_ratio(text: str) -> tuple[float | None, str]:
+    ratio = _extract_percent_ratio_near_labels(
+        text,
+        labels=(
+            "최근매출액 대비",
+            "최근매출액대비",
+            "최근 사업연도 매출액 대비",
+            "최근사업연도매출액대비",
+            "매출액 대비",
+            "매출액대비",
+            "영업정지금액 비율",
+            "영업정지 금액 비율",
+        ),
+    )
+    if ratio is not None:
+        return ratio, "영업정지금액 매출액 대비"
+    suspension_amount = _extract_amount_near_labels(
+        text,
+        labels=(
+            "영업정지금액",
+            "영업정지 금액",
+            "영업정지 분야의 매출액",
+            "영업정지 분야 매출액",
+            "영업정지 사업부문 매출액",
+        ),
+    )
+    recent_sales = _extract_amount_near_labels(
+        text,
+        labels=(
+            "최근매출액",
+            "최근 매출액",
+            "최근 사업연도 매출액",
+            "최근사업연도매출액",
+        ),
+    )
+    if suspension_amount is not None and recent_sales and recent_sales > 0:
+        return suspension_amount / recent_sales, "영업정지금액/최근매출액"
+    return None, ""
+
+
+def _contract_cancellation_materiality_ratio(text: str) -> tuple[float | None, str]:
+    ratio = _extract_percent_ratio_near_labels(
+        text,
+        labels=(
+            "최근매출액 대비",
+            "최근매출액대비",
+            "매출액 대비",
+            "매출액대비",
+            "계약금액 비율",
+            "해지금액 비율",
+        ),
+    )
+    if ratio is not None:
+        return ratio, "계약해지 금액 매출액 대비"
+    cancellation_amount = _extract_amount_near_labels(
+        text,
+        labels=("계약해지금액", "해지금액", "계약금액"),
+    )
+    recent_sales = _extract_amount_near_labels(
+        text,
+        labels=("최근매출액", "최근 매출액", "매출액"),
+    )
+    if cancellation_amount is not None and recent_sales and recent_sales > 0:
+        return cancellation_amount / recent_sales, "계약해지금액/최근매출액"
+    return None, ""
+
+
+def _apply_opendart_detail_materiality(
+    item: dict[str, str],
+    *,
+    ratio: float,
+    basis: str,
+    detail_source: str,
+    confidence: str,
+    low_event_class: str,
+    watch_event_class: str,
+    high_event_class: str,
+) -> dict[str, str]:
+    enriched = dict(item)
+    ratio_text = _format_materiality_ratio(ratio)
+    enriched["materiality_ratio"] = f"{ratio:.4f}"
+    enriched["materiality_basis"] = f"{basis}: {ratio_text}"
+    enriched["materiality_source"] = detail_source
+    enriched["materiality_confidence"] = confidence
+    if ratio < _OPENDART_MATERIALITY_LOW_RATIO:
+        enriched["provider_relevance"] = "caution"
+        enriched["disclosure_severity"] = "caution"
+        enriched["disclosure_event_class"] = low_event_class
+        enriched["disclosure_materiality"] = "procedural_or_one_off"
+        enriched["disclosure_severity_reason"] = (
+            f"상세 공시에서 매출 대비 {ratio_text}로 낮은 중요도 확인"
+        )
+    elif ratio < _OPENDART_MATERIALITY_HIGH_RATIO:
+        enriched["provider_relevance"] = "caution"
+        enriched["disclosure_severity"] = "caution"
+        enriched["disclosure_event_class"] = watch_event_class
+        enriched["disclosure_materiality"] = "watch_context"
+        enriched["disclosure_severity_reason"] = (
+            f"상세 공시에서 매출 대비 {ratio_text}로 관찰 수준 중요도 확인"
+        )
+    else:
+        enriched["provider_relevance"] = "risk"
+        enriched["disclosure_severity"] = "adverse"
+        enriched["disclosure_event_class"] = high_event_class
+        enriched["disclosure_materiality"] = "substantive_adverse"
+        enriched["disclosure_severity_reason"] = (
+            f"상세 공시에서 매출 대비 {ratio_text}로 중대성 확인"
+        )
+    return enriched
+
+
+def _plain_opendart_document_text(text: str) -> str:
+    unescaped = html.unescape(str(text))
+    unescaped = re.sub(r"<!\[CDATA\[(.*?)\]\]>", r"\1", unescaped, flags=re.DOTALL)
+    unescaped = re.sub(r"<br\s*/?>", " ", unescaped, flags=re.IGNORECASE)
+    unescaped = re.sub(
+        r"</(?:td|th|tr|p|div|span|section|article|table)>",
+        " ",
+        unescaped,
+        flags=re.IGNORECASE,
+    )
+    unescaped = re.sub(r"<[^>]+>", " ", unescaped)
+    return re.sub(r"\s+", " ", unescaped).strip()
+
+
+def _extract_percent_ratio_near_labels(text: str, *, labels: tuple[str, ...]) -> float | None:
+    for label in labels:
+        pattern = rf"{re.escape(label)}[^0-9\-]{{0,80}}(-?\d[\d,]*(?:\.\d+)?)\s*%?"
+        match = re.search(pattern, text)
+        if not match:
+            continue
+        ratio = _parse_percent_ratio_value(match.group(1))
+        if ratio is not None:
+            return ratio
+    return None
+
+
+def _extract_amount_near_labels(text: str, *, labels: tuple[str, ...]) -> float | None:
+    for label in labels:
+        pattern = rf"{re.escape(label)}[^0-9\-]{{0,80}}(-?\d[\d,]*(?:\.\d+)?)"
+        match = re.search(pattern, text)
+        if not match:
+            continue
+        amount = _parse_amount_value(match.group(1))
+        if amount is not None:
+            return amount
+    return None
+
+
+def _parse_percent_ratio_value(value: object) -> float | None:
+    number = _parse_amount_value(value)
+    if number is None or number < 0:
+        return None
+    return number / 100
+
+
+def _parse_amount_value(value: object) -> float | None:
+    match = re.search(r"-?\d[\d,]*(?:\.\d+)?", str(value or ""))
+    if not match:
+        return None
+    try:
+        return float(match.group(0).replace(",", ""))
+    except ValueError:
+        return None
+
+
+def _format_materiality_ratio(ratio: float) -> str:
+    return f"{ratio * 100:.2f}%"
+
+
 def _prioritized_opendart_items(items: list[dict[str, str]]) -> list[dict[str, str]]:
     unique = _dedupe_raw_opendart_items(items)
     severity_order = {"veto": 4, "adverse": 3, "caution": 2, "routine": 1}
@@ -740,6 +1248,9 @@ def _disclosure_term_severity(text: str) -> str:
     benign_trading_halt_severity = _benign_trading_halt_severity(text)
     if benign_trading_halt_severity:
         return benign_trading_halt_severity
+    nonmaterial_disclosure_severity = _nonmaterial_or_procedural_disclosure_severity(text)
+    if nonmaterial_disclosure_severity:
+        return nonmaterial_disclosure_severity
     if _contains_any_term(text, _OPENDART_ADVERSE_TERMS):
         return "adverse"
     if _contains_any_term(text, _OPENDART_CAUTION_TERMS):
@@ -751,10 +1262,46 @@ def _disclosure_term_severity(text: str) -> str:
     return ""
 
 
+def _nonmaterial_or_procedural_disclosure_severity(text: str) -> str:
+    """Downgrade one-off or procedural disclosures before broad adverse terms match."""
+    compact_text = _compact_text(text)
+    if any(term in compact_text for term in _compact_terms(_HARD_DISTRESS_TERMS)):
+        return ""
+    if _is_low_materiality_litigation_disclosure(compact_text):
+        return "caution"
+    if _is_voluntary_supply_contract_cancellation(compact_text):
+        return "caution"
+    if _is_procedural_merger_trading_halt(compact_text):
+        return "caution"
+    return ""
+
+
+def _is_low_materiality_litigation_disclosure(compact_text: str) -> bool:
+    has_litigation = any(term in compact_text for term in _compact_terms(_LITIGATION_DISCLOSURE_TERMS))
+    if not has_litigation:
+        return False
+    return any(
+        marker in compact_text for marker in _compact_terms(_LOW_MATERIALITY_DISCLOSURE_MARKERS)
+    )
+
+
+def _is_voluntary_supply_contract_cancellation(compact_text: str) -> bool:
+    has_contract_cancellation = any(
+        term in compact_text for term in _compact_terms(_SUPPLY_CONTRACT_CANCELLATION_TERMS)
+    )
+    return has_contract_cancellation and "자율공시" in compact_text
+
+
+def _is_procedural_merger_trading_halt(compact_text: str) -> bool:
+    if "거래정지" not in compact_text or "합병" not in compact_text:
+        return False
+    return any(marker in compact_text for marker in _compact_terms(_PROCEDURAL_MERGER_HALT_MARKERS))
+
+
 def _benign_trading_halt_severity(text: str) -> str:
     """Downgrade procedural trading halts that are tied to benign corporate actions."""
     lowered = str(text).lower()
-    compact_text = "".join(lowered.split())
+    compact_text = _compact_text(lowered)
     has_trading_halt = "거래정지" in lowered or "거래정지" in compact_text
     if not has_trading_halt:
         return ""
@@ -773,13 +1320,80 @@ def _benign_trading_halt_severity(text: str) -> str:
 
 def _contains_any_term(text: str, terms: tuple[str, ...]) -> bool:
     lowered = str(text).lower()
-    compact_text = "".join(lowered.split())
+    compact_text = _compact_text(lowered)
     return any(
         term.lower() in lowered or "".join(term.lower().split()) in compact_text for term in terms
     )
 
 
-def _opendart_severity_reason(severity: str) -> str:
+def _compact_terms(terms: tuple[str, ...]) -> tuple[str, ...]:
+    return tuple(_compact_text(term) for term in terms)
+
+
+def _compact_text(text: str) -> str:
+    return "".join(str(text).lower().split())
+
+
+def _opendart_disclosure_event_class(report_name: str, *, severity: str) -> str:
+    compact_text = _compact_text(report_name)
+    if severity == "veto":
+        return "veto_event"
+    if _is_procedural_merger_trading_halt(compact_text) or _benign_trading_halt_severity(
+        report_name
+    ):
+        return "procedural_trading_halt"
+    if _is_low_materiality_litigation_disclosure(compact_text):
+        return "low_materiality_litigation"
+    if _is_voluntary_supply_contract_cancellation(compact_text):
+        return "one_off_contract_cancellation"
+    if any(term in compact_text for term in _compact_terms(_SUPPLY_CONTRACT_CANCELLATION_TERMS)):
+        return "material_contract_cancellation"
+    if any(term in compact_text for term in _compact_terms(_LITIGATION_DISCLOSURE_TERMS)):
+        return "material_litigation"
+    if any(term in compact_text for term in _compact_terms(_OPENDART_CAUTION_TERMS)):
+        return "financing_or_governance_watch"
+    if severity == "routine":
+        return "routine_context"
+    if severity == "adverse":
+        return "substantive_adverse"
+    return "unclassified"
+
+
+def _opendart_disclosure_materiality(
+    severity: str,
+    *,
+    event_class: str,
+) -> str:
+    if severity == "veto":
+        return "critical"
+    if severity == "adverse":
+        return "substantive_adverse"
+    if event_class in {
+        "procedural_trading_halt",
+        "low_materiality_litigation",
+        "one_off_contract_cancellation",
+        "low_materiality_contract_cancellation",
+        "business_suspension_low_materiality",
+        "subsidiary_business_suspension_low_materiality",
+    }:
+        return "procedural_or_one_off"
+    if event_class in {"contract_cancellation_watch", "business_suspension_watch"}:
+        return "watch_context"
+    if event_class == "subsidiary_business_suspension_watch":
+        return "watch_context"
+    if severity == "caution":
+        return "watch_context"
+    return "routine_context"
+
+
+def _opendart_severity_reason(severity: str, *, report_name: str = "") -> str:
+    event_class = _opendart_disclosure_event_class(report_name, severity=severity) if report_name else ""
+    if event_class == "procedural_trading_halt":
+        return "절차성 거래정지/해제 공시"
+    if event_class == "low_materiality_litigation":
+        return "일정금액 미만 또는 자율공시 소송 공시"
+    if event_class == "one_off_contract_cancellation":
+        return "자율공시 단일 계약해지 공시"
     return {
         "veto": "강제 경고 후보 공시",
         "adverse": "실질 위험 점검 공시",
@@ -953,6 +1567,13 @@ def _validated_item(
         "disclosure_type_label",
         "disclosure_severity",
         "disclosure_severity_reason",
+        "disclosure_event_class",
+        "disclosure_materiality",
+        "materiality_ratio",
+        "materiality_basis",
+        "materiality_source",
+        "materiality_confidence",
+        "business_suspension_scope",
     ):
         if item.get(key):
             validated[key] = str(item.get(key, ""))
@@ -1055,6 +1676,13 @@ def _merge_duplicate_item(existing: dict[str, object], incoming: dict[str, objec
             "provider_relevance",
             "disclosure_severity",
             "disclosure_severity_reason",
+            "disclosure_event_class",
+            "disclosure_materiality",
+            "materiality_ratio",
+            "materiality_basis",
+            "materiality_source",
+            "materiality_confidence",
+            "business_suspension_scope",
             "corp_code",
             "rcept_no",
             "disclosure_type",

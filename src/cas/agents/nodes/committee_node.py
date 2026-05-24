@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import os
+import time
 from datetime import UTC, datetime
+from importlib import import_module
 from typing import Any, Literal, TypedDict, cast
 
 from cas.agents.committee_view import build_committee_view
@@ -24,6 +26,8 @@ from cas.agents.stage2_outputs import (
     ChairReportOutput,
     EvidenceAuditOutput,
     QuantCreditOutput,
+    ReviewQAOutput,
+    RiskRecallQAOutput,
 )
 from cas.agents.stage2_runner import (
     AgnoStage2AgentRunner,
@@ -38,8 +42,11 @@ from cas.agents.state import (
     CommitteeReview,
     Recommendation,
 )
+from cas.utils.live_cache import read_json_cache, stable_cache_key, write_json_cache
 
 _EvidenceStrength = Literal["none", "weak", "moderate", "strong", "critical"]
+_REVIEW_QA_CACHE_VERSION = "stage2_review_qa_v2"
+_RISK_RECALL_QA_CACHE_VERSION = "stage2_risk_recall_qa_v2"
 
 
 class _EvidenceProfile(TypedDict):
@@ -96,6 +103,42 @@ def run(state: AgentState) -> dict[str, Any]:
     runtime_diagnostics.setdefault("backend_name", runtime_backend_name)
     runtime_diagnostics.setdefault("cache_hit", False)
     agents = [output.to_agent_output() for output in structured_outputs]
+    committee_view = build_committee_view(
+        bundle=bundle,
+        recommendation=recommendation,
+        agents=agents,
+    )
+    review_qa_output = _maybe_run_review_qa(
+        bundle=bundle,
+        committee_view=committee_view,
+        structured_outputs=structured_outputs,
+        runtime_backend_name=runtime_backend_name,
+        runtime_diagnostics=runtime_diagnostics,
+    )
+    if review_qa_output is not None:
+        committee_view = _apply_review_qa_advisory(
+            committee_view=committee_view,
+            review_qa_output=review_qa_output,
+            bundle=bundle,
+            news_cache_snapshot=bundle.news_cache_snapshot,
+            runtime_diagnostics=runtime_diagnostics,
+        )
+        agents.append(review_qa_output.to_agent_output())
+    risk_recall_qa_output = _maybe_run_risk_recall_qa(
+        bundle=bundle,
+        committee_view=committee_view,
+        structured_outputs=structured_outputs,
+        runtime_backend_name=runtime_backend_name,
+        runtime_diagnostics=runtime_diagnostics,
+    )
+    if risk_recall_qa_output is not None:
+        committee_view = _apply_risk_recall_qa_advisory(
+            committee_view=committee_view,
+            risk_recall_qa_output=risk_recall_qa_output,
+            bundle=bundle,
+            runtime_diagnostics=runtime_diagnostics,
+        )
+        agents.append(risk_recall_qa_output.to_agent_output())
     _validate_agent_order(agents)
     reviews = [
         CommitteeReview(
@@ -106,11 +149,6 @@ def run(state: AgentState) -> dict[str, Any]:
         )
         for agent in agents
     ]
-    committee_view = build_committee_view(
-        bundle=bundle,
-        recommendation=recommendation,
-        agents=agents,
-    )
     committee_confidence = _committee_confidence(
         bundle=bundle,
         agents=agents,
@@ -123,7 +161,7 @@ def run(state: AgentState) -> dict[str, Any]:
     agent_summary = {
         "final_recommendation": recommendation,
         "final_confidence": committee_confidence,
-        "synthesis": agents[-1].summary,
+        "synthesis": _chair_summary(agents),
         "agents": {
             agent.role: {
                 "summary": agent.summary,
@@ -145,7 +183,7 @@ def run(state: AgentState) -> dict[str, Any]:
         node="agno_agents",
         timestamp=_now(),
         summary=(
-            f"Three-agent Stage 2 scaffold completed via {runtime_backend_name} runner: "
+            f"Stage 2 scaffold completed via {runtime_backend_name} runner: "
             f"{', '.join(agent.role for agent in agents)}"
         ),
         metrics=audit_metrics,
@@ -174,20 +212,1203 @@ def _runtime_diagnostic_metrics(diagnostics: dict[str, Any]) -> dict[str, float]
             metrics[metric_key] = value
     agent_timings = diagnostics.get("agent_elapsed_seconds")
     if isinstance(agent_timings, dict):
-        for role in ("quant_credit", "evidence_audit", "chair_report", "llm_client"):
+        for role in (
+            "quant_credit",
+            "evidence_audit",
+            "chair_report",
+            "review_qa",
+            "risk_recall_qa",
+            "llm_client",
+        ):
             value = _safe_float(agent_timings.get(role))
             if value is not None:
                 metrics[f"stage2_{role}_elapsed_seconds"] = value
     metrics["stage2_llm_cache_hit"] = 1.0 if diagnostics.get("cache_hit") is True else 0.0
+    metrics["stage2_review_qa_triggered"] = (
+        1.0 if diagnostics.get("review_qa_triggered") is True else 0.0
+    )
+    metrics["stage2_review_qa_cache_hit"] = (
+        1.0 if diagnostics.get("review_qa_cache_hit") is True else 0.0
+    )
+    metrics["stage2_review_qa_advisory_applied"] = (
+        1.0 if diagnostics.get("review_qa_advisory_applied") is True else 0.0
+    )
+    metrics["stage2_risk_recall_qa_triggered"] = (
+        1.0 if diagnostics.get("risk_recall_qa_triggered") is True else 0.0
+    )
+    metrics["stage2_risk_recall_qa_cache_hit"] = (
+        1.0 if diagnostics.get("risk_recall_qa_cache_hit") is True else 0.0
+    )
+    metrics["stage2_risk_recall_qa_advisory_applied"] = (
+        1.0 if diagnostics.get("risk_recall_qa_advisory_applied") is True else 0.0
+    )
     return metrics
 
 
 def _validate_agent_order(agents: list[AgentOutput]) -> None:
     actual_roles = tuple(agent.role for agent in agents)
-    if actual_roles != STAGE2_AGENT_ROLES:
+    required_count = len(STAGE2_AGENT_ROLES)
+    optional_suffix = actual_roles[required_count:]
+    allowed_suffixes = {
+        (),
+        ("review_qa",),
+        ("risk_recall_qa",),
+        ("review_qa", "risk_recall_qa"),
+    }
+    if actual_roles[:required_count] != STAGE2_AGENT_ROLES or optional_suffix not in allowed_suffixes:
         expected = ", ".join(STAGE2_AGENT_ROLES)
         actual = ", ".join(actual_roles)
-        raise ValueError(f"Stage 2 agent order mismatch: expected {expected}, got {actual}")
+        raise ValueError(
+            "Stage 2 agent order mismatch: "
+            f"expected {expected} with optional QA agents at the end, got {actual}"
+        )
+
+
+def _chair_summary(agents: list[AgentOutput]) -> str:
+    for agent in agents:
+        if agent.role == "chair_report":
+            return agent.summary
+    return agents[-1].summary if agents else ""
+
+
+def _maybe_run_review_qa(
+    *,
+    bundle: Stage2InputBundle,
+    committee_view: dict[str, Any],
+    structured_outputs: tuple[QuantCreditOutput, EvidenceAuditOutput, ChairReportOutput],
+    runtime_backend_name: str,
+    runtime_diagnostics: dict[str, Any],
+) -> ReviewQAOutput | None:
+    trigger_reasons = _review_qa_trigger_reasons(bundle=bundle, committee_view=committee_view)
+    runtime_diagnostics["review_qa_triggered"] = bool(trigger_reasons)
+    runtime_diagnostics["review_qa_trigger_reasons"] = trigger_reasons
+    if not trigger_reasons or not _stage2_review_qa_enabled(runtime_backend_name):
+        return None
+    try:
+        review_qa, diagnostics = _run_review_qa_agent_with_cache(
+            bundle=bundle,
+            committee_view=committee_view,
+            quant_credit=structured_outputs[0],
+            evidence_audit=structured_outputs[1],
+            chair_report=structured_outputs[2],
+            trigger_reasons=trigger_reasons,
+        )
+    except Exception as error:
+        if not _stage2_review_qa_fallback_on_error():
+            raise
+        runtime_diagnostics["review_qa_error_message"] = str(error)
+        runtime_diagnostics["review_qa_cache_hit"] = False
+        return None
+    _merge_review_qa_diagnostics(runtime_diagnostics, diagnostics)
+    runtime_diagnostics["review_qa_recommended_action"] = review_qa.recommended_action
+    return review_qa
+
+
+def _apply_review_qa_advisory(
+    *,
+    committee_view: dict[str, Any],
+    review_qa_output: ReviewQAOutput,
+    bundle: Stage2InputBundle | None = None,
+    news_cache_snapshot: dict[str, Any] | None = None,
+    runtime_diagnostics: dict[str, Any],
+) -> dict[str, Any]:
+    runtime_diagnostics["review_qa_advisory_applied"] = False
+    runtime_diagnostics["review_qa_advisory_apply_reason"] = ""
+    if not _stage2_review_qa_apply_advisory():
+        return committee_view
+    if bool(committee_view.get("veto_triggered", False)) or bool(
+        committee_view.get("hidden_tail_risk_flag", False)
+    ):
+        return committee_view
+
+    final_label = str(committee_view.get("final_committee_label") or "")
+    decision_type = str(committee_view.get("committee_decision_type") or "")
+    if final_label == "보류" and decision_type == "risk_hold":
+        if review_qa_output.recommended_action != "downgrade_risk_hold_to_boundary_hold":
+            return committee_view
+        return _apply_review_qa_risk_hold_advisory(
+            committee_view=committee_view,
+            review_qa_output=review_qa_output,
+            news_cache_snapshot=news_cache_snapshot,
+            runtime_diagnostics=runtime_diagnostics,
+        )
+    if final_label == "부적격" and decision_type == "reject":
+        return _apply_review_qa_reject_advisory(
+            committee_view=committee_view,
+            review_qa_output=review_qa_output,
+            bundle=bundle,
+            news_cache_snapshot=news_cache_snapshot,
+            runtime_diagnostics=runtime_diagnostics,
+        )
+    return committee_view
+
+
+def _apply_review_qa_risk_hold_advisory(
+    *,
+    committee_view: dict[str, Any],
+    review_qa_output: ReviewQAOutput,
+    news_cache_snapshot: dict[str, Any] | None,
+    runtime_diagnostics: dict[str, Any],
+) -> dict[str, Any]:
+    apply_reason = _review_qa_advisory_apply_reason(
+        review_qa_output=review_qa_output,
+        news_cache_snapshot=news_cache_snapshot,
+    )
+    if not apply_reason:
+        return committee_view
+
+    adjusted = dict(committee_view)
+    adjusted["committee_decision_type"] = "boundary_hold"
+    adjusted["committee_decision_type_label"] = "경계등급 보류"
+    adjusted["committee_risk_signal"] = False
+    if apply_reason == "watch_context_only_risk_hold_override":
+        adjustment_note = (
+            "ReviewQAAgent는 외부 공시가 caution/watch_context 수준에 머무르고 "
+            "치명 위험 근거가 확인되지 않아, 최종 라벨은 보류로 유지하되 "
+            "세부유형을 경계등급 보류로 낮추도록 권고했습니다."
+        )
+    else:
+        adjustment_note = (
+            "ReviewQAAgent는 최종 라벨을 보류로 유지하되, 위험 보류 근거가 과도하다고 "
+            "판단해 세부유형을 경계등급 보류로 낮추도록 권고했습니다."
+        )
+    adjusted["conflict_resolution"] = _append_sentence(
+        str(adjusted.get("conflict_resolution") or ""),
+        adjustment_note,
+    )
+    adjusted["final_review_memo"] = _append_sentence(
+        str(adjusted.get("final_review_memo") or ""),
+        "ReviewQA 보강 의견: 최종 라벨은 보류로 유지하고 위험신호 표시는 경계등급 보류로 낮춥니다.",
+    )
+    adjusted["mitigating_factors"] = _prepend_unique_text(
+        adjusted.get("mitigating_factors"),
+        "ReviewQA 위험 보류 세부유형 보정 권고",
+    )
+    adjusted["decision_trace"] = [
+        *list(adjusted.get("decision_trace") or []),
+        {
+            "gate": "review_qa_subtype_adjustment",
+            "label": "ReviewQA 세부유형 보정",
+            "triggered": True,
+            "severity": "mitigation",
+            "summary": adjustment_note,
+        },
+    ]
+    runtime_diagnostics["review_qa_advisory_applied"] = True
+    runtime_diagnostics["review_qa_adjusted_decision_type"] = "boundary_hold"
+    runtime_diagnostics["review_qa_advisory_apply_reason"] = apply_reason
+    return adjusted
+
+
+def _apply_review_qa_reject_advisory(
+    *,
+    committee_view: dict[str, Any],
+    review_qa_output: ReviewQAOutput,
+    bundle: Stage2InputBundle | None,
+    news_cache_snapshot: dict[str, Any] | None,
+    runtime_diagnostics: dict[str, Any],
+) -> dict[str, Any]:
+    apply_reason = _review_qa_reject_advisory_apply_reason(
+        review_qa_output=review_qa_output,
+        bundle=bundle,
+        news_cache_snapshot=news_cache_snapshot,
+    )
+    if not apply_reason:
+        return committee_view
+
+    adjusted = dict(committee_view)
+    adjusted["final_committee_label"] = "보류"
+    adjusted["committee_decision_type"] = "boundary_hold"
+    adjusted["committee_decision_type_label"] = "경계등급 보류"
+    adjusted["committee_risk_signal"] = False
+    adjustment_note = (
+        "ReviewQAAgent는 부적격 확정 근거가 모델 고확률과 재무 약점에 치우쳐 있고, "
+        "외부 공시는 routine/caution/watch-context 수준에 머문다고 보아 "
+        "부적격 확정보다는 경계등급 보류로 재검수하도록 권고했습니다."
+    )
+    adjusted["conflict_resolution"] = _append_sentence(
+        str(adjusted.get("conflict_resolution") or ""),
+        adjustment_note,
+    )
+    adjusted["final_review_memo"] = _append_sentence(
+        str(adjusted.get("final_review_memo") or ""),
+        "ReviewQA 보강 의견: 치명 외부근거가 약한 부적격 확정은 경계등급 보류로 낮춰 재검수합니다.",
+    )
+    adjusted["mitigating_factors"] = _prepend_unique_text(
+        adjusted.get("mitigating_factors"),
+        "ReviewQA 부적격 확정 완화 권고",
+    )
+    adjusted["decision_trace"] = [
+        *list(adjusted.get("decision_trace") or []),
+        {
+            "gate": "review_qa_reject_adjustment",
+            "label": "ReviewQA 부적격 확정 보정",
+            "triggered": True,
+            "severity": "mitigation",
+            "summary": adjustment_note,
+        },
+    ]
+    runtime_diagnostics["review_qa_advisory_applied"] = True
+    runtime_diagnostics["review_qa_adjusted_decision_type"] = "boundary_hold"
+    runtime_diagnostics["review_qa_advisory_apply_reason"] = apply_reason
+    return adjusted
+
+
+def _review_qa_advisory_apply_reason(
+    *,
+    review_qa_output: ReviewQAOutput,
+    news_cache_snapshot: dict[str, Any] | None,
+) -> str:
+    if (
+        review_qa_output.risk_hold_assessment == "overstated"
+        and review_qa_output.confidence >= 0.55
+    ):
+        return "review_qa_overstated_risk_hold"
+
+    trigger_reasons = {str(reason) for reason in review_qa_output.trigger_reasons}
+    if "risk_hold_without_critical_evidence" not in trigger_reasons:
+        return ""
+    if review_qa_output.confidence < 0.45:
+        return ""
+    if _external_evidence_is_watch_context_only(news_cache_snapshot or {}):
+        return "watch_context_only_risk_hold_override"
+    return ""
+
+
+def _review_qa_reject_advisory_apply_reason(
+    *,
+    review_qa_output: ReviewQAOutput,
+    bundle: Stage2InputBundle | None,
+    news_cache_snapshot: dict[str, Any] | None,
+) -> str:
+    if review_qa_output.confidence < 0.45:
+        return ""
+    if review_qa_output.recommended_action in {"request_manual_review", "memo_only_fix"}:
+        return ""
+    trigger_reasons = {str(reason) for reason in review_qa_output.trigger_reasons}
+    if (
+        review_qa_output.recommended_action != "downgrade_reject_to_boundary_hold"
+        and "reject_without_critical_evidence" not in trigger_reasons
+    ):
+        return ""
+
+    news_cache = news_cache_snapshot or {}
+    profile = _external_evidence_profile(news_cache)
+    if profile["strength"] in {"strong", "critical"}:
+        return ""
+    if profile["veto_candidate_count"] > 0 or profile["high_confidence_critical_count"] > 0:
+        return ""
+    if _has_substantive_external_risk(news_cache):
+        return ""
+    if not _external_evidence_is_watch_context_only(news_cache):
+        return ""
+    if not _has_review_qa_reject_boundary_defense(bundle):
+        return ""
+    if review_qa_output.recommended_action == "downgrade_reject_to_boundary_hold":
+        return "review_qa_reject_watch_context_only_override"
+    return "review_qa_reject_defensive_boundary_override"
+
+
+def _has_review_qa_reject_boundary_defense(bundle: Stage2InputBundle | None) -> bool:
+    """Require balance-sheet defense before lowering a high-probability reject."""
+    if bundle is None:
+        return False
+    row = bundle.source_feature_row
+    if _has_review_qa_extreme_financial_distress(row):
+        return False
+
+    axes = [
+        _metric_at_least_value(row, "current_ratio", 1.2)
+        and _metric_at_least_value(row, "cash_ratio", 0.15),
+        _metric_at_least_value(row, "equity_ratio", 0.40)
+        and _metric_at_most_value(row, "debt_ratio", 1.50)
+        and _metric_at_most_value(row, "capital_impairment_ratio", 0.0),
+        _metric_at_most_value(row, "total_borrowings_ratio", 0.50)
+        or _metric_at_most_value(row, "short_term_borrowings_share", 0.70),
+        not _truthy(row.get("is_2y_consecutive_operating_loss"))
+        and not _truthy(row.get("is_2y_consecutive_ocf_deficit")),
+        _metric_at_least_value(row, "cashflow_coverage_ratio", 0.0)
+        or _metric_at_least_value(row, "ocf_to_total_liabilities", 0.0)
+        or _metric_at_least_value(row, "ocf_to_sales", 0.0),
+    ]
+    return sum(1 for passed in axes if passed) >= 3
+
+
+def _has_review_qa_extreme_financial_distress(row: dict[str, Any]) -> bool:
+    if _metric_above_value(row, "capital_impairment_ratio", 0.50):
+        return True
+    if _metric_below_value(row, "equity_ratio", 0.15):
+        return True
+    if _metric_above_value(row, "debt_ratio", 5.0):
+        return True
+
+    short_term_maturity_wall = _metric_at_least_value(row, "short_term_borrowings_share", 0.95)
+    weak_cashflow = (
+        _metric_below_value(row, "cashflow_coverage_ratio", 0.0)
+        or _metric_below_value(row, "ocf_to_total_liabilities", 0.0)
+        or _metric_below_value(row, "ocf_to_sales", 0.0)
+    )
+    recurring_loss_or_ocf_deficit = _truthy(row.get("is_2y_consecutive_operating_loss")) or _truthy(
+        row.get("is_2y_consecutive_ocf_deficit")
+    )
+    interest_blocked = _truthy(row.get("icr_under_1")) or _metric_below_value(
+        row,
+        "interest_coverage_ratio",
+        1.0,
+    )
+    return bool(
+        short_term_maturity_wall
+        and weak_cashflow
+        and recurring_loss_or_ocf_deficit
+        and interest_blocked
+    )
+
+
+def _external_evidence_is_watch_context_only(news_cache: dict[str, Any]) -> bool:
+    raw_items = news_cache.get("items", [])
+    items = (
+        [item for item in raw_items if isinstance(item, dict)]
+        if isinstance(raw_items, list)
+        else []
+    )
+    if not items:
+        return False
+
+    profile = _external_evidence_profile(news_cache)
+    if profile["veto_candidate_count"] > 0 or profile["high_confidence_critical_count"] > 0:
+        return False
+
+    watch_context_count = 0
+    for item in items:
+        if _is_substantive_external_risk_item(item):
+            return False
+        if _is_watch_context_external_item(item):
+            watch_context_count += 1
+    return watch_context_count > 0
+
+
+def _is_substantive_external_risk_item(item: dict[str, Any]) -> bool:
+    if item.get("veto_candidate") is True:
+        return True
+    if item.get("critical_context_confirmed") is True:
+        return True
+
+    severity = str(item.get("disclosure_severity", "")).lower()
+    event_class = str(item.get("disclosure_event_class", "")).lower()
+    materiality = str(item.get("disclosure_materiality", "")).lower()
+    if severity in {"veto", "adverse"}:
+        return True
+    if event_class in {"substantive_adverse", "distress", "insolvency", "audit_failure"}:
+        return True
+    if materiality in {"substantive_adverse", "critical", "veto"}:
+        return True
+
+    materiality_ratio = _safe_float(item.get("materiality_ratio"))
+    if materiality_ratio is not None and materiality_ratio >= 0.10:
+        return True
+
+    provider_relevance = str(item.get("provider_relevance", "")).lower()
+    return provider_relevance == "risk" and severity not in {"routine", "caution"}
+
+
+def _is_watch_context_external_item(item: dict[str, Any]) -> bool:
+    severity = str(item.get("disclosure_severity", "")).lower()
+    event_class = str(item.get("disclosure_event_class", "")).lower()
+    materiality = str(item.get("disclosure_materiality", "")).lower()
+    provider_relevance = str(item.get("provider_relevance", "")).lower()
+    return (
+        severity in {"routine", "caution"}
+        or event_class in {"routine_context", "watch_context", "procedural_or_one_off"}
+        or materiality in {"routine_context", "watch_context", "procedural_or_one_off"}
+        or provider_relevance in {"routine", "caution", "context"}
+    )
+
+
+def _append_sentence(base: str, sentence: str) -> str:
+    cleaned = base.strip()
+    if not cleaned:
+        return sentence
+    if sentence in cleaned:
+        return cleaned
+    if cleaned.endswith((".", "!", "?")):
+        return f"{cleaned} {sentence}"
+    return f"{cleaned}. {sentence}"
+
+
+def _prepend_unique_text(raw_items: object, item: str) -> list[str]:
+    existing = [str(value) for value in raw_items or [] if str(value)]
+    return [item, *[value for value in existing if value != item]]
+
+
+def _review_qa_trigger_reasons(
+    *,
+    bundle: Stage2InputBundle,
+    committee_view: dict[str, Any],
+) -> list[str]:
+    reasons: list[str] = []
+    final_label = str(committee_view.get("final_committee_label") or "")
+    decision_type = str(committee_view.get("committee_decision_type") or "")
+    model_investment_grade = bundle.prediction_label == "투자적격"
+    evidence_profile = _external_evidence_profile(bundle.news_cache_snapshot)
+    if model_investment_grade and final_label == "보류":
+        reasons.append("investment_model_hold")
+    if (
+        decision_type == "risk_hold"
+        and evidence_profile["strength"] in {"none", "weak", "moderate"}
+        and evidence_profile["veto_candidate_count"] <= 0
+        and evidence_profile["high_confidence_critical_count"] <= 0
+    ):
+        reasons.append("risk_hold_without_critical_evidence")
+    if _review_qa_memo_conflict_possible(committee_view):
+        reasons.append("label_memo_conflict_candidate")
+    if final_label != "적격" and _has_ambiguous_external_evidence(bundle.news_cache_snapshot):
+        reasons.append("ambiguous_external_evidence")
+    if (
+        final_label == "부적격"
+        and decision_type == "reject"
+        and evidence_profile["strength"] in {"weak", "moderate"}
+        and evidence_profile["veto_candidate_count"] <= 0
+        and evidence_profile["high_confidence_critical_count"] <= 0
+        and _external_evidence_is_watch_context_only(bundle.news_cache_snapshot)
+    ):
+        reasons.append("reject_without_critical_evidence")
+    return reasons[:5]
+
+
+def _review_qa_memo_conflict_possible(committee_view: dict[str, Any]) -> bool:
+    if str(committee_view.get("final_committee_label") or "") == "적격":
+        return False
+    memo = str(committee_view.get("final_review_memo") or "")
+    conflict_markers = (
+        "투자적격 판단을 유지",
+        "투자적격 라벨을 유지",
+        "투자적격 유지",
+        "모델 라벨을 유지",
+        "모델 라벨 유지",
+        "모델 라벨을 존중",
+        "모델 라벨 존중",
+        "최종 라벨은 투자적격",
+        "최종 라벨을 투자적격",
+    )
+    return any(marker in memo for marker in conflict_markers)
+
+
+def _has_ambiguous_external_evidence(news_cache: dict[str, Any]) -> bool:
+    raw_items = news_cache.get("items", [])
+    if not isinstance(raw_items, list):
+        return False
+    markers = (
+        "유상증자",
+        "전환사채",
+        "신주인수권",
+        "자금조달",
+        "거래정지",
+        "거래정지해제",
+        "상장예비심사",
+        "감사보고서",
+        "채무보증",
+    )
+    for item in raw_items:
+        if not isinstance(item, dict):
+            continue
+        text = " ".join(
+            str(item.get(key) or "") for key in ("title", "summary", "description")
+        )
+        if any(marker in text for marker in markers):
+            return True
+    return False
+
+
+def _stage2_review_qa_enabled(runtime_backend_name: str) -> bool:
+    value = os.environ.get("CAS_STAGE2_REVIEW_QA_ENABLED")
+    if value is not None:
+        return value.strip().lower() not in {"0", "false", "no", "off"}
+    backend = runtime_backend_name.strip().lower()
+    return backend.startswith("agno") and "fallback" not in backend
+
+
+def _stage2_review_qa_apply_advisory() -> bool:
+    value = os.environ.get("CAS_STAGE2_REVIEW_QA_APPLY_ADVISORY", "1").strip().lower()
+    return value not in {"0", "false", "no", "off"}
+
+
+def _stage2_review_qa_fallback_on_error() -> bool:
+    value = os.environ.get("CAS_STAGE2_REVIEW_QA_FALLBACK_ON_ERROR", "1").strip().lower()
+    return value not in {"0", "false", "no", "off"}
+
+
+def _run_review_qa_agent_with_cache(
+    *,
+    bundle: Stage2InputBundle,
+    committee_view: dict[str, Any],
+    quant_credit: QuantCreditOutput,
+    evidence_audit: EvidenceAuditOutput,
+    chair_report: ChairReportOutput,
+    trigger_reasons: list[str],
+) -> tuple[ReviewQAOutput, dict[str, Any]]:
+    started_at = time.perf_counter()
+    model_provider = _stage2_review_qa_provider()
+    model_name = _stage2_review_qa_model()
+    cache_payload = _review_qa_cache_payload(
+        bundle=bundle,
+        committee_view=committee_view,
+        quant_credit=quant_credit,
+        evidence_audit=evidence_audit,
+        chair_report=chair_report,
+        trigger_reasons=trigger_reasons,
+        model_provider=model_provider,
+        model_name=model_name,
+    )
+    cache_key = stable_cache_key(cache_payload)
+    cached_payload = read_json_cache(
+        "llm_stage2_review_qa",
+        cache_key,
+        env_var="CAS_STAGE2_LLM_CACHE_ENABLED",
+        default=True,
+    )
+    if cached_payload is not None:
+        response_payload = cached_payload.get("response", cached_payload)
+        review_qa = ReviewQAOutput.model_validate(response_payload)
+        return review_qa, {
+            "review_qa_cache_hit": True,
+            "review_qa_cache_key": cache_key,
+            "agent_elapsed_seconds": {
+                "review_qa": round(time.perf_counter() - started_at, 4)
+            },
+        }
+
+    review_module = import_module("cas.agents.nodes.tripletagents.review_qa_agent")
+    review_qa = cast(
+        ReviewQAOutput,
+        review_module.run_review_qa_agent(
+            bundle=bundle,
+            committee_view=committee_view,
+            quant_credit=quant_credit,
+            evidence_audit=evidence_audit,
+            chair_report=chair_report,
+            trigger_reasons=trigger_reasons,
+            model_provider=model_provider,
+            model_name=model_name,
+            max_tokens=_stage2_review_qa_max_tokens(),
+        ),
+    )
+    write_json_cache(
+        "llm_stage2_review_qa",
+        cache_key,
+        {
+            "cache_version": _REVIEW_QA_CACHE_VERSION,
+            "response": review_qa.model_dump(mode="json"),
+        },
+        env_var="CAS_STAGE2_LLM_CACHE_ENABLED",
+        default=True,
+    )
+    return review_qa, {
+        "review_qa_cache_hit": False,
+        "review_qa_cache_key": cache_key,
+        "agent_elapsed_seconds": {"review_qa": round(time.perf_counter() - started_at, 4)},
+    }
+
+
+def _review_qa_cache_payload(
+    *,
+    bundle: Stage2InputBundle,
+    committee_view: dict[str, Any],
+    quant_credit: QuantCreditOutput,
+    evidence_audit: EvidenceAuditOutput,
+    chair_report: ChairReportOutput,
+    trigger_reasons: list[str],
+    model_provider: str,
+    model_name: str,
+) -> dict[str, Any]:
+    return {
+        "cache_version": _REVIEW_QA_CACHE_VERSION,
+        "model_provider": model_provider,
+        "model_name": model_name,
+        "stage2_input_bundle": bundle.to_prompt_payload(),
+        "committee_view": committee_view,
+        "agent_outputs": {
+            "quant_credit": quant_credit.model_dump(mode="json"),
+            "evidence_audit": evidence_audit.model_dump(mode="json"),
+            "chair_report": chair_report.model_dump(mode="json"),
+        },
+        "trigger_reasons": trigger_reasons,
+    }
+
+
+def _merge_review_qa_diagnostics(
+    runtime_diagnostics: dict[str, Any],
+    review_qa_diagnostics: dict[str, Any],
+) -> None:
+    existing_timings = runtime_diagnostics.get("agent_elapsed_seconds")
+    if not isinstance(existing_timings, dict):
+        existing_timings = {}
+    qa_timings = review_qa_diagnostics.get("agent_elapsed_seconds")
+    qa_elapsed_seconds = 0.0
+    if isinstance(qa_timings, dict):
+        existing_timings.update(qa_timings)
+        qa_elapsed = _safe_float(qa_timings.get("review_qa"))
+        if qa_elapsed is not None:
+            qa_elapsed_seconds = qa_elapsed
+    runtime_diagnostics["agent_elapsed_seconds"] = existing_timings
+    runtime_diagnostics["agent_elapsed_seconds_sum"] = round(
+        sum(float(value) for value in existing_timings.values()),
+        4,
+    )
+    current_total = _safe_float(runtime_diagnostics.get("stage2_total_elapsed_seconds"))
+    if current_total is not None and qa_elapsed_seconds:
+        runtime_diagnostics["stage2_total_elapsed_seconds"] = round(
+            current_total + qa_elapsed_seconds,
+            4,
+        )
+    runtime_diagnostics["review_qa_cache_hit"] = bool(
+        review_qa_diagnostics.get("review_qa_cache_hit", False)
+    )
+    if review_qa_diagnostics.get("review_qa_cache_key"):
+        runtime_diagnostics["review_qa_cache_key"] = review_qa_diagnostics[
+            "review_qa_cache_key"
+        ]
+
+
+def _stage2_review_qa_provider() -> str:
+    return (
+        os.environ.get("CAS_STAGE2_REVIEW_QA_PROVIDER")
+        or os.environ.get("CAS_STAGE2_CHAIR_PROVIDER")
+        or os.environ.get("CAS_STAGE2_MODEL_PROVIDER")
+        or "openai"
+    )
+
+
+def _stage2_review_qa_model() -> str:
+    return (
+        os.environ.get("CAS_STAGE2_REVIEW_QA_MODEL")
+        or os.environ.get("CAS_STAGE2_CHAIR_MODEL")
+        or os.environ.get("CAS_STAGE2_MODEL")
+        or "gpt-4.1-mini"
+    )
+
+
+def _stage2_review_qa_max_tokens() -> int:
+    try:
+        return int(os.environ.get("CAS_STAGE2_REVIEW_QA_MAX_TOKENS", "3000"))
+    except ValueError:
+        return 3000
+
+
+def _maybe_run_risk_recall_qa(
+    *,
+    bundle: Stage2InputBundle,
+    committee_view: dict[str, Any],
+    structured_outputs: tuple[QuantCreditOutput, EvidenceAuditOutput, ChairReportOutput],
+    runtime_backend_name: str,
+    runtime_diagnostics: dict[str, Any],
+) -> RiskRecallQAOutput | None:
+    trigger_reasons = _risk_recall_qa_trigger_reasons(
+        bundle=bundle,
+        committee_view=committee_view,
+    )
+    runtime_diagnostics["risk_recall_qa_triggered"] = bool(trigger_reasons)
+    runtime_diagnostics["risk_recall_qa_trigger_reasons"] = trigger_reasons
+    if not trigger_reasons or not _stage2_risk_recall_qa_enabled(runtime_backend_name):
+        return None
+    try:
+        risk_recall_qa, diagnostics = _run_risk_recall_qa_agent_with_cache(
+            bundle=bundle,
+            committee_view=committee_view,
+            quant_credit=structured_outputs[0],
+            evidence_audit=structured_outputs[1],
+            chair_report=structured_outputs[2],
+            trigger_reasons=trigger_reasons,
+        )
+    except Exception as error:
+        if not _stage2_risk_recall_qa_fallback_on_error():
+            raise
+        runtime_diagnostics["risk_recall_qa_error_message"] = str(error)
+        runtime_diagnostics["risk_recall_qa_cache_hit"] = False
+        return None
+    _merge_post_committee_qa_diagnostics(
+        runtime_diagnostics,
+        diagnostics,
+        role="risk_recall_qa",
+    )
+    runtime_diagnostics["risk_recall_qa_recommended_action"] = (
+        risk_recall_qa.recommended_action
+    )
+    return risk_recall_qa
+
+
+def _apply_risk_recall_qa_advisory(
+    *,
+    committee_view: dict[str, Any],
+    risk_recall_qa_output: RiskRecallQAOutput,
+    bundle: Stage2InputBundle,
+    runtime_diagnostics: dict[str, Any],
+) -> dict[str, Any]:
+    runtime_diagnostics["risk_recall_qa_advisory_applied"] = False
+    runtime_diagnostics["risk_recall_qa_advisory_apply_reason"] = ""
+    if not _stage2_risk_recall_qa_apply_advisory():
+        return committee_view
+    if str(committee_view.get("final_committee_label") or "") != "적격":
+        return committee_view
+    if str(committee_view.get("committee_decision_type") or "") != "eligible":
+        return committee_view
+
+    apply_reason = _risk_recall_qa_advisory_apply_reason(
+        risk_recall_qa_output=risk_recall_qa_output,
+        bundle=bundle,
+    )
+    if not apply_reason:
+        return committee_view
+
+    target_type = (
+        "risk_hold"
+        if risk_recall_qa_output.recommended_action == "escalate_eligible_to_risk_hold"
+        else "boundary_hold"
+    )
+    adjusted = dict(committee_view)
+    adjusted["final_committee_label"] = "보류"
+    adjusted["committee_decision_type"] = target_type
+    adjusted["committee_decision_type_label"] = (
+        "위험 보류" if target_type == "risk_hold" else "경계등급 보류"
+    )
+    adjusted["committee_risk_signal"] = target_type == "risk_hold"
+    adjustment_note = (
+        "RiskRecallQAAgent는 최종 적격 판단을 유지하기에는 기준선/재무/외부근거의 "
+        "잔여 위험이 남아 있다고 보아, 최종 라벨을 보류로 재검수하도록 권고했습니다."
+    )
+    adjusted["conflict_resolution"] = _append_sentence(
+        str(adjusted.get("conflict_resolution") or ""),
+        adjustment_note,
+    )
+    adjusted["final_review_memo"] = _append_sentence(
+        str(adjusted.get("final_review_memo") or ""),
+        "RiskRecallQA 보강 의견: 적격 판단의 위험 누락 가능성을 재점검해 보류로 올립니다.",
+    )
+    adjusted["key_risk_factors"] = _prepend_unique_text(
+        adjusted.get("key_risk_factors"),
+        "RiskRecallQA 적격 재검수 경고",
+    )
+    adjusted["decision_trace"] = [
+        *list(adjusted.get("decision_trace") or []),
+        {
+            "gate": "risk_recall_qa_escalation",
+            "label": "RiskRecallQA 적격 재검수",
+            "triggered": True,
+            "severity": "risk" if target_type == "risk_hold" else "watch",
+            "summary": adjustment_note,
+        },
+    ]
+    runtime_diagnostics["risk_recall_qa_advisory_applied"] = True
+    runtime_diagnostics["risk_recall_qa_adjusted_decision_type"] = target_type
+    runtime_diagnostics["risk_recall_qa_advisory_apply_reason"] = apply_reason
+    return adjusted
+
+
+def _risk_recall_qa_advisory_apply_reason(
+    *,
+    risk_recall_qa_output: RiskRecallQAOutput,
+    bundle: Stage2InputBundle,
+) -> str:
+    action = risk_recall_qa_output.recommended_action
+    assessment = risk_recall_qa_output.eligible_safety_assessment
+    trigger_reasons = {str(reason) for reason in risk_recall_qa_output.trigger_reasons}
+    if action == "escalate_eligible_to_risk_hold":
+        if assessment != "material_missed_risk" or risk_recall_qa_output.confidence < 0.70:
+            return ""
+        if _has_substantive_external_risk(bundle.news_cache_snapshot):
+            return "risk_recall_substantive_external_risk"
+        if len(_risk_recall_weak_financial_axes(bundle)) >= 4:
+            return "risk_recall_severe_financial_weakness"
+        return ""
+
+    if action != "escalate_eligible_to_boundary_hold":
+        return ""
+    if assessment not in {"needs_boundary_review", "material_missed_risk"}:
+        return ""
+    if risk_recall_qa_output.confidence < 0.60:
+        return ""
+    if not trigger_reasons.intersection(
+        {
+            "eligible_near_threshold",
+            "eligible_near_threshold_with_weak_financials",
+            "eligible_with_multiple_weak_financial_axes",
+            "eligible_with_recall_watch_evidence",
+            "eligible_boundary_rating_context",
+        }
+    ):
+        return ""
+    return "risk_recall_boundary_safety_review"
+
+
+def _risk_recall_qa_trigger_reasons(
+    *,
+    bundle: Stage2InputBundle,
+    committee_view: dict[str, Any],
+) -> list[str]:
+    if str(committee_view.get("final_committee_label") or "") != "적격":
+        return []
+    if str(committee_view.get("committee_decision_type") or "") != "eligible":
+        return []
+
+    reasons: list[str] = []
+    near_threshold = _risk_recall_near_threshold(bundle)
+    weak_axes = _risk_recall_weak_financial_axes(bundle)
+    has_watch_evidence = _has_risk_recall_watch_evidence(bundle.news_cache_snapshot)
+    has_substantive_evidence = _has_substantive_external_risk(bundle.news_cache_snapshot)
+    has_boundary_context = _has_rating_boundary_context(bundle)
+
+    if near_threshold and (len(weak_axes) >= 2 or has_substantive_evidence):
+        reasons.append("eligible_near_threshold")
+    if near_threshold and len(weak_axes) >= 2:
+        reasons.append("eligible_near_threshold_with_weak_financials")
+    if len(weak_axes) >= 3:
+        reasons.append("eligible_with_multiple_weak_financial_axes")
+    if has_watch_evidence and (
+        (near_threshold and len(weak_axes) >= 2)
+        or len(weak_axes) >= 3
+        or has_substantive_evidence
+    ):
+        reasons.append("eligible_with_recall_watch_evidence")
+    if has_substantive_evidence:
+        reasons.append("eligible_with_substantive_evidence")
+    if has_boundary_context and (
+        (near_threshold and len(weak_axes) >= 2)
+        or len(weak_axes) >= 3
+        or has_substantive_evidence
+    ):
+        reasons.append("eligible_boundary_rating_context")
+    return reasons[:5]
+
+
+def _risk_recall_near_threshold(bundle: Stage2InputBundle) -> bool:
+    probability = _safe_float(bundle.probability_speculative)
+    threshold = _safe_float(bundle.threshold)
+    if threshold is None or threshold <= 0:
+        return False
+    margin = threshold - (probability or 0.0)
+    return 0.0 <= margin <= 0.10
+
+
+def _risk_recall_weak_financial_axes(bundle: Stage2InputBundle) -> list[str]:
+    row = bundle.source_feature_row
+    axes: list[str] = []
+    if _metric_below_value(row, "current_ratio", 1.0):
+        axes.append("low_current_ratio")
+    if _metric_below_value(row, "cash_ratio", 0.10):
+        axes.append("low_cash_ratio")
+    if (
+        _metric_below_value(row, "cashflow_coverage_ratio", 0.0)
+        or _metric_below_value(row, "ocf_to_total_liabilities", 0.0)
+        or _metric_below_value(row, "ocf_to_sales", 0.0)
+        or _truthy(row.get("is_2y_consecutive_ocf_deficit"))
+    ):
+        axes.append("weak_cashflow")
+    if _metric_below_value(row, "interest_coverage_ratio", 1.0) or _truthy(
+        row.get("icr_under_1")
+    ):
+        axes.append("weak_interest_coverage")
+    if _metric_above_value(row, "debt_ratio", 2.0):
+        axes.append("high_debt_ratio")
+    if _metric_above_value(row, "total_borrowings_ratio", 0.65) or _metric_above_value(
+        row,
+        "short_term_borrowings_share",
+        0.90,
+    ):
+        axes.append("high_borrowing_pressure")
+    return axes
+
+
+def _has_risk_recall_watch_evidence(news_cache: dict[str, Any]) -> bool:
+    raw_items = news_cache.get("items", [])
+    if not isinstance(raw_items, list):
+        return False
+    markers = (
+        "유상증자",
+        "전환사채",
+        "신주인수권",
+        "채무보증",
+        "감사보고서",
+        "소송",
+        "계약해지",
+        "영업정지",
+        "거래정지",
+    )
+    for item in raw_items:
+        if not isinstance(item, dict):
+            continue
+        if item.get("company_match") is not True:
+            continue
+        score = _safe_float(item.get("evidence_score")) or 0.0
+        if score < 0.45:
+            continue
+        text = " ".join(str(item.get(key) or "") for key in ("title", "summary"))
+        if any(marker in text for marker in markers):
+            return True
+    return False
+
+
+def _has_substantive_external_risk(news_cache: dict[str, Any]) -> bool:
+    raw_items = news_cache.get("items", [])
+    if not isinstance(raw_items, list):
+        return False
+    return any(
+        isinstance(item, dict) and _is_risk_recall_substantive_external_risk_item(item)
+        for item in raw_items
+    )
+
+
+def _is_risk_recall_substantive_external_risk_item(item: dict[str, Any]) -> bool:
+    if item.get("company_match") is False:
+        return False
+
+    materiality_ratio = _safe_float(item.get("materiality_ratio"))
+    if materiality_ratio is not None and materiality_ratio >= 0.10:
+        return True
+    if item.get("veto_candidate") is True:
+        return True
+    if item.get("critical_context_confirmed") is True:
+        return True
+
+    event_class = str(item.get("disclosure_event_class", "")).lower()
+    materiality = str(item.get("disclosure_materiality", "")).lower()
+    if event_class in {"substantive_adverse", "distress", "insolvency", "audit_failure"}:
+        return True
+    if materiality in {"substantive_adverse", "critical", "veto"}:
+        return True
+
+    severity = str(item.get("disclosure_severity", "")).lower()
+    title = str(item.get("title") or "")
+    critical_title_markers = (
+        "횡령",
+        "배임",
+        "상장폐지",
+        "관리종목",
+        "감사의견거절",
+        "의견거절",
+        "한정의견",
+        "부도",
+        "파산",
+        "회생절차",
+        "자본잠식",
+    )
+    return severity in {"adverse", "veto"} and any(
+        marker in title for marker in critical_title_markers
+    )
+
+
+def _has_rating_boundary_context(bundle: Stage2InputBundle) -> bool:
+    prior = bundle.prior_rating_reference
+    group = str(prior.get("prior_rating_boundary_group") or "").lower()
+    rating = str(prior.get("prior_credit_rating") or prior.get("credit_rating") or "").upper()
+    if "boundary" in group:
+        return True
+    return rating in {"BBB-", "BB+"}
+
+
+def _metric_below_value(row: dict[str, Any], key: str, threshold: float) -> bool:
+    value = _safe_float(row.get(key))
+    return value is not None and value < threshold
+
+
+def _metric_at_least_value(row: dict[str, Any], key: str, threshold: float) -> bool:
+    value = _safe_float(row.get(key))
+    return value is not None and value >= threshold
+
+
+def _metric_above_value(row: dict[str, Any], key: str, threshold: float) -> bool:
+    value = _safe_float(row.get(key))
+    return value is not None and value > threshold
+
+
+def _metric_at_most_value(row: dict[str, Any], key: str, threshold: float) -> bool:
+    value = _safe_float(row.get(key))
+    return value is not None and value <= threshold
+
+
+def _truthy(value: object) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int | float):
+        return value == 1
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "y", "on"}
+    return False
+
+
+def _stage2_risk_recall_qa_enabled(runtime_backend_name: str) -> bool:
+    value = os.environ.get("CAS_STAGE2_RISK_RECALL_QA_ENABLED")
+    if value is not None:
+        return value.strip().lower() not in {"0", "false", "no", "off"}
+    backend = runtime_backend_name.strip().lower()
+    return backend.startswith("agno") and "fallback" not in backend
+
+
+def _stage2_risk_recall_qa_apply_advisory() -> bool:
+    value = os.environ.get("CAS_STAGE2_RISK_RECALL_QA_APPLY_ADVISORY", "1").strip().lower()
+    return value not in {"0", "false", "no", "off"}
+
+
+def _stage2_risk_recall_qa_fallback_on_error() -> bool:
+    value = os.environ.get("CAS_STAGE2_RISK_RECALL_QA_FALLBACK_ON_ERROR", "1").strip().lower()
+    return value not in {"0", "false", "no", "off"}
+
+
+def _run_risk_recall_qa_agent_with_cache(
+    *,
+    bundle: Stage2InputBundle,
+    committee_view: dict[str, Any],
+    quant_credit: QuantCreditOutput,
+    evidence_audit: EvidenceAuditOutput,
+    chair_report: ChairReportOutput,
+    trigger_reasons: list[str],
+) -> tuple[RiskRecallQAOutput, dict[str, Any]]:
+    started_at = time.perf_counter()
+    model_provider = _stage2_risk_recall_qa_provider()
+    model_name = _stage2_risk_recall_qa_model()
+    cache_payload = _risk_recall_qa_cache_payload(
+        bundle=bundle,
+        committee_view=committee_view,
+        quant_credit=quant_credit,
+        evidence_audit=evidence_audit,
+        chair_report=chair_report,
+        trigger_reasons=trigger_reasons,
+        model_provider=model_provider,
+        model_name=model_name,
+    )
+    cache_key = stable_cache_key(cache_payload)
+    cached_payload = read_json_cache(
+        "llm_stage2_risk_recall_qa",
+        cache_key,
+        env_var="CAS_STAGE2_LLM_CACHE_ENABLED",
+        default=True,
+    )
+    if cached_payload is not None:
+        response_payload = cached_payload.get("response", cached_payload)
+        risk_recall_qa = RiskRecallQAOutput.model_validate(response_payload)
+        return risk_recall_qa, {
+            "risk_recall_qa_cache_hit": True,
+            "risk_recall_qa_cache_key": cache_key,
+            "agent_elapsed_seconds": {
+                "risk_recall_qa": round(time.perf_counter() - started_at, 4)
+            },
+        }
+
+    review_module = import_module("cas.agents.nodes.tripletagents.risk_recall_qa_agent")
+    risk_recall_qa = cast(
+        RiskRecallQAOutput,
+        review_module.run_risk_recall_qa_agent(
+            bundle=bundle,
+            committee_view=committee_view,
+            quant_credit=quant_credit,
+            evidence_audit=evidence_audit,
+            chair_report=chair_report,
+            trigger_reasons=trigger_reasons,
+            model_provider=model_provider,
+            model_name=model_name,
+            max_tokens=_stage2_risk_recall_qa_max_tokens(),
+        ),
+    )
+    write_json_cache(
+        "llm_stage2_risk_recall_qa",
+        cache_key,
+        {
+            "cache_version": _RISK_RECALL_QA_CACHE_VERSION,
+            "response": risk_recall_qa.model_dump(mode="json"),
+        },
+        env_var="CAS_STAGE2_LLM_CACHE_ENABLED",
+        default=True,
+    )
+    return risk_recall_qa, {
+        "risk_recall_qa_cache_hit": False,
+        "risk_recall_qa_cache_key": cache_key,
+        "agent_elapsed_seconds": {
+            "risk_recall_qa": round(time.perf_counter() - started_at, 4)
+        },
+    }
+
+
+def _risk_recall_qa_cache_payload(
+    *,
+    bundle: Stage2InputBundle,
+    committee_view: dict[str, Any],
+    quant_credit: QuantCreditOutput,
+    evidence_audit: EvidenceAuditOutput,
+    chair_report: ChairReportOutput,
+    trigger_reasons: list[str],
+    model_provider: str,
+    model_name: str,
+) -> dict[str, Any]:
+    return {
+        "cache_version": _RISK_RECALL_QA_CACHE_VERSION,
+        "model_provider": model_provider,
+        "model_name": model_name,
+        "stage2_input_bundle": bundle.to_prompt_payload(),
+        "committee_view": committee_view,
+        "agent_outputs": {
+            "quant_credit": quant_credit.model_dump(mode="json"),
+            "evidence_audit": evidence_audit.model_dump(mode="json"),
+            "chair_report": chair_report.model_dump(mode="json"),
+        },
+        "trigger_reasons": trigger_reasons,
+    }
+
+
+def _merge_post_committee_qa_diagnostics(
+    runtime_diagnostics: dict[str, Any],
+    qa_diagnostics: dict[str, Any],
+    *,
+    role: str,
+) -> None:
+    existing_timings = runtime_diagnostics.get("agent_elapsed_seconds")
+    if not isinstance(existing_timings, dict):
+        existing_timings = {}
+    qa_timings = qa_diagnostics.get("agent_elapsed_seconds")
+    qa_elapsed_seconds = 0.0
+    if isinstance(qa_timings, dict):
+        existing_timings.update(qa_timings)
+        qa_elapsed = _safe_float(qa_timings.get(role))
+        if qa_elapsed is not None:
+            qa_elapsed_seconds = qa_elapsed
+    runtime_diagnostics["agent_elapsed_seconds"] = existing_timings
+    runtime_diagnostics["agent_elapsed_seconds_sum"] = round(
+        sum(float(value) for value in existing_timings.values()),
+        4,
+    )
+    current_total = _safe_float(runtime_diagnostics.get("stage2_total_elapsed_seconds"))
+    if current_total is not None and qa_elapsed_seconds:
+        runtime_diagnostics["stage2_total_elapsed_seconds"] = round(
+            current_total + qa_elapsed_seconds,
+            4,
+        )
+    runtime_diagnostics[f"{role}_cache_hit"] = bool(
+        qa_diagnostics.get(f"{role}_cache_hit", False)
+    )
+    if qa_diagnostics.get(f"{role}_cache_key"):
+        runtime_diagnostics[f"{role}_cache_key"] = qa_diagnostics[f"{role}_cache_key"]
+
+
+def _stage2_risk_recall_qa_provider() -> str:
+    return (
+        os.environ.get("CAS_STAGE2_RISK_RECALL_QA_PROVIDER")
+        or os.environ.get("CAS_STAGE2_CHAIR_PROVIDER")
+        or os.environ.get("CAS_STAGE2_MODEL_PROVIDER")
+        or "openai"
+    )
+
+
+def _stage2_risk_recall_qa_model() -> str:
+    return (
+        os.environ.get("CAS_STAGE2_RISK_RECALL_QA_MODEL")
+        or os.environ.get("CAS_STAGE2_CHAIR_MODEL")
+        or os.environ.get("CAS_STAGE2_MODEL")
+        or "gpt-4.1-mini"
+    )
+
+
+def _stage2_risk_recall_qa_max_tokens() -> int:
+    try:
+        return int(os.environ.get("CAS_STAGE2_RISK_RECALL_QA_MAX_TOKENS", "3000"))
+    except ValueError:
+        return 3000
 
 
 def _committee_confidence(

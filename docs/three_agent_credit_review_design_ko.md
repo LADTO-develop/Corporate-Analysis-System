@@ -221,6 +221,25 @@ OpenDART `corpCode.xml` 캐시에서 `stock_code -> corp_code`를 자동 보강�
 외부감사관련, 거래소공시, 정기공시로 나누고, 횡령·배임·감사의견·상장폐지 등
 위험 공시는 `provider_relevance=risk`로 우선 검토한다.
 
+OpenDART 공시는 제목 키워드만으로 즉시 치명 리스크로 보지 않고,
+`disclosure_severity`, `disclosure_event_class`, `disclosure_materiality`로 한 번 더
+분류한다. 일정금액 미만 또는 자율공시 소송, 자율공시 단일 계약해지,
+SPAC 합병 예비심사 등 절차성 거래정지는 `caution/procedural_or_one_off` 맥락으로
+낮춰 EvidenceAuditAgent가 참고 근거로만 다루게 한다. 반대로 횡령·배임,
+감사의견 거절, 상장폐지, 관리종목, 영업정지, 자본잠식처럼 실질 부실 사건은
+`adverse` 또는 `veto`로 유지한다.
+
+계약해지와 영업정지는 제목만으로는 실질성을 알기 어렵기 때문에 OpenDART 상세 공시
+보강을 추가했다. `단일판매ㆍ공급계약해지` 후보는 `document.xml` 원문에서 매출 대비
+계약해지 비율을 파싱하고, `영업정지` 후보는 `bsnSp.json`의 `sl_vs` 또는
+`bsnsp_amt/rsl`로 매출 대비 영업정지 비율을 계산한다. 이 값은
+`materiality_ratio`, `materiality_basis`, `materiality_source`로 EvidenceAuditAgent에
+전달된다. 매출 대비 3% 미만은 절차성/일회성, 3~10%는 관찰 수준, 10% 이상은 실질
+부정 공시로 유지해 정상기업 과잉 보류를 줄이는 재료로 사용한다.
+`bsnSp.json`에 상세 비율이 없으면 `document.xml` 원문 fallback으로 `최근매출액 대비`,
+`영업정지금액`, `최근매출액` 표 값을 다시 파싱한다. 이 fallback은 종속회사 영업정지가
+모회사 신용위험으로 바로 전이되는지 판단하는 보조 근거다.
+
 Agno/LLM 추론은 CI와 일반 재현 실행에서는 꺼 둔다.
 `CAS_STAGE2_RUNNER=deterministic`이면 규칙 기반 scaffold가 실행되고,
 `CAS_STAGE2_RUNNER=agno`로 바꾸면 `Stage2AgentRunner` 인터페이스를 통해 Agno
@@ -305,6 +324,8 @@ structured output 기반 실행으로 교체된다. 기본 live 모드는
 - `src/cas/agents/stage2_bundle.py`: LangGraph `AgentState`를 Stage 2 전용 입력 번들로 정규화
 - `src/cas/agents/stage2_outputs.py`: Agent별 Pydantic 출력 schema를 정의하고 공통 `AgentOutput`으로 변환
 - `src/cas/agents/stage2_runner.py`: deterministic runner와 Agno runner가 공유할 실행 adapter 인터페이스
+- `src/cas/agents/nodes/tripletagents/review_qa_agent.py`: 특정 조건에서만 실행되는 Agno ReviewQAAgent. 최종 라벨과 메모 일관성, `risk_hold` 세부유형, 외부근거 기준일, 정상기업 과잉 보류 가능성을 검수한다.
+- `src/cas/agents/nodes/tripletagents/risk_recall_qa_agent.py`: 특정 조건에서만 실행되는 Agno RiskRecallQAAgent. 최종 `적격` 판단이 기준선/재무취약/외부근거 맥락에서 위험을 놓친 것은 아닌지 재검수한다.
 - `src/cas/agents/committee_schema.py`: `committee_view` Pydantic strict schema 정의
 - `src/cas/agents/signals/debt_liquidity_signals.py`: 부채상환능력, 유동성, 현금흐름 신호 계산
 - `src/cas/agents/signals/macro_signals.py`: 거시·시장 맥락 신호 계산
@@ -319,6 +340,32 @@ structured output 기반 실행으로 교체된다. 기본 live 모드는
 `Stage2InputBundle.to_prompt_payload()`는 Agno agent에 넘길 입력 payload의 기준
 형태이고, `CommitteeViewPayload`는 LLM이 만든 최종 의견도 반드시 같은 출력 형식으로
 검증하는 기준이다.
+
+기본 본심 경로는 계속 `QuantCreditAgent → EvidenceAuditAgent → ChairReportAgent` 3개
+역할이다. 다만 Agno live 실행에서 최종 위원회 라벨이 `보류`인데 Stage 1 모델은
+`투자적격`인 경우, `risk_hold`가 치명 근거 없이 만들어진 경우, chair memo와 최종
+라벨 충돌 가능성이 있는 경우, 또는 자금조달·거래정지·감사보고서처럼 해석이 애매한
+공시가 보류 판단에 관여한 경우에는 선택형 `ReviewQAAgent`가 사후 검수를 수행한다. ReviewQA는
+`agent_summary.agents.review_qa`와 runtime diagnostics에 advisory 결과를 남긴다. 최종
+라벨은 직접 바꾸지 않는다. 다만 `risk_hold`가 치명 근거 없이 과도하다고 판단되고
+veto 또는 hidden-tail-risk가 없을 때만 `committee_decision_type`을 `boundary_hold`로
+낮추는 보수적 subtype 보정을 적용할 수 있다. ReviewQA live 응답의 표현이 조금 흔들려도
+같은 결론을 재현할 수 있도록, 외부 공시가 모두 `caution/watch_context` 수준이고
+중대성 비율 10% 이상·veto·hidden-tail-risk가 없는 경우에는 `risk_hold_without_critical_evidence`
+downgrade 권고를 안정적으로 `boundary_hold` 보정에 연결한다.
+
+RiskRecallQAAgent는 반대 방향의 안전망이다. 최종 위원회 라벨이 `적격`이고,
+투기등급 확률이 기준선 근처라는 이유만으로는 실행하지 않는다. 기준선 근처와
+유동성·현금흐름·이자보상·차입부담 취약 2축 이상이 함께 있거나, 재무 취약 3축
+이상이거나, 실질 외부 위험 근거가 있을 때만 실행된다. 직접 관련 watch 공시나
+BBB-/BB+ 경계 맥락은 단독 trigger가 아니라 이 핵심 조건에 붙는 보조 맥락으로만 쓴다.
+이 에이전트는 정상기업 과잉 보류를 다시 늘리지 않도록 기본 권고를
+`keep_committee_view`로 두고, 재무/외부근거가 정말 불안한 경우에만 `boundary_hold`
+또는 제한적 `risk_hold` 상향을 권고한다. 특히
+`eligible_with_substantive_evidence`는 routine 감사보고서나 단순 공시가 아니라,
+중대성 비율 10% 이상, `substantive_adverse`, veto/critical context, 또는 횡령·배임·상장폐지·
+감사의견 거절 같은 명시적 치명 제목에만 켜지도록 좁힌다.
+
 횡령, 배임, 상장폐지, fraud 같은 강제 경고 키워드는 코드가 아니라
 `configs/agent/committee.yaml`의 `veto_rules`에서 관리한다.
 현재 기본 실행은 `DeterministicStage2AgentRunner`를 사용하며, live 실험에서는 같은
@@ -337,6 +384,9 @@ structured output 기반 실행으로 교체된다. 기본 live 모드는
 - `보류`를 `위험 보류`, `경계등급 보류`, `과민경고 완화 보류`, `확인필요 보류`로 분리
 - 30건 stress sample 기준 1차 모델 대비 2차 위험신호 F1 개선 확인
 - 정상기업 과잉 보류 guardrail 구현 및 로컬 회귀 검증
+- 조건부 Agno ReviewQAAgent 추가. 전체 기업에 4번째 LLM 호출을 붙이지 않고, 보류/근거/메모 충돌 위험이 있는 케이스만 사후 검수한다.
+- ReviewQA subtype advisory 안정화. `caution/watch_context` 외부근거만 있는 TN overhold 후보는 위험 보류가 아니라 경계등급 보류로 일관되게 낮추되, 중대성 10% 이상 공시와 hidden-tail-risk는 낮추지 않는다.
+- 조건부 Agno RiskRecallQAAgent 추가. 최종 적격 케이스 중 기준선/재무취약/외부근거 조건이 있는 경우만 적격 판단의 위험 누락 가능성을 사후 검수한다.
 
 ### 남은 개선 후보
 

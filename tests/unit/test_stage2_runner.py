@@ -149,6 +149,8 @@ def test_agno_stage2_runner_defaults_to_openai_single_model() -> None:
 def test_agno_stage2_runner_uses_triplet_agents(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.setenv("CAS_STAGE2_LLM_CACHE_ENABLED", "0")
+
     def fake_triplet_agents(**kwargs: Any) -> Stage2LLMResponse:
         assert kwargs["model_name"] == "claude-sonnet"
         diagnostics = kwargs.get("diagnostics")
@@ -278,6 +280,7 @@ def test_agno_stage2_runner_reuses_cached_triplet_response(
 def test_agno_stage2_runner_routes_multi_llm_committee(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.setenv("CAS_STAGE2_LLM_CACHE_ENABLED", "0")
     captured: dict[str, Any] = {}
 
     def fake_triplet_agents(**kwargs: Any) -> Stage2LLMResponse:
@@ -340,6 +343,8 @@ def test_agno_stage2_runner_routes_multi_llm_committee(
 def test_agno_stage2_runner_falls_back_when_triplet_agents_fail(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.setenv("CAS_STAGE2_LLM_CACHE_ENABLED", "0")
+
     def fail_triplet_agents(**_kwargs: Any) -> Stage2LLMResponse:
         raise RuntimeError("missing agno runtime")
 
@@ -465,6 +470,52 @@ def test_triplet_agents_write_per_run_runtime_diagnostics(
         "evidence_audit",
         "chair_report",
     }
+
+
+def test_agno_runtime_passes_openai_timeout_and_provider_retries(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from cas.agents.nodes.tripletagents import runtime
+
+    captured: dict[str, Any] = {}
+
+    class FakeOpenAIResponses:
+        def __init__(self, **kwargs: Any) -> None:
+            captured.update(kwargs)
+
+    class FakeOpenAIModule:
+        OpenAIResponses = FakeOpenAIResponses
+
+    def fake_import_module(name: str) -> object:
+        if name == "agno.models.openai":
+            return FakeOpenAIModule()
+        raise AssertionError(f"unexpected import {name}")
+
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setenv("CAS_STAGE2_AGENT_TIMEOUT_SECONDS", "30")
+    monkeypatch.setenv("CAS_STAGE2_PROVIDER_MAX_RETRIES", "1")
+    monkeypatch.setattr(runtime, "import_module", fake_import_module)
+
+    runtime._build_agno_model(
+        provider="openai",
+        model_name="gpt-test",
+        max_tokens=200,
+    )
+
+    assert captured["id"] == "gpt-test"
+    assert captured["timeout"] == 30.0
+    assert captured["max_retries"] == 1
+    assert captured["api_key"] == "test-key"
+
+
+def test_agno_runtime_timeout_can_be_disabled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from cas.agents.nodes.tripletagents import runtime
+
+    monkeypatch.setenv("CAS_STAGE2_AGENT_TIMEOUT_SECONDS", "off")
+
+    assert runtime._stage2_agent_timeout_seconds() is None
 
 
 def _deterministic_runner() -> DeterministicStage2AgentRunner:

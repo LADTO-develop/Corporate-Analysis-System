@@ -528,6 +528,111 @@ class _BenignTradingHaltOpenDartSession:
         return _FakeResponse({"results": []})
 
 
+class _ProceduralDisclosureOpenDartSession:
+    def __init__(self, report_name: str, *, disclosure_type: str = "B") -> None:
+        self.report_name = report_name
+        self.disclosure_type = disclosure_type
+
+    def get(
+        self,
+        url: str,
+        *,
+        params: Mapping[str, object] | None = None,
+        headers: Mapping[str, str] | None = None,
+        timeout: float | None = None,
+    ) -> _FakeResponse:
+        if "corpCode.xml" in url:
+            return _FakeResponse({}, content=_corp_code_zip())
+        if "opendart" in url:
+            assert params is not None
+            if str(params.get("pblntf_ty", "")) == self.disclosure_type:
+                return _FakeResponse(
+                    {
+                        "list": [
+                            {
+                                "report_nm": self.report_name,
+                                "rcept_no": "202012310001",
+                                "rcept_dt": "20201231",
+                            }
+                        ]
+                    }
+                )
+            return _FakeResponse({"list": []})
+        if "naver.com" in url:
+            return _FakeResponse({"items": []})
+        return _FakeResponse({"list": []})
+
+    def post(
+        self,
+        url: str,
+        *,
+        json: Mapping[str, object] | None = None,
+        timeout: float | None = None,
+    ) -> _FakeResponse:
+        return _FakeResponse({"results": []})
+
+
+class _DetailMaterialityOpenDartSession:
+    def __init__(
+        self,
+        report_name: str,
+        *,
+        document_text: str = "",
+        bsn_sp_rows: list[dict[str, object]] | None = None,
+        disclosure_type: str = "B",
+    ) -> None:
+        self.report_name = report_name
+        self.document_text = document_text
+        self.bsn_sp_rows = bsn_sp_rows or []
+        self.disclosure_type = disclosure_type
+
+    def get(
+        self,
+        url: str,
+        *,
+        params: Mapping[str, object] | None = None,
+        headers: Mapping[str, str] | None = None,
+        timeout: float | None = None,
+    ) -> _FakeResponse:
+        if "corpCode.xml" in url:
+            return _FakeResponse({}, content=_corp_code_zip())
+        if "bsnSp.json" in url:
+            assert params is not None
+            assert params["corp_code"] == "00123456"
+            return _FakeResponse({"list": self.bsn_sp_rows})
+        if "document.xml" in url:
+            assert params is not None
+            assert params["rcept_no"] == "202012310001"
+            return _FakeResponse({}, content=_document_zip(self.document_text))
+        if "opendart" in url:
+            assert params is not None
+            if str(params.get("pblntf_ty", "")) == self.disclosure_type:
+                return _FakeResponse(
+                    {
+                        "list": [
+                            {
+                                "report_nm": self.report_name,
+                                "rcept_no": "202012310001",
+                                "rcept_dt": "20201231",
+                            }
+                        ]
+                    }
+                )
+            return _FakeResponse({"list": []})
+        if "naver.com" in url:
+            return _FakeResponse({"items": []})
+        return _FakeResponse({"list": []})
+
+    def post(
+        self,
+        url: str,
+        *,
+        json: Mapping[str, object] | None = None,
+        timeout: float | None = None,
+    ) -> _FakeResponse:
+        return _FakeResponse({"results": []})
+
+
 class _HistoricalEvidenceFilterSession:
     def get(
         self,
@@ -948,6 +1053,351 @@ def test_collect_external_evidence_downgrades_benign_trading_halt_opendart(
     assert item["veto_candidate"] is False
 
 
+def test_collect_external_evidence_downgrades_low_materiality_litigation_opendart(
+    tmp_path: Path,
+) -> None:
+    snapshot = collect_external_evidence(
+        company_name="테스트기업",
+        stock_code="000001",
+        as_of_date="2020-12-31",
+        env={
+            "CAS_ENABLE_EXTERNAL_EVIDENCE": "1",
+            "OPENDART_API_KEY": "dummy",
+            "CAS_OPENDART_CORP_CODE_CACHE_PATH": str(tmp_path / "corp_codes.csv"),
+        },
+        session=_ProceduralDisclosureOpenDartSession(
+            "소송등의판결ㆍ결정(자율공시:일정금액미만의청구)"
+        ),
+    )
+
+    assert snapshot["status"] == "ready"
+    assert snapshot["has_critical_risk"] is False
+    assert snapshot["veto_candidate_count"] == 0
+    item = snapshot["items"][0]
+    assert item["source"] == "opendart"
+    assert item["provider_relevance"] == "caution"
+    assert item["disclosure_severity"] == "caution"
+    assert item["disclosure_event_class"] == "low_materiality_litigation"
+    assert item["disclosure_materiality"] == "procedural_or_one_off"
+    assert item["critical_terms"] == []
+    assert item["veto_candidate"] is False
+    assert float(item["evidence_score"]) <= 0.68
+
+
+def test_collect_external_evidence_downgrades_voluntary_contract_cancellation_opendart(
+    tmp_path: Path,
+) -> None:
+    snapshot = collect_external_evidence(
+        company_name="테스트기업",
+        stock_code="000001",
+        as_of_date="2020-12-31",
+        env={
+            "CAS_ENABLE_EXTERNAL_EVIDENCE": "1",
+            "OPENDART_API_KEY": "dummy",
+            "CAS_OPENDART_CORP_CODE_CACHE_PATH": str(tmp_path / "corp_codes.csv"),
+        },
+        session=_ProceduralDisclosureOpenDartSession("단일판매ㆍ공급계약해지(자율공시)"),
+    )
+
+    assert snapshot["status"] == "ready"
+    assert snapshot["has_critical_risk"] is False
+    assert snapshot["veto_candidate_count"] == 0
+    item = snapshot["items"][0]
+    assert item["provider_relevance"] == "caution"
+    assert item["disclosure_severity"] == "caution"
+    assert item["disclosure_event_class"] == "one_off_contract_cancellation"
+    assert item["disclosure_materiality"] == "procedural_or_one_off"
+    assert item["critical_terms"] == []
+    assert item["veto_candidate"] is False
+
+
+def test_collect_external_evidence_downgrades_spac_merger_halt_opendart(
+    tmp_path: Path,
+) -> None:
+    snapshot = collect_external_evidence(
+        company_name="테스트기업",
+        stock_code="000001",
+        as_of_date="2020-12-31",
+        env={
+            "CAS_ENABLE_EXTERNAL_EVIDENCE": "1",
+            "OPENDART_API_KEY": "dummy",
+            "CAS_OPENDART_CORP_CODE_CACHE_PATH": str(tmp_path / "corp_codes.csv"),
+        },
+        session=_ProceduralDisclosureOpenDartSession("주권매매거래정지(SPAC 합병(예비심사청구대상))"),
+    )
+
+    assert snapshot["status"] == "ready"
+    assert snapshot["has_critical_risk"] is False
+    assert snapshot["veto_candidate_count"] == 0
+    item = snapshot["items"][0]
+    assert item["provider_relevance"] == "caution"
+    assert item["disclosure_severity"] == "caution"
+    assert item["disclosure_event_class"] == "procedural_trading_halt"
+    assert item["disclosure_materiality"] == "procedural_or_one_off"
+    assert item["critical_terms"] == []
+    assert item["veto_candidate"] is False
+
+
+def test_collect_external_evidence_keeps_material_contract_cancellation_adverse(
+    tmp_path: Path,
+) -> None:
+    snapshot = collect_external_evidence(
+        company_name="테스트기업",
+        stock_code="000001",
+        as_of_date="2020-12-31",
+        env={
+            "CAS_ENABLE_EXTERNAL_EVIDENCE": "1",
+            "OPENDART_API_KEY": "dummy",
+            "CAS_OPENDART_CORP_CODE_CACHE_PATH": str(tmp_path / "corp_codes.csv"),
+        },
+        session=_ProceduralDisclosureOpenDartSession("단일판매ㆍ공급계약해지"),
+    )
+
+    assert snapshot["status"] == "ready"
+    item = snapshot["items"][0]
+    assert item["provider_relevance"] == "risk"
+    assert item["disclosure_severity"] == "adverse"
+    assert item["disclosure_event_class"] == "material_contract_cancellation"
+    assert item["disclosure_materiality"] == "substantive_adverse"
+    assert item["evidence_quality"] == "high"
+    assert item["veto_candidate"] is False
+
+
+def test_collect_external_evidence_downgrades_low_ratio_contract_cancellation(
+    tmp_path: Path,
+) -> None:
+    document_text = """
+<DOCUMENT>
+  <TABLE>
+    <TR><TD>계약해지금액</TD><TD>240,000,000</TD></TR>
+    <TR><TD>최근매출액 대비</TD><TD>2.4%</TD></TR>
+  </TABLE>
+</DOCUMENT>
+"""
+    snapshot = collect_external_evidence(
+        company_name="테스트기업",
+        stock_code="000001",
+        as_of_date="2020-12-31",
+        env={
+            "CAS_ENABLE_EXTERNAL_EVIDENCE": "1",
+            "OPENDART_API_KEY": "dummy",
+            "CAS_OPENDART_CORP_CODE_CACHE_PATH": str(tmp_path / "corp_codes.csv"),
+        },
+        session=_DetailMaterialityOpenDartSession(
+            "단일판매ㆍ공급계약해지",
+            document_text=document_text,
+        ),
+    )
+
+    assert snapshot["status"] == "ready"
+    assert snapshot["has_critical_risk"] is False
+    assert snapshot["veto_candidate_count"] == 0
+    item = snapshot["items"][0]
+    assert item["provider_relevance"] == "caution"
+    assert item["disclosure_severity"] == "caution"
+    assert item["disclosure_event_class"] == "low_materiality_contract_cancellation"
+    assert item["disclosure_materiality"] == "procedural_or_one_off"
+    assert item["materiality_ratio"] == "0.0240"
+    assert item["materiality_source"] == "opendart_document_xml"
+    assert "2.40%" in item["materiality_basis"]
+    assert item["critical_terms"] == []
+    assert item["veto_candidate"] is False
+    assert float(item["evidence_score"]) <= 0.68
+
+
+def test_collect_external_evidence_keeps_high_ratio_contract_cancellation_adverse(
+    tmp_path: Path,
+) -> None:
+    document_text = """
+<DOCUMENT>
+  <TABLE>
+    <TR><TD>계약해지금액</TD><TD>1,520,000,000</TD></TR>
+    <TR><TD>최근매출액 대비</TD><TD>15.2%</TD></TR>
+  </TABLE>
+</DOCUMENT>
+"""
+    snapshot = collect_external_evidence(
+        company_name="테스트기업",
+        stock_code="000001",
+        as_of_date="2020-12-31",
+        env={
+            "CAS_ENABLE_EXTERNAL_EVIDENCE": "1",
+            "OPENDART_API_KEY": "dummy",
+            "CAS_OPENDART_CORP_CODE_CACHE_PATH": str(tmp_path / "corp_codes.csv"),
+        },
+        session=_DetailMaterialityOpenDartSession(
+            "단일판매ㆍ공급계약해지",
+            document_text=document_text,
+        ),
+    )
+
+    item = snapshot["items"][0]
+    assert item["provider_relevance"] == "risk"
+    assert item["disclosure_severity"] == "adverse"
+    assert item["disclosure_event_class"] == "material_contract_cancellation"
+    assert item["disclosure_materiality"] == "substantive_adverse"
+    assert item["materiality_ratio"] == "0.1520"
+    assert item["evidence_quality"] == "high"
+
+
+def test_collect_external_evidence_downgrades_low_ratio_subsidiary_business_suspension(
+    tmp_path: Path,
+) -> None:
+    snapshot = collect_external_evidence(
+        company_name="테스트기업",
+        stock_code="000001",
+        as_of_date="2020-12-31",
+        env={
+            "CAS_ENABLE_EXTERNAL_EVIDENCE": "1",
+            "OPENDART_API_KEY": "dummy",
+            "CAS_OPENDART_CORP_CODE_CACHE_PATH": str(tmp_path / "corp_codes.csv"),
+        },
+        session=_DetailMaterialityOpenDartSession(
+            "영업정지(종속회사의주요경영사항)",
+            bsn_sp_rows=[
+                {
+                    "rcept_no": "202012310001",
+                    "bsnsp_amt": "250,000,000",
+                    "rsl": "10,000,000,000",
+                    "sl_vs": "2.5",
+                    "bsnsp_cn": "종속회사 생산라인 일부 영업정지",
+                }
+            ],
+        ),
+    )
+
+    assert snapshot["status"] == "ready"
+    assert snapshot["has_critical_risk"] is False
+    assert snapshot["veto_candidate_count"] == 0
+    item = snapshot["items"][0]
+    assert item["provider_relevance"] == "caution"
+    assert item["disclosure_severity"] == "caution"
+    assert item["disclosure_event_class"] == "subsidiary_business_suspension_low_materiality"
+    assert item["disclosure_materiality"] == "procedural_or_one_off"
+    assert item["business_suspension_scope"] == "subsidiary"
+    assert item["materiality_ratio"] == "0.0250"
+    assert item["materiality_source"] == "opendart_bsnSp"
+    assert item["critical_terms"] == []
+
+
+def test_collect_external_evidence_downgrades_business_suspension_from_document_fallback(
+    tmp_path: Path,
+) -> None:
+    document_text = """
+<DOCUMENT>
+  <TABLE>
+    <TR><TD>영업정지 내용</TD><TD>종속회사 생산라인 일부 영업정지</TD></TR>
+    <TR><TD>영업정지금액</TD><TD>280,000,000</TD></TR>
+    <TR><TD>최근매출액 대비</TD><TD>2.8%</TD></TR>
+  </TABLE>
+</DOCUMENT>
+"""
+    snapshot = collect_external_evidence(
+        company_name="테스트기업",
+        stock_code="000001",
+        as_of_date="2020-12-31",
+        env={
+            "CAS_ENABLE_EXTERNAL_EVIDENCE": "1",
+            "OPENDART_API_KEY": "dummy",
+            "CAS_OPENDART_CORP_CODE_CACHE_PATH": str(tmp_path / "corp_codes.csv"),
+        },
+        session=_DetailMaterialityOpenDartSession(
+            "영업정지(종속회사의주요경영사항)",
+            document_text=document_text,
+            bsn_sp_rows=[],
+        ),
+    )
+
+    assert snapshot["status"] == "ready"
+    assert snapshot["has_critical_risk"] is False
+    assert snapshot["veto_candidate_count"] == 0
+    item = snapshot["items"][0]
+    assert item["provider_relevance"] == "caution"
+    assert item["disclosure_severity"] == "caution"
+    assert item["disclosure_event_class"] == "subsidiary_business_suspension_low_materiality"
+    assert item["disclosure_materiality"] == "procedural_or_one_off"
+    assert item["business_suspension_scope"] == "subsidiary"
+    assert item["materiality_ratio"] == "0.0280"
+    assert item["materiality_source"] == "opendart_document_xml"
+    assert "2.80%" in item["materiality_basis"]
+    assert item["critical_terms"] == []
+
+
+def test_collect_external_evidence_keeps_high_ratio_business_suspension_from_document_fallback(
+    tmp_path: Path,
+) -> None:
+    document_text = """
+<DOCUMENT>
+  <TABLE>
+    <TR><TD>영업정지 내용</TD><TD>주요 사업부 영업정지</TD></TR>
+    <TR><TD>영업정지금액</TD><TD>1,250,000,000</TD></TR>
+    <TR><TD>최근매출액 대비</TD><TD>12.5%</TD></TR>
+  </TABLE>
+</DOCUMENT>
+"""
+    snapshot = collect_external_evidence(
+        company_name="테스트기업",
+        stock_code="000001",
+        as_of_date="2020-12-31",
+        env={
+            "CAS_ENABLE_EXTERNAL_EVIDENCE": "1",
+            "OPENDART_API_KEY": "dummy",
+            "CAS_OPENDART_CORP_CODE_CACHE_PATH": str(tmp_path / "corp_codes.csv"),
+        },
+        session=_DetailMaterialityOpenDartSession(
+            "영업정지",
+            document_text=document_text,
+            bsn_sp_rows=[],
+        ),
+    )
+
+    item = snapshot["items"][0]
+    assert item["provider_relevance"] == "risk"
+    assert item["disclosure_severity"] == "adverse"
+    assert item["disclosure_event_class"] == "substantive_adverse"
+    assert item["disclosure_materiality"] == "substantive_adverse"
+    assert item["business_suspension_scope"] == "parent_or_direct"
+    assert item["materiality_ratio"] == "0.1250"
+    assert item["materiality_source"] == "opendart_document_xml"
+    assert item["evidence_quality"] == "high"
+
+
+def test_collect_external_evidence_keeps_high_ratio_business_suspension_adverse(
+    tmp_path: Path,
+) -> None:
+    snapshot = collect_external_evidence(
+        company_name="테스트기업",
+        stock_code="000001",
+        as_of_date="2020-12-31",
+        env={
+            "CAS_ENABLE_EXTERNAL_EVIDENCE": "1",
+            "OPENDART_API_KEY": "dummy",
+            "CAS_OPENDART_CORP_CODE_CACHE_PATH": str(tmp_path / "corp_codes.csv"),
+        },
+        session=_DetailMaterialityOpenDartSession(
+            "영업정지",
+            bsn_sp_rows=[
+                {
+                    "rcept_no": "202012310001",
+                    "bsnsp_amt": "1,520,000,000",
+                    "rsl": "10,000,000,000",
+                    "sl_vs": "15.2",
+                    "bsnsp_cn": "주요 사업부 영업정지",
+                }
+            ],
+        ),
+    )
+
+    item = snapshot["items"][0]
+    assert item["provider_relevance"] == "risk"
+    assert item["disclosure_severity"] == "adverse"
+    assert item["disclosure_event_class"] == "substantive_adverse"
+    assert item["disclosure_materiality"] == "substantive_adverse"
+    assert item["business_suspension_scope"] == "parent_or_direct"
+    assert item["materiality_ratio"] == "0.1520"
+    assert item["evidence_quality"] == "high"
+
+
 def test_collect_external_evidence_filters_web_items_after_historical_as_of_date() -> None:
     snapshot = collect_external_evidence(
         company_name="테스트기업",
@@ -992,4 +1442,11 @@ def _corp_code_zip() -> bytes:
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w") as archive:
         archive.writestr("CORPCODE.xml", xml.encode("utf-8"))
+    return buffer.getvalue()
+
+
+def _document_zip(text: str) -> bytes:
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as archive:
+        archive.writestr("document.xml", text.encode("utf-8"))
     return buffer.getvalue()

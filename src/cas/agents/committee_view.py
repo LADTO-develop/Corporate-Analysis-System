@@ -611,6 +611,9 @@ def _secondary_overhold_guardrail_reason(bundle: Stage2InputBundle) -> str:
         return ""
     if not bundle.source_feature_row:
         return ""
+    stable_prior_cashflow_reason = _stable_prior_cashflow_overhold_guardrail_reason(bundle)
+    if stable_prior_cashflow_reason:
+        return stable_prior_cashflow_reason
     if _has_blocking_flags(bundle) and not _has_isolated_interest_cover_defense(bundle):
         return ""
     if _has_severe_financial_watch_signal(
@@ -643,6 +646,77 @@ def _secondary_overhold_guardrail_reason(bundle: Stage2InputBundle) -> str:
         f"{', '.join(supports[:3])} 축이 방어적이어서 45개 보조 레이더 단독 신호만으로는 "
         "위험 보류나 경계 보류로 올리지 않습니다."
     )
+
+
+def _stable_prior_cashflow_overhold_guardrail_reason(bundle: Stage2InputBundle) -> str:
+    """Lower near-threshold TN holds when prior rating and OCF defense are strong."""
+    if not _prior_rating_is_stable_investment_non_boundary(bundle.prior_rating_reference):
+        return ""
+    if _overwarning_blocking_external_items(bundle.news_cache_snapshot):
+        return ""
+    if _material_financing_evidence_blocks_tn_hold(bundle.news_cache_snapshot):
+        return ""
+    if _has_extreme_financial_distress_signal(bundle.source_feature_row):
+        return ""
+    if not _has_cashflow_backed_near_threshold_tn_defense(bundle.source_feature_row):
+        return ""
+
+    probability = bundle.probability_speculative
+    threshold = _model_threshold(bundle)
+    prior = bundle.prior_rating_reference
+    rating = str(prior.get("prior_credit_rating") or "").strip()
+    rating_date = str(prior.get("prior_rating_date") or "").strip()
+    agency = str(prior.get("prior_rating_agency") or "").strip()
+    agency_text = f"{agency} " if agency else ""
+    return (
+        "정상기업 과잉 보류 방어 guardrail v2: 1차 모델은 투자적격이고 "
+        f"투기등급 확률 {probability:.1%}가 기준선 {threshold:.1%} 아래입니다. "
+        f"평가 기준일 이전 {agency_text}공개등급도 {rating}({rating_date})로 "
+        "BBB-/BB+ 경계보다 위의 투자등급 영역입니다. 이자보상배율 단기 저하는 있으나 "
+        "영업현금흐름·부채상환 현금흐름·자본잠식 부재·반복 손실 부재가 확인되고, "
+        "직접 검증된 외부 치명근거도 없어 45개 보조 레이더의 경계 보류를 적격으로 "
+        "낮춥니다."
+    )
+
+
+def _prior_rating_is_stable_investment_non_boundary(prior: dict[str, Any]) -> bool:
+    if not prior or prior.get("has_prior_rating") is not True:
+        return False
+    if str(prior.get("prior_rating_boundary_group") or "").strip() != "investment_grade_non_boundary":
+        return False
+    rank = _safe_int(prior.get("prior_credit_rating_rank"))
+    if rank is not None:
+        return rank <= 8
+    rating = str(prior.get("prior_credit_rating") or "").strip().upper()
+    return rating in {"AAA", "AA+", "AA", "AA-", "A+", "A", "A-", "BBB+"}
+
+
+def _has_cashflow_backed_near_threshold_tn_defense(row: dict[str, Any]) -> bool:
+    """Allow eligible alignment when a single ICR dip is offset by cash generation."""
+    if not (
+        _flag_is_true(row.get("icr_under_1"))
+        or _metric_below(row, "interest_coverage_ratio", 1.0)
+    ):
+        return False
+    if _flag_is_true(row.get("is_2y_consecutive_operating_loss")) or _flag_is_true(
+        row.get("is_2y_consecutive_ocf_deficit")
+    ):
+        return False
+    if _metric_above(row, "capital_impairment_ratio", 0.0):
+        return False
+    if _metric_below(row, "net_margin", -0.10):
+        return False
+
+    cashflow_support = (
+        _metric_at_least(row, "cashflow_coverage_ratio", 1.0)
+        and _metric_at_least(row, "ocf_to_total_liabilities", 0.05)
+        and _metric_at_least(row, "ocf_to_sales", 0.0)
+    )
+    balance_or_borrowing_support = (
+        _metric_at_least(row, "cash_ratio", 0.05)
+        or _metric_at_most(row, "total_borrowings_ratio", 0.55)
+    )
+    return bool(cashflow_support and balance_or_borrowing_support)
 
 
 def _secondary_overhold_guardrail_supports(row: dict[str, Any]) -> list[str]:

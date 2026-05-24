@@ -81,6 +81,14 @@ def run_evidence_audit_agent(
             "In the committee meeting, challenge or qualify the quantitative view only with supplied evidence.",
             "List evidence limitations separately from confirmed risks.",
             "For historical evaluation, use only evidence already present in the bundle after as_of_date filtering.",
+            (
+                "Use disclosure_severity, disclosure_event_class, disclosure_materiality, "
+                "and materiality_basis when present. "
+                "Treat procedural trading halts, low-materiality litigation, one-off voluntary contract cancellations, "
+                "low/watch materiality contract cancellations or business suspensions, routine audit filings, "
+                "and single medium financing disclosures as context/watch items unless repeated, unresolved, "
+                "or combined with hard distress evidence."
+            ),
             "Write in Korean business-report language. Do not say a credit decision is confirmed or approved.",
             "Return concise Korean review prose in the structured response fields only.",
         ],
@@ -133,6 +141,13 @@ def _query(bundle: Stage2InputBundle) -> str:
             "news_status": bundle.news_status,
             "as_of_date": bundle.news_cache_snapshot.get("as_of_date", ""),
             "external_evidence_available": not _external_evidence_unavailable(bundle.news_status),
+            "disclosure_calibration_rule_kr": (
+                "공시가 caution/procedural_or_one_off/routine_context로 분류된 경우에는 "
+                "그 자체만으로 실질 부실 또는 tail risk로 확정하지 않는다. "
+                "materiality_basis가 있으면 계약해지/영업정지의 매출 대비 중요도를 우선 반영한다. "
+                "adverse/veto, 반복 공시, 미해소 사건, 재무 차단 신호와 결합될 때만 "
+                "보수적 재검토 신호로 강화한다."
+            ),
             "rule_kr": (
                 "외부근거가 없거나 비활성화된 상태라면 특정 뉴스, 공시, 업황 사건을 "
                 "확인 사실처럼 쓰지 말고 '외부근거 미수집'으로만 판단한다."

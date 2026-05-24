@@ -50,6 +50,11 @@ class Stage2InputBundle:
         )
 
     @property
+    def threshold(self) -> float:
+        """Return the Stage 1 decision threshold with a safe default."""
+        return _safe_float(self.xgboost_result.get("threshold") or self.model_view.get("threshold"))
+
+    @property
     def news_status(self) -> str:
         """Return the external evidence collection status."""
         return str(self.news_cache_snapshot.get("status", "not_implemented"))

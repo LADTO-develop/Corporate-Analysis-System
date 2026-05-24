@@ -93,6 +93,8 @@ class AgentOutput(BaseModel):
         "quant_credit",
         "evidence_audit",
         "chair_report",
+        "review_qa",
+        "risk_recall_qa",
     ]
     summary: str
     findings: list[str] = Field(default_factory=list)
