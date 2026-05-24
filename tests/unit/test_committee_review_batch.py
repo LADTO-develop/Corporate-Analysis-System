@@ -120,6 +120,145 @@ def test_parallel_batch_preserves_input_order(monkeypatch: pytest.MonkeyPatch) -
     assert list(results["index"]) == [0, 1, 2]
 
 
+def test_failed_result_positions_detect_operational_failures() -> None:
+    results = pd.DataFrame(
+        [
+            {
+                "corp_name": "정상",
+                "final_committee_label": "적격",
+                "committee_effect": "tn_kept_eligible",
+                "committee_review_safe_effect": "review_safe_tn_not_rejected",
+                "stage2_error_message": "",
+                "error_message": "",
+                "evidence_status": "ready",
+            },
+            {
+                "corp_name": "그래프실패",
+                "final_committee_label": "",
+                "committee_effect": "run_failed",
+                "committee_review_safe_effect": "run_failed",
+                "stage2_error_message": "",
+                "error_message": "Rate limit reached",
+                "evidence_status": "",
+            },
+            {
+                "corp_name": "스테이지2실패",
+                "final_committee_label": "보류",
+                "committee_effect": "fn_escalated",
+                "committee_review_safe_effect": "review_safe_fn_escalated",
+                "stage2_error_message": "timeout",
+                "error_message": "",
+                "evidence_status": "ready",
+            },
+            {
+                "corp_name": "근거수집실패",
+                "final_committee_label": "보류",
+                "committee_effect": "fn_escalated",
+                "committee_review_safe_effect": "review_safe_fn_escalated",
+                "stage2_error_message": "",
+                "error_message": "",
+                "evidence_status": "error",
+            },
+        ]
+    )
+
+    assert batch_module._failed_result_positions(results) == [1, 2, 3]
+
+
+def test_retry_failed_cases_replaces_failed_rows_and_writes_artifacts(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Any,
+) -> None:
+    batch = pd.DataFrame(
+        [
+            {"corp_name": "A", "stock_code": "000001"},
+            {"corp_name": "B", "stock_code": "000002"},
+        ]
+    )
+    initial_results = pd.DataFrame(
+        [
+            {
+                "corp_name": "A",
+                "final_committee_label": "",
+                "committee_effect": "run_failed",
+                "committee_review_safe_effect": "run_failed",
+                "error_message": "Rate limit reached",
+                "stage2_error_message": "",
+                "evidence_status": "",
+            },
+            {
+                "corp_name": "B",
+                "final_committee_label": "적격",
+                "committee_effect": "tn_kept_eligible",
+                "committee_review_safe_effect": "review_safe_tn_not_rejected",
+                "error_message": "",
+                "stage2_error_message": "",
+                "evidence_status": "ready",
+            },
+        ]
+    )
+    retry_calls: list[pd.DataFrame] = []
+
+    def fake_run_batch(
+        retry_batch: pd.DataFrame,
+        *,
+        use_sample_model_view: bool,
+        workers: int,
+    ) -> pd.DataFrame:
+        retry_calls.append(retry_batch.copy())
+        assert use_sample_model_view is True
+        assert workers == 1
+        return pd.DataFrame(
+            [
+                {
+                    "corp_name": "A",
+                    "final_committee_label": "보류",
+                    "committee_effect": "fn_escalated",
+                    "committee_review_safe_effect": "review_safe_fn_escalated",
+                    "error_message": "",
+                    "stage2_error_message": "",
+                    "evidence_status": "ready",
+                }
+            ]
+        )
+
+    monkeypatch.setattr(batch_module, "run_batch", fake_run_batch)
+
+    combined, reports = batch_module.retry_failed_cases(
+        batch,
+        initial_results,
+        use_sample_model_view=True,
+        attempts=2,
+        workers=1,
+        delay_seconds=0,
+        output_dir=tmp_path,
+        write_artifacts=True,
+    )
+
+    assert len(retry_calls) == 1
+    assert list(retry_calls[0]["corp_name"]) == ["A"]
+    assert list(combined["corp_name"]) == ["A", "B"]
+    assert combined.loc[0, "final_committee_label"] == "보류"
+    assert combined.loc[0, "retry_attempt"] == 1
+    assert combined.loc[1, "final_committee_label"] == "적격"
+    assert reports == [
+        {
+            "attempt": 1,
+            "failed_rows_before": 1,
+            "retried_rows": 1,
+            "recovered_rows": 1,
+            "remaining_failed_rows": 0,
+            "workers": 1,
+            "artifact_paths": {
+                "samples": str(tmp_path / "retry_artifacts/retry_attempt_1_samples.csv"),
+                "results": str(tmp_path / "retry_artifacts/retry_attempt_1_results.csv"),
+            },
+        }
+    ]
+    assert (tmp_path / "retry_artifacts/retry_attempt_1_samples.csv").exists()
+    assert (tmp_path / "retry_artifacts/retry_attempt_1_results.csv").exists()
+
+
 def test_configure_runtime_sets_single_claude_agno_mode(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

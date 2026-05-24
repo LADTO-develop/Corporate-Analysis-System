@@ -121,6 +121,36 @@ def parse_args() -> argparse.Namespace:
             "when measuring true live API latency or prompt changes."
         ),
     )
+    parser.add_argument(
+        "--retry-failed-attempts",
+        type=int,
+        default=_default_retry_failed_attempts(),
+        help=(
+            "Retry only rows with operational failures, such as Stage 2 error messages, "
+            "empty final labels, or failed evidence collection. Default 0 keeps the "
+            "historical single-pass behavior."
+        ),
+    )
+    parser.add_argument(
+        "--retry-failed-workers",
+        type=int,
+        default=_default_retry_failed_workers(),
+        help="Worker count for retry passes. Use 1 to avoid API TPM bursts.",
+    )
+    parser.add_argument(
+        "--retry-failed-delay-seconds",
+        type=float,
+        default=_default_retry_failed_delay_seconds(),
+        help="Sleep before each retry pass to let provider rate limits cool down.",
+    )
+    parser.add_argument(
+        "--retry-failed-artifacts",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "Write retry sample/result CSVs under output_dir/retry_artifacts for audit."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -227,6 +257,129 @@ def run_batch(
     result = pd.DataFrame([row for row in rows if row is not None])
     result["batch_wall_time_seconds"] = round(time.perf_counter() - batch_started_at, 4)
     return result
+
+
+def retry_failed_cases(
+    batch: pd.DataFrame,
+    results: pd.DataFrame,
+    *,
+    use_sample_model_view: bool,
+    attempts: int,
+    workers: int = 1,
+    delay_seconds: float = 0.0,
+    output_dir: Path | None = None,
+    write_artifacts: bool = True,
+) -> tuple[pd.DataFrame, list[dict[str, Any]]]:
+    """Retry operationally failed rows and merge successful retry outputs by row position."""
+    retry_attempts = max(int(attempts), 0)
+    if retry_attempts <= 0 or batch.empty or results.empty:
+        return results, []
+
+    combined = results.reset_index(drop=True).copy()
+    original_batch = batch.reset_index(drop=True).copy()
+    reports: list[dict[str, Any]] = []
+
+    for attempt in range(1, retry_attempts + 1):
+        failed_positions = _failed_result_positions(combined)
+        if not failed_positions:
+            break
+        retry_batch = original_batch.iloc[failed_positions].reset_index(drop=True)
+        print(
+            "[Retry] "
+            f"attempt {attempt}/{retry_attempts}: "
+            f"rerunning {len(retry_batch)} failed row(s) with workers={workers}",
+            flush=True,
+        )
+        if delay_seconds > 0:
+            time.sleep(delay_seconds)
+        retry_results = run_batch(
+            retry_batch,
+            use_sample_model_view=use_sample_model_view,
+            workers=workers,
+        ).reset_index(drop=True)
+        artifacts = _write_retry_artifacts(
+            output_dir=output_dir,
+            attempt=attempt,
+            retry_batch=retry_batch,
+            retry_results=retry_results,
+            enabled=write_artifacts,
+        )
+
+        recovered_rows = 0
+        retry_failed_positions = set(_failed_result_positions(retry_results))
+        for retry_index, original_position in enumerate(failed_positions):
+            if retry_index >= len(retry_results):
+                continue
+            retry_row = retry_results.iloc[retry_index].copy()
+            retry_row["retry_attempt"] = attempt
+            combined.loc[original_position, retry_row.index] = retry_row
+            if retry_index not in retry_failed_positions:
+                recovered_rows += 1
+
+        remaining_failed = _failed_result_positions(combined)
+        reports.append(
+            {
+                "attempt": attempt,
+                "failed_rows_before": len(failed_positions),
+                "retried_rows": len(retry_batch),
+                "recovered_rows": recovered_rows,
+                "remaining_failed_rows": len(remaining_failed),
+                "workers": _bounded_worker_count(workers, len(retry_batch)),
+                "artifact_paths": artifacts,
+            }
+        )
+        if not remaining_failed:
+            break
+
+    return combined, reports
+
+
+def _failed_result_positions(results: pd.DataFrame) -> list[int]:
+    if results.empty:
+        return []
+    return [
+        index
+        for index, row in enumerate(results.to_dict(orient="records"))
+        if _result_needs_retry(row)
+    ]
+
+
+def _result_needs_retry(row: dict[str, Any]) -> bool:
+    if _non_empty(row.get("error_message")):
+        return True
+    if _non_empty(row.get("stage2_error_message")):
+        return True
+    if not _non_empty(row.get("final_committee_label")):
+        return True
+    if str(row.get("committee_effect") or "").strip() == "run_failed":
+        return True
+    if str(row.get("committee_review_safe_effect") or "").strip() == "run_failed":
+        return True
+    evidence_status = str(row.get("evidence_status") or "").strip().lower()
+    return evidence_status in {"error", "failed"}
+
+
+def _write_retry_artifacts(
+    *,
+    output_dir: Path | None,
+    attempt: int,
+    retry_batch: pd.DataFrame,
+    retry_results: pd.DataFrame,
+    enabled: bool,
+) -> dict[str, str]:
+    if not enabled or output_dir is None:
+        return {}
+    target_dir = output_dir if output_dir.is_absolute() else ROOT / output_dir
+    artifact_dir = target_dir / "retry_artifacts"
+    artifact_dir.mkdir(parents=True, exist_ok=True)
+    samples_path = artifact_dir / f"retry_attempt_{attempt}_samples.csv"
+    results_path = artifact_dir / f"retry_attempt_{attempt}_results.csv"
+    retry_batch.to_csv(samples_path, index=False, encoding="utf-8-sig", lineterminator="\n")
+    retry_results.to_csv(results_path, index=False, encoding="utf-8-sig", lineterminator="\n")
+    return {
+        "samples": _path_text(samples_path),
+        "results": _path_text(results_path),
+    }
 
 
 def _run_batch_case(
@@ -623,6 +776,33 @@ def _default_stage2_llm_cache() -> bool:
     return raw_value not in {"0", "false", "no", "off"}
 
 
+def _default_retry_failed_attempts() -> int:
+    raw_value = os.environ.get("CAS_COMMITTEE_BATCH_RETRY_FAILED_ATTEMPTS", "0").strip()
+    try:
+        attempts = int(raw_value)
+    except ValueError:
+        return 0
+    return min(max(attempts, 0), 5)
+
+
+def _default_retry_failed_workers() -> int:
+    raw_value = os.environ.get("CAS_COMMITTEE_BATCH_RETRY_FAILED_WORKERS", "1").strip()
+    try:
+        workers = int(raw_value)
+    except ValueError:
+        return 1
+    return max(workers, 1)
+
+
+def _default_retry_failed_delay_seconds() -> float:
+    raw_value = os.environ.get("CAS_COMMITTEE_BATCH_RETRY_FAILED_DELAY_SECONDS", "1.0").strip()
+    try:
+        delay = float(raw_value)
+    except ValueError:
+        return 1.0
+    return min(max(delay, 0.0), 120.0)
+
+
 def _bounded_worker_count(workers: int, row_count: int) -> int:
     if row_count <= 0:
         return 1
@@ -631,6 +811,17 @@ def _bounded_worker_count(workers: int, row_count: int) -> int:
 
 def _dict_value(value: object) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
+
+
+def _non_empty(value: object) -> bool:
+    if value is None:
+        return False
+    try:
+        if pd.isna(value):
+            return False
+    except (TypeError, ValueError):
+        pass
+    return bool(str(value).strip())
 
 
 def _provider_statuses(value: object) -> dict[str, object]:
@@ -655,25 +846,52 @@ def _evidence_titles(items: object, *, limit: int = 3) -> Iterable[str]:
     return titles
 
 
-def write_outputs(results: pd.DataFrame, *, output_dir: Path) -> None:
+def write_outputs(
+    results: pd.DataFrame,
+    *,
+    output_dir: Path,
+    retry_reports: list[dict[str, Any]] | None = None,
+) -> None:
     if not output_dir.is_absolute():
         output_dir = ROOT / output_dir
     output_dir.mkdir(parents=True, exist_ok=True)
     detail_path = output_dir / "committee_review_batch_results.csv"
     summary_path = output_dir / "committee_review_batch_summary.json"
     report_path = output_dir / "committee_review_batch_report.md"
-    results.to_csv(detail_path, index=False, encoding="utf-8-sig")
+    results.to_csv(detail_path, index=False, encoding="utf-8-sig", lineterminator="\n")
     summary = _summary(results)
+    if retry_reports:
+        summary["retry"] = _retry_summary(results, retry_reports)
     summary["paths"] = {
-        "details": str(detail_path.relative_to(ROOT)),
-        "summary": str(summary_path.relative_to(ROOT)),
-        "report": str(report_path.relative_to(ROOT)),
+        "details": _path_text(detail_path),
+        "summary": _path_text(summary_path),
+        "report": _path_text(report_path),
     }
     summary_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
     report_path.write_text(_report(results, summary), encoding="utf-8")
     print(f"[Saved] {detail_path}")
     print(f"[Saved] {summary_path}")
     print(f"[Saved] {report_path}")
+
+
+def _retry_summary(
+    results: pd.DataFrame, retry_reports: list[dict[str, Any]]
+) -> dict[str, Any]:
+    final_failed_rows = len(_failed_result_positions(results))
+    return {
+        "attempts_run": len(retry_reports),
+        "initial_failed_rows": retry_reports[0]["failed_rows_before"] if retry_reports else 0,
+        "final_failed_rows": final_failed_rows,
+        "total_recovered_rows": sum(int(report.get("recovered_rows", 0)) for report in retry_reports),
+        "attempts": retry_reports,
+    }
+
+
+def _path_text(path: Path) -> str:
+    try:
+        return str(path.relative_to(ROOT))
+    except ValueError:
+        return str(path)
 
 
 def _summary(results: pd.DataFrame) -> dict[str, Any]:
@@ -758,6 +976,7 @@ def _report(results: pd.DataFrame, summary: dict[str, Any]) -> str:
             f"- Rows: {summary['rows']}",
             f"- Strict committee success rate: {summary['success_rate']:.1%}",
             f"- Review-safe success rate: {summary['review_safe_success_rate']:.1%}",
+            _retry_report_line(summary),
             _speed_report_line(summary),
             _stage2_speed_report_line(summary),
             "",
@@ -805,6 +1024,19 @@ def _stage2_speed_report_line(summary: dict[str, Any]) -> str:
     )
 
 
+def _retry_report_line(summary: dict[str, Any]) -> str:
+    retry = summary.get("retry")
+    if not isinstance(retry, dict):
+        return "- Retry: not enabled"
+    return (
+        "- Retry: "
+        f"attempts `{retry.get('attempts_run')}`, "
+        f"initial failed rows `{retry.get('initial_failed_rows')}`, "
+        f"recovered `{retry.get('total_recovered_rows')}`, "
+        f"final failed rows `{retry.get('final_failed_rows')}`"
+    )
+
+
 def main() -> None:
     load_dotenv(ROOT / ".env")
     args = parse_args()
@@ -828,7 +1060,17 @@ def main() -> None:
         use_sample_model_view=args.use_sample_model_view,
         workers=args.workers,
     )
-    write_outputs(results, output_dir=args.output_dir)
+    results, retry_reports = retry_failed_cases(
+        batch,
+        results,
+        use_sample_model_view=args.use_sample_model_view,
+        attempts=args.retry_failed_attempts,
+        workers=args.retry_failed_workers,
+        delay_seconds=args.retry_failed_delay_seconds,
+        output_dir=args.output_dir,
+        write_artifacts=args.retry_failed_artifacts,
+    )
+    write_outputs(results, output_dir=args.output_dir, retry_reports=retry_reports)
 
 
 if __name__ == "__main__":

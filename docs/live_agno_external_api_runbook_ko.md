@@ -55,12 +55,54 @@ Agno Stage 2 preflight passed.
   --stage2-model-provider openai \
   --stage2-model gpt-4.1-mini \
   --no-stage2-llm-cache \
-  --workers 2
+  --workers 2 \
+  --retry-failed-attempts 2 \
+  --retry-failed-workers 1 \
+  --retry-failed-delay-seconds 2
 ```
 
 외부 뉴스/공시 수집까지 함께 켤 때는 `OPENDART_API_KEY`, `NAVER_CLIENT_ID`, `NAVER_CLIENT_SECRET`, `TAVILY_API_KEY`를 `.env`에 설정한 뒤 `--live-external-evidence`를 추가한다.
 
 OpenAI/Claude Agno 호출 지연 outlier를 줄일 때는 `CAS_STAGE2_AGENT_TIMEOUT_SECONDS`를 설정한다. 이 값은 개별 agent HTTP 요청 timeout이며, timeout 또는 일시 오류가 나면 `CAS_STAGE2_AGENT_RETRIES` 횟수만큼 CAS retry 루프가 다시 시도한다. provider SDK 내부 재시도와 CAS 재시도가 겹치면 지연시간이 길어질 수 있으므로, 속도 측정에서는 `CAS_STAGE2_PROVIDER_MAX_RETRIES=0`을 권장한다. timeout을 끄려면 `CAS_STAGE2_AGENT_TIMEOUT_SECONDS=0` 또는 `off`를 사용한다.
+
+## API 실패행 자동 재시도
+
+`run_committee_review_evaluation_batch.py`는 배치 1차 실행 후 실패행만 자동 재시도할 수 있다.
+재시도 대상은 다음 중 하나에 해당하는 행이다.
+
+- `error_message`가 있는 행
+- `stage2_error_message`가 있는 행
+- 최종 위원회 라벨이 비어 있는 행
+- `committee_effect` 또는 `committee_review_safe_effect`가 `run_failed`인 행
+- 외부근거 수집 전체 상태가 `error` 또는 `failed`인 행
+
+권장 설정은 본 실행은 병렬로 돌리고, 재시도는 API TPM burst를 피하기 위해 `workers=1`로
+낮추는 방식이다.
+
+```bash
+/opt/anaconda3/envs/aura/bin/python scripts/run_committee_review_evaluation_batch.py \
+  --samples data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents/committee_review_mixed_hard_40_timeout30_speed_gate_v3_samples.csv \
+  --output-dir data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents/committee_review_mixed_hard_40_agno_openai_live_with_retry \
+  --policy mixed_hard_40_timeout30_speed_gate_v3 \
+  --per-category 12 \
+  --max-cases 40 \
+  --live-external-evidence \
+  --stage2-runner agno \
+  --stage2-agno-mode single \
+  --stage2-model-provider openai \
+  --stage2-model gpt-4.1-mini \
+  --no-stage2-llm-cache \
+  --workers 4 \
+  --retry-failed-attempts 2 \
+  --retry-failed-workers 1 \
+  --retry-failed-delay-seconds 2
+```
+
+최종 `committee_review_batch_results.csv`는 재시도 성공행이 병합된 combined 결과다.
+재시도된 행에는 `retry_attempt` 컬럼이 채워진다. 감사 추적용 원본 재시도 샘플과
+재시도 결과는 `output_dir/retry_artifacts/retry_attempt_N_samples.csv`,
+`output_dir/retry_artifacts/retry_attempt_N_results.csv`에 남는다. 불필요하면
+`--no-retry-failed-artifacts`를 붙인다.
 
 OpenDART 공시 분류는 `external_evidence_v6` 캐시 버전을 사용한다. 이 버전부터
 소송/계약해지/자금조달/거래정지 공시를 모두 같은 위험으로 보지 않고,
