@@ -54,6 +54,41 @@ COMMITTEE_SIGNAL_METRIC_GUIDE = [
     },
 ]
 
+COMMITTEE_HOLD_SUBTYPE_GUIDE = [
+    {
+        "label": "위험 보류",
+        "signal": "위험신호 있음",
+        "tone": "risk",
+        "title": "위험 보류",
+        "body": "외부근거와 재무 스트레스가 위험 쪽으로 맞물려, 적격으로 넘기기 어려운 보류입니다.",
+        "action": "소송, 자금조달, 거래정지, 현금흐름 악화처럼 손실로 이어질 수 있는 근거를 먼저 확인합니다.",
+    },
+    {
+        "label": "확인필요 보류",
+        "signal": "위험신호 아님",
+        "tone": "warning",
+        "title": "확인필요 보류",
+        "body": "보류는 유지하지만 빨간 위험 경고까지는 아닙니다. 근거의 직접성이나 최신성이 더 필요합니다.",
+        "action": "단일 medium 공시나 키워드성 뉴스가 실제 부실 신호인지, 기준일 이전 근거인지 확인합니다.",
+    },
+    {
+        "label": "과민경고 완화 보류",
+        "signal": "위험신호 아님",
+        "tone": "mitigate",
+        "title": "과민경고 완화",
+        "body": "1차 모델 경고를 바로 부적격으로 확정하지 않고, 방어 재무나 약한 외부근거를 반영해 낮춘 상태입니다.",
+        "action": "유동성, 자본, 영업현금흐름이 방어적인지와 치명 공시 부재가 완화 근거로 충분한지 봅니다.",
+    },
+    {
+        "label": "경계등급 보류",
+        "signal": "위험신호 아님",
+        "tone": "neutral",
+        "title": "경계등급 보류",
+        "body": "등급이나 확률이 기준선 근처라 판단을 세게 내리기보다 관찰로 남긴 보류입니다.",
+        "action": "BBB-/BB+ 경계, 확률 기준선 근접, 최근 등급 방향을 함께 확인합니다.",
+    },
+]
+
 
 def render_committee_signal_guide(
     *,
@@ -129,6 +164,56 @@ def render_committee_signal_guide(
             (f"<div class='committee-signal-guide'>{''.join(guide_cards)}</div>"),
             unsafe_allow_html=True,
         )
+
+
+def render_committee_hold_subtype_guide(
+    *,
+    decision_type_label: str,
+    risk_signal: bool,
+    renderers: CommitteePanelRenderers,
+) -> None:
+    """Show how Stage 2 hold subtypes differ from each other."""
+    st.markdown("#### 보류 유형 구분")
+    st.caption(
+        "Stage 2는 보류를 한 덩어리로 보지 않고, 위험을 올린 보류와 경고를 완화한 보류를 "
+        "분리해서 보여줍니다."
+    )
+    cards = []
+    normalized_decision = str(decision_type_label or "").strip()
+    for info in COMMITTEE_HOLD_SUBTYPE_GUIDE:
+        label = str(info["label"])
+        active = label == normalized_decision
+        signal = "위험신호 있음" if active and risk_signal else str(info["signal"])
+        current_badge = (
+            "<span class='committee-signal-current-badge'>현재 유형</span>" if active else ""
+        )
+        cards.append(
+            "<div class='committee-signal-card "
+            f"{escape(str(info['tone']))}{' active' if active else ''}'>"
+            f"{current_badge}"
+            "<div class='committee-signal-eyebrow'>보류 세분화</div>"
+            f"<div class='committee-signal-title'>{escape(str(info['title']))}</div>"
+            f"{renderers.render_decision_badge(signal)}"
+            f"<div class='committee-signal-body' style='margin-top:0.55rem;'>"
+            f"{escape(str(info['body']))}"
+            "</div>"
+            f"<div class='committee-signal-action'>{escape(str(info['action']))}</div>"
+            "</div>"
+        )
+
+    st.markdown(
+        (
+            "<div class='committee-signal-guide' "
+            "style='grid-template-columns:repeat(auto-fit,minmax(220px,1fr));'>"
+            f"{''.join(cards)}"
+            "</div>"
+        ),
+        unsafe_allow_html=True,
+    )
+    st.caption(
+        "발표 화면에서는 이 줄만 봐도 에이전트가 위험을 키운 건지, 보류만 유지한 건지, "
+        "아니면 모델 경고를 완화한 건지 바로 구분할 수 있습니다."
+    )
 
 
 def render_committee_metric_guide() -> None:

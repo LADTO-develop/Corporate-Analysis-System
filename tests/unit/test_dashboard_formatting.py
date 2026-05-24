@@ -8,6 +8,11 @@ import pandas as pd
 
 from cas.dashboard.chart_data import finite_chart_frame, finite_float_or_none
 from cas.dashboard.committee_copy import committee_decision_type_info
+from cas.dashboard.evidence_panel import (
+    _external_evidence_items_frame,
+    _external_evidence_materiality_basis,
+    _external_materiality_summary,
+)
 from cas.dashboard.formatting import COVERAGE_CAP_LABEL, format_ratio_value
 from cas.dashboard.labels import (
     format_stage2_risk_band,
@@ -73,3 +78,97 @@ def test_chart_numeric_helpers_drop_non_finite_values() -> None:
 
     assert frame["label"].tolist() == ["valid"]
     assert frame["값"].tolist() == [1.25]
+
+
+def test_external_evidence_table_exposes_materiality_context() -> None:
+    snapshot = {
+        "items": [
+            {
+                "source": "opendart",
+                "title": "주요사항보고서(유상증자결정)",
+                "company_match": True,
+                "evidence_quality": "high",
+                "reliability": "high",
+                "materiality_ratio": 0.155,
+                "materiality_basis": "발행금액/자기자본: 15.50%",
+                "dilution_ratio": 0.2123,
+                "dilution_basis": "희석률: 21.23%",
+                "disclosure_materiality": "substantive_adverse",
+                "disclosure_event_class": "material_financing",
+            },
+            {
+                "source": "opendart",
+                "title": "타인에대한채무보증결정",
+                "company_match": True,
+                "evidence_quality": "medium",
+                "reliability": "high",
+                "materiality_ratio": "0.1490",
+                "materiality_basis": "채무보증금액/자기자본: 14.90%",
+                "disclosure_materiality": "substantive_adverse",
+                "disclosure_event_class": "material_debt_guarantee",
+            },
+            {
+                "source": "opendart",
+                "title": "단일판매공급계약해지",
+                "company_match": True,
+                "evidence_quality": "medium",
+                "reliability": "medium",
+                "materiality_ratio": "0.0240",
+                "materiality_basis": "계약해지금액/매출액: 2.40%",
+                "disclosure_materiality": "procedural_or_one_off",
+                "disclosure_event_class": "low_materiality_contract_cancellation",
+            },
+        ]
+    }
+
+    frame = _external_evidence_items_frame(snapshot)
+
+    assert "상세 중요도" in frame.columns
+    assert "중요도 단계" in frame.columns
+    assert "공시 성격" in frame.columns
+    assert "희석률: 21.23%" in frame.loc[0, "상세 중요도"]
+    assert frame.loc[1, "상세 중요도"] == "채무보증금액/자기자본: 14.90%"
+    assert frame.loc[2, "중요도 단계"] == "절차/일회성"
+
+
+def test_external_materiality_summary_highlights_scale_and_event_type() -> None:
+    financing_item = {
+        "source": "opendart",
+        "title": "주요사항보고서(유상증자결정)",
+        "materiality_ratio": 0.155,
+        "materiality_basis": "발행금액/자기자본: 15.50%",
+        "dilution_ratio": 0.2123,
+        "dilution_basis": "희석률: 21.23%",
+        "disclosure_materiality": "substantive_adverse",
+        "disclosure_event_class": "material_financing",
+    }
+    snapshot = {
+        "items": [
+            financing_item,
+            {
+                "source": "opendart",
+                "title": "타인에대한채무보증결정",
+                "materiality_ratio": "0.1490",
+                "materiality_basis": "채무보증금액/자기자본: 14.90%",
+                "disclosure_materiality": "substantive_adverse",
+                "disclosure_event_class": "material_debt_guarantee",
+            },
+            {
+                "source": "opendart",
+                "title": "단일판매공급계약해지",
+                "materiality_ratio": "0.0240",
+                "materiality_basis": "계약해지금액/매출액: 2.40%",
+                "disclosure_materiality": "procedural_or_one_off",
+                "disclosure_event_class": "low_materiality_contract_cancellation",
+            },
+        ]
+    }
+
+    summary = _external_materiality_summary(snapshot)
+
+    assert _external_evidence_materiality_basis(financing_item).endswith("희석률: 21.23%")
+    assert summary["has_materiality"] is True
+    assert "희석률: 21.23%" in str(summary["max_basis"])
+    assert summary["substantive_count"] == 2
+    assert summary["watch_or_low_count"] == 1
+    assert "중요 자금조달" in str(summary["top_events"])

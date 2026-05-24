@@ -48,6 +48,7 @@ from cas.dashboard.committee_panel import (
     CommitteePanelRenderers,
     render_committee_decision_trace,
     render_committee_full_review,
+    render_committee_hold_subtype_guide,
     render_committee_key_highlights,
     render_committee_loading_state,
     render_committee_metric_guide,
@@ -3285,6 +3286,11 @@ def render_committee_view_tab(
             final_memo=final_memo,
             risk_items=highlight_risk_items,
             mitigation_items=highlight_mitigation_items,
+            renderers=committee_panel_renderers,
+        )
+        render_committee_hold_subtype_guide(
+            decision_type_label=committee_decision_type_label,
+            risk_signal=committee_risk_signal,
             renderers=committee_panel_renderers,
         )
 
