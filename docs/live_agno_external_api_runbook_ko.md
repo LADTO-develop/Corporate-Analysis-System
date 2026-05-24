@@ -217,3 +217,11 @@ Agno/OpenAI live batch는 deterministic guardrail보다 느리다. 실제 대시
 - `stage2_secondary_trigger=True`
 - `stage2_review_priority`가 `medium` 또는 `high`
 - 직접 관련 외부근거에서 치명 리스크 후보가 확인됨
+
+대시보드에서는 이 원칙을 UI 실행 경로에도 적용한다. `위원회 검토` 탭은 먼저
+deterministic Stage 2 결과를 즉시 표시하고, Agno/OpenAI와 외부 뉴스·공시 API는
+`Agno 실행` 버튼을 눌렀을 때 백그라운드 작업으로 실행한다. 완료된 결과는
+기업-회계연도-모델/runner 설정-외부근거 스냅샷 기준으로 캐시되어 같은 기업을 다시
+열 때 API를 재호출하지 않는다. 기본값 `CAS_DASHBOARD_STAGE2_TRIGGER_ONLY=1`은 위
+트리거가 있는 기업만 live Agno로 보내며, 운영 점검에서 모든 선택 기업을 강제로
+돌리려면 `CAS_DASHBOARD_STAGE2_TRIGGER_ONLY=0`을 사용한다.

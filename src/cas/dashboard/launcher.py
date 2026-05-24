@@ -78,7 +78,7 @@ def parse_args() -> argparse.Namespace:
         "--stage2-runner",
         choices=("deterministic", "agno"),
         default=None,
-        help="Override the Stage 2 runner used by dashboard committee previews.",
+        help="Override the Stage 2 runner used by dashboard committee previews and live Agno jobs.",
     )
     parser.add_argument(
         "--stage2-model",
@@ -89,9 +89,7 @@ def parse_args() -> argparse.Namespace:
         "--stage2-agno-mode",
         choices=("single", "multi_llm_committee"),
         default=None,
-        help=(
-            "Route Agno Stage 2 through one provider or Claude/GPT/Gemini committee mode."
-        ),
+        help=("Route Agno Stage 2 through one provider or Claude/GPT/Gemini committee mode."),
     )
     parser.add_argument(
         "--stage2-model-provider",

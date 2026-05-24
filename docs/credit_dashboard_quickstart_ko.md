@@ -10,6 +10,7 @@
 - 동종업계 및 시장 중앙값 비교
 - 산업별 집계와 연도별 추이 확인
 - 시나리오 기반 가정값 조정
+- 빠른 deterministic 2차 위원회 검토와 선택형 Agno live 검토
 - OpenAI API 기반 AI 심사 요약 생성
 - 보고서형/원페이지형 HTML 및 Markdown 내보내기
 
@@ -51,6 +52,25 @@ cd Corporate-Analysis-System
 ```bash
 /opt/anaconda3/envs/aura/bin/python scripts/run_credit_dashboard.py --rebuild-artifacts
 ```
+
+Agno live 2차 검토까지 로컬에서 켜고 싶으면 `.env`에 `OPENAI_API_KEY`,
+외부 근거 수집용 API 키를 넣은 뒤 아래처럼 실행합니다.
+
+```bash
+/opt/anaconda3/envs/aura/bin/python scripts/run_credit_dashboard.py \
+  --stage2-runner agno \
+  --stage2-model-provider openai \
+  --stage2-model gpt-4.1-mini \
+  --stage2-agno-mode single
+```
+
+이 모드에서도 `위원회 검토` 탭은 먼저 deterministic 결과를 즉시 표시합니다.
+Agno와 외부 뉴스/공시 수집은 `Agno 실행` 버튼을 누를 때 백그라운드에서 돌고,
+완료되면 기업-회계연도-모델-외부근거 기준 캐시로 저장됩니다. 기본값은
+`CAS_DASHBOARD_STAGE2_TRIGGER_ONLY=1`이라 2차 검토 트리거가 있는 기업만 live
+Agno로 보내며, 모든 선택 기업에서 강제로 live 실행을 확인하려면 이 값을 `0`으로
+설정합니다. 동시에 실행할 live 작업 수는 `CAS_DASHBOARD_STAGE2_ASYNC_WORKERS`
+환경변수로 조정할 수 있습니다.
 
 실행 후 브라우저에서 아래와 같은 로컬 주소로 접속하면 됩니다.
 - `http://localhost:8501`
