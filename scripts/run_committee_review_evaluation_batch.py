@@ -147,9 +147,7 @@ def parse_args() -> argparse.Namespace:
         "--retry-failed-artifacts",
         action=argparse.BooleanOptionalAction,
         default=True,
-        help=(
-            "Write retry sample/result CSVs under output_dir/retry_artifacts for audit."
-        ),
+        help=("Write retry sample/result CSVs under output_dir/retry_artifacts for audit."),
     )
     return parser.parse_args()
 
@@ -607,9 +605,7 @@ def _result_row(
         "stage2_evidence_audit_elapsed_seconds": stage2_agent_timings.get("evidence_audit"),
         "stage2_chair_report_elapsed_seconds": stage2_agent_timings.get("chair_report"),
         "stage2_review_qa_elapsed_seconds": stage2_agent_timings.get("review_qa"),
-        "stage2_risk_recall_qa_elapsed_seconds": stage2_agent_timings.get(
-            "risk_recall_qa"
-        ),
+        "stage2_risk_recall_qa_elapsed_seconds": stage2_agent_timings.get("risk_recall_qa"),
         "stage2_parallel_independent_agents": bool(
             stage2_runtime.get("parallel_independent_agents", False)
         ),
@@ -939,15 +935,15 @@ def write_outputs(
     print(f"[Saved] {report_path}")
 
 
-def _retry_summary(
-    results: pd.DataFrame, retry_reports: list[dict[str, Any]]
-) -> dict[str, Any]:
+def _retry_summary(results: pd.DataFrame, retry_reports: list[dict[str, Any]]) -> dict[str, Any]:
     final_failed_rows = len(_failed_result_positions(results))
     return {
         "attempts_run": len(retry_reports),
         "initial_failed_rows": retry_reports[0]["failed_rows_before"] if retry_reports else 0,
         "final_failed_rows": final_failed_rows,
-        "total_recovered_rows": sum(int(report.get("recovered_rows", 0)) for report in retry_reports),
+        "total_recovered_rows": sum(
+            int(report.get("recovered_rows", 0)) for report in retry_reports
+        ),
         "attempts": retry_reports,
     }
 

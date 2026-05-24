@@ -503,10 +503,7 @@ def test_review_qa_advisory_downgrades_watch_context_only_risk_hold() -> None:
     assert adjusted["committee_decision_type"] == "boundary_hold"
     assert adjusted["committee_risk_signal"] is False
     assert runtime["review_qa_advisory_applied"] is True
-    assert (
-        runtime["review_qa_advisory_apply_reason"]
-        == "watch_context_only_risk_hold_override"
-    )
+    assert runtime["review_qa_advisory_apply_reason"] == "watch_context_only_risk_hold_override"
 
 
 def test_review_qa_advisory_keeps_substantive_external_risk_hold() -> None:
@@ -698,13 +695,10 @@ def test_review_qa_advisory_downgrades_reject_with_watch_context_only_evidence(
     assert adjusted["committee_risk_signal"] is False
     assert adjusted["decision_trace"][-1]["gate"] == "review_qa_reject_adjustment"
     assert runtime["review_qa_advisory_applied"] is True
-    assert (
-        runtime["review_qa_advisory_apply_reason"]
-        in {
-            "review_qa_reject_watch_context_only_override",
-            "review_qa_reject_defensive_boundary_override",
-        }
-    )
+    assert runtime["review_qa_advisory_apply_reason"] in {
+        "review_qa_reject_watch_context_only_override",
+        "review_qa_reject_defensive_boundary_override",
+    }
 
 
 def test_review_qa_advisory_keeps_reject_with_substantive_external_risk() -> None:
@@ -1106,10 +1100,7 @@ def test_risk_recall_qa_advisory_escalates_eligible_to_boundary_hold() -> None:
     assert adjusted["committee_risk_signal"] is False
     assert adjusted["decision_trace"][-1]["gate"] == "risk_recall_qa_escalation"
     assert runtime["risk_recall_qa_advisory_applied"] is True
-    assert (
-        runtime["risk_recall_qa_advisory_apply_reason"]
-        == "risk_recall_boundary_safety_review"
-    )
+    assert runtime["risk_recall_qa_advisory_apply_reason"] == "risk_recall_boundary_safety_review"
 
 
 def test_risk_recall_qa_advisory_escalates_substantive_external_risk_to_risk_hold() -> None:
@@ -1172,6 +1163,5 @@ def test_risk_recall_qa_advisory_escalates_substantive_external_risk_to_risk_hol
     assert adjusted["committee_risk_signal"] is True
     assert runtime["risk_recall_qa_advisory_applied"] is True
     assert (
-        runtime["risk_recall_qa_advisory_apply_reason"]
-        == "risk_recall_substantive_external_risk"
+        runtime["risk_recall_qa_advisory_apply_reason"] == "risk_recall_substantive_external_risk"
     )

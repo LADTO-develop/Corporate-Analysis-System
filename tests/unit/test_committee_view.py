@@ -645,9 +645,7 @@ def test_committee_view_holds_secondary_radar_case_with_negative_cashflow() -> N
 
     assert committee_view["final_committee_label"] == "보류"
     assert committee_view["committee_decision_type"] == "boundary_hold"
-    assert "정상기업 과잉 보류 방어 guardrail" not in " ".join(
-        committee_view["mitigating_factors"]
-    )
+    assert "정상기업 과잉 보류 방어 guardrail" not in " ".join(committee_view["mitigating_factors"])
 
 
 def test_committee_view_keeps_cashflow_backed_current_ratio_watch_eligible() -> None:
@@ -1307,9 +1305,7 @@ def test_committee_view_blocks_overhold_guardrail_for_repeated_financing(
     assert committee_view["final_committee_label"] == "보류"
     assert committee_view["committee_decision_type"] == "risk_hold"
     assert committee_view["committee_risk_signal"] is True
-    assert "정상기업 과잉 보류 방어 guardrail" not in " ".join(
-        committee_view["mitigating_factors"]
-    )
+    assert "정상기업 과잉 보류 방어 guardrail" not in " ".join(committee_view["mitigating_factors"])
     assert conflicting_chair_memo not in committee_view["final_review_memo"]
 
 
@@ -1364,9 +1360,7 @@ def test_committee_view_holds_secondary_radar_case_with_profitability_stress() -
 
     assert committee_view["final_committee_label"] == "보류"
     assert committee_view["committee_decision_type"] == "boundary_hold"
-    assert "정상기업 과잉 보류 방어 guardrail" not in " ".join(
-        committee_view["mitigating_factors"]
-    )
+    assert "정상기업 과잉 보류 방어 guardrail" not in " ".join(committee_view["mitigating_factors"])
 
 
 def test_committee_view_appends_informative_chair_report_memo() -> None:

@@ -256,7 +256,10 @@ def _validate_agent_order(agents: list[AgentOutput]) -> None:
         ("risk_recall_qa",),
         ("review_qa", "risk_recall_qa"),
     }
-    if actual_roles[:required_count] != STAGE2_AGENT_ROLES or optional_suffix not in allowed_suffixes:
+    if (
+        actual_roles[:required_count] != STAGE2_AGENT_ROLES
+        or optional_suffix not in allowed_suffixes
+    ):
         expected = ", ".join(STAGE2_AGENT_ROLES)
         actual = ", ".join(actual_roles)
         raise ValueError(
@@ -268,8 +271,8 @@ def _validate_agent_order(agents: list[AgentOutput]) -> None:
 def _chair_summary(agents: list[AgentOutput]) -> str:
     for agent in agents:
         if agent.role == "chair_report":
-            return agent.summary
-    return agents[-1].summary if agents else ""
+            return str(agent.summary)
+    return str(agents[-1].summary) if agents else ""
 
 
 def _maybe_run_review_qa(
@@ -640,7 +643,10 @@ def _append_sentence(base: str, sentence: str) -> str:
 
 
 def _prepend_unique_text(raw_items: object, item: str) -> list[str]:
-    existing = [str(value) for value in raw_items or [] if str(value)]
+    if isinstance(raw_items, list | tuple | set):
+        existing = [str(value) for value in raw_items if str(value)]
+    else:
+        existing = []
     return [item, *[value for value in existing if value != item]]
 
 
@@ -715,9 +721,7 @@ def _has_ambiguous_external_evidence(news_cache: dict[str, Any]) -> bool:
     for item in raw_items:
         if not isinstance(item, dict):
             continue
-        text = " ".join(
-            str(item.get(key) or "") for key in ("title", "summary", "description")
-        )
+        text = " ".join(str(item.get(key) or "") for key in ("title", "summary", "description"))
         if any(marker in text for marker in markers):
             return True
     return False
@@ -776,9 +780,7 @@ def _run_review_qa_agent_with_cache(
         return review_qa, {
             "review_qa_cache_hit": True,
             "review_qa_cache_key": cache_key,
-            "agent_elapsed_seconds": {
-                "review_qa": round(time.perf_counter() - started_at, 4)
-            },
+            "agent_elapsed_seconds": {"review_qa": round(time.perf_counter() - started_at, 4)},
         }
 
     review_module = import_module("cas.agents.nodes.tripletagents.review_qa_agent")
@@ -868,9 +870,7 @@ def _merge_review_qa_diagnostics(
         review_qa_diagnostics.get("review_qa_cache_hit", False)
     )
     if review_qa_diagnostics.get("review_qa_cache_key"):
-        runtime_diagnostics["review_qa_cache_key"] = review_qa_diagnostics[
-            "review_qa_cache_key"
-        ]
+        runtime_diagnostics["review_qa_cache_key"] = review_qa_diagnostics["review_qa_cache_key"]
 
 
 def _stage2_review_qa_provider() -> str:
@@ -934,9 +934,7 @@ def _maybe_run_risk_recall_qa(
         diagnostics,
         role="risk_recall_qa",
     )
-    runtime_diagnostics["risk_recall_qa_recommended_action"] = (
-        risk_recall_qa.recommended_action
-    )
+    runtime_diagnostics["risk_recall_qa_recommended_action"] = risk_recall_qa.recommended_action
     return risk_recall_qa
 
 
@@ -1073,17 +1071,13 @@ def _risk_recall_qa_trigger_reasons(
     if len(weak_axes) >= 3:
         reasons.append("eligible_with_multiple_weak_financial_axes")
     if has_watch_evidence and (
-        (near_threshold and len(weak_axes) >= 2)
-        or len(weak_axes) >= 3
-        or has_substantive_evidence
+        (near_threshold and len(weak_axes) >= 2) or len(weak_axes) >= 3 or has_substantive_evidence
     ):
         reasons.append("eligible_with_recall_watch_evidence")
     if has_substantive_evidence:
         reasons.append("eligible_with_substantive_evidence")
     if has_boundary_context and (
-        (near_threshold and len(weak_axes) >= 2)
-        or len(weak_axes) >= 3
-        or has_substantive_evidence
+        (near_threshold and len(weak_axes) >= 2) or len(weak_axes) >= 3 or has_substantive_evidence
     ):
         reasons.append("eligible_boundary_rating_context")
     return reasons[:5]
@@ -1112,9 +1106,7 @@ def _risk_recall_weak_financial_axes(bundle: Stage2InputBundle) -> list[str]:
         or _truthy(row.get("is_2y_consecutive_ocf_deficit"))
     ):
         axes.append("weak_cashflow")
-    if _metric_below_value(row, "interest_coverage_ratio", 1.0) or _truthy(
-        row.get("icr_under_1")
-    ):
+    if _metric_below_value(row, "interest_coverage_ratio", 1.0) or _truthy(row.get("icr_under_1")):
         axes.append("weak_interest_coverage")
     if _metric_above_value(row, "debt_ratio", 2.0):
         axes.append("high_debt_ratio")
@@ -1235,9 +1227,7 @@ def _is_uncorroborated_material_financing_or_guarantee_item(
         return False
     if not source_feature_row:
         return False
-    return not _material_financing_or_guarantee_has_financial_corroboration(
-        source_feature_row
-    )
+    return not _material_financing_or_guarantee_has_financial_corroboration(source_feature_row)
 
 
 def _is_material_financing_or_guarantee_item(item: dict[str, Any]) -> bool:
@@ -1286,8 +1276,7 @@ def _material_financing_or_guarantee_has_financial_corroboration(
         or _metric_below_value(row, "ocf_to_total_liabilities", 0.0)
         or _metric_below_value(row, "ocf_to_sales", 0.0)
         or _truthy(row.get("is_2y_consecutive_ocf_deficit")),
-        _metric_below_value(row, "interest_coverage_ratio", 1.0)
-        or _truthy(row.get("icr_under_1")),
+        _metric_below_value(row, "interest_coverage_ratio", 1.0) or _truthy(row.get("icr_under_1")),
         _metric_below_value(row, "net_margin", -0.10)
         or _truthy(row.get("is_2y_consecutive_operating_loss")),
         _metric_below_value(row, "equity_ratio", 0.25)
@@ -1412,9 +1401,7 @@ def _run_risk_recall_qa_agent_with_cache(
         return risk_recall_qa, {
             "risk_recall_qa_cache_hit": True,
             "risk_recall_qa_cache_key": cache_key,
-            "agent_elapsed_seconds": {
-                "risk_recall_qa": round(time.perf_counter() - started_at, 4)
-            },
+            "agent_elapsed_seconds": {"risk_recall_qa": round(time.perf_counter() - started_at, 4)},
         }
 
     review_module = import_module("cas.agents.nodes.tripletagents.risk_recall_qa_agent")
@@ -1445,9 +1432,7 @@ def _run_risk_recall_qa_agent_with_cache(
     return risk_recall_qa, {
         "risk_recall_qa_cache_hit": False,
         "risk_recall_qa_cache_key": cache_key,
-        "agent_elapsed_seconds": {
-            "risk_recall_qa": round(time.perf_counter() - started_at, 4)
-        },
+        "agent_elapsed_seconds": {"risk_recall_qa": round(time.perf_counter() - started_at, 4)},
     }
 
 
@@ -1504,9 +1489,7 @@ def _merge_post_committee_qa_diagnostics(
             current_total + qa_elapsed_seconds,
             4,
         )
-    runtime_diagnostics[f"{role}_cache_hit"] = bool(
-        qa_diagnostics.get(f"{role}_cache_hit", False)
-    )
+    runtime_diagnostics[f"{role}_cache_hit"] = bool(qa_diagnostics.get(f"{role}_cache_hit", False))
     if qa_diagnostics.get(f"{role}_cache_key"):
         runtime_diagnostics[f"{role}_cache_key"] = qa_diagnostics[f"{role}_cache_key"]
 

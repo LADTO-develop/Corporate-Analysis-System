@@ -154,9 +154,11 @@ def build_committee_view_model(
         veto_triggered=veto_triggered,
         hidden_tail_risk=hidden_tail_risk,
     )
-    if prior_boundary_reason and (
-        committee_label == "부적격" or _prior_rating_boundary_requires_hold(bundle)
-    ) and not secondary_overhold_guardrail_reason:
+    if (
+        prior_boundary_reason
+        and (committee_label == "부적격" or _prior_rating_boundary_requires_hold(bundle))
+        and not secondary_overhold_guardrail_reason
+    ):
         committee_label = "보류"
     reject_confirmation = _reject_confirmation_assessment(
         bundle,
@@ -499,7 +501,10 @@ def _has_isolated_interest_cover_defense(bundle: Stage2InputBundle) -> bool:
 def _has_isolated_interest_cover_row_defense(row: dict[str, Any]) -> bool:
     """Return whether cash flow and low borrowings offset a single-year ICR dip."""
     return bool(
-        (_flag_is_true(row.get("icr_under_1")) or _metric_below(row, "interest_coverage_ratio", 1.0))
+        (
+            _flag_is_true(row.get("icr_under_1"))
+            or _metric_below(row, "interest_coverage_ratio", 1.0)
+        )
         and _metric_at_least(row, "current_ratio", 1.2)
         and _metric_at_least(row, "cash_ratio", 0.15)
         and _metric_at_least(row, "cashflow_coverage_ratio", 1.0)
@@ -515,8 +520,7 @@ def _has_isolated_interest_cover_row_defense(row: dict[str, Any]) -> bool:
 def _has_isolated_icr_review_buffer(row: dict[str, Any]) -> bool:
     """Downgrade risk display when an ICR dip is offset by OCF, capital, and low debt."""
     if not (
-        _flag_is_true(row.get("icr_under_1"))
-        or _metric_below(row, "interest_coverage_ratio", 1.0)
+        _flag_is_true(row.get("icr_under_1")) or _metric_below(row, "interest_coverage_ratio", 1.0)
     ):
         return False
     if _flag_is_true(row.get("is_2y_consecutive_operating_loss")) or _flag_is_true(
@@ -697,11 +701,14 @@ def _stable_prior_cashflow_overhold_guardrail_reason(bundle: Stage2InputBundle) 
 def _prior_rating_is_stable_investment_non_boundary(prior: dict[str, Any]) -> bool:
     if not prior or prior.get("has_prior_rating") is not True:
         return False
-    if str(prior.get("prior_rating_boundary_group") or "").strip() != "investment_grade_non_boundary":
+    if (
+        str(prior.get("prior_rating_boundary_group") or "").strip()
+        != "investment_grade_non_boundary"
+    ):
         return False
     rank = _safe_int(prior.get("prior_credit_rating_rank"))
     if rank is not None:
-        return rank <= 8
+        return bool(rank <= 8)
     rating = str(prior.get("prior_credit_rating") or "").strip().upper()
     return rating in {"AAA", "AA+", "AA", "AA-", "A+", "A", "A-", "BBB+"}
 
@@ -709,8 +716,7 @@ def _prior_rating_is_stable_investment_non_boundary(prior: dict[str, Any]) -> bo
 def _has_cashflow_backed_near_threshold_tn_defense(row: dict[str, Any]) -> bool:
     """Allow eligible alignment when a single ICR dip is offset by cash generation."""
     if not (
-        _flag_is_true(row.get("icr_under_1"))
-        or _metric_below(row, "interest_coverage_ratio", 1.0)
+        _flag_is_true(row.get("icr_under_1")) or _metric_below(row, "interest_coverage_ratio", 1.0)
     ):
         return False
     if _flag_is_true(row.get("is_2y_consecutive_operating_loss")) or _flag_is_true(
@@ -727,9 +733,8 @@ def _has_cashflow_backed_near_threshold_tn_defense(row: dict[str, Any]) -> bool:
         and _metric_at_least(row, "ocf_to_total_liabilities", 0.05)
         and _metric_at_least(row, "ocf_to_sales", 0.0)
     )
-    balance_or_borrowing_support = (
-        _metric_at_least(row, "cash_ratio", 0.05)
-        or _metric_at_most(row, "total_borrowings_ratio", 0.55)
+    balance_or_borrowing_support = _metric_at_least(row, "cash_ratio", 0.05) or _metric_at_most(
+        row, "total_borrowings_ratio", 0.55
     )
     return bool(cashflow_support and balance_or_borrowing_support)
 
@@ -1404,8 +1409,7 @@ def _high_risk_financing_evidence_count(
             and (
                 item.get("veto_candidate") is True
                 or item.get("critical_context_confirmed") is True
-                or str(item.get("provider_relevance", "")).lower()
-                in ADVERSE_PROVIDER_RELEVANCE
+                or str(item.get("provider_relevance", "")).lower() in ADVERSE_PROVIDER_RELEVANCE
                 or str(item.get("disclosure_severity", "")).lower() in {"adverse", "veto"}
             )
         )
@@ -1442,9 +1446,7 @@ def _is_uncorroborated_material_financing_or_guarantee_item(
         return False
     if not source_feature_row:
         return False
-    return not _material_financing_or_guarantee_has_financial_corroboration(
-        source_feature_row
-    )
+    return not _material_financing_or_guarantee_has_financial_corroboration(source_feature_row)
 
 
 def _hidden_tail_evidence_requires_risk_signal(
@@ -1465,9 +1467,7 @@ def _hidden_tail_evidence_requires_risk_signal(
             return True
     if _has_extreme_financial_distress_signal(source_feature_row):
         return True
-    return _material_financing_or_guarantee_has_severe_financial_corroboration(
-        source_feature_row
-    )
+    return _material_financing_or_guarantee_has_severe_financial_corroboration(source_feature_row)
 
 
 def _is_material_financing_or_guarantee_item(item: dict[str, Any]) -> bool:
@@ -2508,9 +2508,7 @@ def _final_review_memo(
     )
 
 
-def _chair_report_memo_seed(
-    agents: list[AgentOutput], *, committee_label: CommitteeLabel
-) -> str:
+def _chair_report_memo_seed(agents: list[AgentOutput], *, committee_label: CommitteeLabel) -> str:
     chair = next((agent for agent in agents if agent.role == "chair_report"), None)
     if chair is None:
         return ""
