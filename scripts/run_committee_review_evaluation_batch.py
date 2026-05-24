@@ -560,6 +560,7 @@ def _result_row(
     )
     provider_statuses = _provider_statuses(evidence.get("providers"))
     evidence_titles = _evidence_titles(evidence.get("items", []))
+    materiality_summary = _materiality_summary(evidence.get("items", []))
     decision_trace = _decision_trace_items(committee_view)
     trace_by_gate = _decision_trace_by_gate(decision_trace)
     result = {
@@ -662,6 +663,12 @@ def _result_row(
         "high_confidence_critical_count": evidence.get("high_confidence_critical_count"),
         "provider_statuses": json.dumps(provider_statuses, ensure_ascii=False, sort_keys=True),
         "top_evidence_titles": " / ".join(evidence_titles),
+        "materiality_event_count": materiality_summary["event_count"],
+        "materiality_substantive_count": materiality_summary["substantive_count"],
+        "materiality_watch_count": materiality_summary["watch_count"],
+        "materiality_max_ratio": materiality_summary["max_ratio"],
+        "materiality_top_basis": materiality_summary["top_basis"],
+        "materiality_event_classes": materiality_summary["event_classes"],
         "conflict_resolution": committee_view.get("conflict_resolution"),
         "final_review_memo": committee_view.get("final_review_memo"),
         "error_message": error_message,
@@ -846,6 +853,64 @@ def _evidence_titles(items: object, *, limit: int = 3) -> Iterable[str]:
     return titles
 
 
+def _materiality_summary(items: object) -> dict[str, object]:
+    if not isinstance(items, list):
+        return {
+            "event_count": 0,
+            "substantive_count": 0,
+            "watch_count": 0,
+            "max_ratio": "",
+            "top_basis": "",
+            "event_classes": "",
+        }
+
+    materiality_items: list[dict[str, object]] = []
+    for item in items:
+        if not isinstance(item, dict) or item.get("company_match") is not True:
+            continue
+        if not (
+            item.get("materiality_ratio") not in {None, ""}
+            or item.get("materiality_basis")
+            or item.get("disclosure_materiality")
+        ):
+            continue
+        materiality_items.append(item)
+
+    ratios: list[tuple[float, str]] = []
+    event_classes: list[str] = []
+    substantive_count = 0
+    watch_count = 0
+    for item in materiality_items:
+        event_class = str(item.get("disclosure_event_class") or "").strip()
+        if event_class and event_class not in event_classes:
+            event_classes.append(event_class)
+        materiality = str(item.get("disclosure_materiality") or "").strip().lower()
+        severity = str(item.get("disclosure_severity") or "").strip().lower()
+        if materiality == "substantive_adverse" or severity == "adverse":
+            substantive_count += 1
+        elif materiality in {"watch_context", "procedural_or_one_off"} or severity == "caution":
+            watch_count += 1
+        ratio = _safe_float(item.get("materiality_ratio"), default=-1.0)
+        if ratio >= 0:
+            ratios.append((ratio, str(item.get("materiality_basis") or "").strip()))
+
+    max_ratio = ""
+    top_basis = ""
+    if ratios:
+        ratio, basis = max(ratios, key=lambda pair: pair[0])
+        max_ratio = round(ratio, 4)
+        top_basis = basis
+
+    return {
+        "event_count": len(materiality_items),
+        "substantive_count": substantive_count,
+        "watch_count": watch_count,
+        "max_ratio": max_ratio,
+        "top_basis": top_basis,
+        "event_classes": " / ".join(event_classes[:6]),
+    }
+
+
 def write_outputs(
     results: pd.DataFrame,
     *,
@@ -947,6 +1012,16 @@ def _summary(results: pd.DataFrame) -> dict[str, Any]:
                     results.get("stage2_llm_cache_hit", pd.Series(dtype=bool)).fillna(False).sum()
                 ),
             }
+    if "materiality_event_count" in results.columns and len(results):
+        event_counts = pd.to_numeric(results["materiality_event_count"], errors="coerce").fillna(0)
+        max_ratios = pd.to_numeric(results.get("materiality_max_ratio"), errors="coerce")
+        summary["materiality"] = {
+            "rows_with_materiality_events": int((event_counts > 0).sum()),
+            "materiality_event_count_sum": int(event_counts.sum()),
+            "materiality_max_ratio": (
+                round(float(max_ratios.max()), 4) if not max_ratios.dropna().empty else None
+            ),
+        }
     return summary
 
 
@@ -967,6 +1042,9 @@ def _report(results: pd.DataFrame, summary: dict[str, Any]) -> str:
         "committee_effect",
         "evidence_status",
         "evidence_items",
+        "materiality_event_count",
+        "materiality_max_ratio",
+        "materiality_top_basis",
     ]
     preview = results.loc[:, [column for column in preview_columns if column in results.columns]]
     return "\n".join(

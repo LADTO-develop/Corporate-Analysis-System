@@ -300,6 +300,41 @@ def test_configure_runtime_can_disable_stage2_llm_cache(
     assert batch_module.os.environ["CAS_STAGE2_LLM_CACHE_ENABLED"] == "0"
 
 
+def test_materiality_summary_reports_direct_ratio_fields() -> None:
+    summary = batch_module._materiality_summary(
+        [
+            {
+                "company_match": True,
+                "disclosure_event_class": "material_debt_guarantee",
+                "disclosure_materiality": "substantive_adverse",
+                "disclosure_severity": "adverse",
+                "materiality_ratio": "0.1280",
+                "materiality_basis": "채무보증금액/자기자본: 12.80%",
+            },
+            {
+                "company_match": True,
+                "disclosure_event_class": "contract_cancellation_watch",
+                "disclosure_materiality": "watch_context",
+                "disclosure_severity": "caution",
+                "materiality_ratio": "0.0312",
+                "materiality_basis": "계약해지 금액 매출액 대비: 3.12%",
+            },
+            {
+                "company_match": False,
+                "disclosure_materiality": "substantive_adverse",
+                "materiality_ratio": "0.5000",
+            },
+        ]
+    )
+
+    assert summary["event_count"] == 2
+    assert summary["substantive_count"] == 1
+    assert summary["watch_count"] == 1
+    assert summary["max_ratio"] == 0.128
+    assert summary["top_basis"] == "채무보증금액/자기자본: 12.80%"
+    assert summary["event_classes"] == "material_debt_guarantee / contract_cancellation_watch"
+
+
 def _sample_batch_frame() -> pd.DataFrame:
     selection = {
         "source": "web_listing",

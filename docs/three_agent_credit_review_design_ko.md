@@ -239,6 +239,14 @@ SPAC 합병 예비심사 등 절차성 거래정지는 `caution/procedural_or_on
 EvidenceAuditAgent에 전달된다. 기업 규모 대비 3% 미만은 절차성/일회성, 3~10%는
 관찰 수준, 10% 이상은 실질 부정 공시로 유지해 정상기업 과잉 보류를 줄이는 재료로
 사용한다.
+다만 자금조달·채무보증의 10% 이상 materiality는 단독으로 정상기업을 `risk_hold`로
+올리는 근거가 아니다. `veto_candidate`, `critical_context_confirmed`, 자본잠식·부도·
+상장폐지 같은 hard distress 문맥, 또는 현금흐름/이자보상/손익/레버리지 중 2축 이상의
+재무 스트레스가 함께 있을 때 숨은 꼬리위험 또는 RiskRecallQA의 실질 외부 위험으로 본다.
+이 guardrail은 일회성 또는 계열사 지원성 채무보증을 실제 부실 전이와 구분하기 위한
+정상기업 과잉 보류 방어 장치다.
+반복 채무보증처럼 일부 재무약점과 함께 있어 보류 자체는 유지하되 치명 문맥과 현금흐름
+악화가 없는 경우에는 hidden-tail-risk를 `risk_hold`가 아니라 `review_hold`로 표시한다.
 `bsnSp.json`에 상세 비율이 없으면 `document.xml` 원문 fallback으로 `최근매출액 대비`,
 `영업정지금액`, `최근매출액` 표 값을 다시 파싱한다. 이 fallback은 종속회사 영업정지가
 모회사 신용위험으로 바로 전이되는지 판단하는 보조 근거다.
@@ -366,8 +374,9 @@ BBB-/BB+ 경계 맥락은 단독 trigger가 아니라 이 핵심 조건에 붙�
 `keep_committee_view`로 두고, 재무/외부근거가 정말 불안한 경우에만 `boundary_hold`
 또는 제한적 `risk_hold` 상향을 권고한다. 특히
 `eligible_with_substantive_evidence`는 routine 감사보고서나 단순 공시가 아니라,
-중대성 비율 10% 이상, `substantive_adverse`, veto/critical context, 또는 횡령·배임·상장폐지·
-감사의견 거절 같은 명시적 치명 제목에만 켜지도록 좁힌다.
+`substantive_adverse`, veto/critical context, 또는 횡령·배임·상장폐지·감사의견 거절
+같은 명시적 치명 제목에만 켜지도록 좁힌다. 자금조달·채무보증은 중대성 비율이
+10% 이상이어도 재무 스트레스나 hard distress 문맥이 함께 있을 때만 실질 외부 위험으로 본다.
 
 횡령, 배임, 상장폐지, fraud 같은 강제 경고 키워드는 코드가 아니라
 `configs/agent/committee.yaml`의 `veto_rules`에서 관리한다.
@@ -388,7 +397,7 @@ BBB-/BB+ 경계 맥락은 단독 trigger가 아니라 이 핵심 조건에 붙�
 - 30건 stress sample 기준 1차 모델 대비 2차 위험신호 F1 개선 확인
 - 정상기업 과잉 보류 guardrail 구현 및 로컬 회귀 검증
 - 조건부 Agno ReviewQAAgent 추가. 전체 기업에 4번째 LLM 호출을 붙이지 않고, 보류/근거/메모 충돌 위험이 있는 케이스만 사후 검수한다.
-- ReviewQA subtype advisory 안정화. `caution/watch_context` 외부근거만 있는 TN overhold 후보는 위험 보류가 아니라 경계등급 보류로 일관되게 낮추되, 중대성 10% 이상 공시와 hidden-tail-risk는 낮추지 않는다.
+- ReviewQA subtype advisory 안정화. `caution/watch_context` 외부근거만 있는 TN overhold 후보는 위험 보류가 아니라 경계등급 보류로 일관되게 낮추되, 자금조달·채무보증은 중대성 10% 이상이어도 재무 스트레스나 hard distress 문맥이 없으면 단독 `risk_hold` 근거로 쓰지 않는다.
 - 조건부 Agno RiskRecallQAAgent 추가. 최종 적격 케이스 중 기준선/재무취약/외부근거 조건이 있는 경우만 적격 판단의 위험 누락 가능성을 사후 검수한다.
 
 ### 남은 개선 후보

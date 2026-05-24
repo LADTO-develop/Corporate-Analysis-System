@@ -152,6 +152,9 @@ guardrail, 선택형 Agno runner, 외부근거 수집 노드가 연결되어 있
 관련 로컬 회귀 결과는
 `data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents/stage2_agent_performance_evidence.md`에
 기록되어 있습니다.
+PR 리뷰용 핵심 요약은
+[docs/stage2_agent_experiment_results_ko.md](docs/stage2_agent_experiment_results_ko.md)에
+따로 정리되어 있습니다.
 
 ## 6. 시스템 흐름
 

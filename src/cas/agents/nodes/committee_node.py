@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 from importlib import import_module
 from typing import Any, Literal, TypedDict, cast
 
+from cas.agents.committee_assessments import FINANCING_EVIDENCE_TERMS
 from cas.agents.committee_view import build_committee_view
 from cas.agents.nodes.committee_feature_formatting import (
     describe_top_drivers,
@@ -498,7 +499,10 @@ def _review_qa_reject_advisory_apply_reason(
         return ""
     if profile["veto_candidate_count"] > 0 or profile["high_confidence_critical_count"] > 0:
         return ""
-    if _has_substantive_external_risk(news_cache):
+    if _has_substantive_external_risk(
+        news_cache,
+        source_feature_row=bundle.source_feature_row if bundle else None,
+    ):
         return ""
     if not _external_evidence_is_watch_context_only(news_cache):
         return ""
@@ -1014,7 +1018,10 @@ def _risk_recall_qa_advisory_apply_reason(
     if action == "escalate_eligible_to_risk_hold":
         if assessment != "material_missed_risk" or risk_recall_qa_output.confidence < 0.70:
             return ""
-        if _has_substantive_external_risk(bundle.news_cache_snapshot):
+        if _has_substantive_external_risk(
+            bundle.news_cache_snapshot,
+            source_feature_row=bundle.source_feature_row,
+        ):
             return "risk_recall_substantive_external_risk"
         if len(_risk_recall_weak_financial_axes(bundle)) >= 4:
             return "risk_recall_severe_financial_weakness"
@@ -1053,7 +1060,10 @@ def _risk_recall_qa_trigger_reasons(
     near_threshold = _risk_recall_near_threshold(bundle)
     weak_axes = _risk_recall_weak_financial_axes(bundle)
     has_watch_evidence = _has_risk_recall_watch_evidence(bundle.news_cache_snapshot)
-    has_substantive_evidence = _has_substantive_external_risk(bundle.news_cache_snapshot)
+    has_substantive_evidence = _has_substantive_external_risk(
+        bundle.news_cache_snapshot,
+        source_feature_row=bundle.source_feature_row,
+    )
     has_boundary_context = _has_rating_boundary_context(bundle)
 
     if near_threshold and (len(weak_axes) >= 2 or has_substantive_evidence):
@@ -1146,18 +1156,35 @@ def _has_risk_recall_watch_evidence(news_cache: dict[str, Any]) -> bool:
     return False
 
 
-def _has_substantive_external_risk(news_cache: dict[str, Any]) -> bool:
+def _has_substantive_external_risk(
+    news_cache: dict[str, Any],
+    *,
+    source_feature_row: dict[str, Any] | None = None,
+) -> bool:
     raw_items = news_cache.get("items", [])
     if not isinstance(raw_items, list):
         return False
     return any(
-        isinstance(item, dict) and _is_risk_recall_substantive_external_risk_item(item)
+        isinstance(item, dict)
+        and _is_risk_recall_substantive_external_risk_item(
+            item,
+            source_feature_row=source_feature_row,
+        )
         for item in raw_items
     )
 
 
-def _is_risk_recall_substantive_external_risk_item(item: dict[str, Any]) -> bool:
+def _is_risk_recall_substantive_external_risk_item(
+    item: dict[str, Any],
+    *,
+    source_feature_row: dict[str, Any] | None = None,
+) -> bool:
     if item.get("company_match") is False:
+        return False
+    if _is_uncorroborated_material_financing_or_guarantee_item(
+        item,
+        source_feature_row=source_feature_row,
+    ):
         return False
 
     materiality_ratio = _safe_float(item.get("materiality_ratio"))
@@ -1193,6 +1220,104 @@ def _is_risk_recall_substantive_external_risk_item(item: dict[str, Any]) -> bool
     return severity in {"adverse", "veto"} and any(
         marker in title for marker in critical_title_markers
     )
+
+
+def _is_uncorroborated_material_financing_or_guarantee_item(
+    item: dict[str, Any],
+    *,
+    source_feature_row: dict[str, Any] | None,
+) -> bool:
+    if not _is_material_financing_or_guarantee_item(item):
+        return False
+    if item.get("veto_candidate") is True or item.get("critical_context_confirmed") is True:
+        return False
+    if _has_hard_distress_text(item):
+        return False
+    if not source_feature_row:
+        return False
+    return not _material_financing_or_guarantee_has_financial_corroboration(
+        source_feature_row
+    )
+
+
+def _is_material_financing_or_guarantee_item(item: dict[str, Any]) -> bool:
+    if str(item.get("source", "")).lower() != "opendart":
+        return False
+    if item.get("company_match") is False:
+        return False
+    event_class = str(item.get("disclosure_event_class", "")).lower()
+    if event_class in {"material_financing", "material_debt_guarantee"}:
+        return True
+    materiality = str(item.get("disclosure_materiality", "")).lower()
+    ratio = _safe_float(item.get("materiality_ratio"))
+    if materiality != "substantive_adverse" and (ratio is None or ratio < 0.10):
+        return False
+    text = _compact_text(" ".join(str(item.get(key, "")) for key in ("title", "summary")))
+    return any(term in text for term in FINANCING_EVIDENCE_TERMS) or "채무보증" in text
+
+
+def _has_hard_distress_text(item: dict[str, Any]) -> bool:
+    hard_terms = (
+        "자본잠식",
+        "부도",
+        "파산",
+        "회생",
+        "상장폐지",
+        "관리종목",
+        "감사의견거절",
+        "의견거절",
+        "횡령",
+        "배임",
+        "채무불이행",
+    )
+    text = _compact_text(" ".join(str(item.get(key, "")) for key in ("title", "summary")))
+    return any(term in text for term in hard_terms)
+
+
+def _material_financing_or_guarantee_has_financial_corroboration(
+    row: dict[str, Any],
+) -> bool:
+    if _financial_observation_count(row) < 3:
+        return True
+    if _has_review_qa_extreme_financial_distress(row):
+        return True
+    weak_axes = [
+        _metric_below_value(row, "cashflow_coverage_ratio", 0.0)
+        or _metric_below_value(row, "ocf_to_total_liabilities", 0.0)
+        or _metric_below_value(row, "ocf_to_sales", 0.0)
+        or _truthy(row.get("is_2y_consecutive_ocf_deficit")),
+        _metric_below_value(row, "interest_coverage_ratio", 1.0)
+        or _truthy(row.get("icr_under_1")),
+        _metric_below_value(row, "net_margin", -0.10)
+        or _truthy(row.get("is_2y_consecutive_operating_loss")),
+        _metric_below_value(row, "equity_ratio", 0.25)
+        or _metric_above_value(row, "debt_ratio", 3.0)
+        or _metric_above_value(row, "total_borrowings_ratio", 0.65)
+        or _metric_above_value(row, "capital_impairment_ratio", 0.0),
+        _metric_below_value(row, "current_ratio", 1.0)
+        and _metric_below_value(row, "cash_ratio", 0.10),
+    ]
+    return sum(1 for passed in weak_axes if passed) >= 2
+
+
+def _financial_observation_count(row: dict[str, Any]) -> int:
+    keys = (
+        "cashflow_coverage_ratio",
+        "ocf_to_total_liabilities",
+        "ocf_to_sales",
+        "interest_coverage_ratio",
+        "equity_ratio",
+        "debt_ratio",
+        "total_borrowings_ratio",
+        "current_ratio",
+        "cash_ratio",
+        "net_margin",
+    )
+    return sum(1 for key in keys if row.get(key) is not None)
+
+
+def _compact_text(text: str) -> str:
+    return "".join(str(text).lower().split())
 
 
 def _has_rating_boundary_context(bundle: Stage2InputBundle) -> bool:

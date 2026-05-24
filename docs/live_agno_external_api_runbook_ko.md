@@ -129,13 +129,28 @@ v7에서는 상세 공시 materiality 범위를 확장했다. 자금조달 공�
 3% 미만은 낮은 중요도, 3~10%는 watch context, 10% 이상은 `substantive_adverse`로
 분류해 제목만으로 위험을 확정하지 않도록 한다.
 
+이후 committee guardrail은 자금조달·채무보증의 10% 이상 materiality를 단독 치명
+근거로 쓰지 않는다. `veto_candidate`, `critical_context_confirmed`, 자본잠식·부도·
+상장폐지 같은 hard distress 문맥, 또는 현금흐름/이자보상/손익/레버리지 중 2축 이상의
+재무 스트레스가 함께 있을 때 `risk_hold` 근거로 유지한다. 반대로 방어적인 TN 케이스에서
+자금조달·채무보증 비율만 큰 경우에는 hidden-tail-risk와 RiskRecallQA의 위험 확정을
+막아 `eligible` 또는 `boundary_hold` 쪽으로 남길 수 있다.
+반복 채무보증처럼 규모성 공시와 일부 재무약점이 함께 있어 보류 자체는 유지할 필요가
+있지만, 현금흐름 악화나 치명 문맥이 없는 경우에는 hidden-tail-risk를 `risk_hold`가 아닌
+`review_hold`로 낮춰 표시한다.
+
 배치 결과 CSV에는 Stage 2 실행 진단 컬럼이 함께 남는다. 주요 컬럼은 `stage2_backend_name`, `stage2_llm_cache_hit`, `stage2_total_elapsed_seconds`, `stage2_agent_elapsed_seconds_sum`, `stage2_quant_credit_elapsed_seconds`, `stage2_evidence_audit_elapsed_seconds`, `stage2_chair_report_elapsed_seconds`, `stage2_review_qa_elapsed_seconds`, `stage2_review_qa_triggered`, `stage2_review_qa_trigger_reasons`, `stage2_review_qa_recommended_action`, `stage2_review_qa_advisory_applied`, `stage2_review_qa_advisory_apply_reason`, `stage2_risk_recall_qa_elapsed_seconds`, `stage2_risk_recall_qa_triggered`, `stage2_risk_recall_qa_trigger_reasons`, `stage2_risk_recall_qa_recommended_action`, `stage2_risk_recall_qa_advisory_applied`, `stage2_risk_recall_qa_advisory_apply_reason`, `stage2_parallel_independent_agents`다. 실제 API 속도를 측정할 때는 `stage2_llm_cache_hit=False`인 행을 기준으로 보고, 캐시 재사용 여부를 제거하려면 위 예시처럼 `--no-stage2-llm-cache`를 붙인다.
+
+같은 CSV에는 materiality 확인용 컬럼도 남는다. `materiality_event_count`,
+`materiality_substantive_count`, `materiality_watch_count`, `materiality_max_ratio`,
+`materiality_top_basis`, `materiality_event_classes`를 보면 OpenDART 상세 공시에서 어떤
+비율 근거가 판단에 들어왔는지 결과 파일만으로 확인할 수 있다.
 
 ReviewQAAgent는 Agno runner에서 기본적으로 켜져 있지만, 모든 기업에 실행되지는 않는다. Stage 1 모델이 `투자적격`인데 최종 라벨이 `보류`인 경우, `risk_hold`가 치명 근거 없이 만들어진 경우, chair memo와 최종 라벨 충돌 가능성이 있는 경우, 또는 자금조달·거래정지·감사보고서처럼 해석이 애매한 공시가 보류 판단에 관여한 경우에만 실행된다. 운영 속도 테스트에서 순수 3-agent 지연시간만 보고 싶으면 `CAS_STAGE2_REVIEW_QA_ENABLED=0`을 추가한다.
 
-ReviewQA는 최종 라벨을 직접 바꾸지 않는다. 다만 `risk_hold`가 과도하다고 권고하고 `veto_triggered=false`, `hidden_tail_risk_flag=false`이면 `committee_decision_type`만 `boundary_hold`로 낮출 수 있다. 또한 ReviewQA가 `risk_hold_without_critical_evidence` 조건에서 downgrade를 권고했고, 외부 공시가 모두 `caution/watch_context/procedural_or_one_off` 수준이며 중대성 비율 10% 이상·veto·hidden-tail-risk가 없으면 같은 subtype 보정을 안정적으로 적용한다. 이 subtype advisory 적용을 끄고 순수 관찰만 하려면 `CAS_STAGE2_REVIEW_QA_APPLY_ADVISORY=0`을 추가한다.
+ReviewQA는 최종 라벨을 직접 바꾸지 않는다. 다만 `risk_hold`가 과도하다고 권고하고 `veto_triggered=false`, `hidden_tail_risk_flag=false`이면 `committee_decision_type`만 `boundary_hold`로 낮출 수 있다. 또한 ReviewQA가 `risk_hold_without_critical_evidence` 조건에서 downgrade를 권고했고, 외부 공시가 모두 `caution/watch_context/procedural_or_one_off` 수준이며 veto·hidden-tail-risk가 없으면 같은 subtype 보정을 안정적으로 적용한다. 자금조달·채무보증 materiality는 10% 이상이어도 재무 스트레스나 hard distress 문맥이 없으면 단독으로 ReviewQA 보정을 막지 않는다. 이 subtype advisory 적용을 끄고 순수 관찰만 하려면 `CAS_STAGE2_REVIEW_QA_APPLY_ADVISORY=0`을 추가한다.
 
-RiskRecallQAAgent는 ReviewQA의 반대편 안전망이다. 최종 라벨이 `적격`일 때도 확률이 기준선 근처라는 이유만으로는 실행하지 않고, 기준선 근처와 재무 취약 2축 이상이 함께 있거나, 재무 취약 3축 이상이거나, 실질 외부 위험 근거가 있을 때만 실행한다. watch 공시나 BBB-/BB+ 경계 맥락은 단독 trigger가 아니라 이 핵심 조건에 붙는 보조 맥락으로만 남긴다. 적격 판단을 유지하기 어렵다고 권고하면 `boundary_hold` 또는 아주 제한적으로 `risk_hold`로 올릴 수 있다. `eligible_with_substantive_evidence` trigger는 routine 감사보고서나 단순 공시가 아니라 `materiality_ratio >= 10%`, `substantive_adverse`, `veto/critical context`, 또는 횡령·배임·상장폐지·감사의견 거절 같은 명시적 치명 제목에만 켜진다. 속도 테스트에서 끄려면 `CAS_STAGE2_RISK_RECALL_QA_ENABLED=0`, 권고 적용만 끄려면 `CAS_STAGE2_RISK_RECALL_QA_APPLY_ADVISORY=0`을 추가한다.
+RiskRecallQAAgent는 ReviewQA의 반대편 안전망이다. 최종 라벨이 `적격`일 때도 확률이 기준선 근처라는 이유만으로는 실행하지 않고, 기준선 근처와 재무 취약 2축 이상이 함께 있거나, 재무 취약 3축 이상이거나, 실질 외부 위험 근거가 있을 때만 실행한다. watch 공시나 BBB-/BB+ 경계 맥락은 단독 trigger가 아니라 이 핵심 조건에 붙는 보조 맥락으로만 남긴다. 적격 판단을 유지하기 어렵다고 권고하면 `boundary_hold` 또는 아주 제한적으로 `risk_hold`로 올릴 수 있다. `eligible_with_substantive_evidence` trigger는 routine 감사보고서나 단순 공시가 아니라 `substantive_adverse`, `veto/critical context`, 또는 횡령·배임·상장폐지·감사의견 거절 같은 명시적 치명 제목에만 켜진다. 단, 자금조달·채무보증은 `materiality_ratio >= 10%`만으로는 충분하지 않고 재무 스트레스 또는 hard distress 문맥이 함께 있어야 실질 외부 위험으로 본다. 속도 테스트에서 끄려면 `CAS_STAGE2_RISK_RECALL_QA_ENABLED=0`, 권고 적용만 끄려면 `CAS_STAGE2_RISK_RECALL_QA_APPLY_ADVISORY=0`을 추가한다.
 
 ## Deterministic vs OpenAI Agno 설명 품질 비교
 

@@ -962,6 +962,250 @@ def test_committee_view_keeps_tn_hold_with_substantive_external_risk() -> None:
     assert "guardrail v2" not in " ".join(committee_view["mitigating_factors"])
 
 
+def test_committee_view_does_not_hidden_tail_on_uncorroborated_material_debt_guarantee() -> None:
+    state: AgentState = {
+        "company_id": "019540",
+        "company_name": "(주)일지테크",
+        "source_feature_row": {
+            "stock_code": "019540",
+            "current_ratio": 1.85,
+            "cash_ratio": 0.22,
+            "cashflow_coverage_ratio": 2.4,
+            "ocf_to_sales": 0.05,
+            "ocf_to_total_liabilities": 0.08,
+            "interest_coverage_ratio": 5.2,
+            "equity_ratio": 0.52,
+            "debt_ratio": 0.92,
+            "total_borrowings_ratio": 0.18,
+            "capital_impairment_ratio": 0.0,
+            "net_margin": 0.04,
+            "icr_under_1": 0,
+            "is_2y_consecutive_operating_loss": 0,
+            "is_2y_consecutive_ocf_deficit": 0,
+        },
+        "model_view": {
+            "prediction_label": "투자적격",
+            "probability_speculative": 0.2191,
+            "threshold": 0.225,
+            "stage2_secondary_trigger": True,
+            "stage2_review_priority": "high",
+            "trigger_reason": "rolling OOT 모델은 투자적격이지만 기준선 근처입니다.",
+        },
+        "xgboost_result": {
+            "prediction_label": "투자적격",
+            "probability_speculative": 0.2191,
+            "threshold": 0.225,
+        },
+        "rule_result": {"risk_band": "stable", "recommendation": "priority", "blocking_flags": []},
+        "news_cache_snapshot": {
+            "status": "ready",
+            "items": [
+                {
+                    "source": "opendart",
+                    "title": "타인에대한채무보증결정",
+                    "summary": "(주)일지테크 직접 관련 채무보증 공시입니다.",
+                    "company_match": True,
+                    "provider_relevance": "risk",
+                    "disclosure_severity": "adverse",
+                    "disclosure_event_class": "material_debt_guarantee",
+                    "disclosure_materiality": "substantive_adverse",
+                    "materiality_ratio": 0.149,
+                    "materiality_basis": "채무보증금액/자기자본: 14.90%",
+                    "critical_terms": [],
+                    "critical_context_confirmed": False,
+                    "veto_candidate": False,
+                    "evidence_quality": "high",
+                    "evidence_score": 0.95,
+                }
+            ],
+        },
+    }
+    agents = [
+        AgentOutput(role="quant_credit", summary="정량 결과", findings=[], confidence=0.8),
+        AgentOutput(role="evidence_audit", summary="근거 검토", findings=[], confidence=0.7),
+        AgentOutput(role="chair_report", summary="종합", findings=[], confidence=0.7),
+    ]
+
+    committee_view = build_committee_view(
+        bundle=build_stage2_input_bundle(state),
+        recommendation="priority",
+        agents=agents,
+    )
+
+    assert committee_view["final_committee_label"] == "적격"
+    assert committee_view["committee_decision_type"] == "eligible"
+    assert committee_view["committee_risk_signal"] is False
+    assert committee_view["hidden_tail_risk_flag"] is False
+
+
+def test_committee_view_keeps_material_financing_risk_when_financial_stress_corroborates() -> None:
+    state: AgentState = {
+        "company_id": "039130",
+        "company_name": "(주)하나투어",
+        "source_feature_row": {
+            "stock_code": "039130",
+            "current_ratio": 0.82,
+            "cash_ratio": 0.06,
+            "cashflow_coverage_ratio": -1.2,
+            "ocf_to_sales": -0.05,
+            "ocf_to_total_liabilities": -0.02,
+            "interest_coverage_ratio": -3.0,
+            "equity_ratio": 0.22,
+            "debt_ratio": 3.4,
+            "net_margin": -0.25,
+            "icr_under_1": 1,
+            "is_2y_consecutive_operating_loss": 1,
+            "is_2y_consecutive_ocf_deficit": 1,
+        },
+        "model_view": {
+            "prediction_label": "투자적격",
+            "probability_speculative": 0.2353,
+            "threshold": 0.25,
+        },
+        "xgboost_result": {
+            "prediction_label": "투자적격",
+            "probability_speculative": 0.2353,
+            "threshold": 0.25,
+        },
+        "news_cache_snapshot": {
+            "status": "ready",
+            "items": [
+                {
+                    "source": "opendart",
+                    "title": "주요사항보고서(유상증자결정)",
+                    "summary": "(주)하나투어 직접 관련 유상증자 공시입니다.",
+                    "company_match": True,
+                    "provider_relevance": "risk",
+                    "disclosure_severity": "adverse",
+                    "disclosure_event_class": "material_financing",
+                    "disclosure_materiality": "substantive_adverse",
+                    "materiality_ratio": 0.20,
+                    "materiality_basis": "희석률: 20.00%",
+                    "dilution_ratio": 0.20,
+                    "critical_context_confirmed": False,
+                    "veto_candidate": False,
+                    "evidence_quality": "high",
+                    "evidence_score": 0.95,
+                }
+            ],
+        },
+    }
+    agents = [
+        AgentOutput(role="quant_credit", summary="정량 결과", findings=[], confidence=0.8),
+        AgentOutput(role="evidence_audit", summary="근거 검토", findings=[], confidence=0.7),
+        AgentOutput(role="chair_report", summary="종합", findings=[], confidence=0.7),
+    ]
+
+    committee_view = build_committee_view(
+        bundle=build_stage2_input_bundle(state),
+        recommendation="priority",
+        agents=agents,
+    )
+
+    assert committee_view["final_committee_label"] == "보류"
+    assert committee_view["committee_decision_type"] == "risk_hold"
+    assert committee_view["committee_risk_signal"] is True
+    assert committee_view["hidden_tail_risk_flag"] is True
+
+
+def test_committee_view_softens_repeated_guarantee_hidden_tail_to_review_hold() -> None:
+    state: AgentState = {
+        "company_id": "019540",
+        "company_name": "(주)일지테크",
+        "source_feature_row": {
+            "stock_code": "019540",
+            "current_ratio": 0.49,
+            "cash_ratio": 0.05,
+            "cashflow_coverage_ratio": 5.33,
+            "ocf_to_sales": 0.17,
+            "ocf_to_total_liabilities": 0.14,
+            "interest_coverage_ratio": -2.46,
+            "equity_ratio": 0.34,
+            "debt_ratio": 1.94,
+            "total_borrowings_ratio": 0.29,
+            "short_term_borrowings_share": 0.97,
+            "capital_impairment_ratio": 0.0,
+            "net_margin": -0.02,
+            "icr_under_1": 1,
+            "is_2y_consecutive_operating_loss": 0,
+            "is_2y_consecutive_ocf_deficit": 0,
+        },
+        "model_view": {
+            "prediction_label": "투자적격",
+            "probability_speculative": 0.2191,
+            "threshold": 0.225,
+            "stage2_secondary_trigger": True,
+            "stage2_review_priority": "high",
+            "trigger_reason": "rolling OOT 모델은 투자적격이지만 기준선 근처입니다.",
+        },
+        "xgboost_result": {
+            "prediction_label": "투자적격",
+            "probability_speculative": 0.2191,
+            "threshold": 0.225,
+        },
+        "rule_result": {
+            "risk_band": "high_risk",
+            "recommendation": "defer",
+            "blocking_flags": ["interest_coverage_under_1"],
+        },
+        "news_cache_snapshot": {
+            "status": "ready",
+            "items": [
+                {
+                    "source": "opendart",
+                    "title": "타인에대한채무보증결정",
+                    "summary": "(주)일지테크 직접 관련 채무보증 공시입니다.",
+                    "company_match": True,
+                    "provider_relevance": "risk",
+                    "disclosure_severity": "adverse",
+                    "disclosure_event_class": "material_debt_guarantee",
+                    "disclosure_materiality": "substantive_adverse",
+                    "materiality_ratio": 0.149,
+                    "materiality_basis": "채무보증금액/자기자본: 14.90%",
+                    "critical_context_confirmed": False,
+                    "veto_candidate": False,
+                    "evidence_quality": "high",
+                    "evidence_score": 0.95,
+                },
+                {
+                    "source": "opendart",
+                    "title": "타인에대한채무보증결정",
+                    "summary": "(주)일지테크 직접 관련 채무보증 공시입니다.",
+                    "company_match": True,
+                    "provider_relevance": "risk",
+                    "disclosure_severity": "adverse",
+                    "disclosure_event_class": "material_debt_guarantee",
+                    "disclosure_materiality": "substantive_adverse",
+                    "materiality_ratio": 0.1226,
+                    "materiality_basis": "채무보증금액/자기자본: 12.26%",
+                    "critical_context_confirmed": False,
+                    "veto_candidate": False,
+                    "evidence_quality": "high",
+                    "evidence_score": 0.93,
+                },
+            ],
+        },
+    }
+    agents = [
+        AgentOutput(role="quant_credit", summary="정량 결과", findings=[], confidence=0.8),
+        AgentOutput(role="evidence_audit", summary="근거 검토", findings=[], confidence=0.7),
+        AgentOutput(role="chair_report", summary="종합", findings=[], confidence=0.7),
+    ]
+
+    committee_view = build_committee_view(
+        bundle=build_stage2_input_bundle(state),
+        recommendation="defer",
+        agents=agents,
+    )
+
+    assert committee_view["final_committee_label"] == "보류"
+    assert committee_view["committee_decision_type"] == "review_hold"
+    assert committee_view["committee_decision_type_label"] == "확인필요 보류"
+    assert committee_view["committee_risk_signal"] is False
+    assert committee_view["hidden_tail_risk_flag"] is True
+    assert "위험 보류가 아닌 확인필요 보류" in committee_view["hidden_tail_risk_reason"]
+
+
 @pytest.mark.parametrize(
     "conflicting_chair_memo",
     [

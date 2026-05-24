@@ -280,7 +280,7 @@ def _committee_decision_type(
     if committee_label == "부적격":
         return "reject"
     if hidden_tail_risk.triggered:
-        return "risk_hold"
+        return "risk_hold" if hidden_tail_risk.risk_signal else "review_hold"
     if overwarning_mitigation.triggered and prediction_label == "부적격":
         return "mitigation_hold"
     if reject_confirmation.triggered:
@@ -418,7 +418,10 @@ def _committee_label_with_investment_evidence_alignment(
     threshold = _model_threshold(bundle)
     if probability >= threshold:
         return committee_label
-    noncritical_evidence = _noncritical_external_evidence_assessment(bundle.news_cache_snapshot)
+    noncritical_evidence = _noncritical_external_evidence_assessment(
+        bundle.news_cache_snapshot,
+        source_feature_row=bundle.source_feature_row,
+    )
     if not noncritical_evidence.triggered:
         return committee_label
     return "적격"
@@ -628,9 +631,15 @@ def _secondary_overhold_guardrail_reason(bundle: Stage2InputBundle) -> str:
         return ""
     if _has_secondary_rule_liquidity_watch_signal(bundle):
         return ""
-    if _overwarning_blocking_external_items(bundle.news_cache_snapshot):
+    if _overwarning_blocking_external_items(
+        bundle.news_cache_snapshot,
+        source_feature_row=bundle.source_feature_row,
+    ):
         return ""
-    if _material_financing_evidence_blocks_tn_hold(bundle.news_cache_snapshot):
+    if _material_financing_evidence_blocks_tn_hold(
+        bundle.news_cache_snapshot,
+        source_feature_row=bundle.source_feature_row,
+    ):
         return ""
     if _prior_rating_is_speculative(bundle.prior_rating_reference):
         return ""
@@ -652,9 +661,15 @@ def _stable_prior_cashflow_overhold_guardrail_reason(bundle: Stage2InputBundle) 
     """Lower near-threshold TN holds when prior rating and OCF defense are strong."""
     if not _prior_rating_is_stable_investment_non_boundary(bundle.prior_rating_reference):
         return ""
-    if _overwarning_blocking_external_items(bundle.news_cache_snapshot):
+    if _overwarning_blocking_external_items(
+        bundle.news_cache_snapshot,
+        source_feature_row=bundle.source_feature_row,
+    ):
         return ""
-    if _material_financing_evidence_blocks_tn_hold(bundle.news_cache_snapshot):
+    if _material_financing_evidence_blocks_tn_hold(
+        bundle.news_cache_snapshot,
+        source_feature_row=bundle.source_feature_row,
+    ):
         return ""
     if _has_extreme_financial_distress_signal(bundle.source_feature_row):
         return ""
@@ -815,6 +830,10 @@ def _hidden_tail_risk_assessment(bundle: Stage2InputBundle) -> HiddenTailRiskAss
         item
         for item in adverse_items
         if _is_actionable_verified_adverse_external_item(item, bundle.news_cache_snapshot)
+        and not _is_uncorroborated_material_financing_or_guarantee_item(
+            item,
+            source_feature_row=bundle.source_feature_row,
+        )
     ]
     if not verified_items:
         return HiddenTailRiskAssessment(False, "", len(adverse_items), 0)
@@ -824,14 +843,33 @@ def _hidden_tail_risk_assessment(bundle: Stage2InputBundle) -> HiddenTailRiskAss
     source_names = sorted({str(item.get("source", "external")) for item in verified_items})
     terms = sorted({term for item in adverse_items for term in _item_critical_terms(item)})
     terms_text = f" 위험 키워드: {', '.join(terms[:4])}." if terms else ""
-    reason = (
-        f"숨은 꼬리위험 보완 플래그: 모델은 투자적격(투기등급 확률 {probability:.1%}, "
-        f"기준선 {threshold:.1%})으로 봤지만, 기업 직접 관련 외부 위험 근거 "
-        f"{len(adverse_items)}건 중 검증 가능 근거 {len(verified_items)}건이 확인되어 "
-        f"FN 가능성을 보수적으로 점검해야 합니다. 출처: {', '.join(source_names)}."
-        f"{terms_text}"
+    risk_signal = _hidden_tail_evidence_requires_risk_signal(
+        verified_items,
+        source_feature_row=bundle.source_feature_row,
     )
-    return HiddenTailRiskAssessment(True, reason, len(adverse_items), len(verified_items))
+    if risk_signal:
+        reason = (
+            f"숨은 꼬리위험 보완 플래그: 모델은 투자적격(투기등급 확률 {probability:.1%}, "
+            f"기준선 {threshold:.1%})으로 봤지만, 기업 직접 관련 외부 위험 근거 "
+            f"{len(adverse_items)}건 중 검증 가능 근거 {len(verified_items)}건이 확인되어 "
+            f"FN 가능성을 보수적으로 점검해야 합니다. 출처: {', '.join(source_names)}."
+            f"{terms_text}"
+        )
+    else:
+        reason = (
+            f"외부근거 확인필요 보류 플래그: 모델은 투자적격(투기등급 확률 {probability:.1%}, "
+            f"기준선 {threshold:.1%})으로 봤지만, 자금조달·채무보증 등 규모성 공시 "
+            f"{len(verified_items)}건이 확인되어 추가 점검이 필요합니다. 다만 치명 문맥이나 "
+            "현금흐름 악화가 함께 확인된 실질 부실 근거는 제한적이므로 위험 보류가 아닌 "
+            f"확인필요 보류로 분리합니다. 출처: {', '.join(source_names)}."
+        )
+    return HiddenTailRiskAssessment(
+        True,
+        reason,
+        len(adverse_items),
+        len(verified_items),
+        risk_signal,
+    )
 
 
 def _secondary_review_risk_assessment(bundle: Stage2InputBundle) -> SecondaryReviewRiskAssessment:
@@ -924,9 +962,15 @@ def _secondary_review_risk_signal_corroborated(
     """Require corroboration before showing a secondary review hold as a risk signal."""
     if severe_watch:
         return not _has_isolated_icr_review_buffer(bundle.source_feature_row)
-    if _overwarning_blocking_external_items(bundle.news_cache_snapshot):
+    if _overwarning_blocking_external_items(
+        bundle.news_cache_snapshot,
+        source_feature_row=bundle.source_feature_row,
+    ):
         return True
-    if _material_financing_evidence_blocks_tn_hold(bundle.news_cache_snapshot):
+    if _material_financing_evidence_blocks_tn_hold(
+        bundle.news_cache_snapshot,
+        source_feature_row=bundle.source_feature_row,
+    ):
         return True
     prior = bundle.prior_rating_reference
     return _prior_rating_is_speculative(prior) or _prior_rating_is_exact_boundary(prior)
@@ -991,7 +1035,10 @@ def _prior_rating_boundary_hold_reason(
     prior = bundle.prior_rating_reference
     if not _prior_rating_is_exact_boundary(prior):
         return ""
-    if _overwarning_blocking_external_items(bundle.news_cache_snapshot):
+    if _overwarning_blocking_external_items(
+        bundle.news_cache_snapshot,
+        source_feature_row=bundle.source_feature_row,
+    ):
         return ""
 
     probability = bundle.probability_speculative
@@ -1048,7 +1095,10 @@ def _overwarning_mitigation_assessment(
     """Soften likely over-warning cases to hold, not eligible."""
     if bundle.prediction_label != "부적격" or veto_triggered or hidden_tail_risk.triggered:
         return OverwarningMitigationAssessment(False, "")
-    if _overwarning_blocking_external_items(bundle.news_cache_snapshot):
+    if _overwarning_blocking_external_items(
+        bundle.news_cache_snapshot,
+        source_feature_row=bundle.source_feature_row,
+    ):
         return OverwarningMitigationAssessment(False, "")
 
     probability = bundle.probability_speculative
@@ -1063,7 +1113,10 @@ def _overwarning_mitigation_assessment(
     explicit_overwarning = bool(bundle.model_view.get("stage2_overwarning_filter_candidate"))
     financial_resilience = _financial_resilience_overwarning_assessment(bundle.source_feature_row)
     cash_rich_loss_stage_buffer_reason = _cash_rich_loss_stage_overwarning_buffer_reason(bundle)
-    noncritical_evidence = _noncritical_external_evidence_assessment(bundle.news_cache_snapshot)
+    noncritical_evidence = _noncritical_external_evidence_assessment(
+        bundle.news_cache_snapshot,
+        source_feature_row=bundle.source_feature_row,
+    )
     near_threshold_buffer = near_threshold and (
         noncritical_evidence.triggered
         or _no_direct_external_items(bundle.news_cache_snapshot)
@@ -1136,7 +1189,10 @@ def _cash_rich_loss_stage_overwarning_buffer_reason(bundle: Stage2InputBundle) -
     probability = bundle.probability_speculative
     if probability < 0.85:
         return ""
-    if _overwarning_blocking_external_items(bundle.news_cache_snapshot):
+    if _overwarning_blocking_external_items(
+        bundle.news_cache_snapshot,
+        source_feature_row=bundle.source_feature_row,
+    ):
         return ""
     if not (
         _metric_at_least(row, "current_ratio", 2.0)
@@ -1179,7 +1235,10 @@ def _prior_boundary_overwarning_buffer_reason(
         return ""
     if _has_extreme_financial_distress_signal(bundle.source_feature_row):
         return ""
-    if _overwarning_blocking_external_items(bundle.news_cache_snapshot):
+    if _overwarning_blocking_external_items(
+        bundle.news_cache_snapshot,
+        source_feature_row=bundle.source_feature_row,
+    ):
         return ""
     if not (
         noncritical_evidence.triggered
@@ -1217,7 +1276,12 @@ def _reject_confirmation_assessment(
 
     probability = bundle.probability_speculative
     very_high_model_warning = probability >= 0.90
-    direct_adverse_evidence = bool(_overwarning_blocking_external_items(bundle.news_cache_snapshot))
+    direct_adverse_evidence = bool(
+        _overwarning_blocking_external_items(
+            bundle.news_cache_snapshot,
+            source_feature_row=bundle.source_feature_row,
+        )
+    )
     extreme_financial_distress = _has_extreme_financial_distress_signal(bundle.source_feature_row)
     severe_financial_watch = very_high_model_warning and _has_severe_financial_watch_signal(
         bundle.source_feature_row
@@ -1308,23 +1372,42 @@ def _repeated_financing_evidence_count(news_cache: dict[str, Any]) -> int:
     return len(_financing_evidence_items(news_cache))
 
 
-def _material_financing_evidence_blocks_tn_hold(news_cache: dict[str, Any]) -> bool:
+def _material_financing_evidence_blocks_tn_hold(
+    news_cache: dict[str, Any],
+    *,
+    source_feature_row: dict[str, Any] | None = None,
+) -> bool:
     """Block TN overhold relief only for repeated or explicitly high-risk financing."""
     return bool(
         _repeated_financing_evidence_count(news_cache) >= 2
-        or _high_risk_financing_evidence_count(news_cache) >= 1
+        or _high_risk_financing_evidence_count(
+            news_cache,
+            source_feature_row=source_feature_row,
+        )
+        >= 1
     )
 
 
-def _high_risk_financing_evidence_count(news_cache: dict[str, Any]) -> int:
+def _high_risk_financing_evidence_count(
+    news_cache: dict[str, Any],
+    *,
+    source_feature_row: dict[str, Any] | None = None,
+) -> int:
     return sum(
         1
         for item in _financing_evidence_items(news_cache)
         if (
-            item.get("veto_candidate") is True
-            or item.get("critical_context_confirmed") is True
-            or str(item.get("provider_relevance", "")).lower() in ADVERSE_PROVIDER_RELEVANCE
-            or str(item.get("disclosure_severity", "")).lower() in {"adverse", "veto"}
+            not _is_uncorroborated_material_financing_or_guarantee_item(
+                item,
+                source_feature_row=source_feature_row,
+            )
+            and (
+                item.get("veto_candidate") is True
+                or item.get("critical_context_confirmed") is True
+                or str(item.get("provider_relevance", "")).lower()
+                in ADVERSE_PROVIDER_RELEVANCE
+                or str(item.get("disclosure_severity", "")).lower() in {"adverse", "veto"}
+            )
         )
     )
 
@@ -1343,6 +1426,168 @@ def _financing_evidence_items(news_cache: dict[str, Any]) -> list[dict[str, Any]
         if any(term in text for term in FINANCING_EVIDENCE_TERMS):
             items.append(item)
     return items
+
+
+def _is_uncorroborated_material_financing_or_guarantee_item(
+    item: dict[str, Any],
+    *,
+    source_feature_row: dict[str, Any] | None,
+) -> bool:
+    """Treat material financing/guarantee as contextual unless distress corroborates it."""
+    if not _is_material_financing_or_guarantee_item(item):
+        return False
+    if item.get("veto_candidate") is True or item.get("critical_context_confirmed") is True:
+        return False
+    if _has_hard_distress_terms(item):
+        return False
+    if not source_feature_row:
+        return False
+    return not _material_financing_or_guarantee_has_financial_corroboration(
+        source_feature_row
+    )
+
+
+def _hidden_tail_evidence_requires_risk_signal(
+    items: list[dict[str, Any]],
+    *,
+    source_feature_row: dict[str, Any],
+) -> bool:
+    if not items:
+        return False
+    for item in items:
+        if not _is_material_financing_or_guarantee_item(item):
+            return True
+        if (
+            item.get("veto_candidate") is True
+            or item.get("critical_context_confirmed") is True
+            or _has_hard_distress_terms(item)
+        ):
+            return True
+    if _has_extreme_financial_distress_signal(source_feature_row):
+        return True
+    return _material_financing_or_guarantee_has_severe_financial_corroboration(
+        source_feature_row
+    )
+
+
+def _is_material_financing_or_guarantee_item(item: dict[str, Any]) -> bool:
+    if str(item.get("source", "")).lower() != "opendart":
+        return False
+    if item.get("company_match") is not True:
+        return False
+    event_class = str(item.get("disclosure_event_class", "")).lower()
+    if event_class in {"material_financing", "material_debt_guarantee"}:
+        return True
+    materiality = str(item.get("disclosure_materiality", "")).lower()
+    ratio = _safe_float(item.get("materiality_ratio"))
+    if materiality != "substantive_adverse" and (ratio is None or ratio < 0.10):
+        return False
+    text = _compact_text(" ".join(str(item.get(key, "")) for key in ("title", "summary")))
+    guarantee_markers = ("채무보증", "타인에대한채무보증")
+    return any(term in text for term in FINANCING_EVIDENCE_TERMS) or any(
+        marker in text for marker in guarantee_markers
+    )
+
+
+def _has_hard_distress_terms(item: dict[str, Any]) -> bool:
+    terms = {str(term).strip() for term in _item_critical_terms(item)}
+    hard_terms = {
+        "자본잠식",
+        "부도",
+        "파산",
+        "회생",
+        "상장폐지",
+        "관리종목",
+        "감사의견거절",
+        "의견거절",
+        "횡령",
+        "배임",
+        "채무불이행",
+    }
+    if terms.intersection(hard_terms):
+        return True
+    text = _compact_text(" ".join(str(item.get(key, "")) for key in ("title", "summary")))
+    return any(term in text for term in hard_terms)
+
+
+def _material_financing_or_guarantee_has_financial_corroboration(
+    row: dict[str, Any],
+) -> bool:
+    if _financial_observation_count(row) < 3:
+        return True
+    if _has_extreme_financial_distress_signal(row):
+        return True
+    weak_axes = [
+        _metric_below(row, "cashflow_coverage_ratio", 0.0)
+        or _metric_below(row, "ocf_to_total_liabilities", 0.0)
+        or _metric_below(row, "ocf_to_sales", 0.0)
+        or _flag_is_true(row.get("is_2y_consecutive_ocf_deficit")),
+        _metric_below(row, "interest_coverage_ratio", 1.0) or _flag_is_true(row.get("icr_under_1")),
+        _metric_below(row, "net_margin", -0.10)
+        or _flag_is_true(row.get("is_2y_consecutive_operating_loss")),
+        _metric_below(row, "equity_ratio", 0.25)
+        or _metric_above(row, "debt_ratio", 3.0)
+        or _metric_above(row, "total_borrowings_ratio", 0.65)
+        or _metric_above(row, "capital_impairment_ratio", 0.0),
+        _metric_below(row, "current_ratio", 1.0) and _metric_below(row, "cash_ratio", 0.10),
+    ]
+    return sum(1 for passed in weak_axes if passed) >= 2
+
+
+def _material_financing_or_guarantee_has_severe_financial_corroboration(
+    row: dict[str, Any],
+) -> bool:
+    if _financial_observation_count(row) < 3:
+        return True
+    cashflow_weak = (
+        _metric_below(row, "cashflow_coverage_ratio", 0.0)
+        or _metric_below(row, "ocf_to_total_liabilities", 0.0)
+        or _metric_below(row, "ocf_to_sales", 0.0)
+        or _flag_is_true(row.get("is_2y_consecutive_ocf_deficit"))
+    )
+    interest_weak = _metric_below(row, "interest_coverage_ratio", 1.0) or _flag_is_true(
+        row.get("icr_under_1")
+    )
+    earnings_weak = _metric_below(row, "net_margin", -0.10) or _flag_is_true(
+        row.get("is_2y_consecutive_operating_loss")
+    )
+    leverage_weak = (
+        _metric_below(row, "equity_ratio", 0.25)
+        or _metric_above(row, "debt_ratio", 3.0)
+        or _metric_above(row, "total_borrowings_ratio", 0.65)
+        or _metric_above(row, "capital_impairment_ratio", 0.0)
+    )
+    liquidity_weak = _metric_below(row, "current_ratio", 1.0) and _metric_below(
+        row, "cash_ratio", 0.10
+    )
+    weak_axis_count = sum(
+        1
+        for passed in (
+            cashflow_weak,
+            interest_weak,
+            earnings_weak,
+            leverage_weak,
+            liquidity_weak,
+        )
+        if passed
+    )
+    return bool(weak_axis_count >= 3 or (cashflow_weak and weak_axis_count >= 2))
+
+
+def _financial_observation_count(row: dict[str, Any]) -> int:
+    keys = (
+        "cashflow_coverage_ratio",
+        "ocf_to_total_liabilities",
+        "ocf_to_sales",
+        "interest_coverage_ratio",
+        "equity_ratio",
+        "debt_ratio",
+        "total_borrowings_ratio",
+        "current_ratio",
+        "cash_ratio",
+        "net_margin",
+    )
+    return sum(1 for key in keys if row.get(key) is not None)
 
 
 def _prior_rating_is_speculative(prior: dict[str, Any]) -> bool:
@@ -1385,7 +1630,10 @@ def _model_only_overwarning_buffer_reason(
         and not cashflow_backed_resilience
     ):
         return ""
-    if _overwarning_blocking_external_items(bundle.news_cache_snapshot):
+    if _overwarning_blocking_external_items(
+        bundle.news_cache_snapshot,
+        source_feature_row=bundle.source_feature_row,
+    ):
         return ""
 
     news_status = bundle.news_status
@@ -1459,6 +1707,8 @@ def _has_extreme_financial_distress_signal(row: dict[str, Any]) -> bool:
 
 def _noncritical_external_evidence_assessment(
     news_cache: dict[str, Any],
+    *,
+    source_feature_row: dict[str, Any] | None = None,
 ) -> NoncriticalEvidenceAssessment:
     """Treat verified but non-critical external evidence as a reason to hold, not reject."""
     status = str(news_cache.get("status", "")).strip().lower()
@@ -1472,7 +1722,14 @@ def _noncritical_external_evidence_assessment(
     ]
     if not direct_items:
         return NoncriticalEvidenceAssessment(False, "", 0, 0)
-    blocking_items = [item for item in direct_items if _is_blocking_external_adverse_item(item)]
+    blocking_items = [
+        item
+        for item in direct_items
+        if _is_blocking_external_adverse_item(
+            item,
+            source_feature_row=source_feature_row,
+        )
+    ]
     if blocking_items:
         return NoncriticalEvidenceAssessment(False, "", len(direct_items), len(blocking_items))
     contextual_items = [
@@ -1598,12 +1855,20 @@ def _is_actionable_verified_adverse_external_item(
     )
 
 
-def _overwarning_blocking_external_items(news_cache: dict[str, Any]) -> list[dict[str, Any]]:
+def _overwarning_blocking_external_items(
+    news_cache: dict[str, Any],
+    *,
+    source_feature_row: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
     """Return external items strong enough to block FP mitigation."""
     return [
         item
         for item in _verified_adverse_external_items(news_cache)
         if _is_actionable_verified_adverse_external_item(item, news_cache)
+        and not _is_uncorroborated_material_financing_or_guarantee_item(
+            item,
+            source_feature_row=source_feature_row,
+        )
     ]
 
 
@@ -1627,8 +1892,17 @@ def _is_adverse_external_item(item: dict[str, Any]) -> bool:
     return str(item.get("evidence_quality", "")).lower() in ADVERSE_EVIDENCE_QUALITY
 
 
-def _is_blocking_external_adverse_item(item: dict[str, Any]) -> bool:
+def _is_blocking_external_adverse_item(
+    item: dict[str, Any],
+    *,
+    source_feature_row: dict[str, Any] | None = None,
+) -> bool:
     """Return whether an evidence item should prevent FP mitigation."""
+    if _is_uncorroborated_material_financing_or_guarantee_item(
+        item,
+        source_feature_row=source_feature_row,
+    ):
+        return False
     if item.get("veto_candidate") is True:
         return True
     source = str(item.get("source", "")).lower()
@@ -1990,7 +2264,9 @@ def _decision_trace_items(
             gate="hidden_tail_risk",
             label="숨은 꼬리위험 점검",
             triggered=hidden_tail_risk.triggered,
-            severity="risk" if hidden_tail_risk.triggered else "info",
+            severity="risk"
+            if hidden_tail_risk.triggered and hidden_tail_risk.risk_signal
+            else ("watch" if hidden_tail_risk.triggered else "info"),
             summary=hidden_tail_risk.reason
             or "직접 관련 외부 위험 근거로 모델 투자적격 판단을 뒤집을 신호는 제한적입니다.",
         ),
@@ -2093,6 +2369,13 @@ def _conflict_resolution(
             "위원회 의견을 부적격으로 보수 조정했습니다."
         )
     if hidden_tail_risk.triggered:
+        if not hidden_tail_risk.risk_signal:
+            return (
+                f"모델 원판단은 {prediction_label}이지만, 직접 관련 외부 규모성 공시가 "
+                "추가 확인 대상으로 확인되어 위원회 의견은 보류로 정리했습니다. 다만 "
+                "치명 문맥이나 실질 부실 전이 근거는 제한적이어서 위험 보류가 아닌 "
+                "확인필요 보류로 구분했습니다."
+            )
         return (
             f"모델 원판단은 {prediction_label}이지만, 직접 관련 외부 위험 근거가 "
             "모델이 놓칠 수 있는 숨은 꼬리위험을 보완해 위원회 의견은 보류로 정리했습니다."
@@ -2162,6 +2445,13 @@ def _final_review_memo(
             "외부 또는 정책 위험 신호가 있어 위원회 의견을 부적격으로 정리했습니다."
         )
     if hidden_tail_risk.triggered:
+        if not hidden_tail_risk.risk_signal:
+            return (
+                f"모델 원판단은 {prediction_label}으로 보존합니다. 다만 직접 관련 "
+                "규모성 공시가 확인되어 최종 적격으로 바로 확정하지 않고 보류로 "
+                "정리했습니다. 치명 문맥이나 현금흐름 악화가 함께 확인된 실질 부실 "
+                f"근거는 제한적이므로 세부 유형은 확인필요 보류입니다. {hidden_tail_risk.reason}"
+            )
         return (
             f"모델 원판단은 {prediction_label}으로 보존합니다. 다만 직접 관련 외부 위험 "
             f"근거가 확인되어 재무제표 기반 모델이 놓칠 수 있는 FN 가능성을 보완했습니다. "
