@@ -754,7 +754,13 @@ def _dashboard_stage2_async_workers() -> int:
     return max(1, min(raw_value, 4))
 
 
-@st.cache_resource(show_spinner=False)
+_stage2_executor_cache = cast(
+    Callable[[Callable[[int], ThreadPoolExecutor]], Callable[[int], ThreadPoolExecutor]],
+    st.cache_resource(show_spinner=False),
+)
+
+
+@_stage2_executor_cache
 def _dashboard_stage2_executor(max_workers: int) -> ThreadPoolExecutor:
     """Share a bounded executor across Streamlit reruns."""
     return ThreadPoolExecutor(
