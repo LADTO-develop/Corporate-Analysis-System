@@ -8,10 +8,11 @@ import os
 import re
 from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor
-from datetime import date
+from datetime import date, datetime
 from html import escape
 from pathlib import Path
 from typing import cast
+from zoneinfo import ZoneInfo
 
 import altair as alt
 import pandas as pd
@@ -93,7 +94,7 @@ from cas.dashboard.streamlit_compat import (
 from cas.dashboard.theme import inject_dashboard_theme
 from cas.evidence import collect_external_evidence
 from cas.ratings import lookup_prior_rating_reference
-from cas.utils.live_cache import read_json_cache, stable_cache_key, write_json_cache
+from cas.utils.live_cache import live_cache_dir, read_json_cache, stable_cache_key, write_json_cache
 
 LOGGER = logging.getLogger(__name__)
 
@@ -746,6 +747,24 @@ def _dashboard_cache_write(
     )
 
 
+def _dashboard_cache_file_path(namespace: str, key: str) -> Path:
+    """Return the dashboard cache file path for metadata display."""
+    safe_namespace = namespace.replace("/", "_").replace("..", "_")
+    return live_cache_dir() / safe_namespace / f"{key}.json"
+
+
+def _dashboard_cache_saved_at_label(namespace: str, key: str) -> str | None:
+    """Return a user-facing saved timestamp for an existing dashboard cache file."""
+    path = _dashboard_cache_file_path(namespace, key)
+    if not path.exists():
+        return None
+    try:
+        saved_at = datetime.fromtimestamp(path.stat().st_mtime, tz=ZoneInfo("Asia/Seoul"))
+    except OSError:
+        return None
+    return saved_at.strftime("%Y-%m-%d %H:%M")
+
+
 def _dashboard_stage2_async_workers() -> int:
     """Return the small worker pool size for live Stage 2 dashboard jobs."""
     try:
@@ -889,6 +908,15 @@ def _dashboard_stage2_job_key(
             }
         ),
     )
+
+
+def _dashboard_stage2_header_request_key(selected_row: pd.Series) -> str:
+    """Return the key used when the selected-company header requests precise review."""
+    fiscal_year = _optional_int(selected_row.get("fiscal_year"))
+    fiscal_year_text = (
+        str(fiscal_year) if fiscal_year is not None else str(selected_row.get("fiscal_year"))
+    )
+    return f"{_stock_code_text(selected_row.get('stock_code'))}:{fiscal_year_text}"
 
 
 def _persist_dashboard_committee_context(
@@ -1266,6 +1294,67 @@ def _dashboard_needs_live_stage2_from_views(
         bool(evidence_snapshot.get("has_critical_risk"))
         or (_optional_int(evidence_snapshot.get("veto_candidate_count")) or 0) > 0
         or (_optional_int(evidence_snapshot.get("high_confidence_critical_count")) or 0) > 0
+    )
+
+
+def _render_dashboard_live_stage2_notice(
+    container: st.delta_generator.DeltaGenerator,
+    *,
+    tone: str,
+    title: str,
+    body: str,
+    status: str | None = None,
+    loading: bool = False,
+) -> None:
+    """Render the live Stage 2 review notice in a calm dashboard style."""
+    tone_class = tone if tone in {"info", "running", "ready", "error"} else "info"
+    status_html = ""
+    if status:
+        status_html = f"<div class='committee-live-note-badge'>{escape(status)}</div>"
+    loading_html = ""
+    if loading:
+        loading_html = (
+            "<div class='committee-live-note-loader' aria-hidden='true'>"
+            "<span class='committee-live-note-spinner'></span>"
+            "<span class='committee-live-note-progress'><span></span></span>"
+            "</div>"
+        )
+    container.markdown(
+        (
+            f"<div class='committee-live-note {escape(tone_class)}'>"
+            f"{status_html}"
+            f"<div class='committee-live-note-title'>{escape(title)}</div>"
+            f"<div class='committee-live-note-body'>{escape(body)}</div>"
+            f"{loading_html}"
+            "</div>"
+        ),
+        unsafe_allow_html=True,
+    )
+
+
+def _render_dashboard_live_stage2_loading_screen() -> None:
+    """Render a loading-only state while precise AI review is running."""
+    st.markdown(
+        (
+            "<div class='committee-live-loading-screen'>"
+            "<div class='committee-live-loading-header'>"
+            "<span class='committee-live-loading-spinner' aria-hidden='true'></span>"
+            "<div>"
+            "<div class='committee-live-loading-title'>정밀 AI 검토 결과를 준비하고 있어요</div>"
+            "<div class='committee-live-loading-body'>"
+            "뉴스·공시 근거를 다시 읽고 위험 근거와 완화 근거를 맞춰보는 중입니다. "
+            "완료되면 새로고침 버튼으로 결과를 반영할 수 있어요."
+            "</div>"
+            "</div>"
+            "</div>"
+            "<div class='committee-live-loading-steps'>"
+            "<div><span></span><p>외부 근거 재확인</p></div>"
+            "<div><span></span><p>위험·완화 요인 정리</p></div>"
+            "<div><span></span><p>최종 위원회 의견 생성</p></div>"
+            "</div>"
+            "</div>"
+        ),
+        unsafe_allow_html=True,
     )
 
 
@@ -3092,11 +3181,27 @@ def render_committee_view_tab(
             "기업별 prediction_scores.csv가 연결되면 이 탭에서 1차 모델 판단과 2차 위원회 판단을 함께 볼 수 있습니다."
         )
         return
+    committee_cache_saved_at = None
     if committee_cache_hit:
-        if committee_context_source == DASHBOARD_LIVE_STAGE2_RUNNER:
-            st.caption("저장된 Agno live 위원회 검토 결과를 바로 불러왔어요.")
-        else:
-            st.caption("방금 확인한 기업이라 저장된 빠른 위원회 검토 결과를 바로 불러왔어요.")
+        resolved_committee_cache_key = _dashboard_committee_cache_key(
+            selected_row,
+            prediction_row,
+            evidence_snapshot,
+            stage2_runner=committee_context_source,
+        )
+        if resolved_committee_cache_key:
+            committee_cache_saved_at = _dashboard_cache_saved_at_label(
+                "dashboard_committee_context",
+                resolved_committee_cache_key,
+            )
+    if committee_cache_hit:
+        saved_at_suffix = (
+            f" 저장 시각: {committee_cache_saved_at}" if committee_cache_saved_at else ""
+        )
+        if committee_context_source != DASHBOARD_LIVE_STAGE2_RUNNER:
+            st.caption(
+                f"방금 확인한 기업이라 저장된 빠른 위원회 검토 결과를 바로 불러왔어요.{saved_at_suffix}"
+            )
 
     model_view = _as_plain_dict(committee_context.get("model_view"))
     committee_view = _as_plain_dict(committee_context.get("committee_view"))
@@ -3151,36 +3256,98 @@ def render_committee_view_tab(
     requested_dashboard_runner = _dashboard_stage2_runner_name()
     live_review_suggested = _dashboard_needs_live_stage2_from_views(model_view, evidence_snapshot)
     if requested_dashboard_runner == DASHBOARD_LIVE_STAGE2_RUNNER:
-        live_control_cols = st.columns([0.64, 0.18, 0.18])
-        if live_stage2_status == "running":
-            live_control_cols[0].info(
-                "Agno live 검토가 백그라운드에서 실행 중입니다. 완료 전까지는 현재 저장된 검토 결과를 보여줍니다."
-            )
-        elif committee_context_source == DASHBOARD_LIVE_STAGE2_RUNNER:
-            live_control_cols[0].success("Agno live 검토 결과를 반영한 화면입니다.")
-        elif isinstance(live_stage2_status, str) and live_stage2_status.startswith("error:"):
-            live_control_cols[0].warning(
-                f"Agno live 검토가 실패해 빠른 검토 결과를 보여줍니다. {live_stage2_status.removeprefix('error:')}"
-            )
-        elif live_review_suggested:
-            live_control_cols[0].info(
-                "2차 검토 트리거가 있어 빠른 검토 결과를 먼저 보여줍니다. 필요하면 Agno live 검토를 실행할 수 있어요."
-            )
-        else:
-            live_control_cols[0].caption(
-                "현재 기업은 2차 live 트리거가 낮아 빠른 검토 결과를 우선 표시합니다."
-            )
-
         live_job_key = _dashboard_stage2_job_key(selected_row, prediction_row)
         live_job_running = False
         if live_job_key:
             live_job = st.session_state.get(live_job_key)
             live_job_running = isinstance(live_job, Future) and not live_job.done()
+        header_start_request = st.session_state.get("dashboard_stage2_header_start_request")
+        if header_start_request == _dashboard_stage2_header_request_key(selected_row):
+            st.session_state.pop("dashboard_stage2_header_start_request", None)
+            if not live_job_running and prediction_row is not None:
+                _start_dashboard_live_stage2_job(
+                    selected_row=selected_row,
+                    prediction_row=prediction_row,
+                    local_shap=local_shap,
+                    peer_slice=peer_slice,
+                )
+                st.rerun()
+
+        live_control_cols = st.columns([0.70, 0.15, 0.15])
+        if committee_context_source == DASHBOARD_LIVE_STAGE2_RUNNER:
+            displayed_review_status = (
+                (
+                    f"현재 화면: 저장된 정밀 AI 검토 · 저장됨: {committee_cache_saved_at}"
+                    if committee_cache_saved_at
+                    else "현재 화면: 저장된 정밀 AI 검토"
+                )
+                if committee_cache_hit
+                else "현재 화면: 방금 실행한 정밀 AI 검토"
+            )
+        else:
+            displayed_review_status = (
+                (
+                    f"현재 화면: 저장된 빠른 검토 · 저장됨: {committee_cache_saved_at}"
+                    if committee_cache_saved_at
+                    else "현재 화면: 저장된 빠른 검토"
+                )
+                if committee_cache_hit
+                else "현재 화면: 빠른 검토"
+            )
+        if live_stage2_status == "running":
+            _render_dashboard_live_stage2_notice(
+                live_control_cols[0],
+                tone="running",
+                status="정밀 AI 검토 진행 중",
+                title="정밀 AI 검토를 실행 중입니다",
+                body=(
+                    "뉴스와 공시를 다시 읽는 중이에요. 완료 전까지는 정밀 검토 영역을 "
+                    "로딩 화면으로 표시합니다."
+                ),
+                loading=True,
+            )
+        elif committee_context_source == DASHBOARD_LIVE_STAGE2_RUNNER:
+            ready_status = displayed_review_status.replace("현재 화면: ", "")
+            live_control_cols[0].caption(f"정밀 AI 검토 결과 표시 중 · {ready_status}")
+        elif isinstance(live_stage2_status, str) and live_stage2_status.startswith("error:"):
+            _render_dashboard_live_stage2_notice(
+                live_control_cols[0],
+                tone="error",
+                status=displayed_review_status,
+                title="정밀 검토를 완료하지 못했습니다",
+                body=(
+                    "현재는 빠른 검토 결과를 보여줍니다. "
+                    f"{live_stage2_status.removeprefix('error:')}"
+                ),
+            )
+        elif live_review_suggested:
+            _render_dashboard_live_stage2_notice(
+                live_control_cols[0],
+                tone="info",
+                status=f"{displayed_review_status} · 정밀 AI 검토 미실행",
+                title="현재는 빠른 검토 결과입니다",
+                body=(
+                    "모델 판단만으로 끝내기 애매한 신호가 있어요. 정밀 검토 버튼을 누르면 "
+                    "AI가 뉴스·공시를 다시 읽고 위험 근거와 완화 근거를 더 꼼꼼히 확인합니다."
+                ),
+            )
+        else:
+            _render_dashboard_live_stage2_notice(
+                live_control_cols[0],
+                tone="info",
+                status=displayed_review_status,
+                title="빠른 검토 결과를 보여주는 중입니다",
+                body=(
+                    "현재 기업은 추가로 깊게 볼 위험 신호가 크지 않아 빠른 결과를 먼저 보여줍니다. "
+                    "필요하면 정밀 검토로 뉴스·공시를 다시 읽을 수 있어요."
+                ),
+            )
+
         if live_control_cols[1].button(
-            "Agno 실행",
+            "정밀 검토",
             key=f"{live_job_key}:start" if live_job_key else "dashboard_stage2_live_start",
             disabled=live_job_running or prediction_row is None,
-            type="primary" if live_review_suggested else "secondary",
+            type="secondary",
         ):
             _start_dashboard_live_stage2_job(
                 selected_row=selected_row,
@@ -3190,11 +3357,19 @@ def render_committee_view_tab(
             )
             st.rerun()
         if live_control_cols[2].button(
-            "상태 새로고침",
+            "새로고침",
             key=f"{live_job_key}:refresh" if live_job_key else "dashboard_stage2_live_refresh",
             disabled=not live_job_running,
         ):
             st.rerun()
+        if live_stage2_status == "running":
+            _render_dashboard_live_stage2_loading_screen()
+            return
+    elif st.session_state.get(
+        "dashboard_stage2_header_start_request"
+    ) == _dashboard_stage2_header_request_key(selected_row):
+        st.session_state.pop("dashboard_stage2_header_start_request", None)
+        st.info("정밀 AI 검토 실행 모드가 꺼져 있어 현재는 빠른 검토 결과를 보여줍니다.")
 
     if veto_triggered:
         summary_text = (
@@ -3245,10 +3420,10 @@ def render_committee_view_tab(
         feature_map,
     )
     highlight_risk_items = (
-        full_risk_items[:2] if selected_output_format == "brief" else full_risk_items
+        full_risk_items if selected_output_format == "detailed" else full_risk_items[:2]
     )
     highlight_mitigation_items = (
-        full_mitigation_items[:2] if selected_output_format == "brief" else full_mitigation_items
+        full_mitigation_items if selected_output_format == "detailed" else full_mitigation_items[:2]
     )
     conflict_text = _friendly_committee_text(
         committee_view.get("conflict_resolution")
@@ -3261,18 +3436,9 @@ def render_committee_view_tab(
         feature_map,
     )
 
-    conclusion_tab, factor_tab, external_tab = st.tabs(
-        ["위원회 결론", "위험·완화 근거", "외부근거 확인"]
-    )
+    factor_tab, external_tab = st.tabs(["위험·완화 근거", "외부근거 확인"])
 
-    with conclusion_tab:
-        render_committee_section_divider("결론")
-        st.subheader("먼저 볼 위원회 판단")
-        st.caption(
-            "이 탭은 사용자가 가장 먼저 확인할 결론 화면입니다. "
-            "2차 에이전트 위원회가 최종적으로 어느 단계로 봤는지와, "
-            "1차 모델 판단과 달라진 이유를 먼저 보여줍니다."
-        )
+    with factor_tab:
         render_committee_key_highlights(
             committee_label=committee_stage_label,
             committee_decision_type_label=committee_reason_label,
@@ -3287,11 +3453,7 @@ def render_committee_view_tab(
             risk_items=highlight_risk_items,
             mitigation_items=highlight_mitigation_items,
             renderers=committee_panel_renderers,
-        )
-        render_committee_hold_subtype_guide(
-            decision_type_label=committee_decision_type_label,
-            risk_signal=committee_risk_signal,
-            renderers=committee_panel_renderers,
+            max_highlight_items=3 if selected_output_format == "detailed" else 2,
         )
 
         with st.expander("1차 모델과 비교해서 보기", expanded=False):
@@ -3383,26 +3545,31 @@ def render_committee_view_tab(
             )
             render_summary_banner("판단 차이 해석", summary_text, summary_color)
 
-        st.markdown("#### 판단 단계 설명")
-        st.caption(
-            "같은 보류라도 이유가 다를 수 있어요. 위원회가 이 기업을 어떤 관점에서 "
-            "다시 봐야 한다고 판단했는지 단계별로 보여줍니다."
-        )
-        render_committee_signal_guide(
-            decision_type_label=committee_decision_type_label,
-            risk_signal=committee_risk_signal,
-            renderers=committee_panel_renderers,
-        )
-        raw_decision_trace = committee_view.get("decision_trace")
-        decision_trace = (
-            [item for item in raw_decision_trace if isinstance(item, dict)]
-            if isinstance(raw_decision_trace, list)
-            else []
-        )
-        render_committee_decision_trace(
-            decision_trace,
-            expanded=selected_output_format == "detailed",
-        )
+        with st.expander("판단 단계와 규칙 자세히 보기", expanded=False):
+            st.caption(
+                "같은 보류라도 이유가 다를 수 있어요. 위원회가 이 기업을 어떤 관점에서 "
+                "다시 봐야 한다고 판단했는지 단계별로 보여줍니다."
+            )
+            render_committee_hold_subtype_guide(
+                decision_type_label=committee_decision_type_label,
+                risk_signal=committee_risk_signal,
+                renderers=committee_panel_renderers,
+            )
+            render_committee_signal_guide(
+                decision_type_label=committee_decision_type_label,
+                risk_signal=committee_risk_signal,
+                renderers=committee_panel_renderers,
+            )
+            raw_decision_trace = committee_view.get("decision_trace")
+            decision_trace = (
+                [item for item in raw_decision_trace if isinstance(item, dict)]
+                if isinstance(raw_decision_trace, list)
+                else []
+            )
+            render_committee_decision_trace(
+                decision_trace,
+                expanded=selected_output_format == "detailed",
+            )
 
     with factor_tab:
         render_committee_section_divider("위험·완화 근거")

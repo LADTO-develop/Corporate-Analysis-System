@@ -412,29 +412,64 @@ def render_committee_review_hero(
         risk_signal=risk_signal,
     )
     normalized_summary = _normalize_committee_text(summary_text)
+    fact_rows = [
+        ("1차 모델", renderers.render_decision_badge(model_display_label)),
+        ("판단 차이", renderers.render_decision_badge(decision_gap_label)),
+        ("강제 경고", renderers.render_decision_badge(veto_label)),
+        ("위원회 신뢰도", escape(renderers.format_percent(final_confidence))),
+    ]
+    fact_rows_html = "".join(
+        (
+            "<div class='committee-review-fact-row'>"
+            f"<span class='committee-review-fact-label'>{escape(label)}</span>"
+            f"<span class='committee-review-fact-value'>{value}</span>"
+            "</div>"
+        )
+        for label, value in fact_rows
+    )
+    current_stage_key = re.sub(r"\s+", "", committee_label or "")
+    stage_steps = [
+        ("적격", "확인된 위험 낮음"),
+        ("관찰", "추가 확인 필요"),
+        ("위험주의", "먼저 볼 위험 있음"),
+        ("부적격", "신용위험 높음"),
+    ]
+    stage_steps_html_parts = []
+    for label, caption in stage_steps:
+        active_class = "active" if re.sub(r"\s+", "", label) == current_stage_key else ""
+        stage_steps_html_parts.append(
+            "<div class='committee-stage-step "
+            f"{active_class}'>"
+            f"<span>{escape(label)}</span>"
+            f"<small>{escape(caption)}</small>"
+            "</div>"
+        )
+    stage_steps_html = "".join(stage_steps_html_parts)
     st.markdown(
         (
             f"<div class='committee-review-hero {escape(tone)}'>"
             "<div class='committee-review-layout'>"
             "<div>"
-            "<div class='committee-review-eyebrow'>Committee Review</div>"
-            "<div class='committee-review-title'>위원회는 이렇게 봤어요</div>"
+            "<div class='committee-review-eyebrow'>AI 위원회 결론</div>"
+            "<div class='committee-review-title-row'>"
+            f"<div class='committee-review-title'>{escape(committee_label)}</div>"
+            f"{renderers.render_decision_badge(committee_decision_type_label)}"
+            "</div>"
             f"<div class='committee-review-summary'>{escape(normalized_summary)}</div>"
             "<div class='committee-review-chip-row'>"
-            f"<span class='committee-review-chip'>1차 모델 {escape(model_display_label)}</span>"
-            f"<span class='committee-review-chip'>판단 차이 {escape(decision_gap_label)}</span>"
-            f"<span class='committee-review-chip'>강제 경고 {escape(veto_label)}</span>"
+            f"<span class='committee-review-chip'>{escape(committee_risk_signal_label)}</span>"
+            f"<span class='committee-review-chip'>신뢰도 {escape(renderers.format_percent(final_confidence))}</span>"
             "</div>"
             "</div>"
-            "<div class='committee-review-score'>"
-            "<div class='committee-review-score-label'>최종 위원회 의견</div>"
-            f"<div class='committee-review-score-value'>{escape(committee_label)}</div>"
-            f"{renderers.render_decision_badge(committee_decision_type_label)}"
-            "<div class='committee-review-score-caption'>"
-            f"{escape(committee_risk_signal_label)} · 신뢰도 {escape(renderers.format_percent(final_confidence))}"
+            "<div class='committee-review-facts'>"
+            "<div class='committee-review-facts-title'>판단 근거 요약</div>"
+            f"{fact_rows_html}"
             "</div>"
             "</div>"
             "</div>"
+            "<div class='committee-stage-scale'>"
+            "<div class='committee-stage-scale-label'>판단 단계</div>"
+            f"<div class='committee-stage-track'>{stage_steps_html}</div>"
             "</div>"
         ),
         unsafe_allow_html=True,
@@ -493,29 +528,21 @@ def render_committee_key_highlights(
     risk_items: list[str],
     mitigation_items: list[str],
     renderers: CommitteePanelRenderers,
+    max_highlight_items: int = 2,
 ) -> None:
     """Render the committee result as a quick executive summary."""
     top_risk_items = _committee_highlight_items(
         risk_items,
         "위원회가 별도로 강조한 위험 요인은 없습니다.",
+        max_items=max_highlight_items,
     )
     top_mitigation_items = _committee_highlight_items(
         mitigation_items,
         "위원회가 별도로 강조한 완화 요인은 없습니다.",
+        max_items=max_highlight_items,
     )
     checkpoint_text = final_memo or conflict_text or summary_text
-    decision_meta = (
-        f"세부 판단: {committee_decision_type_label} / 1차 모델: {model_display_label} / "
-        f"판단 차이: {decision_gap_label} / "
-        f"위험신호: {committee_risk_signal_label} / "
-        f"강제 경고: {veto_label} / 신뢰도: {renderers.format_percent(final_confidence)}"
-    )
     cards = [
-        (
-            "",
-            "판단 상태",
-            decision_meta,
-        ),
         (
             "risk",
             "가장 먼저 볼 위험",
@@ -530,7 +557,11 @@ def render_committee_key_highlights(
             "warning",
             "사용자 체크 포인트",
             _committee_highlight_body_html(
-                _committee_highlight_items([checkpoint_text], checkpoint_text, max_items=2)
+                _committee_highlight_items(
+                    [checkpoint_text],
+                    checkpoint_text,
+                    max_items=max_highlight_items,
+                )
             ),
         ),
     ]
@@ -545,14 +576,7 @@ def render_committee_key_highlights(
     )
     st.markdown(
         (
-            "<div class='committee-decision-strip'>"
-            "<div class='committee-decision-topline'>"
-            "<span class='committee-decision-label'>2차 위원회 최종 판단</span>"
-            f"{renderers.render_decision_badge(committee_label)}"
-            f"{renderers.render_decision_badge(committee_decision_type_label)}"
-            "</div>"
-            f"<p class='committee-decision-summary'>{escape(_normalize_committee_text(summary_text))}</p>"
-            "</div>"
+            "<div class='committee-highlights-heading'>핵심 확인 포인트</div>"
             f"<div class='committee-highlight-grid'>{card_html}</div>"
         ),
         unsafe_allow_html=True,

@@ -121,81 +121,58 @@ def render_selected_company_detail_header(
     industry = selected_row.get("_display_industry") or formatters.to_industry_display_label(
         selected_row.get("industry_macro_category")
     )
-    probability = selected_row.get("_display_probability") or formatters.format_percent(
-        selected_row.get("prob_speculative")
-    )
     stock_code = formatters.stock_code_text(selected_row.get("stock_code"))
-    risk_band = selected_row.get("risk_band") or "-"
-    risk_tone_class = market_card_risk_tone_class(risk_band)
     size_label = selected_row.get("_display_size") or formatters.to_size_label(
         selected_row.get("firm_size_group")
     )
-    review_priority = str(selected_row.get("stage2_review_priority") or "none").strip().lower()
-    review_status_map = {
-        "high": (
-            "주의 깊게 살펴보기",
-            "에이전트 위원회가 먼저 확인해야 할 신호가 있다고 본 기업입니다.",
-            "high",
-        ),
-        "medium": (
-            "한 번 더 확인하기",
-            "모델 결과와 보조 신호를 함께 보며 추가 확인이 필요한 기업입니다.",
-            "watch",
-        ),
-        "watch": (
-            "변화 신호 확인하기",
-            "지금 바로 위험하다고 단정하기보다는, 최근 흐름을 한 번 더 살펴보면 좋은 기업입니다.",
-            "watch",
-        ),
-        "none": (
-            "기본 모니터링",
-            "현재는 큰 경고보다 정기적으로 흐름을 확인하는 관점에서 보는 기업입니다.",
-            "stable",
-        ),
-    }
-    review_status, review_caption, review_tone = review_status_map.get(
-        review_priority,
-        review_status_map["none"],
-    )
-    review_badge = "에이전트 검토"
+    review_request_key = _company_review_request_key(selected_row, stock_code)
 
     with title_col:
-        st.markdown(
-            (
-                "<div class='selected-company-hero'>"
-                "<div>"
-                "<div class='selected-company-eyebrow'>기업 신용도 해석</div>"
-                f"<div class='selected-company-title'>{escape(str(selected_row.get('corp_name') or '-'))}</div>"
-                "<div class='selected-company-subtitle'>"
-                "에이전트 위원회가 재무 데이터와 뉴스·공시 근거를 함께 살펴보고, "
-                "이 기업의 신용도를 어떻게 해석하면 좋을지 쉽게 정리해드립니다. "
-                "먼저 위원회 판단을 확인하고, 필요하면 모델 확률과 주요 지표를 이어서 볼 수 있어요."
-                "</div>"
-                "<div class='selected-company-chip-row'>"
-                f"<span class='selected-company-chip'>{escape(str(market))}</span>"
-                f"<span class='selected-company-chip'>{escape(stock_code)}</span>"
-                f"<span class='selected-company-chip'>{escape(str(industry))}</span>"
-                f"<span class='selected-company-chip'>{escape(str(size_label))}</span>"
-                "</div>"
-                "</div>"
-                "<div class='selected-company-signal'>"
-                "<div>"
-                "<div class='selected-company-signal-label'>에이전트 위원회 판단</div>"
-                f"<div class='selected-company-signal-value'>{escape(review_status)}</div>"
-                "<div class='selected-company-signal-caption'>"
-                f"{escape(review_caption)}"
-                "</div>"
-                "</div>"
-                "<div class='selected-company-badge-row'>"
-                f"<span class='selected-company-badge neutral'>모델 참고 확률 {escape(str(probability))}</span>"
-                f"<span class='selected-company-badge {escape(risk_tone_class)}'>모델상 {escape(str(risk_band))}</span>"
-                f"<span class='selected-company-badge {escape(review_tone)}'>{escape(review_badge)}</span>"
-                "</div>"
-                "</div>"
-                "</div>"
-            ),
-            unsafe_allow_html=True,
-        )
+        info_col, action_col = st.columns([0.64, 0.36], gap="medium")
+        with info_col:
+            st.markdown(
+                (
+                    "<div class='selected-company-hero'>"
+                    "<div>"
+                    "<div class='selected-company-eyebrow'>기업 신용도 해석</div>"
+                    f"<div class='selected-company-title'>{escape(str(selected_row.get('corp_name') or '-'))}</div>"
+                    "<div class='selected-company-subtitle'>"
+                    "선택한 기업의 기본 정보를 먼저 보여드립니다. 아래 탭에서 위원회 검토, "
+                    "재무 핵심, 시장·산업 비교를 이어서 확인할 수 있어요."
+                    "</div>"
+                    "<div class='selected-company-chip-row'>"
+                    f"<span class='selected-company-chip'>{escape(str(market))}</span>"
+                    f"<span class='selected-company-chip'>{escape(stock_code)}</span>"
+                    f"<span class='selected-company-chip'>{escape(str(industry))}</span>"
+                    f"<span class='selected-company-chip'>{escape(str(size_label))}</span>"
+                    "</div>"
+                    "</div>"
+                    "</div>"
+                ),
+                unsafe_allow_html=True,
+            )
+        with action_col:
+            st.markdown(
+                (
+                    "<div class='selected-company-action-panel'>"
+                    "<div class='selected-company-action-label'>정밀 AI 검토</div>"
+                    "<div class='selected-company-action-title'>뉴스·공시까지 다시 확인</div>"
+                    "<div class='selected-company-action-body'>"
+                    "버튼을 누르면 AI 위원회가 외부 근거를 다시 읽고, 아래 위원회 검토 탭에 "
+                    "정밀 검토 상태와 결과를 표시합니다."
+                    "</div>"
+                    "</div>"
+                ),
+                unsafe_allow_html=True,
+            )
+            if st.button(
+                "정밀 검토 실행",
+                key=f"selected_company_stage2_start_{review_request_key}",
+                use_container_width=True,
+                type="secondary",
+            ):
+                st.session_state["dashboard_stage2_header_start_request"] = review_request_key
+                st.rerun()
 
 
 def build_company_explorer_frame(
@@ -265,6 +242,16 @@ def _company_selection_key(row: pd.Series, *, formatters: LandingPageFormatters)
     except (TypeError, ValueError):
         fiscal_year_text = str(fiscal_year)
     return f"{row.get('market')}-{formatters.stock_code_text(row.get('stock_code'))}-{fiscal_year_text}"
+
+
+def _company_review_request_key(row: pd.Series, stock_code_text: str) -> str:
+    """Build a small key used to request precise review from the detail header."""
+    fiscal_year = row.get("fiscal_year")
+    try:
+        fiscal_year_text = str(int(float(str(fiscal_year))))
+    except (TypeError, ValueError):
+        fiscal_year_text = str(fiscal_year)
+    return f"{stock_code_text}:{fiscal_year_text}"
 
 
 def _company_search_label(row: pd.Series, *, formatters: LandingPageFormatters) -> str:
