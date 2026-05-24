@@ -229,13 +229,16 @@ SPAC 합병 예비심사 등 절차성 거래정지는 `caution/procedural_or_on
 감사의견 거절, 상장폐지, 관리종목, 영업정지, 자본잠식처럼 실질 부실 사건은
 `adverse` 또는 `veto`로 유지한다.
 
-계약해지와 영업정지는 제목만으로는 실질성을 알기 어렵기 때문에 OpenDART 상세 공시
-보강을 추가했다. `단일판매ㆍ공급계약해지` 후보는 `document.xml` 원문에서 매출 대비
-계약해지 비율을 파싱하고, `영업정지` 후보는 `bsnSp.json`의 `sl_vs` 또는
-`bsnsp_amt/rsl`로 매출 대비 영업정지 비율을 계산한다. 이 값은
-`materiality_ratio`, `materiality_basis`, `materiality_source`로 EvidenceAuditAgent에
-전달된다. 매출 대비 3% 미만은 절차성/일회성, 3~10%는 관찰 수준, 10% 이상은 실질
-부정 공시로 유지해 정상기업 과잉 보류를 줄이는 재료로 사용한다.
+계약해지, 영업정지, 자금조달, 채무보증, 소송은 제목만으로는 실질성을 알기 어렵기
+때문에 OpenDART 상세 공시 보강을 추가했다. `단일판매ㆍ공급계약해지` 후보는
+`document.xml` 원문에서 매출 대비 계약해지 비율을 파싱하고, `영업정지` 후보는
+`bsnSp.json`의 `sl_vs` 또는 `bsnsp_amt/rsl`로 매출 대비 영업정지 비율을 계산한다.
+자금조달은 발행금액/자기자본과 희석률, 채무보증은 보증금액/자기자본, 소송은
+청구금액/자기자본 또는 매출액을 파싱한다. 이 값은 `materiality_ratio`,
+`materiality_basis`, `materiality_source`, 필요 시 `dilution_ratio`로
+EvidenceAuditAgent에 전달된다. 기업 규모 대비 3% 미만은 절차성/일회성, 3~10%는
+관찰 수준, 10% 이상은 실질 부정 공시로 유지해 정상기업 과잉 보류를 줄이는 재료로
+사용한다.
 `bsnSp.json`에 상세 비율이 없으면 `document.xml` 원문 fallback으로 `최근매출액 대비`,
 `영업정지금액`, `최근매출액` 표 값을 다시 파싱한다. 이 fallback은 종속회사 영업정지가
 모회사 신용위험으로 바로 전이되는지 판단하는 보조 근거다.

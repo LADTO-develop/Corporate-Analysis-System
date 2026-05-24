@@ -104,7 +104,7 @@ OpenAI/Claude Agno 호출 지연 outlier를 줄일 때는 `CAS_STAGE2_AGENT_TIME
 `output_dir/retry_artifacts/retry_attempt_N_results.csv`에 남는다. 불필요하면
 `--no-retry-failed-artifacts`를 붙인다.
 
-OpenDART 공시 분류는 `external_evidence_v6` 캐시 버전을 사용한다. 이 버전부터
+OpenDART 공시 분류는 `external_evidence_v7` 캐시 버전을 사용한다. 이 버전부터
 소송/계약해지/자금조달/거래정지 공시를 모두 같은 위험으로 보지 않고,
 `disclosure_severity`, `disclosure_event_class`, `disclosure_materiality`를 함께 남긴다.
 일정금액 미만 소송, 자율공시 단일 계약해지, SPAC 합병 절차성 거래정지는
@@ -123,6 +123,11 @@ v6에서는 `bsnSp.json`에 비율이 없거나 매칭되는 영업정지 행이
 `document.xml` 원문 fallback을 한 번 더 수행한다. 이 fallback은 종속회사 영업정지
 공시에서 `최근매출액 대비`, `영업정지금액`, `최근매출액` 같은 원문 표 값을 찾아
 모회사 신용위험으로 볼 만큼 중대한지 다시 분류한다.
+
+v7에서는 상세 공시 materiality 범위를 확장했다. 자금조달 공시는 발행금액/자기자본과
+희석률, 채무보증은 보증금액/자기자본, 소송은 청구금액/자기자본 또는 매출액을 파싱한다.
+3% 미만은 낮은 중요도, 3~10%는 watch context, 10% 이상은 `substantive_adverse`로
+분류해 제목만으로 위험을 확정하지 않도록 한다.
 
 배치 결과 CSV에는 Stage 2 실행 진단 컬럼이 함께 남는다. 주요 컬럼은 `stage2_backend_name`, `stage2_llm_cache_hit`, `stage2_total_elapsed_seconds`, `stage2_agent_elapsed_seconds_sum`, `stage2_quant_credit_elapsed_seconds`, `stage2_evidence_audit_elapsed_seconds`, `stage2_chair_report_elapsed_seconds`, `stage2_review_qa_elapsed_seconds`, `stage2_review_qa_triggered`, `stage2_review_qa_trigger_reasons`, `stage2_review_qa_recommended_action`, `stage2_review_qa_advisory_applied`, `stage2_review_qa_advisory_apply_reason`, `stage2_risk_recall_qa_elapsed_seconds`, `stage2_risk_recall_qa_triggered`, `stage2_risk_recall_qa_trigger_reasons`, `stage2_risk_recall_qa_recommended_action`, `stage2_risk_recall_qa_advisory_applied`, `stage2_risk_recall_qa_advisory_apply_reason`, `stage2_parallel_independent_agents`다. 실제 API 속도를 측정할 때는 `stage2_llm_cache_hit=False`인 행을 기준으로 보고, 캐시 재사용 여부를 제거하려면 위 예시처럼 `--no-stage2-llm-cache`를 붙인다.
 

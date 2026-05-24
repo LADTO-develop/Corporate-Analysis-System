@@ -1123,7 +1123,9 @@ def test_collect_external_evidence_downgrades_spac_merger_halt_opendart(
             "OPENDART_API_KEY": "dummy",
             "CAS_OPENDART_CORP_CODE_CACHE_PATH": str(tmp_path / "corp_codes.csv"),
         },
-        session=_ProceduralDisclosureOpenDartSession("주권매매거래정지(SPAC 합병(예비심사청구대상))"),
+        session=_ProceduralDisclosureOpenDartSession(
+            "주권매매거래정지(SPAC 합병(예비심사청구대상))"
+        ),
     )
 
     assert snapshot["status"] == "ready"
@@ -1237,6 +1239,155 @@ def test_collect_external_evidence_keeps_high_ratio_contract_cancellation_advers
     assert item["disclosure_event_class"] == "material_contract_cancellation"
     assert item["disclosure_materiality"] == "substantive_adverse"
     assert item["materiality_ratio"] == "0.1520"
+    assert item["evidence_quality"] == "high"
+
+
+def test_collect_external_evidence_downgrades_low_ratio_financing(
+    tmp_path: Path,
+) -> None:
+    document_text = """
+<DOCUMENT>
+  <TABLE>
+    <TR><TD>발행금액</TD><TD>250,000,000</TD></TR>
+    <TR><TD>자기자본</TD><TD>10,000,000,000</TD></TR>
+  </TABLE>
+</DOCUMENT>
+"""
+    snapshot = collect_external_evidence(
+        company_name="테스트기업",
+        stock_code="000001",
+        as_of_date="2020-12-31",
+        env={
+            "CAS_ENABLE_EXTERNAL_EVIDENCE": "1",
+            "OPENDART_API_KEY": "dummy",
+            "CAS_OPENDART_CORP_CODE_CACHE_PATH": str(tmp_path / "corp_codes.csv"),
+        },
+        session=_DetailMaterialityOpenDartSession(
+            "유상증자결정",
+            document_text=document_text,
+        ),
+    )
+
+    assert snapshot["status"] == "ready"
+    assert snapshot["has_critical_risk"] is False
+    assert snapshot["veto_candidate_count"] == 0
+    item = snapshot["items"][0]
+    assert item["provider_relevance"] == "caution"
+    assert item["disclosure_severity"] == "caution"
+    assert item["disclosure_event_class"] == "low_materiality_financing"
+    assert item["disclosure_materiality"] == "procedural_or_one_off"
+    assert item["materiality_ratio"] == "0.0250"
+    assert "발행금액/자기자본" in item["materiality_basis"]
+    assert item["critical_terms"] == []
+
+
+def test_collect_external_evidence_keeps_high_dilution_financing_adverse(
+    tmp_path: Path,
+) -> None:
+    document_text = """
+<DOCUMENT>
+  <TABLE>
+    <TR><TD>발행금액</TD><TD>600,000,000</TD></TR>
+    <TR><TD>자기자본</TD><TD>20,000,000,000</TD></TR>
+    <TR><TD>증자비율</TD><TD>15.5%</TD></TR>
+  </TABLE>
+</DOCUMENT>
+"""
+    snapshot = collect_external_evidence(
+        company_name="테스트기업",
+        stock_code="000001",
+        as_of_date="2020-12-31",
+        env={
+            "CAS_ENABLE_EXTERNAL_EVIDENCE": "1",
+            "OPENDART_API_KEY": "dummy",
+            "CAS_OPENDART_CORP_CODE_CACHE_PATH": str(tmp_path / "corp_codes.csv"),
+        },
+        session=_DetailMaterialityOpenDartSession(
+            "유상증자결정",
+            document_text=document_text,
+        ),
+    )
+
+    item = snapshot["items"][0]
+    assert item["provider_relevance"] == "risk"
+    assert item["disclosure_severity"] == "adverse"
+    assert item["disclosure_event_class"] == "material_financing"
+    assert item["disclosure_materiality"] == "substantive_adverse"
+    assert item["materiality_ratio"] == "0.1550"
+    assert item["dilution_ratio"] == "0.1550"
+    assert "희석률" in item["materiality_basis"]
+    assert item["evidence_quality"] == "high"
+
+
+def test_collect_external_evidence_downgrades_low_ratio_debt_guarantee(
+    tmp_path: Path,
+) -> None:
+    document_text = """
+<DOCUMENT>
+  <TABLE>
+    <TR><TD>채무보증금액</TD><TD>200,000,000</TD></TR>
+    <TR><TD>자기자본</TD><TD>10,000,000,000</TD></TR>
+  </TABLE>
+</DOCUMENT>
+"""
+    snapshot = collect_external_evidence(
+        company_name="테스트기업",
+        stock_code="000001",
+        as_of_date="2020-12-31",
+        env={
+            "CAS_ENABLE_EXTERNAL_EVIDENCE": "1",
+            "OPENDART_API_KEY": "dummy",
+            "CAS_OPENDART_CORP_CODE_CACHE_PATH": str(tmp_path / "corp_codes.csv"),
+        },
+        session=_DetailMaterialityOpenDartSession(
+            "타인에대한채무보증결정",
+            document_text=document_text,
+        ),
+    )
+
+    item = snapshot["items"][0]
+    assert item["provider_relevance"] == "caution"
+    assert item["disclosure_severity"] == "caution"
+    assert item["disclosure_event_class"] == "low_materiality_debt_guarantee"
+    assert item["disclosure_materiality"] == "procedural_or_one_off"
+    assert item["materiality_ratio"] == "0.0200"
+    assert "채무보증금액/자기자본" in item["materiality_basis"]
+    assert item["veto_candidate"] is False
+
+
+def test_collect_external_evidence_keeps_high_ratio_litigation_adverse(
+    tmp_path: Path,
+) -> None:
+    document_text = """
+<DOCUMENT>
+  <TABLE>
+    <TR><TD>청구금액</TD><TD>1,200,000,000</TD></TR>
+    <TR><TD>자기자본</TD><TD>10,000,000,000</TD></TR>
+  </TABLE>
+</DOCUMENT>
+"""
+    snapshot = collect_external_evidence(
+        company_name="테스트기업",
+        stock_code="000001",
+        as_of_date="2020-12-31",
+        env={
+            "CAS_ENABLE_EXTERNAL_EVIDENCE": "1",
+            "OPENDART_API_KEY": "dummy",
+            "CAS_OPENDART_CORP_CODE_CACHE_PATH": str(tmp_path / "corp_codes.csv"),
+        },
+        session=_DetailMaterialityOpenDartSession(
+            "소송등의제기",
+            document_text=document_text,
+        ),
+    )
+
+    item = snapshot["items"][0]
+    assert item["provider_relevance"] == "risk"
+    assert item["disclosure_severity"] == "adverse"
+    assert item["disclosure_event_class"] == "material_litigation"
+    assert item["disclosure_materiality"] == "substantive_adverse"
+    assert item["materiality_ratio"] == "0.1200"
+    assert "청구금액/자기자본" in item["materiality_basis"]
     assert item["evidence_quality"] == "high"
 
 
