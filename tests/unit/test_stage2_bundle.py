@@ -166,9 +166,7 @@ def test_stage2_compact_prompt_payload_is_role_scoped() -> None:
         "peer_comparison_rows": [{"feature": "current_ratio", "industry_median": 1.5}],
     }
 
-    quant_payload = build_stage2_input_bundle(state).to_compact_prompt_payload(
-        role="quant_credit"
-    )
+    quant_payload = build_stage2_input_bundle(state).to_compact_prompt_payload(role="quant_credit")
     evidence_payload = build_stage2_input_bundle(state).to_compact_prompt_payload(
         role="evidence_audit"
     )

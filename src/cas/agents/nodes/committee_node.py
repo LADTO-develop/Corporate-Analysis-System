@@ -634,9 +634,11 @@ def _is_substantive_external_risk_item(
     *,
     source_feature_row: dict[str, Any] | None = None,
 ) -> bool:
-    return _shared_substantive_external_risk_item(
-        item,
-        source_feature_row=source_feature_row,
+    return bool(
+        _shared_substantive_external_risk_item(
+            item,
+            source_feature_row=source_feature_row,
+        )
     )
 
 
@@ -1009,9 +1011,7 @@ def _apply_risk_recall_qa_advisory(
     )
     adjusted["committee_risk_signal"] = target_type == "risk_hold"
     if target_type == "risk_hold":
-        reason_tags, reason_labels, reason_summary = _risk_recall_hold_reason_fields(
-            apply_reason
-        )
+        reason_tags, reason_labels, reason_summary = _risk_recall_hold_reason_fields(apply_reason)
         adjusted["risk_hold_reason_tags"] = reason_tags
         adjusted["risk_hold_reason_labels"] = reason_labels
         adjusted["risk_hold_reason_summary"] = reason_summary
@@ -1242,9 +1242,11 @@ def _has_substantive_external_risk(
     *,
     source_feature_row: dict[str, Any] | None = None,
 ) -> bool:
-    return _shared_has_substantive_external_risk(
-        news_cache,
-        source_feature_row=source_feature_row,
+    return bool(
+        _shared_has_substantive_external_risk(
+            news_cache,
+            source_feature_row=source_feature_row,
+        )
     )
 
 
@@ -1843,9 +1845,11 @@ def _is_adverse_evidence_item(
     *,
     source_feature_row: dict[str, Any] | None = None,
 ) -> bool:
-    return _shared_substantive_external_risk_item(
-        item,
-        source_feature_row=source_feature_row,
+    return bool(
+        _shared_substantive_external_risk_item(
+            item,
+            source_feature_row=source_feature_row,
+        )
     )
 
 

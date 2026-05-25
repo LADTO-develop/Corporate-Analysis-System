@@ -433,10 +433,7 @@ def _risk_hold_has_financial_stress(
         _flag_is_true(row.get("is_2y_consecutive_operating_loss"))
         or _metric_below(row, "net_margin", -0.10),
         _metric_above(row, "capital_impairment_ratio", 0.0)
-        or (
-            _metric_below(row, "equity_ratio", 0.25)
-            and _metric_above(row, "debt_ratio", 1.50)
-        ),
+        or (_metric_below(row, "equity_ratio", 0.25) and _metric_above(row, "debt_ratio", 1.50)),
         _metric_below(row, "current_ratio", 1.0) and _metric_below(row, "cash_ratio", 0.10),
     ]
     if sum(1 for flag in financial_flags if flag) >= 2:
@@ -461,9 +458,9 @@ def _risk_hold_has_external_materiality(
     }:
         return True
     summary = treatment.materiality_summary
-    return bool(
-        _safe_int(summary.get("high_risk_financing_evidence_count")) or 0
-    ) or bool(summary.get("material_financing_blocks_tn_hold"))
+    return bool(_safe_int(summary.get("high_risk_financing_evidence_count")) or 0) or bool(
+        summary.get("material_financing_blocks_tn_hold")
+    )
 
 
 def _risk_hold_reason_labels(tags: list[RiskHoldReasonTag]) -> list[str]:
@@ -1599,9 +1596,11 @@ def _material_financing_evidence_blocks_tn_hold(
     source_feature_row: dict[str, Any] | None = None,
 ) -> bool:
     """Block TN overhold relief only for repeated or explicitly high-risk financing."""
-    return _shared_material_financing_evidence_blocks_tn_hold(
-        news_cache,
-        source_feature_row=source_feature_row,
+    return bool(
+        _shared_material_financing_evidence_blocks_tn_hold(
+            news_cache,
+            source_feature_row=source_feature_row,
+        )
     )
 
 
@@ -1610,14 +1609,16 @@ def _high_risk_financing_evidence_count(
     *,
     source_feature_row: dict[str, Any] | None = None,
 ) -> int:
-    return _shared_high_risk_financing_evidence_count(
-        news_cache,
-        source_feature_row=source_feature_row,
+    return int(
+        _shared_high_risk_financing_evidence_count(
+            news_cache,
+            source_feature_row=source_feature_row,
+        )
     )
 
 
 def _financing_evidence_items(news_cache: dict[str, Any]) -> list[dict[str, Any]]:
-    return _shared_financing_evidence_items(news_cache)
+    return cast(list[dict[str, Any]], _shared_financing_evidence_items(news_cache))
 
 
 def _is_uncorroborated_material_financing_or_guarantee_item(
@@ -1626,9 +1627,11 @@ def _is_uncorroborated_material_financing_or_guarantee_item(
     source_feature_row: dict[str, Any] | None,
 ) -> bool:
     """Treat material financing/guarantee as contextual unless distress corroborates it."""
-    return _shared_is_uncorroborated_material_financing_or_guarantee_item(
-        item,
-        source_feature_row=source_feature_row,
+    return bool(
+        _shared_is_uncorroborated_material_financing_or_guarantee_item(
+            item,
+            source_feature_row=source_feature_row,
+        )
     )
 
 
@@ -1637,30 +1640,32 @@ def _hidden_tail_evidence_requires_risk_signal(
     *,
     source_feature_row: dict[str, Any],
 ) -> bool:
-    return _shared_hidden_tail_evidence_requires_risk_signal(
-        items,
-        source_feature_row=source_feature_row,
+    return bool(
+        _shared_hidden_tail_evidence_requires_risk_signal(
+            items,
+            source_feature_row=source_feature_row,
+        )
     )
 
 
 def _is_material_financing_or_guarantee_item(item: dict[str, Any]) -> bool:
-    return _shared_is_material_financing_or_guarantee_item(item)
+    return bool(_shared_is_material_financing_or_guarantee_item(item))
 
 
 def _has_hard_distress_terms(item: dict[str, Any]) -> bool:
-    return _shared_has_hard_distress_terms(item)
+    return bool(_shared_has_hard_distress_terms(item))
 
 
 def _material_financing_or_guarantee_has_financial_corroboration(
     row: dict[str, Any],
 ) -> bool:
-    return _shared_material_financing_or_guarantee_has_financial_corroboration(row)
+    return bool(_shared_material_financing_or_guarantee_has_financial_corroboration(row))
 
 
 def _material_financing_or_guarantee_has_severe_financial_corroboration(
     row: dict[str, Any],
 ) -> bool:
-    return _shared_material_financing_or_guarantee_has_severe_financial_corroboration(row)
+    return bool(_shared_material_financing_or_guarantee_has_severe_financial_corroboration(row))
 
 
 def _financial_observation_count(row: dict[str, Any]) -> int:

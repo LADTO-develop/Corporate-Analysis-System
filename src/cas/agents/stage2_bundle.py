@@ -231,9 +231,7 @@ class Stage2InputBundle:
         if role in {"stage2", "quant_credit"}:
             payload["peer_comparison_rows"] = _compact_peer_rows(self.peer_comparison_rows)
         if role in {"stage2", "quant_credit", "chair_report"}:
-            payload["credit_policy_snapshot"] = _compact_credit_policy(
-                self.credit_policy_snapshot
-            )
+            payload["credit_policy_snapshot"] = _compact_credit_policy(self.credit_policy_snapshot)
         if role in {"stage2", "evidence_audit", "review_qa", "risk_recall_qa"}:
             payload["news_cache_snapshot"] = _compact_news_cache(
                 self.news_cache_snapshot,
@@ -508,7 +506,11 @@ def _materiality_prompt_summary(
     )
 
     raw_items = news_cache.get("items", [])
-    items = [item for item in raw_items if isinstance(item, dict)] if isinstance(raw_items, list) else []
+    items = (
+        [item for item in raw_items if isinstance(item, dict)]
+        if isinstance(raw_items, list)
+        else []
+    )
     materiality_items = [
         item for item in items if _safe_optional_float(item.get("materiality_ratio")) is not None
     ]

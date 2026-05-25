@@ -83,8 +83,7 @@ def evaluate_evidence_treatment(
         hard_distress = has_hard_distress_terms(item)
         hard_distress_detected = hard_distress_detected or hard_distress
         veto_or_confirmed = (
-            item.get("veto_candidate") is True
-            or item.get("critical_context_confirmed") is True
+            item.get("veto_candidate") is True or item.get("critical_context_confirmed") is True
         )
         veto_or_confirmed_count += int(veto_or_confirmed)
         substantive = substantive_external_risk_item(
@@ -200,8 +199,17 @@ def _is_watch_context_external_item(item: dict[str, Any]) -> bool:
 
 
 def _safe_int(value: object) -> int:
-    try:
+    if isinstance(value, bool):
         return int(value)
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float | str | bytes | bytearray):
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return 0
+    try:
+        return int(str(value))
     except (TypeError, ValueError):
         return 0
 

@@ -190,7 +190,9 @@ def test_evidence_audit_agent_scores_direct_external_risk_evidence() -> None:
     assert "보수 검토" in structured_output.model_challenge
     assert "보류 또는 부적격 검토" in structured_output.audit_conclusion
     assert any("외부근거 위험" in item for item in agent.findings)
-    assert any("recommended_evidence_treatment=critical_veto_review" in item for item in agent.findings)
+    assert any(
+        "recommended_evidence_treatment=critical_veto_review" in item for item in agent.findings
+    )
 
 
 def test_committee_view_exposes_final_decision_fields() -> None:

@@ -162,9 +162,7 @@ def _committee_view_payload(
             "risk_hold_reason_labels": [
                 str(item) for item in committee_view.get("risk_hold_reason_labels", []) or []
             ],
-            "risk_hold_reason_summary": str(
-                committee_view.get("risk_hold_reason_summary", "")
-            ),
+            "risk_hold_reason_summary": str(committee_view.get("risk_hold_reason_summary", "")),
             "veto_triggered": bool(committee_view.get("veto_triggered", False)),
             "hidden_tail_risk_flag": bool(committee_view.get("hidden_tail_risk_flag", False)),
             "hidden_tail_risk_reason": str(committee_view.get("hidden_tail_risk_reason", "")),
