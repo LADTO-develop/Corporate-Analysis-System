@@ -750,7 +750,7 @@ def _dashboard_cache_write(
 def _dashboard_cache_file_path(namespace: str, key: str) -> Path:
     """Return the dashboard cache file path for metadata display."""
     safe_namespace = namespace.replace("/", "_").replace("..", "_")
-    return live_cache_dir() / safe_namespace / f"{key}.json"
+    return Path(live_cache_dir()) / safe_namespace / f"{key}.json"
 
 
 def _dashboard_cache_saved_at_label(namespace: str, key: str) -> str | None:
