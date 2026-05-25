@@ -84,23 +84,15 @@ def run_quant_credit_agent(
 
 
 def _query(bundle: Stage2InputBundle) -> str:
+    prompt_context = bundle.to_compact_prompt_payload(role="quant_credit")
     prompt_payload = {
-        "company": {
-            "company_id": bundle.company_id,
-            "company_name": bundle.company_name,
-            "market": bundle.market,
-            "analysis_year": bundle.analysis_year,
-        },
-        "stage1_model": {
-            "prediction_label": bundle.prediction_label,
-            "probability_speculative": bundle.probability_speculative,
-            "xgboost_result": bundle.xgboost_result,
-            "model_view": bundle.model_view,
-        },
-        "prior_rating_reference": bundle.prior_rating_reference,
-        "source_feature_row": bundle.source_feature_row,
-        "peer_comparison_rows": list(bundle.peer_comparison_rows),
-        "credit_policy_snapshot": bundle.credit_policy_snapshot,
+        "company": prompt_context["company"],
+        "stage1_model": prompt_context["stage1_model"],
+        "prior_rating_reference": prompt_context["prior_rating_reference"],
+        "source_feature_row": prompt_context["financial_metrics"],
+        "peer_comparison_rows": prompt_context.get("peer_comparison_rows", []),
+        "credit_policy_snapshot": prompt_context.get("credit_policy_snapshot", {}),
+        "materiality_summary": prompt_context["materiality_summary"],
         "policy_guardrail": {
             "label_override_allowed": False,
             "rule_kr": (

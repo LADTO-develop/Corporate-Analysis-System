@@ -52,6 +52,7 @@ TRACE_GATES = (
     "boundary_rating_review",
     "overwarning_mitigation",
     "reject_confirmation",
+    "risk_hold_reason_tagging",
 )
 
 
@@ -592,6 +593,13 @@ def _result_row(
         "committee_decision_type": committee_view.get("committee_decision_type"),
         "committee_decision_type_label": committee_view.get("committee_decision_type_label"),
         "committee_risk_signal": bool(committee_view.get("committee_risk_signal", False)),
+        "risk_hold_reason_tags": " / ".join(
+            str(item) for item in committee_view.get("risk_hold_reason_tags", []) or []
+        ),
+        "risk_hold_reason_labels": " / ".join(
+            str(item) for item in committee_view.get("risk_hold_reason_labels", []) or []
+        ),
+        "risk_hold_reason_summary": committee_view.get("risk_hold_reason_summary", ""),
         "decision_trace": json.dumps(decision_trace, ensure_ascii=False, sort_keys=True),
         "committee_success": success,
         "committee_effect": effect,

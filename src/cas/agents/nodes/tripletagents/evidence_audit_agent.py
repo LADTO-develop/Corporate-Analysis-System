@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from cas.agents.signals.evidence_treatment_signals import evaluate_evidence_treatment
 from cas.agents.stage2_bundle import Stage2InputBundle
-from cas.agents.stage2_outputs import EvidenceAuditOutput
+from cas.agents.stage2_outputs import EvidenceAuditOutput, EvidenceTreatment
 
 from .runtime import (
     build_agno_agent,
@@ -50,6 +51,31 @@ class AgnoEvidenceAuditResponse(BaseModel):
         description=(
             "Evidence-bundle limitations such as missing providers, date filters, "
             "weak company relevance, or unverified snippets."
+        ),
+    )
+    critical_evidence_count: int = Field(
+        default=0,
+        ge=0,
+        description="Count of direct external items that should be treated as substantive or critical.",
+    )
+    watch_context_count: int = Field(
+        default=0,
+        ge=0,
+        description="Count of direct external items that are watch/context rather than critical.",
+    )
+    materiality_summary: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Structured materiality summary supplied in the prompt.",
+    )
+    hard_distress_detected: bool = Field(
+        default=False,
+        description="Whether hard distress terms such as delisting, insolvency, fraud, or default are detected.",
+    )
+    recommended_evidence_treatment: EvidenceTreatment = Field(
+        default="context_only",
+        description=(
+            "Recommended treatment: context_only, watch_context, substantive_review, "
+            "or critical_veto_review."
         ),
     )
 
@@ -98,6 +124,12 @@ def run_evidence_audit_agent(
         query=_query(bundle),
         response_model=AgnoEvidenceAuditResponse,
     )
+    prompt_context = bundle.to_compact_prompt_payload(role="evidence_audit")
+    treatment = evaluate_evidence_treatment(
+        bundle.news_cache_snapshot,
+        source_feature_row=bundle.source_feature_row,
+        materiality_summary=prompt_context["materiality_summary"],
+    )
     strength = _evidence_strength(result=result, status=bundle.news_status)
     model_challenge = _model_challenge(result=result, bundle=bundle, strength=strength)
     return EvidenceAuditOutput(
@@ -116,30 +148,42 @@ def run_evidence_audit_agent(
         external_evidence_findings=compact_items(
             result.critical_off_balance_risk,
             f"External risk level: {result.external_risk_level}",
+            (
+                "Structured evidence treatment: "
+                f"{treatment.recommended_evidence_treatment}; "
+                f"critical={treatment.critical_evidence_count}; "
+                f"watch={treatment.watch_context_count}"
+            ),
         ),
         evidence_limitations=compact_items(*result.evidence_limitations),
+        critical_evidence_count=treatment.critical_evidence_count,
+        watch_context_count=treatment.watch_context_count,
+        materiality_summary=treatment.materiality_summary,
+        hard_distress_detected=treatment.hard_distress_detected,
+        recommended_evidence_treatment=treatment.recommended_evidence_treatment,
         confidence=_confidence_for_strength(strength),
     )
 
 
 def _query(bundle: Stage2InputBundle) -> str:
+    prompt_context = bundle.to_compact_prompt_payload(role="evidence_audit")
+    compact_news = prompt_context["news_cache_snapshot"]
+    treatment = evaluate_evidence_treatment(
+        bundle.news_cache_snapshot,
+        source_feature_row=bundle.source_feature_row,
+        materiality_summary=prompt_context["materiality_summary"],
+    )
     prompt_payload = {
-        "company": {
-            "company_id": bundle.company_id,
-            "company_name": bundle.company_name,
-            "market": bundle.market,
-            "analysis_year": bundle.analysis_year,
-        },
-        "stage1_model": {
-            "prediction_label": bundle.prediction_label,
-            "probability_speculative": bundle.probability_speculative,
-        },
-        "prior_rating_reference": bundle.prior_rating_reference,
-        "source_feature_row": bundle.source_feature_row,
-        "news_cache_snapshot": bundle.news_cache_snapshot,
+        "company": prompt_context["company"],
+        "stage1_model": prompt_context["stage1_model"],
+        "prior_rating_reference": prompt_context["prior_rating_reference"],
+        "source_feature_row": prompt_context["financial_metrics"],
+        "news_cache_snapshot": compact_news,
+        "materiality_summary": prompt_context["materiality_summary"],
+        "structured_evidence_decision": treatment.as_payload(),
         "evidence_guardrail": {
             "news_status": bundle.news_status,
-            "as_of_date": bundle.news_cache_snapshot.get("as_of_date", ""),
+            "as_of_date": compact_news.get("as_of_date", ""),
             "external_evidence_available": not _external_evidence_unavailable(bundle.news_status),
             "disclosure_calibration_rule_kr": (
                 "공시가 caution/procedural_or_one_off/routine_context로 분류된 경우에는 "
@@ -148,6 +192,11 @@ def _query(bundle: Stage2InputBundle) -> str:
                 "기업 규모 대비 중요도를 우선 반영하고, dilution_basis가 있으면 희석률도 함께 본다. "
                 "adverse/veto, 반복 공시, 미해소 사건, 재무 차단 신호와 결합될 때만 "
                 "보수적 재검토 신호로 강화한다."
+            ),
+            "structured_output_rule_kr": (
+                "critical_evidence_count, watch_context_count, hard_distress_detected, "
+                "recommended_evidence_treatment는 structured_evidence_decision을 기준으로 "
+                "일관되게 채운다. watch_context는 위험 확정이 아니라 관찰/설명 보완으로 둔다."
             ),
             "rule_kr": (
                 "외부근거가 없거나 비활성화된 상태라면 특정 뉴스, 공시, 업황 사건을 "
@@ -261,6 +310,14 @@ def _unavailable_evidence_output(bundle: Stage2InputBundle) -> EvidenceAuditOutp
         ],
         external_evidence_findings=["확인된 외부 뉴스·공시 항목 없음"],
         evidence_limitations=[f"외부근거 수집 상태가 `{status}`라서 확인 가능한 근거가 없습니다."],
+        critical_evidence_count=0,
+        watch_context_count=0,
+        materiality_summary=evaluate_evidence_treatment(
+            bundle.news_cache_snapshot,
+            source_feature_row=bundle.source_feature_row,
+        ).materiality_summary,
+        hard_distress_detected=False,
+        recommended_evidence_treatment="context_only",
         confidence=0.45,
     )
 

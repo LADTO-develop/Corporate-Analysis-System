@@ -7,7 +7,6 @@ from typing import Any, Literal, cast
 from cas.agents.committee_assessments import (
     ADVERSE_EVIDENCE_QUALITY,
     ADVERSE_PROVIDER_RELEVANCE,
-    FINANCING_EVIDENCE_TERMS,
     BoundaryReviewAssessment,
     FinancialResilienceAssessment,
     HiddenTailRiskAssessment,
@@ -21,6 +20,7 @@ from cas.agents.committee_schema import (
     CommitteeLabel,
     CommitteeViewPayload,
     DecisionTraceItem,
+    RiskHoldReasonTag,
 )
 from cas.agents.committee_utils import (
     clean_evidence_summary_items as _clean_evidence_summary_items,
@@ -54,6 +54,36 @@ from cas.agents.committee_utils import (
 )
 from cas.agents.committee_utils import (
     safe_int as _safe_int,
+)
+from cas.agents.signals.evidence_treatment_signals import (
+    evaluate_evidence_treatment as _evaluate_evidence_treatment,
+)
+from cas.agents.signals.materiality_signals import (
+    financing_evidence_items as _shared_financing_evidence_items,
+)
+from cas.agents.signals.materiality_signals import (
+    has_hard_distress_terms as _shared_has_hard_distress_terms,
+)
+from cas.agents.signals.materiality_signals import (
+    hidden_tail_evidence_requires_risk_signal as _shared_hidden_tail_evidence_requires_risk_signal,
+)
+from cas.agents.signals.materiality_signals import (
+    high_risk_financing_evidence_count as _shared_high_risk_financing_evidence_count,
+)
+from cas.agents.signals.materiality_signals import (
+    is_material_financing_or_guarantee_item as _shared_is_material_financing_or_guarantee_item,
+)
+from cas.agents.signals.materiality_signals import (
+    is_uncorroborated_material_financing_or_guarantee_item as _shared_is_uncorroborated_material_financing_or_guarantee_item,
+)
+from cas.agents.signals.materiality_signals import (
+    material_financing_evidence_blocks_tn_hold as _shared_material_financing_evidence_blocks_tn_hold,
+)
+from cas.agents.signals.materiality_signals import (
+    material_financing_or_guarantee_has_financial_corroboration as _shared_material_financing_or_guarantee_has_financial_corroboration,
+)
+from cas.agents.signals.materiality_signals import (
+    material_financing_or_guarantee_has_severe_financial_corroboration as _shared_material_financing_or_guarantee_has_severe_financial_corroboration,
 )
 from cas.agents.stage2_bundle import Stage2InputBundle
 from cas.agents.state import AgentOutput, Recommendation
@@ -216,11 +246,6 @@ def build_committee_view_model(
         final_review_memo,
         _chair_report_memo_seed(agents, committee_label=committee_label),
     )
-    risk_factors = _clean_text_items(risk_factors)
-    mitigating_factors = _clean_text_items(mitigating_factors)
-    evidence_summary = _clean_evidence_summary_items(evidence_summary)
-    conflict_resolution = _clean_korean_review_text(conflict_resolution)
-    final_review_memo = _clean_korean_review_text(final_review_memo)
     decision_type = _committee_decision_type(
         committee_label=committee_label,
         prediction_label=prediction_label,
@@ -230,12 +255,35 @@ def build_committee_view_model(
         overwarning_mitigation=overwarning_mitigation,
         reject_confirmation=reject_confirmation,
     )
+    risk_hold_reason_tags = _risk_hold_reason_tags(
+        bundle=bundle,
+        decision_type=decision_type,
+        hidden_tail_risk=hidden_tail_risk,
+        secondary_review_risk=secondary_review_risk,
+        reject_confirmation=reject_confirmation,
+    )
+    risk_hold_reason_labels = _risk_hold_reason_labels(risk_hold_reason_tags)
+    risk_hold_reason_summary = _risk_hold_reason_summary(
+        tags=risk_hold_reason_tags,
+        labels=risk_hold_reason_labels,
+    )
+    if risk_hold_reason_summary:
+        final_review_memo = f"{final_review_memo} {risk_hold_reason_summary}"
+
+    risk_factors = _clean_text_items(risk_factors)
+    mitigating_factors = _clean_text_items(mitigating_factors)
+    evidence_summary = _clean_evidence_summary_items(evidence_summary)
+    conflict_resolution = _clean_korean_review_text(conflict_resolution)
+    final_review_memo = _clean_korean_review_text(final_review_memo)
 
     return CommitteeViewPayload(
         final_committee_label=committee_label,
         committee_decision_type=decision_type,
         committee_decision_type_label=_committee_decision_type_label(decision_type),
         committee_risk_signal=_committee_risk_signal(decision_type),
+        risk_hold_reason_tags=risk_hold_reason_tags,
+        risk_hold_reason_labels=risk_hold_reason_labels,
+        risk_hold_reason_summary=risk_hold_reason_summary,
         veto_triggered=veto_triggered,
         hidden_tail_risk_flag=hidden_tail_risk.triggered,
         hidden_tail_risk_reason=hidden_tail_risk.reason,
@@ -254,6 +302,8 @@ def build_committee_view_model(
             secondary_review_risk=secondary_review_risk,
             overwarning_mitigation=overwarning_mitigation,
             reject_confirmation=reject_confirmation,
+            risk_hold_reason_tags=risk_hold_reason_tags,
+            risk_hold_reason_summary=risk_hold_reason_summary,
         ),
         final_review_memo=final_review_memo,
     )
@@ -312,6 +362,145 @@ def _committee_decision_type_label(decision_type: CommitteeDecisionType) -> str:
 
 def _committee_risk_signal(decision_type: CommitteeDecisionType) -> bool:
     return decision_type in {"risk_hold", "reject"}
+
+
+_RISK_HOLD_REASON_LABELS: dict[RiskHoldReasonTag, str] = {
+    "combined_watch_hold": "재무+외부 복합 관찰",
+    "financial_stress_hold": "재무 스트레스",
+    "external_materiality_hold": "외부 중요도 근거",
+    "secondary_radar_hold": "2차 보조 레이더",
+    "model_reject_confirmation_hold": "부적격 확정 전 보류",
+    "model_risk_hold": "모델 위험 보류",
+}
+
+
+def _risk_hold_reason_tags(
+    *,
+    bundle: Stage2InputBundle,
+    decision_type: CommitteeDecisionType,
+    hidden_tail_risk: HiddenTailRiskAssessment,
+    secondary_review_risk: SecondaryReviewRiskAssessment,
+    reject_confirmation: RejectConfirmationAssessment,
+) -> list[RiskHoldReasonTag]:
+    """Explain why a risk_hold remained a hold without changing the decision."""
+    if decision_type != "risk_hold":
+        return []
+
+    financial_stress = _risk_hold_has_financial_stress(
+        bundle,
+        secondary_review_risk=secondary_review_risk,
+        reject_confirmation=reject_confirmation,
+    )
+    external_materiality = _risk_hold_has_external_materiality(
+        bundle,
+        hidden_tail_risk=hidden_tail_risk,
+    )
+    tags: list[RiskHoldReasonTag] = []
+    if financial_stress and external_materiality:
+        tags.append("combined_watch_hold")
+    if financial_stress:
+        tags.append("financial_stress_hold")
+    if external_materiality:
+        tags.append("external_materiality_hold")
+    if secondary_review_risk.triggered:
+        tags.append("secondary_radar_hold")
+    if reject_confirmation.triggered:
+        tags.append("model_reject_confirmation_hold")
+    if not tags:
+        tags.append("model_risk_hold")
+    return list(dict.fromkeys(tags))[:4]
+
+
+def _risk_hold_has_financial_stress(
+    bundle: Stage2InputBundle,
+    *,
+    secondary_review_risk: SecondaryReviewRiskAssessment,
+    reject_confirmation: RejectConfirmationAssessment,
+) -> bool:
+    row = bundle.source_feature_row
+    if _has_severe_financial_watch_signal(row):
+        return True
+    if _has_secondary_overhold_guardrail_blocker(row):
+        return True
+    if reject_confirmation.signal_count >= 2:
+        return True
+    financial_flags = [
+        _flag_is_true(row.get("icr_under_1")) or _metric_below(row, "interest_coverage_ratio", 1.0),
+        _flag_is_true(row.get("is_2y_consecutive_ocf_deficit"))
+        or _metric_below(row, "cashflow_coverage_ratio", 0.0)
+        or _metric_below(row, "ocf_to_total_liabilities", 0.0)
+        or _metric_below(row, "ocf_to_sales", 0.0),
+        _flag_is_true(row.get("is_2y_consecutive_operating_loss"))
+        or _metric_below(row, "net_margin", -0.10),
+        _metric_above(row, "capital_impairment_ratio", 0.0)
+        or (
+            _metric_below(row, "equity_ratio", 0.25)
+            and _metric_above(row, "debt_ratio", 1.50)
+        ),
+        _metric_below(row, "current_ratio", 1.0) and _metric_below(row, "cash_ratio", 0.10),
+    ]
+    if sum(1 for flag in financial_flags if flag) >= 2:
+        return True
+    return bool(secondary_review_risk.triggered and secondary_review_risk.risk_signal)
+
+
+def _risk_hold_has_external_materiality(
+    bundle: Stage2InputBundle,
+    *,
+    hidden_tail_risk: HiddenTailRiskAssessment,
+) -> bool:
+    if hidden_tail_risk.triggered:
+        return True
+    treatment = _evaluate_evidence_treatment(
+        bundle.news_cache_snapshot,
+        source_feature_row=bundle.source_feature_row,
+    )
+    if treatment.recommended_evidence_treatment in {
+        "substantive_review",
+        "critical_veto_review",
+    }:
+        return True
+    summary = treatment.materiality_summary
+    return bool(
+        _safe_int(summary.get("high_risk_financing_evidence_count")) or 0
+    ) or bool(summary.get("material_financing_blocks_tn_hold"))
+
+
+def _risk_hold_reason_labels(tags: list[RiskHoldReasonTag]) -> list[str]:
+    return [_RISK_HOLD_REASON_LABELS[tag] for tag in tags]
+
+
+def _risk_hold_reason_summary(
+    *,
+    tags: list[RiskHoldReasonTag],
+    labels: list[str],
+) -> str:
+    if not tags:
+        return ""
+    label_text = ", ".join(labels)
+    if "combined_watch_hold" in tags:
+        return (
+            "위험 보류 이유 태그는 "
+            f"{label_text}입니다. 재무 스트레스와 외부 중요도 근거가 함께 남아 있어, "
+            "정상기업 과잉 보류 guardrail을 바로 적용하지 않고 위험 보류로 유지했습니다."
+        )
+    if "financial_stress_hold" in tags:
+        return (
+            "위험 보류 이유 태그는 "
+            f"{label_text}입니다. 치명 외부근거가 약하더라도 현금흐름, 이자보상, 손익, "
+            "유동성 중 방어가 충분하지 않은 축이 있어 적격으로 바로 낮추지 않았습니다."
+        )
+    if "external_materiality_hold" in tags:
+        return (
+            "위험 보류 이유 태그는 "
+            f"{label_text}입니다. 공시나 외부근거의 기업 규모 대비 중요도가 남아 있어 "
+            "단순 경계 보류보다 강한 재검토 신호로 유지했습니다."
+        )
+    return (
+        "위험 보류 이유 태그는 "
+        f"{label_text}입니다. 부적격 확정까지는 아니지만 적격으로 낮추기에는 "
+        "잔여 위험 신호가 남아 보류로 유지했습니다."
+    )
 
 
 def _veto_triggered(bundle: Stage2InputBundle, *, veto_rules: VetoRules) -> bool:
@@ -1281,12 +1470,12 @@ def _reject_confirmation_assessment(
 
     probability = bundle.probability_speculative
     very_high_model_warning = probability >= 0.90
-    direct_adverse_evidence = bool(
-        _overwarning_blocking_external_items(
-            bundle.news_cache_snapshot,
-            source_feature_row=bundle.source_feature_row,
-        )
+    direct_adverse_items = _overwarning_blocking_external_items(
+        bundle.news_cache_snapshot,
+        source_feature_row=bundle.source_feature_row,
     )
+    direct_adverse_evidence = bool(direct_adverse_items)
+    hard_external_confirmation = _has_hard_reject_external_confirmation(direct_adverse_items)
     extreme_financial_distress = _has_extreme_financial_distress_signal(bundle.source_feature_row)
     severe_financial_watch = very_high_model_warning and _has_severe_financial_watch_signal(
         bundle.source_feature_row
@@ -1302,13 +1491,30 @@ def _reject_confirmation_assessment(
         signals.append("강한 재무위험")
 
     signal_count = len(signals)
-    if signal_count >= 2:
+    if signal_count >= 2 and (hard_external_confirmation or extreme_financial_distress):
         reason = (
             "부적격 확정 게이트 통과: "
             f"{', '.join(signals)} 신호가 함께 확인되어 모델의 부적격 경고를 "
             "위원회 부적격 의견으로 확정할 수 있습니다."
         )
         return RejectConfirmationAssessment(True, False, reason, signal_count, tuple(signals))
+
+    if signal_count >= 2:
+        reason = (
+            "부적격 확정 게이트 부분 충족: "
+            f"{', '.join(signals)} 신호가 확인되었지만, 치명 외부근거나 극단 재무위험이 "
+            "함께 확인되지는 않았습니다. 부적격 확정은 유보하고 위험 보류로 "
+            "추가 근거 확인이 필요합니다."
+        )
+        return RejectConfirmationAssessment(
+            False,
+            True,
+            reason,
+            signal_count,
+            tuple(signals),
+            True,
+            "고확률 모델 경고와 재무/외부 watch 신호는 있으나 확정형 부실 근거는 제한적입니다.",
+        )
 
     review_risk_signal, review_risk_reason = _unconfirmed_reject_review_risk_assessment(
         bundle,
@@ -1339,6 +1545,16 @@ def _reject_confirmation_assessment(
         "확인필요 보류로 두고 추가 근거 확인이 필요합니다."
     )
     return RejectConfirmationAssessment(False, True, reason, signal_count, tuple(signals))
+
+
+def _has_hard_reject_external_confirmation(items: list[dict[str, Any]]) -> bool:
+    """Return whether adverse external evidence is hard enough to confirm reject."""
+    for item in items:
+        if item.get("veto_candidate") is True or item.get("critical_context_confirmed") is True:
+            return True
+        if _shared_has_hard_distress_terms(item):
+            return True
+    return False
 
 
 def _unconfirmed_reject_review_risk_assessment(
@@ -1383,13 +1599,9 @@ def _material_financing_evidence_blocks_tn_hold(
     source_feature_row: dict[str, Any] | None = None,
 ) -> bool:
     """Block TN overhold relief only for repeated or explicitly high-risk financing."""
-    return bool(
-        _repeated_financing_evidence_count(news_cache) >= 2
-        or _high_risk_financing_evidence_count(
-            news_cache,
-            source_feature_row=source_feature_row,
-        )
-        >= 1
+    return _shared_material_financing_evidence_blocks_tn_hold(
+        news_cache,
+        source_feature_row=source_feature_row,
     )
 
 
@@ -1398,38 +1610,14 @@ def _high_risk_financing_evidence_count(
     *,
     source_feature_row: dict[str, Any] | None = None,
 ) -> int:
-    return sum(
-        1
-        for item in _financing_evidence_items(news_cache)
-        if (
-            not _is_uncorroborated_material_financing_or_guarantee_item(
-                item,
-                source_feature_row=source_feature_row,
-            )
-            and (
-                item.get("veto_candidate") is True
-                or item.get("critical_context_confirmed") is True
-                or str(item.get("provider_relevance", "")).lower() in ADVERSE_PROVIDER_RELEVANCE
-                or str(item.get("disclosure_severity", "")).lower() in {"adverse", "veto"}
-            )
-        )
+    return _shared_high_risk_financing_evidence_count(
+        news_cache,
+        source_feature_row=source_feature_row,
     )
 
 
 def _financing_evidence_items(news_cache: dict[str, Any]) -> list[dict[str, Any]]:
-    raw_items = news_cache.get("items", [])
-    if not isinstance(raw_items, list):
-        return []
-    items: list[dict[str, Any]] = []
-    for item in raw_items:
-        if not isinstance(item, dict) or item.get("company_match") is not True:
-            continue
-        if str(item.get("source", "")).lower() != "opendart":
-            continue
-        text = _compact_text(" ".join(str(item.get(key, "")) for key in ("title", "summary")))
-        if any(term in text for term in FINANCING_EVIDENCE_TERMS):
-            items.append(item)
-    return items
+    return _shared_financing_evidence_items(news_cache)
 
 
 def _is_uncorroborated_material_financing_or_guarantee_item(
@@ -1438,15 +1626,10 @@ def _is_uncorroborated_material_financing_or_guarantee_item(
     source_feature_row: dict[str, Any] | None,
 ) -> bool:
     """Treat material financing/guarantee as contextual unless distress corroborates it."""
-    if not _is_material_financing_or_guarantee_item(item):
-        return False
-    if item.get("veto_candidate") is True or item.get("critical_context_confirmed") is True:
-        return False
-    if _has_hard_distress_terms(item):
-        return False
-    if not source_feature_row:
-        return False
-    return not _material_financing_or_guarantee_has_financial_corroboration(source_feature_row)
+    return _shared_is_uncorroborated_material_financing_or_guarantee_item(
+        item,
+        source_feature_row=source_feature_row,
+    )
 
 
 def _hidden_tail_evidence_requires_risk_signal(
@@ -1454,124 +1637,30 @@ def _hidden_tail_evidence_requires_risk_signal(
     *,
     source_feature_row: dict[str, Any],
 ) -> bool:
-    if not items:
-        return False
-    for item in items:
-        if not _is_material_financing_or_guarantee_item(item):
-            return True
-        if (
-            item.get("veto_candidate") is True
-            or item.get("critical_context_confirmed") is True
-            or _has_hard_distress_terms(item)
-        ):
-            return True
-    if _has_extreme_financial_distress_signal(source_feature_row):
-        return True
-    return _material_financing_or_guarantee_has_severe_financial_corroboration(source_feature_row)
-
-
-def _is_material_financing_or_guarantee_item(item: dict[str, Any]) -> bool:
-    if str(item.get("source", "")).lower() != "opendart":
-        return False
-    if item.get("company_match") is not True:
-        return False
-    event_class = str(item.get("disclosure_event_class", "")).lower()
-    if event_class in {"material_financing", "material_debt_guarantee"}:
-        return True
-    materiality = str(item.get("disclosure_materiality", "")).lower()
-    ratio = _safe_float(item.get("materiality_ratio"))
-    if materiality != "substantive_adverse" and (ratio is None or ratio < 0.10):
-        return False
-    text = _compact_text(" ".join(str(item.get(key, "")) for key in ("title", "summary")))
-    guarantee_markers = ("채무보증", "타인에대한채무보증")
-    return any(term in text for term in FINANCING_EVIDENCE_TERMS) or any(
-        marker in text for marker in guarantee_markers
+    return _shared_hidden_tail_evidence_requires_risk_signal(
+        items,
+        source_feature_row=source_feature_row,
     )
 
 
+def _is_material_financing_or_guarantee_item(item: dict[str, Any]) -> bool:
+    return _shared_is_material_financing_or_guarantee_item(item)
+
+
 def _has_hard_distress_terms(item: dict[str, Any]) -> bool:
-    terms = {str(term).strip() for term in _item_critical_terms(item)}
-    hard_terms = {
-        "자본잠식",
-        "부도",
-        "파산",
-        "회생",
-        "상장폐지",
-        "관리종목",
-        "감사의견거절",
-        "의견거절",
-        "횡령",
-        "배임",
-        "채무불이행",
-    }
-    if terms.intersection(hard_terms):
-        return True
-    text = _compact_text(" ".join(str(item.get(key, "")) for key in ("title", "summary")))
-    return any(term in text for term in hard_terms)
+    return _shared_has_hard_distress_terms(item)
 
 
 def _material_financing_or_guarantee_has_financial_corroboration(
     row: dict[str, Any],
 ) -> bool:
-    if _financial_observation_count(row) < 3:
-        return True
-    if _has_extreme_financial_distress_signal(row):
-        return True
-    weak_axes = [
-        _metric_below(row, "cashflow_coverage_ratio", 0.0)
-        or _metric_below(row, "ocf_to_total_liabilities", 0.0)
-        or _metric_below(row, "ocf_to_sales", 0.0)
-        or _flag_is_true(row.get("is_2y_consecutive_ocf_deficit")),
-        _metric_below(row, "interest_coverage_ratio", 1.0) or _flag_is_true(row.get("icr_under_1")),
-        _metric_below(row, "net_margin", -0.10)
-        or _flag_is_true(row.get("is_2y_consecutive_operating_loss")),
-        _metric_below(row, "equity_ratio", 0.25)
-        or _metric_above(row, "debt_ratio", 3.0)
-        or _metric_above(row, "total_borrowings_ratio", 0.65)
-        or _metric_above(row, "capital_impairment_ratio", 0.0),
-        _metric_below(row, "current_ratio", 1.0) and _metric_below(row, "cash_ratio", 0.10),
-    ]
-    return sum(1 for passed in weak_axes if passed) >= 2
+    return _shared_material_financing_or_guarantee_has_financial_corroboration(row)
 
 
 def _material_financing_or_guarantee_has_severe_financial_corroboration(
     row: dict[str, Any],
 ) -> bool:
-    if _financial_observation_count(row) < 3:
-        return True
-    cashflow_weak = (
-        _metric_below(row, "cashflow_coverage_ratio", 0.0)
-        or _metric_below(row, "ocf_to_total_liabilities", 0.0)
-        or _metric_below(row, "ocf_to_sales", 0.0)
-        or _flag_is_true(row.get("is_2y_consecutive_ocf_deficit"))
-    )
-    interest_weak = _metric_below(row, "interest_coverage_ratio", 1.0) or _flag_is_true(
-        row.get("icr_under_1")
-    )
-    earnings_weak = _metric_below(row, "net_margin", -0.10) or _flag_is_true(
-        row.get("is_2y_consecutive_operating_loss")
-    )
-    leverage_weak = (
-        _metric_below(row, "equity_ratio", 0.25)
-        or _metric_above(row, "debt_ratio", 3.0)
-        or _metric_above(row, "total_borrowings_ratio", 0.65)
-        or _metric_above(row, "capital_impairment_ratio", 0.0)
-    )
-    liquidity_weak = _metric_below(row, "current_ratio", 1.0) and _metric_below(
-        row, "cash_ratio", 0.10
-    )
-    weak_axis_count = sum(
-        1
-        for passed in (
-            cashflow_weak,
-            interest_weak,
-            earnings_weak,
-            leverage_weak,
-            liquidity_weak,
-        )
-        if passed
-    )
-    return bool(weak_axis_count >= 3 or (cashflow_weak and weak_axis_count >= 2))
+    return _shared_material_financing_or_guarantee_has_severe_financial_corroboration(row)
 
 
 def _financial_observation_count(row: dict[str, Any]) -> int:
@@ -2232,6 +2321,8 @@ def _decision_trace_items(
     secondary_review_risk: SecondaryReviewRiskAssessment,
     overwarning_mitigation: OverwarningMitigationAssessment,
     reject_confirmation: RejectConfirmationAssessment,
+    risk_hold_reason_tags: list[RiskHoldReasonTag],
+    risk_hold_reason_summary: str,
 ) -> list[DecisionTraceItem]:
     """Build an auditable deterministic gate trace for Stage 2 decisions."""
     probability = bundle.probability_speculative
@@ -2309,6 +2400,14 @@ def _decision_trace_items(
             else ("watch" if reject_confirmation.triggered else "info"),
             summary=reject_confirmation.reason
             or "부적격 확정을 위한 복수의 강한 근거 조건은 충족하지 않았습니다.",
+        ),
+        DecisionTraceItem(
+            gate="risk_hold_reason_tagging",
+            label="위험 보류 이유 태그",
+            triggered=bool(risk_hold_reason_tags),
+            severity="risk" if risk_hold_reason_tags else "info",
+            summary=risk_hold_reason_summary
+            or "위험 보류가 아니므로 별도 위험 보류 이유 태그는 남기지 않았습니다.",
         ),
         DecisionTraceItem(
             gate="final_committee_decision",

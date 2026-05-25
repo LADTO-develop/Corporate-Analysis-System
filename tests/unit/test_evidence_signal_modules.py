@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from cas.agents.signals.debt_liquidity_signals import evaluate_debt_liquidity
+from cas.agents.signals.evidence_treatment_signals import evaluate_evidence_treatment
 from cas.agents.signals.external_evidence_signals import evaluate_external_evidence
 from cas.agents.signals.macro_signals import evaluate_macro_market
 from cas.agents.stage2_bundle import build_stage2_input_bundle
@@ -62,3 +63,28 @@ def test_external_evidence_signals_include_critical_risk_terms() -> None:
     assert any("감사의견 관련 우려 보도" in item for item in signals.findings)
     assert any("직접 관련성 낮음" in item for item in signals.findings)
     assert any("미확인 위험 키워드 히트" in item for item in signals.findings)
+
+
+def test_evidence_treatment_separates_watch_context_from_critical() -> None:
+    signals = evaluate_evidence_treatment(
+        {
+            "status": "ready",
+            "items": [
+                {
+                    "source": "opendart",
+                    "title": "단일판매ㆍ공급계약해지",
+                    "company_match": True,
+                    "disclosure_event_class": "watch_context",
+                    "disclosure_materiality": "watch_context",
+                    "materiality_ratio": 0.0592,
+                    "materiality_basis": "매출 대비 계약해지 비율: 5.92%",
+                }
+            ],
+        }
+    )
+
+    assert signals.critical_evidence_count == 0
+    assert signals.watch_context_count == 1
+    assert signals.hard_distress_detected is False
+    assert signals.recommended_evidence_treatment == "watch_context"
+    assert signals.materiality_summary["top_materiality_basis"].endswith("5.92%")

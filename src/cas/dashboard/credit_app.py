@@ -3230,6 +3230,8 @@ def render_committee_view_tab(
         committee_decision_type_label,
         risk_signal=committee_risk_signal,
     )
+    risk_hold_reason_labels = _as_text_list(committee_view.get("risk_hold_reason_labels"))
+    risk_hold_reason_summary = str(committee_view.get("risk_hold_reason_summary") or "").strip()
     model_base_label = to_committee_base_label(model_label)
     has_decision_gap = model_base_label != committee_label
     veto_triggered = bool(committee_view.get("veto_triggered", False))
@@ -3550,6 +3552,17 @@ def render_committee_view_tab(
                 "같은 보류라도 이유가 다를 수 있어요. 위원회가 이 기업을 어떤 관점에서 "
                 "다시 봐야 한다고 판단했는지 단계별로 보여줍니다."
             )
+            if risk_hold_reason_summary:
+                reason_label_text = (
+                    " · ".join(risk_hold_reason_labels)
+                    if risk_hold_reason_labels
+                    else "위험 보류 이유"
+                )
+                render_summary_banner(
+                    f"위험 보류 이유 · {reason_label_text}",
+                    risk_hold_reason_summary,
+                    COLOR_NEUTRAL,
+                )
             render_committee_hold_subtype_guide(
                 decision_type_label=committee_decision_type_label,
                 risk_signal=committee_risk_signal,

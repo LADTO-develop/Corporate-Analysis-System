@@ -1774,7 +1774,7 @@ def test_committee_view_softens_near_threshold_overwarning_to_hold() -> None:
     assert "과민 경고" in committee_view["mitigating_factors"][0]
 
 
-def test_committee_view_keeps_high_probability_risk_as_reject() -> None:
+def test_committee_view_marks_high_probability_financial_watch_as_risk_hold() -> None:
     state: AgentState = {
         "company_id": "000250",
         "company_name": "삼천당제약(주)",
@@ -1816,7 +1816,17 @@ def test_committee_view_keeps_high_probability_risk_as_reject() -> None:
         agents=agents,
     )
 
-    assert committee_view["final_committee_label"] == "부적격"
+    assert committee_view["final_committee_label"] == "보류"
+    assert committee_view["committee_decision_type"] == "risk_hold"
+    assert committee_view["committee_risk_signal"] is True
+    assert "financial_stress_hold" in committee_view["risk_hold_reason_tags"]
+    assert "재무 스트레스" in committee_view["risk_hold_reason_labels"]
+    assert "위험 보류 이유 태그" in committee_view["risk_hold_reason_summary"]
+    assert any(
+        item["gate"] == "risk_hold_reason_tagging" and item["triggered"]
+        for item in committee_view["decision_trace"]
+    )
+    assert "부적격 확정 게이트 부분 충족" in committee_view["key_risk_factors"][0]
 
 
 def test_committee_view_softens_cash_rich_loss_stage_warning_to_mitigation_hold() -> None:
@@ -2726,7 +2736,7 @@ def test_committee_view_softens_high_probability_risk_with_financial_resilience(
     assert "고확률 과민 경고 방어 신호" in committee_view["mitigating_factors"][0]
 
 
-def test_committee_view_keeps_high_probability_risk_when_blockers_exist() -> None:
+def test_committee_view_marks_high_probability_weak_financials_as_risk_hold() -> None:
     state: AgentState = {
         "company_id": "317120",
         "company_name": "(주)라닉스",
@@ -2777,10 +2787,13 @@ def test_committee_view_keeps_high_probability_risk_when_blockers_exist() -> Non
         agents=agents,
     )
 
-    assert committee_view["final_committee_label"] == "부적격"
+    assert committee_view["final_committee_label"] == "보류"
+    assert committee_view["committee_decision_type"] == "risk_hold"
+    assert committee_view["committee_risk_signal"] is True
+    assert "부적격 확정 게이트 부분 충족" in committee_view["key_risk_factors"][0]
 
 
-def test_committee_view_keeps_high_probability_risk_with_noncritical_evidence_only() -> None:
+def test_committee_view_marks_noncritical_evidence_only_as_risk_hold() -> None:
     state: AgentState = {
         "company_id": "317120",
         "company_name": "(주)라닉스",
@@ -2863,13 +2876,14 @@ def test_committee_view_keeps_high_probability_risk_with_noncritical_evidence_on
         agents=agents,
     )
 
-    assert committee_view["final_committee_label"] == "부적격"
-    assert committee_view["committee_decision_type"] == "reject"
+    assert committee_view["final_committee_label"] == "보류"
+    assert committee_view["committee_decision_type"] == "risk_hold"
     assert committee_view["committee_risk_signal"] is True
+    assert "부적격 확정 게이트 부분 충족" in committee_view["key_risk_factors"][0]
     assert "과민 경고" not in committee_view["conflict_resolution"]
 
 
-def test_committee_view_keeps_reject_when_external_evidence_is_adverse() -> None:
+def test_committee_view_keeps_reject_when_external_evidence_is_critical() -> None:
     state: AgentState = {
         "company_id": "123456",
         "company_name": "테스트기업",
@@ -2898,7 +2912,7 @@ def test_committee_view_keeps_reject_when_external_evidence_is_adverse() -> None
                     "provider_relevance": "risk",
                     "disclosure_severity": "adverse",
                     "critical_terms": [],
-                    "critical_context_confirmed": False,
+                    "critical_context_confirmed": True,
                     "veto_candidate": False,
                     "evidence_quality": "high",
                     "evidence_score": 0.82,
