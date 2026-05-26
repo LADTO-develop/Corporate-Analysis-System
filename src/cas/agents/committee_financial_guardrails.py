@@ -78,10 +78,7 @@ def has_isolated_interest_cover_defense(bundle: Stage2InputBundle) -> bool:
 def has_isolated_interest_cover_row_defense(row: dict[str, Any]) -> bool:
     """Return whether cash flow and low borrowings offset a single-year ICR dip."""
     return bool(
-        (
-            flag_is_true(row.get("icr_under_1"))
-            or metric_below(row, "interest_coverage_ratio", 1.0)
-        )
+        (flag_is_true(row.get("icr_under_1")) or metric_below(row, "interest_coverage_ratio", 1.0))
         and metric_at_least(row, "current_ratio", 1.2)
         and metric_at_least(row, "cash_ratio", 0.15)
         and metric_at_least(row, "cashflow_coverage_ratio", 1.0)
@@ -584,7 +581,10 @@ def model_only_overwarning_buffer_reason(
         return ""
     if has_blocking_flags(bundle) and not cashflow_backed_resilience:
         return ""
-    if has_severe_financial_watch_signal(bundle.source_feature_row) and not cashflow_backed_resilience:
+    if (
+        has_severe_financial_watch_signal(bundle.source_feature_row)
+        and not cashflow_backed_resilience
+    ):
         return ""
     if overwarning_blocking_external_items(
         bundle.news_cache_snapshot,

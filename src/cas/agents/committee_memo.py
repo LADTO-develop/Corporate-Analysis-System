@@ -245,12 +245,9 @@ def sanitize_chair_report_memo_for_evidence_treatment(
     evidence_treatment: EvidenceTreatmentSignals,
 ) -> str:
     """Soften over-critical Chair prose when structured evidence is not veto-grade."""
-    if (
-        committee_label != "적격"
-        and (
-            evidence_treatment.recommended_evidence_treatment == "critical_veto_review"
-            or evidence_treatment.hard_distress_detected
-        )
+    if committee_label != "적격" and (
+        evidence_treatment.recommended_evidence_treatment == "critical_veto_review"
+        or evidence_treatment.hard_distress_detected
     ):
         return text
 

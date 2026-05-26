@@ -741,12 +741,8 @@ def _review_qa_trigger_reasons(
     risk_hold_boundary_defense = _has_review_qa_risk_hold_boundary_defense(bundle)
     risk_hold_from_investment_model = bundle.prediction_label == "투자적격"
     risk_hold_review_candidate = final_label == "보류" and decision_type == "risk_hold"
-    risk_hold_actionable_candidate = (
-        memo_conflict_candidate
-        or (
-            risk_hold_from_investment_model
-            and (watch_context_only or risk_hold_boundary_defense)
-        )
+    risk_hold_actionable_candidate = memo_conflict_candidate or (
+        risk_hold_from_investment_model and (watch_context_only or risk_hold_boundary_defense)
     )
     if risk_hold_review_candidate:
         if high_disagreement and not has_critical_evidence and risk_hold_actionable_candidate:
@@ -1247,16 +1243,11 @@ def _risk_recall_qa_advisory_apply_reason(
         )
         and len(weak_axes) >= 2
     )
-    multi_axis_weak = "eligible_with_multiple_weak_financial_axes" in trigger_reasons and len(
-        weak_axes
-    ) >= 3
+    multi_axis_weak = (
+        "eligible_with_multiple_weak_financial_axes" in trigger_reasons and len(weak_axes) >= 3
+    )
     boundary_weak = "eligible_boundary_rating_context" in trigger_reasons and len(weak_axes) >= 2
-    if not (
-        confirmed_external_evidence
-        or near_threshold_weak
-        or multi_axis_weak
-        or boundary_weak
-    ):
+    if not (confirmed_external_evidence or near_threshold_weak or multi_axis_weak or boundary_weak):
         return ""
     return "risk_recall_boundary_safety_review"
 

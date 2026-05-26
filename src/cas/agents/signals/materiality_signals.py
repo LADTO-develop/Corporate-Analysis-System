@@ -242,9 +242,7 @@ def hidden_tail_evidence_requires_risk_signal(
     for item in items:
         if not is_material_financing_or_guarantee_item(item):
             return True
-        if (
-            confirmed_external_veto_item(item) or confirmed_hard_distress_item(item)
-        ):
+        if confirmed_external_veto_item(item) or confirmed_hard_distress_item(item):
             return True
     if material_financing_or_guarantee_has_extreme_distress(source_feature_row):
         return True
@@ -296,9 +294,7 @@ def confirmed_external_veto_item(item: dict[str, Any]) -> bool:
     return bool(
         source == "opendart"
         and (
-            event_class == "veto_event"
-            or materiality in {"critical", "veto"}
-            or severity == "veto"
+            event_class == "veto_event" or materiality in {"critical", "veto"} or severity == "veto"
         )
     )
 
