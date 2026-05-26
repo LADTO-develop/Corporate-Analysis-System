@@ -7,8 +7,9 @@ from typing import Any, Literal
 
 from cas.agents.committee_utils import safe_float
 from cas.agents.signals.materiality_signals import (
+    confirmed_external_veto_item,
+    confirmed_hard_distress_item,
     financing_evidence_items,
-    has_hard_distress_terms,
     has_substantive_external_risk,
     high_risk_financing_evidence_count,
     material_financing_evidence_blocks_tn_hold,
@@ -78,13 +79,11 @@ def evaluate_evidence_treatment(
     hard_distress_detected = False
     veto_or_confirmed_count = 0
     for item in items:
-        if item.get("company_match") is False:
+        if item.get("company_match") is not True:
             continue
-        hard_distress = has_hard_distress_terms(item)
+        hard_distress = confirmed_hard_distress_item(item)
         hard_distress_detected = hard_distress_detected or hard_distress
-        veto_or_confirmed = (
-            item.get("veto_candidate") is True or item.get("critical_context_confirmed") is True
-        )
+        veto_or_confirmed = confirmed_external_veto_item(item)
         veto_or_confirmed_count += int(veto_or_confirmed)
         substantive = substantive_external_risk_item(
             item,
@@ -158,7 +157,7 @@ def _materiality_summary(
         for item in items
         if substantive_external_risk_item(item, source_feature_row=source_feature_row)
     )
-    hard_distress_count = sum(1 for item in items if has_hard_distress_terms(item))
+    hard_distress_count = sum(1 for item in items if confirmed_hard_distress_item(item))
     return {
         "item_count": len(items),
         "materiality_event_count": len(materiality_items),

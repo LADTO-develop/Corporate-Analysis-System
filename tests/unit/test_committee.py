@@ -401,6 +401,11 @@ def test_review_qa_does_not_trigger_for_mitigation_hold_ambiguous_evidence_only(
 
 def test_review_qa_triggers_for_risk_hold_with_watch_context_defense() -> None:
     state: AgentState = {
+        "xgboost_result": {
+            "prediction_label": "투자적격",
+            "probability_speculative": 0.30,
+            "threshold": 0.32,
+        },
         "source_feature_row": {
             "current_ratio": 1.8,
             "cash_ratio": 0.22,
@@ -441,6 +446,8 @@ def test_review_qa_triggers_for_risk_hold_with_watch_context_defense() -> None:
     committee_view = {
         "final_committee_label": "보류",
         "committee_decision_type": "risk_hold",
+        "agent_disagreement_level": "medium",
+        "agent_disagreement_reasons": ["chair_risk_without_critical_evidence"],
         "final_review_memo": "watch-context 공시와 경계 신호 때문에 위험 보류입니다.",
     }
 
@@ -450,6 +457,193 @@ def test_review_qa_triggers_for_risk_hold_with_watch_context_defense() -> None:
     )
 
     assert reasons == ["risk_hold_without_critical_evidence"]
+
+
+def test_review_qa_skips_low_disagreement_risk_hold_with_watch_context_defense() -> None:
+    state: AgentState = {
+        "xgboost_result": {
+            "prediction_label": "투자적격",
+            "probability_speculative": 0.30,
+            "threshold": 0.32,
+        },
+        "source_feature_row": {
+            "current_ratio": 1.8,
+            "cash_ratio": 0.22,
+            "cashflow_coverage_ratio": 2.1,
+            "ocf_to_total_liabilities": 0.12,
+            "ocf_to_sales": 0.08,
+            "interest_coverage_ratio": 3.4,
+            "icr_under_1": 0,
+            "equity_ratio": 0.55,
+            "debt_ratio": 0.8,
+            "capital_impairment_ratio": 0.0,
+            "total_borrowings_ratio": 0.28,
+            "short_term_borrowings_share": 0.35,
+            "is_2y_consecutive_operating_loss": 0,
+            "is_2y_consecutive_ocf_deficit": 0,
+        },
+        "news_cache_snapshot": {
+            "status": "ready",
+            "items": [
+                {
+                    "source": "opendart",
+                    "title": "단일판매ㆍ공급계약해지",
+                    "company_match": True,
+                    "evidence_score": 0.68,
+                    "provider_relevance": "caution",
+                    "disclosure_severity": "caution",
+                    "disclosure_event_class": "watch_context",
+                    "disclosure_materiality": "watch_context",
+                    "materiality_ratio": 0.0592,
+                }
+            ],
+            "direct_match_count": 1,
+            "verified_item_count": 1,
+            "veto_candidate_count": 0,
+            "high_confidence_critical_count": 0,
+        },
+    }
+    committee_view = {
+        "final_committee_label": "보류",
+        "committee_decision_type": "risk_hold",
+        "agent_disagreement_level": "low",
+        "agent_disagreement_reasons": [],
+        "final_review_memo": "watch-context 공시와 경계 신호 때문에 위험 보류입니다.",
+    }
+
+    reasons = committee_node_module._review_qa_trigger_reasons(
+        bundle=build_stage2_input_bundle(state),
+        committee_view=committee_view,
+    )
+
+    assert reasons == []
+
+
+def test_review_qa_skips_medium_disagreement_without_relevant_reason() -> None:
+    state: AgentState = {
+        "xgboost_result": {
+            "prediction_label": "투자적격",
+            "probability_speculative": 0.30,
+            "threshold": 0.32,
+        },
+        "source_feature_row": {
+            "current_ratio": 1.8,
+            "cash_ratio": 0.22,
+            "cashflow_coverage_ratio": 2.1,
+            "ocf_to_total_liabilities": 0.12,
+            "ocf_to_sales": 0.08,
+            "interest_coverage_ratio": 3.4,
+            "icr_under_1": 0,
+            "equity_ratio": 0.55,
+            "debt_ratio": 0.8,
+            "capital_impairment_ratio": 0.0,
+        },
+        "news_cache_snapshot": {
+            "status": "ready",
+            "items": [
+                {
+                    "source": "opendart",
+                    "title": "단일판매ㆍ공급계약해지",
+                    "company_match": True,
+                    "evidence_score": 0.68,
+                    "provider_relevance": "caution",
+                    "disclosure_severity": "caution",
+                    "disclosure_event_class": "watch_context",
+                    "disclosure_materiality": "watch_context",
+                }
+            ],
+        },
+    }
+    committee_view = {
+        "final_committee_label": "보류",
+        "committee_decision_type": "risk_hold",
+        "agent_disagreement_level": "medium",
+        "agent_disagreement_reasons": ["agent_confidence_gap"],
+        "final_review_memo": "watch-context 공시와 경계 신호 때문에 위험 보류입니다.",
+    }
+
+    reasons = committee_node_module._review_qa_trigger_reasons(
+        bundle=build_stage2_input_bundle(state),
+        committee_view=committee_view,
+    )
+
+    assert reasons == []
+
+
+def test_review_qa_skips_high_model_risk_hold_without_actionable_downgrade_path() -> None:
+    state: AgentState = {
+        "xgboost_result": {
+            "prediction_label": "부적격",
+            "probability_speculative": 0.62,
+            "threshold": 0.31,
+        },
+        "news_cache_snapshot": {
+            "status": "ready",
+            "items": [],
+            "direct_match_count": 0,
+            "verified_item_count": 0,
+            "veto_candidate_count": 0,
+            "high_confidence_critical_count": 0,
+        },
+    }
+    committee_view = {
+        "final_committee_label": "보류",
+        "committee_decision_type": "risk_hold",
+        "agent_disagreement_score": 0.65,
+        "final_review_memo": "위험 보류입니다.",
+    }
+
+    reasons = committee_node_module._review_qa_trigger_reasons(
+        bundle=build_stage2_input_bundle(state),
+        committee_view=committee_view,
+    )
+
+    assert reasons == []
+
+
+def test_review_qa_triggers_for_high_investment_model_risk_hold_with_watch_context() -> None:
+    state: AgentState = {
+        "xgboost_result": {
+            "prediction_label": "투자적격",
+            "probability_speculative": 0.30,
+            "threshold": 0.32,
+        },
+        "news_cache_snapshot": {
+            "status": "ready",
+            "items": [
+                {
+                    "source": "opendart",
+                    "title": "최대주주변경",
+                    "company_match": True,
+                    "evidence_score": 0.62,
+                    "provider_relevance": "caution",
+                    "disclosure_severity": "caution",
+                    "disclosure_event_class": "watch_context",
+                    "disclosure_materiality": "watch_context",
+                }
+            ],
+            "direct_match_count": 1,
+            "verified_item_count": 1,
+            "veto_candidate_count": 0,
+            "high_confidence_critical_count": 0,
+        },
+    }
+    committee_view = {
+        "final_committee_label": "보류",
+        "committee_decision_type": "risk_hold",
+        "agent_disagreement_score": 0.65,
+        "final_review_memo": "위험 보류입니다.",
+    }
+
+    reasons = committee_node_module._review_qa_trigger_reasons(
+        bundle=build_stage2_input_bundle(state),
+        committee_view=committee_view,
+    )
+
+    assert reasons == [
+        "agent_disagreement_high_without_critical_evidence",
+        "risk_hold_without_critical_evidence",
+    ]
 
 
 def test_review_qa_advisory_downgrades_risk_hold_subtype_only() -> None:
@@ -700,6 +894,8 @@ def test_review_qa_triggers_for_reject_with_watch_context_only_evidence() -> Non
         "final_committee_label": "부적격",
         "committee_decision_type": "reject",
         "committee_risk_signal": True,
+        "agent_disagreement_level": "medium",
+        "agent_disagreement_reasons": ["chair_reject_without_critical_evidence"],
         "final_review_memo": "모델 고확률과 재무 약점으로 부적격입니다.",
     }
 
@@ -1255,8 +1451,145 @@ def test_risk_recall_qa_advisory_escalates_eligible_to_boundary_hold() -> None:
     assert adjusted["committee_decision_type"] == "boundary_hold"
     assert adjusted["committee_risk_signal"] is False
     assert adjusted["decision_trace"][-1]["gate"] == "risk_recall_qa_escalation"
+    assert "최종 위원회 판단은 적격입니다" not in adjusted["final_review_memo"]
+    assert "초기 위원회 판단은 적격이었습니다" in adjusted["final_review_memo"]
+    assert "최종 표시 라벨을 보류로 올립니다" in adjusted["final_review_memo"]
     assert runtime["risk_recall_qa_advisory_applied"] is True
     assert runtime["risk_recall_qa_advisory_apply_reason"] == "risk_recall_boundary_safety_review"
+
+
+def test_risk_recall_qa_advisory_blocks_low_quality_news_only_boundary_escalation() -> None:
+    committee_view = {
+        "final_committee_label": "적격",
+        "committee_decision_type": "eligible",
+        "committee_decision_type_label": "적격",
+        "committee_risk_signal": False,
+        "conflict_resolution": "정량 모델과 외부근거를 종합해 적격으로 정리했습니다.",
+        "final_review_memo": "최종 위원회 판단은 적격입니다.",
+        "key_risk_factors": [],
+        "decision_trace": [],
+    }
+    output = RiskRecallQAOutput(
+        qa_summary="저품질 뉴스 스니펫에 hard distress 단어가 있어 보류를 권고했습니다.",
+        trigger_reasons=["eligible_with_recall_watch_evidence"],
+        eligible_safety_assessment="needs_boundary_review",
+        financial_resilience_check="뚜렷한 복수 재무취약성은 없습니다.",
+        evidence_recall_check="뉴스 요약에 횡령 단어가 있습니다.",
+        rating_boundary_check="경계등급 맥락은 제한적입니다.",
+        recommended_action="escalate_eligible_to_boundary_hold",
+        confidence=0.78,
+    )
+    state: AgentState = {
+        "xgboost_result": {
+            "prediction_label": "투자적격",
+            "probability_speculative": 0.18,
+            "threshold": 0.45,
+        },
+        "source_feature_row": {
+            "current_ratio": 1.8,
+            "cash_ratio": 0.3,
+            "cashflow_coverage_ratio": 1.2,
+            "interest_coverage_ratio": 4.0,
+            "debt_ratio": 0.8,
+        },
+        "news_cache_snapshot": {
+            "status": "ready",
+            "items": [
+                {
+                    "source": "naver_news",
+                    "title": "공시종합",
+                    "summary": "타사 직원 횡령혐의 공시와 함께 대상 기업 이름이 목록에 언급됐습니다.",
+                    "company_match": True,
+                    "evidence_quality": "low",
+                    "evidence_score": 0.54,
+                    "provider_relevance": "unknown",
+                    "disclosure_severity": "veto",
+                    "critical_terms": ["횡령"],
+                    "veto_candidate": False,
+                    "critical_context_confirmed": False,
+                }
+            ],
+        },
+    }
+    runtime: dict[str, object] = {}
+
+    adjusted = committee_node_module._apply_risk_recall_qa_advisory(
+        committee_view=committee_view,
+        risk_recall_qa_output=output,
+        bundle=build_stage2_input_bundle(state),
+        runtime_diagnostics=runtime,
+    )
+
+    assert adjusted["final_committee_label"] == "적격"
+    assert adjusted["committee_decision_type"] == "eligible"
+    assert runtime["risk_recall_qa_advisory_applied"] is False
+
+
+def test_risk_recall_qa_advisory_blocks_low_quality_news_only_risk_escalation() -> None:
+    committee_view = {
+        "final_committee_label": "적격",
+        "committee_decision_type": "eligible",
+        "committee_decision_type_label": "적격",
+        "committee_risk_signal": False,
+        "conflict_resolution": "정량 모델과 외부근거를 종합해 적격으로 정리했습니다.",
+        "final_review_memo": "최종 위원회 판단은 적격입니다.",
+        "key_risk_factors": [],
+        "decision_trace": [],
+    }
+    output = RiskRecallQAOutput(
+        qa_summary="저품질 뉴스 스니펫을 중대 외부근거로 보아 위험 보류를 권고했습니다.",
+        trigger_reasons=["eligible_with_substantive_evidence"],
+        eligible_safety_assessment="material_missed_risk",
+        financial_resilience_check="복수 재무취약성은 확인되지 않습니다.",
+        evidence_recall_check="뉴스 요약에 배임 단어가 있습니다.",
+        rating_boundary_check="경계등급 맥락은 제한적입니다.",
+        recommended_action="escalate_eligible_to_risk_hold",
+        confidence=0.82,
+    )
+    state: AgentState = {
+        "xgboost_result": {
+            "prediction_label": "투자적격",
+            "probability_speculative": 0.18,
+            "threshold": 0.45,
+        },
+        "source_feature_row": {
+            "current_ratio": 1.8,
+            "cash_ratio": 0.3,
+            "cashflow_coverage_ratio": 1.2,
+            "interest_coverage_ratio": 4.0,
+            "debt_ratio": 0.8,
+        },
+        "news_cache_snapshot": {
+            "status": "ready",
+            "items": [
+                {
+                    "source": "naver_news",
+                    "title": "업계 인터뷰",
+                    "summary": "업계 전반의 배임횡령 이슈를 설명하면서 대상 기업 이름이 언급됐습니다.",
+                    "company_match": True,
+                    "evidence_quality": "low",
+                    "evidence_score": 0.54,
+                    "provider_relevance": "unknown",
+                    "disclosure_severity": "veto",
+                    "critical_terms": ["배임", "횡령"],
+                    "veto_candidate": False,
+                    "critical_context_confirmed": False,
+                }
+            ],
+        },
+    }
+    runtime: dict[str, object] = {}
+
+    adjusted = committee_node_module._apply_risk_recall_qa_advisory(
+        committee_view=committee_view,
+        risk_recall_qa_output=output,
+        bundle=build_stage2_input_bundle(state),
+        runtime_diagnostics=runtime,
+    )
+
+    assert adjusted["final_committee_label"] == "적격"
+    assert adjusted["committee_decision_type"] == "eligible"
+    assert runtime["risk_recall_qa_advisory_applied"] is False
 
 
 def test_risk_recall_qa_advisory_escalates_substantive_external_risk_to_risk_hold() -> None:

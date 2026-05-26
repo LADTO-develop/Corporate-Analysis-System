@@ -20,8 +20,35 @@ _SUBSTANTIVE_EVENT_CLASSES = {
     "distress",
     "insolvency",
     "audit_failure",
+    "veto_event",
 }
 _SUBSTANTIVE_MATERIALITY_CLASSES = {"substantive_adverse", "critical", "veto"}
+_CONTEXT_EVENT_CLASSES = {
+    "routine_context",
+    "watch_context",
+    "procedural_or_one_off",
+    "procedural_trading_halt",
+    "low_materiality_litigation",
+    "one_off_contract_cancellation",
+    "low_materiality_contract_cancellation",
+    "business_suspension_low_materiality",
+    "subsidiary_business_suspension_low_materiality",
+    "low_materiality_financing",
+    "low_materiality_debt_guarantee",
+    "contract_cancellation_watch",
+    "business_suspension_watch",
+    "subsidiary_business_suspension_watch",
+    "financing_watch",
+    "debt_guarantee_watch",
+    "litigation_watch",
+}
+_CONTEXT_MATERIALITY_CLASSES = {
+    "routine_context",
+    "watch_context",
+    "procedural_or_one_off",
+}
+_CONTEXT_PROVIDER_RELEVANCE = {"routine", "caution", "context"}
+_CONTEXT_SEVERITY_CLASSES = {"routine", "caution"}
 _HARD_DISTRESS_TERMS = {
     "자본잠식",
     "부도",
@@ -35,9 +62,26 @@ _HARD_DISTRESS_TERMS = {
     "배임",
     "채무불이행",
 }
+_AUDIT_REPORT_ROUTINE_MARKERS = (
+    "감사보고서제출",
+    "감사보고서(",
+    "감사보고서",
+    "연결감사보고서",
+)
+_AUDIT_REPORT_FAILURE_MARKERS = (
+    "감사의견거절",
+    "의견거절",
+    "한정의견",
+    "부적정의견",
+    "계속기업불확실성",
+    "감사범위제한",
+    "상장폐지사유발생",
+)
 _GUARANTEE_MARKERS = ("채무보증", "타인에대한채무보증")
 
 __all__ = [
+    "confirmed_external_veto_item",
+    "confirmed_hard_distress_item",
     "financial_observation_count",
     "financing_evidence_items",
     "has_hard_distress_terms",
@@ -83,25 +127,22 @@ def substantive_external_risk_item(
     Financing and debt-guarantee disclosures are contextual unless they have hard
     distress context or enough financial-stress corroboration in the source row.
     """
-    if item.get("company_match") is False:
+    if item.get("company_match") is not True:
         return False
     if is_uncorroborated_material_financing_or_guarantee_item(
         item,
         source_feature_row=source_feature_row,
     ):
         return False
-
-    if item.get("veto_candidate") is True or item.get("critical_context_confirmed") is True:
+    if _is_routine_or_procedural_item(item):
+        return False
+    if confirmed_external_veto_item(item):
         return True
 
     event_class = str(item.get("disclosure_event_class", "")).lower()
     materiality = str(item.get("disclosure_materiality", "")).lower()
     severity = str(item.get("disclosure_severity", "")).lower()
     provider_relevance = str(item.get("provider_relevance", "")).lower()
-    if event_class in {"routine_context", "procedural_or_one_off"}:
-        return False
-    if materiality in {"routine_context", "procedural_or_one_off"}:
-        return False
     if event_class in _SUBSTANTIVE_EVENT_CLASSES:
         return True
     if materiality in _SUBSTANTIVE_MATERIALITY_CLASSES:
@@ -183,9 +224,7 @@ def is_uncorroborated_material_financing_or_guarantee_item(
     """Treat material financing/guarantee as contextual unless distress corroborates it."""
     if not is_material_financing_or_guarantee_item(item):
         return False
-    if item.get("veto_candidate") is True or item.get("critical_context_confirmed") is True:
-        return False
-    if has_hard_distress_terms(item):
+    if confirmed_external_veto_item(item) or confirmed_hard_distress_item(item):
         return False
     if not source_feature_row:
         return False
@@ -204,9 +243,7 @@ def hidden_tail_evidence_requires_risk_signal(
         if not is_material_financing_or_guarantee_item(item):
             return True
         if (
-            item.get("veto_candidate") is True
-            or item.get("critical_context_confirmed") is True
-            or has_hard_distress_terms(item)
+            confirmed_external_veto_item(item) or confirmed_hard_distress_item(item)
         ):
             return True
     if material_financing_or_guarantee_has_extreme_distress(source_feature_row):
@@ -239,6 +276,66 @@ def has_hard_distress_terms(item: dict[str, Any]) -> bool:
     if terms.intersection(_HARD_DISTRESS_TERMS):
         return True
     return any(term in _item_text(item) for term in _HARD_DISTRESS_TERMS)
+
+
+def confirmed_external_veto_item(item: dict[str, Any]) -> bool:
+    """Return whether a veto marker is direct enough to drive critical review."""
+    if item.get("company_match") is not True:
+        return False
+    if _is_contextual_or_routine_item(item):
+        return False
+    if _is_routine_audit_report_item(item):
+        return False
+    if item.get("veto_candidate") is True or item.get("critical_context_confirmed") is True:
+        return True
+
+    source = str(item.get("source") or "").lower()
+    event_class = str(item.get("disclosure_event_class") or "").lower()
+    materiality = str(item.get("disclosure_materiality") or "").lower()
+    severity = str(item.get("disclosure_severity") or "").lower()
+    return bool(
+        source == "opendart"
+        and (
+            event_class == "veto_event"
+            or materiality in {"critical", "veto"}
+            or severity == "veto"
+        )
+    )
+
+
+def confirmed_hard_distress_item(item: dict[str, Any]) -> bool:
+    """Return whether hard distress keywords are confirmed enough for critical treatment."""
+    if item.get("company_match") is not True:
+        return False
+    if not has_hard_distress_terms(item):
+        return False
+    if _is_contextual_or_routine_item(item):
+        return False
+    if _is_routine_audit_report_item(item):
+        return False
+    if confirmed_external_veto_item(item):
+        return True
+
+    source = str(item.get("source") or "").lower()
+    event_class = str(item.get("disclosure_event_class") or "").lower()
+    materiality = str(item.get("disclosure_materiality") or "").lower()
+    severity = str(item.get("disclosure_severity") or "").lower()
+    quality = str(item.get("evidence_quality") or "").lower()
+    score = safe_float(item.get("evidence_score"))
+    if quality == "low":
+        return False
+    if source == "opendart" and (
+        event_class in _SUBSTANTIVE_EVENT_CLASSES
+        or materiality in _SUBSTANTIVE_MATERIALITY_CLASSES
+        or severity in {"adverse", "veto"}
+    ):
+        return True
+    return bool(
+        quality in {"medium", "high"}
+        and score is not None
+        and score >= 0.75
+        and str(item.get("provider_relevance") or "").lower() in ADVERSE_PROVIDER_RELEVANCE
+    )
 
 
 def material_financing_or_guarantee_has_financial_corroboration(
@@ -356,6 +453,51 @@ def financial_observation_count(row: dict[str, Any]) -> int:
     return sum(1 for key in keys if row.get(key) is not None)
 
 
+def _is_contextual_or_routine_item(item: dict[str, Any]) -> bool:
+    event_class = str(item.get("disclosure_event_class") or "").lower()
+    materiality = str(item.get("disclosure_materiality") or "").lower()
+    severity = str(item.get("disclosure_severity") or "").lower()
+    provider_relevance = str(item.get("provider_relevance") or "").lower()
+    return bool(
+        event_class in _CONTEXT_EVENT_CLASSES
+        or materiality in _CONTEXT_MATERIALITY_CLASSES
+        or severity in _CONTEXT_SEVERITY_CLASSES
+        or provider_relevance in _CONTEXT_PROVIDER_RELEVANCE
+    )
+
+
+def _is_routine_or_procedural_item(item: dict[str, Any]) -> bool:
+    event_class = str(item.get("disclosure_event_class") or "").lower()
+    materiality = str(item.get("disclosure_materiality") or "").lower()
+    severity = str(item.get("disclosure_severity") or "").lower()
+    provider_relevance = str(item.get("provider_relevance") or "").lower()
+    return bool(
+        event_class
+        in {
+            "routine_context",
+            "procedural_or_one_off",
+            "procedural_trading_halt",
+            "low_materiality_litigation",
+            "one_off_contract_cancellation",
+            "low_materiality_contract_cancellation",
+            "business_suspension_low_materiality",
+            "subsidiary_business_suspension_low_materiality",
+            "low_materiality_financing",
+            "low_materiality_debt_guarantee",
+        }
+        or materiality in {"routine_context", "procedural_or_one_off"}
+        or severity == "routine"
+        or provider_relevance == "routine"
+    )
+
+
+def _is_routine_audit_report_item(item: dict[str, Any]) -> bool:
+    text = _item_text(item)
+    if any(marker in text for marker in _compact_terms(_AUDIT_REPORT_FAILURE_MARKERS)):
+        return False
+    return any(marker in text for marker in _compact_terms(_AUDIT_REPORT_ROUTINE_MARKERS))
+
+
 def _item_critical_terms(item: dict[str, Any]) -> list[str]:
     raw_terms = item.get("critical_terms", [])
     if isinstance(raw_terms, list | tuple):
@@ -369,3 +511,7 @@ def _item_text(item: dict[str, Any]) -> str:
 
 def _compact_text(text: str) -> str:
     return "".join(str(text).lower().split())
+
+
+def _compact_terms(terms: tuple[str, ...]) -> tuple[str, ...]:
+    return tuple(_compact_text(term) for term in terms)

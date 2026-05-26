@@ -1407,6 +1407,64 @@ def test_committee_view_appends_informative_chair_report_memo() -> None:
     assert chair_memo in committee_view["final_review_memo"]
 
 
+def test_committee_view_softens_overcritical_chair_memo_without_veto_evidence() -> None:
+    state: AgentState = {
+        "company_id": "119500",
+        "company_name": "(주)포메탈",
+        "source_feature_row": {"stock_code": "119500"},
+        "xgboost_result": {
+            "prediction_label": "투자적격",
+            "probability_speculative": 0.30,
+            "threshold": 0.325,
+        },
+        "news_cache_snapshot": {
+            "status": "ready",
+            "items": [
+                {
+                    "source": "opendart",
+                    "title": "감사보고서제출",
+                    "summary": "정기 감사보고서 제출 공시입니다.",
+                    "company_match": True,
+                    "provider_relevance": "routine",
+                    "disclosure_severity": "routine",
+                    "disclosure_event_class": "routine_context",
+                    "disclosure_materiality": "routine_context",
+                    "critical_terms": [],
+                    "critical_context_confirmed": False,
+                    "veto_candidate": False,
+                    "evidence_quality": "medium",
+                    "evidence_score": 0.76,
+                }
+            ],
+        },
+    }
+    overcritical_chair_memo = (
+        "외부 근거에서 과거 횡령 및 배임 의혹 관련 치명적 위험 신호가 발견되어 "
+        "보수적 관점에서 위원장 단계 추가 검토가 필요하다고 판단했습니다."
+    )
+    agents = [
+        AgentOutput(role="quant_credit", summary="정량 결과", findings=[], confidence=0.8),
+        AgentOutput(role="evidence_audit", summary="근거 검토", findings=[], confidence=0.6),
+        AgentOutput(
+            role="chair_report",
+            summary="종합",
+            findings=["모델 보존", "위원회 범위", overcritical_chair_memo],
+            confidence=0.7,
+        ),
+    ]
+
+    committee_view = build_committee_view(
+        bundle=build_stage2_input_bundle(state),
+        recommendation="priority",
+        agents=agents,
+    )
+
+    assert committee_view["final_committee_label"] == "적격"
+    assert "치명적 위험 신호" not in committee_view["final_review_memo"]
+    assert "추가 확인이 필요한 외부 위험 단서" in committee_view["final_review_memo"]
+    assert "사후 모니터링 관점에서 추가 확인이 필요" in committee_view["final_review_memo"]
+
+
 def test_committee_view_keeps_low_probability_secondary_liquidity_watch_eligible() -> None:
     state: AgentState = {
         "company_id": "086670",

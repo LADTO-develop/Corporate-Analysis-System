@@ -341,6 +341,7 @@ structured output 기반 실행으로 교체된다. 기본 live 모드는
 - `src/cas/agents/signals/debt_liquidity_signals.py`: 부채상환능력, 유동성, 현금흐름 신호 계산
 - `src/cas/agents/signals/macro_signals.py`: 거시·시장 맥락 신호 계산
 - `src/cas/agents/signals/external_evidence_signals.py`: 뉴스·공시·검색 근거 신호 계산
+- `src/cas/agents/signals/agent_disagreement_signals.py`: QuantCredit, EvidenceAudit, ChairReport/committee_view 사이의 판단 충돌 점수 계산
 - `src/cas/agents/nodes/committee_node.py`: Stage 2 실행 순서 제어, 각 에이전트 결과 생성, audit 기록
 - `src/cas/agents/committee_view.py`: `final_committee_label`, `veto_triggered`, `conflict_resolution` 등 최종 출력 JSON 조립
 - `src/cas/veto_rules.py`: `configs/agent/committee.yaml`의 veto rule을 읽어 강제 경고 기준을 공유
@@ -353,10 +354,19 @@ structured output 기반 실행으로 교체된다. 기본 live 모드는
 검증하는 기준이다.
 
 기본 본심 경로는 계속 `QuantCreditAgent → EvidenceAuditAgent → ChairReportAgent` 3개
-역할이다. 다만 Agno live 실행에서 최종 위원회 라벨이 `보류`인데 Stage 1 모델은
-`투자적격`인 경우, `risk_hold`가 치명 근거 없이 만들어진 경우, chair memo와 최종
-라벨 충돌 가능성이 있는 경우, 또는 자금조달·거래정지·감사보고서처럼 해석이 애매한
-공시가 보류 판단에 관여한 경우에는 선택형 `ReviewQAAgent`가 사후 검수를 수행한다. ReviewQA는
+역할이다. 세 agent 결과와 최종 `committee_view` 사이의 충돌은
+`agent_disagreement_score`와 `agent_disagreement_reasons`로 기록한다. 예를 들어 정량
+모델은 위험인데 EvidenceAudit은 watch/context 수준으로 보거나, 최종 `risk_hold`인데
+치명 외부근거가 제한적인 경우 high disagreement가 될 수 있다.
+
+Agno live 실행에서 선택형 `ReviewQAAgent`는 전수 호출하지 않는다. `agent_disagreement_level=high`
+이더라도 치명 외부근거가 제한적이라는 이유만으로 호출하지 않고, 실제로 낮출 수 있는 경로가 있는지
+한 번 더 확인한다. `risk_hold`는 1차 모델이 투자적격인데 위원회가 위험 보류로 올린 overhold 후보,
+또는 라벨-메모 충돌 후보일 때 우선 검수한다. 1차 모델이 이미 부적격이고 위원회가 `risk_hold`로
+완화한 케이스는 보정 가능성이 낮으면 ReviewQA를 건너뛴다. `medium`은
+`chair_risk_without_critical_evidence`, `chair_reject_without_critical_evidence`,
+`committee_label_memo_conflict`처럼 실제 라벨/근거 충돌을 설명하는 reason이 있을 때만 실행한다.
+`low` disagreement 케이스는 ReviewQA를 건너뛰어 속도 비용을 줄인다. ReviewQA는
 `agent_summary.agents.review_qa`와 runtime diagnostics에 advisory 결과를 남긴다. 최종
 라벨은 직접 바꾸지 않는다. 다만 `risk_hold`가 치명 근거 없이 과도하다고 판단되고
 veto 또는 hidden-tail-risk가 없을 때만 `committee_decision_type`을 `boundary_hold`로
@@ -377,6 +387,11 @@ BBB-/BB+ 경계 맥락은 단독 trigger가 아니라 이 핵심 조건에 붙�
 `substantive_adverse`, veto/critical context, 또는 횡령·배임·상장폐지·감사의견 거절
 같은 명시적 치명 제목에만 켜지도록 좁힌다. 자금조달·채무보증은 중대성 비율이
 10% 이상이어도 재무 스트레스나 hard distress 문맥이 함께 있을 때만 실질 외부 위험으로 본다.
+후속 적용부에서도 같은 원칙을 한 번 더 확인한다. RiskRecallQA가 상향을 권고하더라도
+저품질 뉴스 스니펫이나 검색요약에 치명 키워드가 우연히 포함된 것만으로는 `적격`을
+`보류`로 올리지 않는다. `risk_hold` 상향은 검증된 외부 중요근거 또는 매우 강한
+재무취약성이 있어야 적용하고, `boundary_hold` 상향도 기준선 근처와 복수 재무취약성,
+BBB-/BB+ 경계+재무취약성, 또는 검증된 외부근거가 있을 때만 적용한다.
 
 횡령, 배임, 상장폐지, fraud 같은 강제 경고 키워드는 코드가 아니라
 `configs/agent/committee.yaml`의 `veto_rules`에서 관리한다.
@@ -399,6 +414,9 @@ BBB-/BB+ 경계 맥락은 단독 trigger가 아니라 이 핵심 조건에 붙�
 - 조건부 Agno ReviewQAAgent 추가. 전체 기업에 4번째 LLM 호출을 붙이지 않고, 보류/근거/메모 충돌 위험이 있는 케이스만 사후 검수한다.
 - ReviewQA subtype advisory 안정화. `caution/watch_context` 외부근거만 있는 TN overhold 후보는 위험 보류가 아니라 경계등급 보류로 일관되게 낮추되, 자금조달·채무보증은 중대성 10% 이상이어도 재무 스트레스나 hard distress 문맥이 없으면 단독 `risk_hold` 근거로 쓰지 않는다.
 - 조건부 Agno RiskRecallQAAgent 추가. 최종 적격 케이스 중 기준선/재무취약/외부근거 조건이 있는 경우만 적격 판단의 위험 누락 가능성을 사후 검수한다.
+- RiskRecallQA escalation guardrail 추가. low-quality 뉴스 스니펫 단독으로는 적격을 보류로 올리지 않고, 구조화 외부근거 또는 복수 재무취약성이 확인될 때만 advisory를 적용한다.
+- EvidenceAudit criticality hard gate 추가. LLM의 `has_critical_risk` 응답만으로는 치명 외부근거를 확정하지 않고, 구조화 근거 판정의 `critical_veto_review`, `hard_distress_detected`, 또는 `critical_evidence_count > 0`일 때만 `critical`로 올린다.
+- Agent disagreement score 추가. QuantCredit, EvidenceAudit, ChairReport/committee_view의 방향이 충돌하는 경우를 점수화해 ReviewQA 호출 근거와 대시보드 설명 신호로 사용한다.
 
 ### 남은 개선 후보
 

@@ -74,6 +74,7 @@ def run_risk_recall_qa_agent(
             "Do not rewrite model_view. Treat committee_view as decision-support, not an official rating.",
             "Do not invent external news, DART filings, macro events, or industry events not present in the input.",
             "Use EvidenceAudit recommended_evidence_treatment and hard_distress_detected before prose when judging missed-risk recall.",
+            "Do not escalate from low-quality news snippets alone; require direct structured evidence, confirmed materiality, or severe financial stress.",
             "Escalate to risk_hold only when verified adverse evidence or severe financial stress is present.",
             "Use boundary_hold or manual review for near-threshold uncertainty without confirmed adverse evidence.",
             "If financial defenses and external evidence are adequate, keep committee_view unchanged.",

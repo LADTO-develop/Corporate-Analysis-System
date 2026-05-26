@@ -16,6 +16,7 @@ from cas.agents.nodes.committee_feature_formatting import (
     humanize_size_group,
 )
 from cas.agents.signals import (
+    evaluate_agent_disagreement,
     evaluate_debt_liquidity,
     evaluate_evidence_treatment,
     evaluate_external_evidence,
@@ -115,6 +116,12 @@ def run(state: AgentState) -> dict[str, Any]:
         recommendation=recommendation,
         agents=agents,
     )
+    committee_view = _attach_agent_disagreement(
+        bundle=bundle,
+        committee_view=committee_view,
+        structured_outputs=structured_outputs,
+        runtime_diagnostics=runtime_diagnostics,
+    )
     review_qa_output = _maybe_run_review_qa(
         bundle=bundle,
         committee_view=committee_view,
@@ -130,6 +137,12 @@ def run(state: AgentState) -> dict[str, Any]:
             news_cache_snapshot=bundle.news_cache_snapshot,
             runtime_diagnostics=runtime_diagnostics,
         )
+        committee_view = _attach_agent_disagreement(
+            bundle=bundle,
+            committee_view=committee_view,
+            structured_outputs=structured_outputs,
+            runtime_diagnostics=runtime_diagnostics,
+        )
         agents.append(review_qa_output.to_agent_output())
     risk_recall_qa_output = _maybe_run_risk_recall_qa(
         bundle=bundle,
@@ -143,6 +156,12 @@ def run(state: AgentState) -> dict[str, Any]:
             committee_view=committee_view,
             risk_recall_qa_output=risk_recall_qa_output,
             bundle=bundle,
+            runtime_diagnostics=runtime_diagnostics,
+        )
+        committee_view = _attach_agent_disagreement(
+            bundle=bundle,
+            committee_view=committee_view,
+            structured_outputs=structured_outputs,
             runtime_diagnostics=runtime_diagnostics,
         )
         agents.append(risk_recall_qa_output.to_agent_output())
@@ -279,6 +298,25 @@ def _chair_summary(agents: list[AgentOutput]) -> str:
         if agent.role == "chair_report":
             return str(agent.summary)
     return str(agents[-1].summary) if agents else ""
+
+
+def _attach_agent_disagreement(
+    *,
+    bundle: Stage2InputBundle,
+    committee_view: dict[str, Any],
+    structured_outputs: tuple[QuantCreditOutput, EvidenceAuditOutput, ChairReportOutput],
+    runtime_diagnostics: dict[str, Any],
+) -> dict[str, Any]:
+    disagreement = evaluate_agent_disagreement(
+        bundle=bundle,
+        committee_view=committee_view,
+        quant_credit=structured_outputs[0],
+        evidence_audit=structured_outputs[1],
+        chair_report=structured_outputs[2],
+    )
+    payload = disagreement.as_payload()
+    runtime_diagnostics.update(payload)
+    return {**committee_view, **payload}
 
 
 def _maybe_run_review_qa(
@@ -696,29 +734,113 @@ def _review_qa_trigger_reasons(
         bundle.news_cache_snapshot,
         source_feature_row=bundle.source_feature_row,
     )
-    risk_hold_review_candidate = (
-        final_label == "보류"
-        and decision_type == "risk_hold"
-        and not has_critical_evidence
-        and (
-            watch_context_only
-            or _has_review_qa_risk_hold_boundary_defense(bundle)
-            or _review_qa_memo_conflict_possible(committee_view)
+    disagreement_level = _agent_disagreement_level_from_committee_view(committee_view)
+    disagreement_reasons = _agent_disagreement_reasons_from_committee_view(committee_view)
+    high_disagreement = disagreement_level == "high"
+    memo_conflict_candidate = _review_qa_memo_conflict_possible(committee_view)
+    risk_hold_boundary_defense = _has_review_qa_risk_hold_boundary_defense(bundle)
+    risk_hold_from_investment_model = bundle.prediction_label == "투자적격"
+    risk_hold_review_candidate = final_label == "보류" and decision_type == "risk_hold"
+    risk_hold_actionable_candidate = (
+        memo_conflict_candidate
+        or (
+            risk_hold_from_investment_model
+            and (watch_context_only or risk_hold_boundary_defense)
         )
     )
     if risk_hold_review_candidate:
-        reasons.append("risk_hold_without_critical_evidence")
-    if risk_hold_review_candidate and _review_qa_memo_conflict_possible(committee_view):
-        reasons.append("label_memo_conflict_candidate")
+        if high_disagreement and not has_critical_evidence and risk_hold_actionable_candidate:
+            reasons.append("agent_disagreement_high_without_critical_evidence")
+        if (
+            not has_critical_evidence
+            and risk_hold_actionable_candidate
+            and _review_qa_disagreement_allows_risk_hold(
+                disagreement_level=disagreement_level,
+                disagreement_reasons=disagreement_reasons,
+            )
+        ):
+            reasons.append("risk_hold_without_critical_evidence")
+            if memo_conflict_candidate:
+                reasons.append("label_memo_conflict_candidate")
+    if (
+        final_label == "부적격"
+        and decision_type == "reject"
+        and not has_critical_evidence
+        and high_disagreement
+    ):
+        reasons.append("agent_disagreement_high_without_critical_evidence")
     if (
         final_label == "부적격"
         and decision_type == "reject"
         and not has_critical_evidence
         and watch_context_only
         and _has_review_qa_reject_boundary_defense(bundle)
+        and _review_qa_disagreement_allows_reject(
+            disagreement_level=disagreement_level,
+            disagreement_reasons=disagreement_reasons,
+        )
     ):
         reasons.append("reject_without_critical_evidence")
     return reasons[:5]
+
+
+def _agent_disagreement_level_from_committee_view(committee_view: dict[str, Any]) -> str:
+    level = str(committee_view.get("agent_disagreement_level") or "").strip().lower()
+    if level in {"low", "medium", "high"}:
+        return level
+    score = _safe_float(committee_view.get("agent_disagreement_score")) or 0.0
+    if score >= 0.55:
+        return "high"
+    if score >= 0.25:
+        return "medium"
+    return "low"
+
+
+def _agent_disagreement_reasons_from_committee_view(
+    committee_view: dict[str, Any],
+) -> set[str]:
+    raw_reasons = committee_view.get("agent_disagreement_reasons")
+    if not isinstance(raw_reasons, list | tuple | set):
+        return set()
+    return {str(reason).strip() for reason in raw_reasons if str(reason).strip()}
+
+
+def _review_qa_disagreement_allows_risk_hold(
+    *,
+    disagreement_level: str,
+    disagreement_reasons: set[str],
+) -> bool:
+    if disagreement_level == "high":
+        return True
+    if disagreement_level != "medium":
+        return False
+    return bool(
+        disagreement_reasons.intersection(
+            {
+                "chair_risk_without_critical_evidence",
+                "committee_label_memo_conflict",
+            }
+        )
+    )
+
+
+def _review_qa_disagreement_allows_reject(
+    *,
+    disagreement_level: str,
+    disagreement_reasons: set[str],
+) -> bool:
+    if disagreement_level == "high":
+        return True
+    if disagreement_level != "medium":
+        return False
+    return bool(
+        disagreement_reasons.intersection(
+            {
+                "chair_reject_without_critical_evidence",
+                "committee_label_memo_conflict",
+            }
+        )
+    )
 
 
 def _has_review_qa_risk_hold_boundary_defense(bundle: Stage2InputBundle) -> bool:
@@ -1028,8 +1150,11 @@ def _apply_risk_recall_qa_advisory(
         adjustment_note,
     )
     adjusted["final_review_memo"] = _append_sentence(
-        str(adjusted.get("final_review_memo") or ""),
-        "RiskRecallQA 보강 의견: 적격 판단의 위험 누락 가능성을 재점검해 보류로 올립니다.",
+        _neutralize_prior_eligible_final_memo(str(adjusted.get("final_review_memo") or "")),
+        (
+            "RiskRecallQA 보강 의견: 적격 판단의 위험 누락 가능성을 재점검해 "
+            "최종 표시 라벨을 보류로 올립니다."
+        ),
     )
     adjusted["key_risk_factors"] = _prepend_unique_text(
         adjusted.get("key_risk_factors"),
@@ -1065,6 +1190,19 @@ def _apply_risk_recall_qa_advisory(
     return adjusted
 
 
+def _neutralize_prior_eligible_final_memo(memo: str) -> str:
+    replacements = {
+        "최종 위원회 판단은 적격입니다.": "초기 위원회 판단은 적격이었습니다.",
+        "최종 의견을 적격으로 정리했습니다.": "초기 의견을 적격으로 정리했습니다.",
+        "최종 의견은 적격입니다.": "초기 의견은 적격이었습니다.",
+        "최종 라벨은 적격입니다.": "초기 라벨은 적격이었습니다.",
+    }
+    updated = memo
+    for before, after in replacements.items():
+        updated = updated.replace(before, after)
+    return updated
+
+
 def _risk_recall_qa_advisory_apply_reason(
     *,
     risk_recall_qa_output: RiskRecallQAOutput,
@@ -1073,15 +1211,14 @@ def _risk_recall_qa_advisory_apply_reason(
     action = risk_recall_qa_output.recommended_action
     assessment = risk_recall_qa_output.eligible_safety_assessment
     trigger_reasons = {str(reason) for reason in risk_recall_qa_output.trigger_reasons}
+    weak_axes = _risk_recall_weak_financial_axes(bundle)
+    confirmed_external_evidence = _risk_recall_confirmed_external_escalation_evidence(bundle)
     if action == "escalate_eligible_to_risk_hold":
         if assessment != "material_missed_risk" or risk_recall_qa_output.confidence < 0.70:
             return ""
-        if _has_substantive_external_risk(
-            bundle.news_cache_snapshot,
-            source_feature_row=bundle.source_feature_row,
-        ):
+        if confirmed_external_evidence:
             return "risk_recall_substantive_external_risk"
-        if len(_risk_recall_weak_financial_axes(bundle)) >= 4:
+        if len(weak_axes) >= 4:
             return "risk_recall_severe_financial_weakness"
         return ""
 
@@ -1101,7 +1238,72 @@ def _risk_recall_qa_advisory_apply_reason(
         }
     ):
         return ""
+    near_threshold_weak = bool(
+        trigger_reasons.intersection(
+            {
+                "eligible_near_threshold",
+                "eligible_near_threshold_with_weak_financials",
+            }
+        )
+        and len(weak_axes) >= 2
+    )
+    multi_axis_weak = "eligible_with_multiple_weak_financial_axes" in trigger_reasons and len(
+        weak_axes
+    ) >= 3
+    boundary_weak = "eligible_boundary_rating_context" in trigger_reasons and len(weak_axes) >= 2
+    if not (
+        confirmed_external_evidence
+        or near_threshold_weak
+        or multi_axis_weak
+        or boundary_weak
+    ):
+        return ""
     return "risk_recall_boundary_safety_review"
+
+
+def _risk_recall_confirmed_external_escalation_evidence(bundle: Stage2InputBundle) -> bool:
+    """Require confirmed, structured evidence before RiskRecallQA escalates eligible cases."""
+    news_cache = bundle.news_cache_snapshot
+    profile = _external_evidence_profile(
+        news_cache,
+        source_feature_row=bundle.source_feature_row,
+    )
+    if profile["veto_candidate_count"] > 0 or profile["high_confidence_critical_count"] > 0:
+        return True
+
+    raw_items = news_cache.get("items", [])
+    items = (
+        [item for item in raw_items if isinstance(item, dict)]
+        if isinstance(raw_items, list)
+        else []
+    )
+    for item in items:
+        if item.get("company_match") is not True:
+            continue
+        if not _risk_recall_evidence_item_is_confirmed(item):
+            continue
+        if _is_substantive_external_risk_item(
+            item,
+            source_feature_row=bundle.source_feature_row,
+        ):
+            return True
+    return False
+
+
+def _risk_recall_evidence_item_is_confirmed(item: dict[str, Any]) -> bool:
+    if item.get("veto_candidate") is True or item.get("critical_context_confirmed") is True:
+        return True
+
+    source = str(item.get("source") or "").lower()
+    quality = str(item.get("evidence_quality") or "").lower()
+    score = _safe_float(item.get("evidence_score"))
+    if source == "opendart":
+        return score is None or score >= 0.55
+    if quality == "low":
+        return False
+    if quality in {"medium", "high"} and (score is None or score >= 0.55):
+        return True
+    return score is not None and score >= 0.65
 
 
 def _risk_recall_hold_reason_fields(apply_reason: str) -> tuple[list[str], list[str], str]:

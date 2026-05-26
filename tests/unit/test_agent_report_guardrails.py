@@ -8,7 +8,10 @@ import pytest
 
 from cas.agents.nodes import data_node
 from cas.agents.nodes.tripletagents import evidence_audit_agent
-from cas.agents.nodes.tripletagents.evidence_audit_agent import run_evidence_audit_agent
+from cas.agents.nodes.tripletagents.evidence_audit_agent import (
+    AgnoEvidenceAuditResponse,
+    run_evidence_audit_agent,
+)
 from cas.agents.stage2_bundle import build_stage2_input_bundle
 from cas.reporting.export import render_report
 
@@ -59,6 +62,64 @@ def test_evidence_audit_skips_llm_when_external_evidence_is_disabled(
     assert output.evidence_strength == "none"
     assert output.evidence_reliability == "status=disabled; 외부근거 미수집"
     assert "외부근거 미수집" in output.model_challenge
+
+
+def test_evidence_audit_criticality_requires_structured_evidence(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fake_build_agno_agent(*args: object, **kwargs: object) -> object:
+        return object()
+
+    def fake_run_structured_agent(*args: object, **kwargs: object) -> AgnoEvidenceAuditResponse:
+        return AgnoEvidenceAuditResponse(
+            macro_environmental_impact="LLM은 외부 충격이 크다고 봅니다.",
+            critical_off_balance_risk="LLM은 치명 외부위험이라고 주장합니다.",
+            has_critical_risk=True,
+            external_risk_level="critical",
+            evidence_limitations=["구조화 근거는 watch context 수준입니다."],
+        )
+
+    monkeypatch.setattr(evidence_audit_agent, "build_agno_agent", fake_build_agno_agent)
+    monkeypatch.setattr(
+        evidence_audit_agent,
+        "run_structured_agent",
+        fake_run_structured_agent,
+    )
+    bundle = build_stage2_input_bundle(
+        {
+            "company_id": "005930",
+            "company_name": "삼성전자(주)",
+            "market": "KOSPI",
+            "analysis_year": 2024,
+            "xgboost_result": {"prediction_label": "투자적격"},
+            "news_cache_snapshot": {
+                "status": "ready",
+                "items": [
+                    {
+                        "source": "opendart",
+                        "title": "정기보고서 제출",
+                        "summary": "정기 공시 제출",
+                        "company_match": True,
+                        "disclosure_event_class": "routine_context",
+                        "disclosure_materiality": "watch_context",
+                    }
+                ],
+            },
+        }
+    )
+
+    output = run_evidence_audit_agent(
+        bundle=bundle,
+        model_name="gpt-4.1-mini",
+        max_tokens=1024,
+    )
+
+    assert output.evidence_strength == "strong"
+    assert output.critical_evidence_count == 0
+    assert output.watch_context_count == 1
+    assert output.hard_distress_detected is False
+    assert output.recommended_evidence_treatment == "watch_context"
+    assert "structured_critical_evidence=False" in output.evidence_reliability
 
 
 def test_render_report_uses_korean_headings_and_softens_official_rating_language() -> None:

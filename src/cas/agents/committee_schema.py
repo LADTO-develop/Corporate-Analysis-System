@@ -23,6 +23,7 @@ RiskHoldReasonTag = Literal[
     "model_reject_confirmation_hold",
     "model_risk_hold",
 ]
+AgentDisagreementLevel = Literal["low", "medium", "high"]
 
 
 class _StrictModel(BaseModel):
@@ -57,6 +58,10 @@ class CommitteeViewPayload(_StrictModel):
     risk_hold_reason_tags: list[RiskHoldReasonTag] = Field(default_factory=list)
     risk_hold_reason_labels: list[str] = Field(default_factory=list)
     risk_hold_reason_summary: str = ""
+    agent_disagreement_score: float = Field(default=0.0, ge=0.0, le=1.0)
+    agent_disagreement_level: AgentDisagreementLevel = "low"
+    agent_disagreement_reasons: list[str] = Field(default_factory=list)
+    agent_disagreement_summary: str = ""
     veto_triggered: bool
     hidden_tail_risk_flag: bool = False
     hidden_tail_risk_reason: str = ""
@@ -69,6 +74,7 @@ class CommitteeViewPayload(_StrictModel):
 
 
 __all__ = [
+    "AgentDisagreementLevel",
     "CommitteeDecisionType",
     "CommitteeLabel",
     "CommitteeViewPayload",

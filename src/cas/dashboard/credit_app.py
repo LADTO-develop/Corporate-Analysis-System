@@ -47,6 +47,7 @@ from cas.dashboard.chart_data import finite_chart_frame
 from cas.dashboard.committee_copy import committee_user_reason_label, committee_user_stage_label
 from cas.dashboard.committee_panel import (
     CommitteePanelRenderers,
+    render_agent_disagreement_card,
     render_committee_decision_trace,
     render_committee_full_review,
     render_committee_hold_subtype_guide,
@@ -100,7 +101,7 @@ LOGGER = logging.getLogger(__name__)
 
 DASHBOARD_BASE_STAGE2_RUNNER = "deterministic"
 DASHBOARD_LIVE_STAGE2_RUNNER = "agno"
-DASHBOARD_COMMITTEE_CONTEXT_CACHE_VERSION = "dashboard_committee_context_v2"
+DASHBOARD_COMMITTEE_CONTEXT_CACHE_VERSION = "dashboard_committee_context_v3"
 
 PREFERRED_DEFAULT_COMPANIES = [
     "현대모비스(주)",
@@ -1222,6 +1223,7 @@ def build_dashboard_committee_context(
         "rule_result": dict(state.get("rule_result") or {}),
         "agent_summary": dict(state.get("agent_summary") or {}),
         "committee_view": dict(state.get("committee_view") or {}),
+        "stage2_runtime_diagnostics": dict(state.get("stage2_runtime_diagnostics") or {}),
         "final_confidence": state.get("final_confidence"),
     }
 
@@ -3206,6 +3208,9 @@ def render_committee_view_tab(
     model_view = _as_plain_dict(committee_context.get("model_view"))
     committee_view = _as_plain_dict(committee_context.get("committee_view"))
     agent_summary = _as_plain_dict(committee_context.get("agent_summary"))
+    stage2_runtime_diagnostics = _as_plain_dict(committee_context.get("stage2_runtime_diagnostics"))
+    if not stage2_runtime_diagnostics:
+        stage2_runtime_diagnostics = _as_plain_dict(agent_summary.get("runtime"))
     rule_result = _as_plain_dict(committee_context.get("rule_result"))
     st.session_state["model_view"] = model_view
     st.session_state["committee_view"] = committee_view
@@ -3254,6 +3259,14 @@ def render_committee_view_tab(
         render_decision_badge=render_decision_badge,
         format_percent=format_percent,
     )
+    stage2_agent_elapsed = _as_plain_dict(stage2_runtime_diagnostics.get("agent_elapsed_seconds"))
+    stage2_agents = _as_plain_dict(agent_summary.get("agents"))
+    review_qa_executed = "review_qa" in stage2_agents or "review_qa" in stage2_agent_elapsed
+    review_qa_triggered = _optional_bool(
+        stage2_runtime_diagnostics.get("review_qa_triggered"),
+        default=review_qa_executed,
+    )
+    review_qa_reasons = _as_text_list(stage2_runtime_diagnostics.get("review_qa_trigger_reasons"))
 
     requested_dashboard_runner = _dashboard_stage2_runner_name()
     live_review_suggested = _dashboard_needs_live_stage2_from_views(model_view, evidence_snapshot)
@@ -3411,6 +3424,15 @@ def render_committee_view_tab(
         summary_text=summary_text,
         risk_signal=committee_risk_signal,
         renderers=committee_panel_renderers,
+    )
+    render_agent_disagreement_card(
+        score=committee_view.get("agent_disagreement_score"),
+        level=committee_view.get("agent_disagreement_level"),
+        reasons=_as_text_list(committee_view.get("agent_disagreement_reasons")),
+        summary=str(committee_view.get("agent_disagreement_summary") or ""),
+        review_qa_triggered=review_qa_triggered,
+        review_qa_executed=review_qa_executed,
+        review_qa_reasons=review_qa_reasons,
     )
 
     full_risk_items = _friendly_committee_items(

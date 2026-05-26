@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import time
 from collections.abc import Iterable
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -562,6 +563,7 @@ def _result_row(
     materiality_summary = _materiality_summary(evidence.get("items", []))
     decision_trace = _decision_trace_items(committee_view)
     trace_by_gate = _decision_trace_by_gate(decision_trace)
+    evidence_audit_structured = _evidence_audit_structured_fields(state)
     result = {
         "run_timestamp_utc": datetime.now(UTC).isoformat(),
         "evaluation_mode": sample.get("evaluation_mode"),
@@ -600,6 +602,12 @@ def _result_row(
             str(item) for item in committee_view.get("risk_hold_reason_labels", []) or []
         ),
         "risk_hold_reason_summary": committee_view.get("risk_hold_reason_summary", ""),
+        "agent_disagreement_score": committee_view.get("agent_disagreement_score"),
+        "agent_disagreement_level": committee_view.get("agent_disagreement_level", ""),
+        "agent_disagreement_reasons": " / ".join(
+            str(item) for item in committee_view.get("agent_disagreement_reasons", []) or []
+        ),
+        "agent_disagreement_summary": committee_view.get("agent_disagreement_summary", ""),
         "decision_trace": json.dumps(decision_trace, ensure_ascii=False, sort_keys=True),
         "committee_success": success,
         "committee_effect": effect,
@@ -617,6 +625,7 @@ def _result_row(
         "stage2_parallel_independent_agents": bool(
             stage2_runtime.get("parallel_independent_agents", False)
         ),
+        **evidence_audit_structured,
         "stage2_review_qa_triggered": bool(stage2_runtime.get("review_qa_triggered", False)),
         "stage2_review_qa_cache_hit": bool(stage2_runtime.get("review_qa_cache_hit", False)),
         "stage2_review_qa_trigger_reasons": " / ".join(
@@ -698,6 +707,82 @@ def _decision_trace_by_gate(trace: list[dict[str, Any]]) -> dict[str, dict[str, 
         if gate:
             output[gate] = item
     return output
+
+
+def _evidence_audit_structured_fields(state: dict[str, Any]) -> dict[str, object]:
+    findings = _agent_findings(state, "evidence_audit")
+    structured_line = next(
+        (
+            finding
+            for finding in findings
+            if "recommended_evidence_treatment=" in finding
+            or "Structured evidence treatment:" in finding
+        ),
+        "",
+    )
+    return {
+        "evidence_audit_structured_found": bool(structured_line),
+        "evidence_audit_critical_evidence_count": _extract_int_marker(
+            structured_line,
+            ("critical_evidence_count", "critical"),
+        ),
+        "evidence_audit_watch_context_count": _extract_int_marker(
+            structured_line,
+            ("watch_context_count", "watch"),
+        ),
+        "evidence_audit_hard_distress_detected": _extract_bool_marker(
+            structured_line,
+            "hard_distress_detected",
+        ),
+        "evidence_audit_recommended_evidence_treatment": _extract_text_marker(
+            structured_line,
+            "recommended_evidence_treatment",
+        ),
+        "evidence_audit_top_materiality_basis": _extract_text_marker(
+            structured_line,
+            "top_materiality_basis",
+        ),
+    }
+
+
+def _agent_findings(state: dict[str, Any], role: str) -> list[str]:
+    agent_summary = _dict_value(state.get("agent_summary"))
+    agents = _dict_value(agent_summary.get("agents"))
+    agent = _dict_value(agents.get(role))
+    raw_findings = agent.get("findings", [])
+    if isinstance(raw_findings, list):
+        return [str(item) for item in raw_findings if str(item).strip()]
+    raw_agent_outputs = state.get("agent_outputs")
+    if not isinstance(raw_agent_outputs, list):
+        return []
+    for output in raw_agent_outputs:
+        output_dict = _model_or_dict_value(output)
+        if str(output_dict.get("role") or "") != role:
+            continue
+        raw_output_findings = output_dict.get("findings", [])
+        if isinstance(raw_output_findings, list):
+            return [str(item) for item in raw_output_findings if str(item).strip()]
+    return []
+
+
+def _extract_int_marker(text: str, marker_names: tuple[str, ...]) -> int:
+    for marker_name in marker_names:
+        match = re.search(rf"{re.escape(marker_name)}=(\d+)", text)
+        if match:
+            return int(match.group(1))
+    return 0
+
+
+def _extract_bool_marker(text: str, marker_name: str) -> bool:
+    match = re.search(rf"{re.escape(marker_name)}=(true|false)", text, flags=re.IGNORECASE)
+    return bool(match and match.group(1).lower() == "true")
+
+
+def _extract_text_marker(text: str, marker_name: str) -> str:
+    match = re.search(rf"{re.escape(marker_name)}=([^;]+)", text)
+    if not match:
+        return ""
+    return match.group(1).strip()
 
 
 def _committee_success(*, model_error_type: str, final_label: str) -> tuple[bool, str]:
@@ -822,6 +907,17 @@ def _bounded_worker_count(workers: int, row_count: int) -> int:
 
 def _dict_value(value: object) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
+
+
+def _model_or_dict_value(value: object) -> dict[str, Any]:
+    if isinstance(value, dict):
+        return value
+    model_dump = getattr(value, "model_dump", None)
+    if callable(model_dump):
+        dumped = model_dump(mode="json")
+        if isinstance(dumped, dict):
+            return dumped
+    return {}
 
 
 def _non_empty(value: object) -> bool:

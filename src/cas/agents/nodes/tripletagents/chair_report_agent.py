@@ -63,6 +63,12 @@ def run_chair_report_agent(
                 "recommended_evidence_treatment. Treat watch_context as observation, not "
                 "confirmed distress, unless the structured fields identify substantive or critical evidence."
             ),
+            (
+                "If recommended_evidence_treatment is not critical_veto_review or "
+                "hard_distress_detected is false, do not describe the evidence as "
+                "`치명적 위험 신호`, `치명 외부근거`, or confirmed fatal distress. Use softer "
+                "phrases such as `외부 위험 단서`, `관찰 근거`, or `추가 확인 필요`."
+            ),
             "Return concise Korean review prose in the structured response fields only.",
             "Use credit_policy_summary only to explain the already computed committee qualification.",
             "Do not convert policy signals into a new official rating, probability, or label.",

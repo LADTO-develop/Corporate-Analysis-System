@@ -123,6 +123,10 @@ STAGE2_AGENT_SPECS: tuple[Stage2AgentSpec, ...] = (
             "risk_hold_reason_tags",
             "risk_hold_reason_labels",
             "risk_hold_reason_summary",
+            "agent_disagreement_score",
+            "agent_disagreement_level",
+            "agent_disagreement_reasons",
+            "agent_disagreement_summary",
             "veto_triggered",
             "hidden_tail_risk_flag",
             "hidden_tail_risk_reason",
@@ -207,7 +211,8 @@ STAGE2_OPTIONAL_AGENT_SPECS: tuple[Stage2AgentSpec, ...] = (
             "Treat eligible committee decisions as provisional when they are near the "
             "threshold, financially weak, or supported by ambiguous external evidence. "
             "Recommend keep, boundary hold, risk hold, manual review, or memo-only fix "
-            "without inventing evidence."
+            "without inventing evidence, and do not escalate from low-quality news "
+            "snippets unless structured evidence or severe financial stress corroborates them."
         ),
     ),
 )

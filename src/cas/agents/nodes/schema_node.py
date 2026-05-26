@@ -163,6 +163,16 @@ def _committee_view_payload(
                 str(item) for item in committee_view.get("risk_hold_reason_labels", []) or []
             ],
             "risk_hold_reason_summary": str(committee_view.get("risk_hold_reason_summary", "")),
+            "agent_disagreement_score": _clamp_probability(
+                committee_view.get("agent_disagreement_score", 0.0)
+            ),
+            "agent_disagreement_level": _agent_disagreement_level(
+                committee_view.get("agent_disagreement_level")
+            ),
+            "agent_disagreement_reasons": [
+                str(item) for item in committee_view.get("agent_disagreement_reasons", []) or []
+            ],
+            "agent_disagreement_summary": str(committee_view.get("agent_disagreement_summary", "")),
             "veto_triggered": bool(committee_view.get("veto_triggered", False)),
             "hidden_tail_risk_flag": bool(committee_view.get("hidden_tail_risk_flag", False)),
             "hidden_tail_risk_reason": str(committee_view.get("hidden_tail_risk_reason", "")),
@@ -194,6 +204,10 @@ def _committee_view_payload(
         "risk_hold_reason_tags": [],
         "risk_hold_reason_labels": [],
         "risk_hold_reason_summary": "",
+        "agent_disagreement_score": 0.0,
+        "agent_disagreement_level": "low",
+        "agent_disagreement_reasons": [],
+        "agent_disagreement_summary": "",
         "veto_triggered": False,
         "hidden_tail_risk_flag": False,
         "hidden_tail_risk_reason": "",
@@ -295,6 +309,16 @@ def _build_schema_failure_response(
             "risk_hold_reason_tags": [],
             "risk_hold_reason_labels": [],
             "risk_hold_reason_summary": "",
+            "agent_disagreement_score": _clamp_probability(
+                committee_view.get("agent_disagreement_score", 0.0)
+            ),
+            "agent_disagreement_level": _agent_disagreement_level(
+                committee_view.get("agent_disagreement_level")
+            ),
+            "agent_disagreement_reasons": [
+                str(item) for item in committee_view.get("agent_disagreement_reasons", []) or []
+            ],
+            "agent_disagreement_summary": str(committee_view.get("agent_disagreement_summary", "")),
             "veto_triggered": bool(committee_view.get("veto_triggered", False)),
             "hidden_tail_risk_flag": False,
             "hidden_tail_risk_reason": "",
@@ -415,6 +439,11 @@ def _clamp_probability(value: object) -> float:
     except (TypeError, ValueError):
         numeric = 0.0
     return min(max(numeric, 0.0), 1.0)
+
+
+def _agent_disagreement_level(value: object) -> str:
+    text = str(value or "low").strip().lower()
+    return text if text in {"low", "medium", "high"} else "low"
 
 
 def _now() -> str:

@@ -1,8 +1,8 @@
 # Stage 2 Agent Performance Evidence
 
 - 작성일: 2026-05-21
-- 최종 업데이트: 2026-05-24
-- 범위: 지금까지의 committee-review agent 실험 로그, rolling validation 핵심 증빙 15건, 새 holdout 8건 속도/성능 재검증, OpenAI single 3-agent no-cache live 재검증, ReviewQA/RiskRecallQA live 확대 검증
+- 최종 업데이트: 2026-05-26
+- 범위: 지금까지의 committee-review agent 실험 로그, rolling validation 핵심 증빙 15건, 새 holdout 8건 속도/성능 재검증, OpenAI single 3-agent no-cache live 재검증, ReviewQA/RiskRecallQA live 확대 검증, Agent disagreement score 검증
 - 목적: Claude/OpenAI API + Agno 기반 Stage 2 committee가 1차 모델 오류를 얼마나 보완했는지 수치로 남긴다.
 - 주의: 아래 수치는 전체 기업 모집단 정확도가 아니라, Stage 2 검토가 필요한 hard sample/replay 샘플에 대한 위원회 보완 성능이다.
 
@@ -19,6 +19,11 @@
 | isolated ICR TN guardrail | 8 | 7/8 = 87.5% | 8/8 = 100.0% | 이자보상 단일 플래그 TN 1건 개선 |
 | OpenAI single 3-agent no-cache live | 8 | 7/8 = 87.5% | 8/8 = 100.0% | 캐시 hit 0, 역할별 실행시간 8/8건 기록 |
 | Compact prompt smoke live | 8 | 8/8 = 100.0% | 8/8 = 100.0% | role별 compact payload 적용, cache hit 0, Stage 2 평균 14.9034초 |
+| Explainability smoke live | 8 | 7/8 = 87.5% | 8/8 = 100.0% | cache hit 0, EvidenceAudit 구조화 필드 8/8, risk_hold reason tag 3/3 |
+| Agent disagreement smoke live | 10 | 9/10 = 90.0% | 10/10 = 100.0% | cache hit 0, high disagreement 2/10 모두 ReviewQA 실행, memo conflict 0 |
+| Disagreement-gated ReviewQA 20건 live | 20 | 18/20 = 90.0% | 20/20 = 100.0% | cache hit 0, ReviewQA 5/20건 실행, advisory 1건 적용, Stage 2 평균 22.9209초 |
+| Disagreement-gated ReviewQA v2 20건 live | 20 | 19/20 = 95.0% | 20/20 = 100.0% | cache hit 0, ReviewQA 3/20건 실행, advisory 2건 적용, Stage 2 평균 18.7126초 |
+| Disagreement-gated ReviewQA v2 40건 live | 40 | 36/40 = 90.0% | 40/40 = 100.0% | cache hit 0, ReviewQA 5/40건 실행, advisory 2건 적용, Stage 2 평균 17.5488초 |
 | TN 과잉 보류 30건 확대 | 30 | 22/30 = 73.3% | 30/30 = 100.0% | 레몬 1건 보류→적격, 남은 보류 8건은 재무 차단 신호 보유 |
 | TN 과잉 보류 8건 OpenAI Agno live | 8 | 2/8 = 25.0% | 8/8 = 100.0% | 캐시 hit 0, 외부근거 ready 8/8, 자금조달 공시 민감도 발견 |
 | TN 자금조달 guardrail 재평가 | 8 | 3/8 = 37.5% | 8/8 = 100.0% | 같은 외부근거 캐시 재평가, 머큐리 1건 보류→적격 |
@@ -148,6 +153,10 @@ round 3 live 결과에서는 FN 2건은 모두 보류로 끌어올렸고, FP 3�
 | TN overhold expanded timeout30 speed gate v3 OpenAI Agno full20 no-cache | `committee_review_tn_overhold_expanded_20_timeout30_speed_gate_v3_agno_openai_live_no_cache_full20` | 20 | 11/20 = 55.0% | 20/20 = 100.0% | 0 | timeout30 live 재검증, 최종 분포 유지, wall 190.9334초→151.0032초, Stage 2 max 73.2104초→19.3524초 |
 | Mixed hard 40 deterministic baseline | `committee_review_mixed_hard_40_deterministic_baseline` | 40 | 34/40 = 85.0% | 38/40 = 95.0% | 0 | Agno live 전 sanity baseline, FN 8 FP 12 TP 12 TN 8 혼합 hard sample |
 | Mixed hard 40 timeout30 speed gate v3 OpenAI Agno live no-cache | `committee_review_mixed_hard_40_timeout30_speed_gate_v3_agno_openai_live_no_cache` | 40 | 34/40 = 85.0% | 38/40 = 95.0% | 0 | timeout30 + speed gate v3 혼합 hard sample live 검증, hold/reject Recall 1.0000, Stage 2 max 23.5955초 |
+| Agent disagreement memo-fix final 10 OpenAI Agno live no-cache | `committee_review_disagreement_memo_fix_final_10_agno_openai_live_no_cache` | 10 | 9/10 = 90.0% | 10/10 = 100.0% | 0 | Quant/Evidence/Chair disagreement score live 검증, high 2/10 모두 ReviewQA 실행, memo conflict 0 |
+| Disagreement-gated ReviewQA 20 OpenAI Agno live no-cache | `committee_review_disagreement_trigger_gated_20_agno_openai_live_no_cache` | 20 | 18/20 = 90.0% | 20/20 = 100.0% | 0 | ReviewQA trigger를 disagreement level/reason에 직접 연결한 뒤 20건 live 재검증, ReviewQA 5/20건 실행 |
+| Disagreement-gated ReviewQA v2 20 OpenAI Agno live no-cache | `committee_review_disagreement_trigger_gated_v2_20_agno_openai_live_no_cache` | 20 | 19/20 = 95.0% | 20/20 = 100.0% | 0 | high disagreement 단독 호출을 제거한 v2 live 재검증, ReviewQA 3/20건 실행 |
+| Disagreement-gated ReviewQA v2 40 OpenAI Agno live no-cache | `committee_review_disagreement_trigger_gated_v2_40_agno_openai_live_no_cache` | 40 | 36/40 = 90.0% | 40/40 = 100.0% | 0 | v2를 mixed hard 40건 전체로 확대 재검증, ReviewQA 5/40건 실행 |
 
 Historical 12건 계열은 동일 기업 12건을 반복 검증한 산출물이다. 이 계열에서는 초기 75.0%에서 secondary signal connected 기준 100.0%까지 개선됐다. Rolling validation 계열은 샘플 구성과 평가지표가 달라 별도로 보며, 최종 추가 10건에서 90.0%/100.0%를 기록했다.
 
@@ -555,6 +564,125 @@ EvidenceAudit 5.9740초, ChairReport 5.5899초였고, ReviewQA는 3/8건만 호�
 `secondary_radar_hold`, `model_reject_confirmation_hold`, `model_risk_hold`로 구분한다.
 따라서 실제 라벨이 투자적격인 기업이 보류로 남아도, 재무 스트레스 때문인지, 외부 공시 중요도
 때문인지, 재무와 외부근거가 결합된 관찰 보류인지 발표와 대시보드에서 설명할 수 있다.
+
+## Agent Disagreement Score live 검증
+
+ReviewQA를 더 효율적으로 호출하기 위해 QuantCredit, EvidenceAudit, ChairReport/committee_view의
+판단이 서로 엇갈리는 정도를 `agent_disagreement_score`로 기록하도록 했다. 점수는 정량 모델과
+외부근거의 방향 충돌, 최종 `risk_hold`/`reject`와 EvidenceAudit 치명근거 부족, 최종 라벨과
+메모 문구 충돌 가능성, 역할 agent confidence gap을 조합해 계산한다.
+
+mixed hard 10건을 OpenAI Agno single provider 3-agent, live external evidence,
+`--no-stage2-llm-cache`, workers=1 조건으로 재실행했다. 실행 결과는 다음과 같다.
+
+| 실행 | 건수 | 엄격 기준 | Review-safe | Evidence ready | LLM cache hit | Disagreement high | ReviewQA 호출 | Memo conflict | Stage 2 평균 | Stage 2 최대 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| disagreement memo-fix final | 10 | 9/10 = 90.0% | 10/10 = 100.0% | 10/10 | 0/10 | 2/10 | 3/10 | 0/10 | 24.3740초 | 54.5707초 |
+
+`high` disagreement 2건은 모두 BBB-/BB+ 경계 FP인 `(주)제닉`, `솔트웨어(주)`였다. 두 케이스 모두
+`quant_risk_evidence_watch_context / chair_risk_without_critical_evidence` reason이 기록됐고,
+ReviewQA가 실행됐다. 즉 ReviewQA가 전수 호출이 아니라 "정량 모델은 위험인데 외부근거는
+watch/context 수준인 애매한 경계 보류"에 집중되도록 하는 증거가 생겼다.
+
+memo conflict 오탐은 0건이었다. 이전 smoke에서 `(주)솔디펜스`의 "최종 적격으로 확정하지 않고 보류"
+문구를 충돌로 잘못 읽는 사례가 있었지만, 부정형 문구를 제외하도록 보정한 뒤 최종 재실행에서는
+`committee_label_memo_conflict`가 남지 않았다.
+
+엄격 기준 실패 1건은 `(주)엔에프씨` TN이 RiskRecallQA 적용 후 `보류/boundary_hold`로 올라간
+케이스다. review-safe 기준에서는 정상기업을 `부적격`으로 악화시키지 않았으므로 성공으로 본다.
+이 결과는 disagreement score가 위험기업 recall을 해치지 않으면서, ReviewQA 호출 이유를 설명하는
+진단 신호로 사용할 수 있음을 보여준다.
+
+후속 구현에서는 ReviewQA trigger도 이 score에 직접 연결한 v1 정책을 검증했다. `high`
+disagreement는 치명 외부근거가 제한적인 `risk_hold`/`reject`에서 우선 QA를 실행하고, `medium`은
+`chair_risk_without_critical_evidence`, `chair_reject_without_critical_evidence`,
+`committee_label_memo_conflict` reason이 있을 때만 실행한다. `low` disagreement는
+ReviewQA를 건너뛰도록 해, 단순 watch-context 또는 방어 재무축만으로는 4번째 LLM 호출이 발생하지
+않게 했다.
+
+이 정책을 mixed hard 20건으로 OpenAI Agno live no-cache 재검증했다. 외부근거는 20/20건
+`ready`, LLM cache hit는 0/20건, 실행 실패 행은 0건이었다. 결과는 strict 18/20 = 90.0%,
+review-safe 20/20 = 100.0%였다. ReviewQA는 5/20건만 실행됐고, advisory는 1건 적용됐다.
+실행된 5건은 FN risk_hold 3건과 BBB-/BB+ 경계 FP 2건에 집중됐으며, FP 완화 보류,
+TP 위험 유지, TN guardrail 케이스는 ReviewQA를 호출하지 않았다. Stage 2 평균은 22.9209초,
+최대는 46.1780초였다. 실행 중 OpenAI timeout 로그가 3회 있었지만 내부 retry/continuation 후
+최종 CSV에는 `error_message`와 `stage2_error_message`가 남지 않았다.
+
+strict 실패 2건은 `(주)엔에프씨` TN `boundary_hold`와 `(주)하나투어` TN `risk_hold`였다.
+둘 다 최종 `부적격`으로 악화하지 않아 review-safe 기준은 통과했다. 하나투어는 희석률 20.00%와
+재무 스트레스/외부 중요도 근거가 함께 남아 위험 보류를 유지한 보수적 케이스다.
+
+이 live 결과에서 ReviewQA 5건 중 advisory가 적용된 건 1건뿐이었으므로, 후속 v2 구현에서는
+`high` disagreement를 단독 호출 조건으로 쓰지 않도록 더 좁혔다. `risk_hold`는 1차 모델이
+투자적격인데 위원회가 위험 보류로 올린 overhold 후보, 또는 라벨-메모 충돌 후보를 우선 검수한다.
+1차 모델이 이미 부적격이고 위원회가 보류로 완화한 케이스는 보정 가능성이 낮으면 QA를 건너뛰어,
+내부 의견 차이는 대시보드 설명 신호로 남기되 4번째 LLM 호출은 줄인다.
+
+v2를 같은 mixed hard 20건으로 OpenAI Agno live no-cache 재검증했다. 외부근거는 20/20건
+`ready`, LLM cache hit는 0/20건, 실행 실패 행은 0건이었다. 결과는 strict 19/20 = 95.0%,
+review-safe 20/20 = 100.0%였다. ReviewQA는 3/20건만 실행됐고 advisory는 2건 적용됐다.
+실행된 3건은 모두 FN risk_hold였으며, BBB-/BB+ 경계 FP 4건, FP 완화 4건, TP 위험 유지 4건,
+TN guardrail 4건은 ReviewQA를 호출하지 않았다. Stage 2 평균은 18.7126초, 최대는 31.4994초였고,
+wall time은 376.3633초였다. v1 대비 ReviewQA 호출은 5건에서 3건으로 줄고, strict 성공은
+18/20에서 19/20으로 회복됐다. strict 실패는 하나투어 TN `risk_hold` 1건뿐이며, 종속회사
+영업정지/자금조달 중요도와 재무 스트레스가 결합된 보수적 보류라 review-safe 기준은 통과했다.
+
+v2를 mixed hard 40건 전체로 확대한 OpenAI Agno live no-cache 재검증에서는 외부근거 40/40건
+`ready`, LLM cache hit 0/40건, 실행 실패 행 0건을 확인했다. 결과는 strict 36/40 = 90.0%,
+review-safe 40/40 = 100.0%였다. ReviewQA는 5/40건만 실행됐고 advisory는 2건 적용됐다.
+호출 대상은 모두 FN risk_hold였으며, BBB-/BB+ 경계 FP 8건, FP 완화 8건, TP 12건, TN 8건은
+ReviewQA를 호출하지 않았다. Stage 2 평균은 17.5488초, 최대는 34.0596초, wall time은
+729.5342초였다.
+
+40건 확대 결과에서 ReviewQA v2의 호출 절감은 일반화됐지만, strict는 mixed hard 최고치보다 낮았다.
+TN 8건 중 `(주)엔에프씨`, `(주)하나투어`, `청광건설(주)`, `(주)일지테크` 4건이 보류로 남았기
+때문이다. 하나투어는 종속회사 영업정지/자금조달 중요도와 재무 스트레스가 결합된 보수적
+`risk_hold`라 유지 근거가 분명하지만, NFC와 청광건설은 RiskRecallQA/EvidenceAudit이 routine
+공시 목록에서 과거 횡령/배임 같은 치명 맥락을 과하게 읽어 적격을 `boundary_hold`로 올린 케이스다.
+일지테크는 채무보증금액/자기자본 14.90% 때문에 `review_hold`로 남았다. 따라서 다음 개선은
+ReviewQA가 아니라 RiskRecallQA escalation에 실제 evidence profile의 veto/substantive 근거를
+요구하는 guardrail이다.
+
+후속 구현으로 RiskRecallQA escalation guardrail을 추가했다. RiskRecallQA가 상향을 권고해도
+저품질 뉴스 스니펫이나 검색요약에 `횡령`, `배임` 같은 치명 키워드가 우연히 포함된 것만으로는
+적격을 보류로 올리지 않는다. `risk_hold` 상향은 검증된 외부 중요근거 또는 매우 강한 재무취약성이
+있어야 적용하고, `boundary_hold` 상향도 기준선 근처+복수 재무취약성, BBB-/BB+ 경계+재무취약성,
+또는 검증된 외부근거가 있어야 적용한다. 이 변경은 live API 재검증 전 구현 단계이며,
+`tests/unit/test_committee.py`에서 저품질 뉴스 단독 `boundary_hold`/`risk_hold` 상향 차단과
+기존 복수 재무취약성 및 OpenDART substantive evidence 상향 경로 유지를 확인했다.
+
+PR #53 머지 후에는 Quant/Evidence 역할 분리 문구와 credit signal policy 보강을 선별 흡수하되,
+OpenAI 기본 provider, materiality guardrail, structured evidence treatment, disagreement score,
+RiskRecallQA escalation guardrail은 유지했다. 이를 mixed hard 10건으로 OpenAI Agno live
+no-cache 재검증한 결과, 외부근거 `ready` 10/10건, LLM cache hit 0/10건, 실행 실패 0건이었다.
+결과는 strict 10/10 = 100.0%, review-safe 10/10 = 100.0%였다. FN 3건은 모두 `risk_hold`로
+상향됐고, FP 6건은 모두 `mitigation_hold` 또는 review-safe 보류로 완화됐으며, TP 1건은
+위험 판단을 유지했다. ReviewQA는 2/10건만 실행됐고 advisory 적용은 0건, RiskRecallQA 호출은
+0건이었다. Stage 2 평균은 16.4039초, 최대는 22.2847초, wall time은 90.0239초였다.
+
+후속 구현으로 EvidenceAudit criticality hard gate를 추가했다. Agno EvidenceAudit LLM 응답의
+`has_critical_risk=true`는 advisory 신호로만 보고, deterministic `structured_evidence_decision`
+기준으로 `critical_veto_review`, `hard_distress_detected`, 또는 `critical_evidence_count > 0`이
+확인될 때만 `evidence_strength=critical`을 허용한다. 저품질 뉴스/공시 요약이나 watch-context
+외부근거를 LLM이 과하게 해석해 치명 외부근거로 올리는 경로를 줄이기 위한 변경이며,
+`tests/unit/test_agent_report_guardrails.py`에서 LLM 단독 critical flag가 `critical`로 승격되지
+않는 것을 확인했다.
+
+이를 TN overhold 후보 10건으로 OpenAI Agno live no-cache 재검증했다. 외부근거는 10/10건
+`ready`, LLM cache hit는 0/10건, 실행 실패 행은 0건이었다. 결과는 strict 7/10 = 70.0%,
+review-safe 10/10 = 100.0%였다. 최종 라벨은 `적격` 7건, `보류/boundary_hold` 3건,
+`부적격` 0건이었다. ReviewQA는 1/10건 실행되어 advisory 1건이 적용됐고, RiskRecallQA는
+4/10건 실행됐지만 advisory 적용은 0건이었다. Stage 2 평균은 24.3308초, 최대는 42.3019초,
+wall time은 136.9049초였다.
+
+이 결과는 hard gate가 LLM 단독 critical flag를 막는 방어선으로 유효하지만, 구조화
+evidence-treatment 자체의 critical 판정 품질은 아직 개선 여지가 있음을 보여준다. 해당 10건에서
+`critical_veto_review` 4건, `substantive_review` 1건, `watch_context` 5건이 나왔고, 일부 적격
+유지 케이스의 메모에는 "치명적 위험 신호" 같은 표현이 남았다. 따라서 다음 개선은 routine
+감사보고서, 저품질 검색요약, 회사 직접 관련성이 약한 과거 치명 키워드를 `critical_veto_review`로
+올리는 조건을 더 좁히는 것이다.
+
+최종 PR 정리 시 원시 batch output 폴더는 남기지 않고, 위 수치와 해석만 이 증빙 문서에 보존한다.
 
 ## 증빙 파일
 

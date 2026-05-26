@@ -146,7 +146,7 @@ v7에서는 상세 공시 materiality 범위를 확장했다. 자금조달 공�
 `materiality_top_basis`, `materiality_event_classes`를 보면 OpenDART 상세 공시에서 어떤
 비율 근거가 판단에 들어왔는지 결과 파일만으로 확인할 수 있다.
 
-ReviewQAAgent는 Agno runner에서 기본적으로 켜져 있지만, 모든 기업에 실행되지는 않는다. Stage 1 모델이 `투자적격`인데 최종 라벨이 `보류`인 경우, `risk_hold`가 치명 근거 없이 만들어진 경우, chair memo와 최종 라벨 충돌 가능성이 있는 경우, 또는 자금조달·거래정지·감사보고서처럼 해석이 애매한 공시가 보류 판단에 관여한 경우에만 실행된다. 운영 속도 테스트에서 순수 3-agent 지연시간만 보고 싶으면 `CAS_STAGE2_REVIEW_QA_ENABLED=0`을 추가한다.
+ReviewQAAgent는 Agno runner에서 기본적으로 켜져 있지만, 모든 기업에 실행되지는 않는다. `agent_disagreement_level=high`이면서 치명 외부근거가 제한적인 `risk_hold`/`reject`는 우선 실행하고, `medium`은 `chair_risk_without_critical_evidence`, `chair_reject_without_critical_evidence`, `committee_label_memo_conflict`처럼 라벨과 근거의 충돌을 설명하는 reason이 있을 때만 실행한다. `low` disagreement 케이스는 ReviewQA를 건너뛰어 속도 비용을 줄인다. 이 disagreement score는 QuantCredit, EvidenceAudit, ChairReport/committee_view가 서로 다른 방향을 보는지 기록하는 진단 신호이며, batch 결과 CSV의 `agent_disagreement_score`, `agent_disagreement_level`, `agent_disagreement_reasons`, `agent_disagreement_summary`에서 확인한다. 운영 속도 테스트에서 순수 3-agent 지연시간만 보고 싶으면 `CAS_STAGE2_REVIEW_QA_ENABLED=0`을 추가한다.
 
 ReviewQA는 최종 라벨을 직접 바꾸지 않는다. 다만 `risk_hold`가 과도하다고 권고하고 `veto_triggered=false`, `hidden_tail_risk_flag=false`이면 `committee_decision_type`만 `boundary_hold`로 낮출 수 있다. 또한 ReviewQA가 `risk_hold_without_critical_evidence` 조건에서 downgrade를 권고했고, 외부 공시가 모두 `caution/watch_context/procedural_or_one_off` 수준이며 veto·hidden-tail-risk가 없으면 같은 subtype 보정을 안정적으로 적용한다. 자금조달·채무보증 materiality는 10% 이상이어도 재무 스트레스나 hard distress 문맥이 없으면 단독으로 ReviewQA 보정을 막지 않는다. 이 subtype advisory 적용을 끄고 순수 관찰만 하려면 `CAS_STAGE2_REVIEW_QA_APPLY_ADVISORY=0`을 추가한다.
 

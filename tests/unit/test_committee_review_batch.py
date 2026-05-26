@@ -43,6 +43,13 @@ def test_sample_model_replay_skips_pre_replay_stage2(
         }
         updated["committee_view"] = {
             "final_committee_label": "보류",
+            "agent_disagreement_score": 0.65,
+            "agent_disagreement_level": "high",
+            "agent_disagreement_reasons": [
+                "quant_risk_evidence_watch_context",
+                "chair_risk_without_critical_evidence",
+            ],
+            "agent_disagreement_summary": "역할 agent 간 판단 충돌 점수는 0.65입니다.",
             "veto_triggered": False,
             "hidden_tail_risk_flag": False,
             "conflict_resolution": "샘플 모델값 기준으로 재검토했습니다.",
@@ -59,6 +66,20 @@ def test_sample_model_replay_skips_pre_replay_stage2(
                 "chair_report": 2.4,
             },
             "parallel_independent_agents": True,
+        }
+        updated["agent_summary"] = {
+            "agents": {
+                "evidence_audit": {
+                    "findings": [
+                        (
+                            "구조화 근거 판정: critical_evidence_count=1; "
+                            "watch_context_count=2; hard_distress_detected=True; "
+                            "recommended_evidence_treatment=critical_veto_review; "
+                            "top_materiality_basis=채무보증금액/자기자본: 12.80%"
+                        )
+                    ]
+                }
+            }
         }
         return updated
 
@@ -87,6 +108,19 @@ def test_sample_model_replay_skips_pre_replay_stage2(
     assert results.loc[0, "stage2_total_elapsed_seconds"] == 12.3
     assert results.loc[0, "stage2_evidence_audit_elapsed_seconds"] == 5.2
     assert bool(results.loc[0, "stage2_parallel_independent_agents"]) is True
+    assert results.loc[0, "agent_disagreement_score"] == 0.65
+    assert results.loc[0, "agent_disagreement_level"] == "high"
+    assert (
+        results.loc[0, "agent_disagreement_reasons"]
+        == "quant_risk_evidence_watch_context / chair_risk_without_critical_evidence"
+    )
+    assert "판단 충돌 점수" in results.loc[0, "agent_disagreement_summary"]
+    assert bool(results.loc[0, "evidence_audit_structured_found"]) is True
+    assert results.loc[0, "evidence_audit_critical_evidence_count"] == 1
+    assert results.loc[0, "evidence_audit_watch_context_count"] == 2
+    assert bool(results.loc[0, "evidence_audit_hard_distress_detected"]) is True
+    assert results.loc[0, "evidence_audit_recommended_evidence_treatment"] == "critical_veto_review"
+    assert results.loc[0, "evidence_audit_top_materiality_basis"] == "채무보증금액/자기자본: 12.80%"
     assert results.loc[0, "prior_credit_rating"] == "BB+"
     assert results.loc[0, "prior_rating_agency"] == "한국신용평가"
 
