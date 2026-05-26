@@ -36,7 +36,7 @@ def run_chair_report_agent(
     quant_credit: QuantCreditOutput,
     evidence_audit: EvidenceAuditOutput,
     model_name: str,
-    model_provider: str = "anthropic",
+    model_provider: str = "openai",
     max_tokens: int,
 ) -> ChairReportOutput:
     """Run the Agno ChairReportAgent and map it to the CAS Stage 2 schema."""

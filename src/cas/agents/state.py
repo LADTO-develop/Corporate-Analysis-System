@@ -93,6 +93,8 @@ class AgentOutput(BaseModel):
         "quant_credit",
         "evidence_audit",
         "chair_report",
+        "review_qa",
+        "risk_recall_qa",
     ]
     summary: str
     findings: list[str] = Field(default_factory=list)
@@ -162,6 +164,7 @@ class AgentState(TypedDict, total=False):
     committee_reviews: Annotated[list[CommitteeReview], append_opinions]
     agent_outputs: Annotated[list[AgentOutput], append_agent_outputs]
     agent_summary: dict[str, Any]
+    stage2_runtime_diagnostics: dict[str, Any]
     committee_view: dict[str, Any]
     final_recommendation: Recommendation
     final_confidence: float

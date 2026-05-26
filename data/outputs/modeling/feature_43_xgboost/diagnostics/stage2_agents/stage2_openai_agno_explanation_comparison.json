@@ -1,0 +1,21 @@
+{
+  "generated_at_utc": "2026-05-22T04:33:41Z",
+  "deterministic_results_path": "data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents/committee_review_openai_agno_comparison_deterministic/committee_review_batch_results.csv",
+  "agno_results_path": "data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents/committee_review_openai_agno_comparison_agno/committee_review_batch_results.csv",
+  "deterministic_rows": 4,
+  "agno_rows": 4,
+  "matched_rows": 4,
+  "agno_results_available": true,
+  "outputs": {
+    "details": "data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents/stage2_openai_agno_explanation_comparison_details.csv",
+    "report": "data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents/stage2_openai_agno_explanation_comparison.md"
+  },
+  "status": "compared",
+  "label_change_count": 0,
+  "success_change_count": 0,
+  "deterministic_success_rate": 1.0,
+  "agno_success_rate": 1.0,
+  "deterministic_quality_mean": 0.7741,
+  "agno_quality_mean": 0.8933,
+  "quality_delta_mean": 0.1191
+}

@@ -9,6 +9,8 @@ from cas.agents.stage2_outputs import (
     ChairReportOutput,
     EvidenceAuditOutput,
     QuantCreditOutput,
+    ReviewQAOutput,
+    RiskRecallQAOutput,
 )
 
 
@@ -70,6 +72,46 @@ def test_chair_report_output_flattens_to_common_agent_output() -> None:
         "committee_view만 보완합니다.",
         "심사 메모 초안",
     ]
+
+
+def test_review_qa_output_flattens_to_common_agent_output() -> None:
+    output = ReviewQAOutput(
+        qa_summary="최종 라벨과 메모를 검수했습니다.",
+        trigger_reasons=["investment_model_hold", "ambiguous_external_evidence"],
+        label_memo_consistency="최종 라벨과 메모가 충돌하지 않습니다.",
+        risk_hold_assessment="overstated",
+        evidence_cutoff_check="기준일 이후 근거는 사용하지 않았습니다.",
+        overhold_guardrail_assessment="정상기업 과잉 보류 guardrail 검토가 필요합니다.",
+        recommended_action="downgrade_risk_hold_to_boundary_hold",
+        confidence=0.72,
+    )
+
+    agent = output.to_agent_output()
+
+    assert agent.role == "review_qa"
+    assert agent.summary == "최종 라벨과 메모를 검수했습니다."
+    assert "investment_model_hold" in agent.findings[0]
+    assert agent.findings[-1] == "QA 권고: downgrade_risk_hold_to_boundary_hold"
+
+
+def test_risk_recall_qa_output_flattens_to_common_agent_output() -> None:
+    output = RiskRecallQAOutput(
+        qa_summary="적격 판단의 위험 누락 가능성을 재검수했습니다.",
+        trigger_reasons=["eligible_near_threshold", "eligible_with_recall_watch_evidence"],
+        eligible_safety_assessment="needs_boundary_review",
+        financial_resilience_check="유동성은 약하지만 현금흐름 방어축은 일부 확인됩니다.",
+        evidence_recall_check="외부 공시는 watch_context 수준입니다.",
+        rating_boundary_check="모델 확률이 기준선 근처입니다.",
+        recommended_action="escalate_eligible_to_boundary_hold",
+        confidence=0.66,
+    )
+
+    agent = output.to_agent_output()
+
+    assert agent.role == "risk_recall_qa"
+    assert agent.summary == "적격 판단의 위험 누락 가능성을 재검수했습니다."
+    assert "eligible_near_threshold" in agent.findings[0]
+    assert agent.findings[-1] == "Recall QA 권고: escalate_eligible_to_boundary_hold"
 
 
 def test_stage2_output_schema_rejects_invalid_confidence() -> None:

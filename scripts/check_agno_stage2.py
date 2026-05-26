@@ -20,28 +20,32 @@ PROVIDER_ENV_VARS = {
     "openai": ("OPENAI_API_KEY",),
     "google": ("GOOGLE_API_KEY", "GEMINI_API_KEY"),
 }
+DEFAULT_AGNO_MODE = "single"
+DEFAULT_MODEL_PROVIDER = "openai"
+DEFAULT_MODEL = "gpt-4.1-mini"
 
 
 def main() -> None:
     """Validate Agno dependencies and local live-mode environment variables."""
     load_dotenv()
     runner = os.environ.get("CAS_STAGE2_RUNNER", "deterministic").strip().lower()
-    agno_mode = os.environ.get("CAS_STAGE2_AGNO_MODE", "multi_llm_committee").strip().lower()
+    agno_mode = os.environ.get("CAS_STAGE2_AGNO_MODE", DEFAULT_AGNO_MODE).strip().lower()
     providers = _required_providers(runner=runner, agno_mode=agno_mode)
     package_specs = _required_package_specs(providers)
     package_errors = _missing_packages(package_specs)
     env_errors = _missing_env_vars(providers)
     fallback = os.environ.get("CAS_STAGE2_FALLBACK_ON_ERROR", "1").strip()
+    llm_cache = os.environ.get("CAS_STAGE2_LLM_CACHE_ENABLED", "1").strip()
 
     print("CAS Stage 2 Agno preflight")
     print(f"- CAS_STAGE2_RUNNER={runner or 'deterministic'}")
-    print(f"- CAS_STAGE2_AGNO_MODE={agno_mode or 'multi_llm_committee'}")
+    print(f"- CAS_STAGE2_AGNO_MODE={agno_mode or DEFAULT_AGNO_MODE}")
     if runner == "agno" and agno_mode in {"multi", "multi_llm", "multi_llm_committee"}:
         print(
             f"- CAS_STAGE2_QUANT_PROVIDER={os.environ.get('CAS_STAGE2_QUANT_PROVIDER', 'anthropic')}"
         )
         print(
-            f"- CAS_STAGE2_QUANT_MODEL={os.environ.get('CAS_STAGE2_QUANT_MODEL', os.environ.get('CAS_STAGE2_MODEL', 'claude-sonnet-4-5-20250929'))}"
+            f"- CAS_STAGE2_QUANT_MODEL={os.environ.get('CAS_STAGE2_QUANT_MODEL', os.environ.get('CAS_STAGE2_MODEL', DEFAULT_MODEL))}"
         )
         print(
             f"- CAS_STAGE2_EVIDENCE_PROVIDER={os.environ.get('CAS_STAGE2_EVIDENCE_PROVIDER', 'openai')}"
@@ -57,12 +61,11 @@ def main() -> None:
         )
     else:
         print(
-            f"- CAS_STAGE2_MODEL_PROVIDER={os.environ.get('CAS_STAGE2_MODEL_PROVIDER', 'anthropic')}"
+            f"- CAS_STAGE2_MODEL_PROVIDER={os.environ.get('CAS_STAGE2_MODEL_PROVIDER', DEFAULT_MODEL_PROVIDER)}"
         )
-        print(
-            f"- CAS_STAGE2_MODEL={os.environ.get('CAS_STAGE2_MODEL', 'claude-sonnet-4-5-20250929')}"
-        )
+        print(f"- CAS_STAGE2_MODEL={os.environ.get('CAS_STAGE2_MODEL', DEFAULT_MODEL)}")
     print(f"- CAS_STAGE2_FALLBACK_ON_ERROR={fallback or '1'}")
+    print(f"- CAS_STAGE2_LLM_CACHE_ENABLED={llm_cache or '1'}")
     for package_name in package_specs:
         print(f"- {package_name}={_package_version(package_name)}")
 
@@ -85,7 +88,9 @@ def _required_providers(*, runner: str, agno_mode: str) -> list[str]:
             _normalize_provider(os.environ.get("CAS_STAGE2_EVIDENCE_PROVIDER", "openai")),
             _normalize_provider(os.environ.get("CAS_STAGE2_CHAIR_PROVIDER", "google")),
         ]
-    return [_normalize_provider(os.environ.get("CAS_STAGE2_MODEL_PROVIDER", "anthropic"))]
+    return [
+        _normalize_provider(os.environ.get("CAS_STAGE2_MODEL_PROVIDER", DEFAULT_MODEL_PROVIDER))
+    ]
 
 
 def _required_package_specs(providers: list[str]) -> dict[str, str]:

@@ -1,0 +1,95 @@
+{
+  "generated_at_utc": "2026-05-22T08:12:39.359663+00:00",
+  "rows": 8,
+  "success_rate": 0.875,
+  "review_safe_success_rate": 1.0,
+  "by_error_type": [
+    {
+      "model_error_type": "false_negative",
+      "committee_effect": "fn_escalated",
+      "rows": 2
+    },
+    {
+      "model_error_type": "false_positive",
+      "committee_effect": "fp_mitigated",
+      "rows": 2
+    },
+    {
+      "model_error_type": "true_negative",
+      "committee_effect": "tn_escalated",
+      "rows": 1
+    },
+    {
+      "model_error_type": "true_negative",
+      "committee_effect": "tn_kept_eligible",
+      "rows": 2
+    },
+    {
+      "model_error_type": "true_positive",
+      "committee_effect": "tp_risk_supported",
+      "rows": 1
+    }
+  ],
+  "by_review_safe_effect": [
+    {
+      "model_error_type": "false_negative",
+      "committee_review_safe_effect": "review_safe_fn_escalated",
+      "rows": 2
+    },
+    {
+      "model_error_type": "false_positive",
+      "committee_review_safe_effect": "review_safe_fp_not_rejected",
+      "rows": 2
+    },
+    {
+      "model_error_type": "true_negative",
+      "committee_review_safe_effect": "review_safe_tn_not_rejected",
+      "rows": 3
+    },
+    {
+      "model_error_type": "true_positive",
+      "committee_review_safe_effect": "review_safe_tp_supported",
+      "rows": 1
+    }
+  ],
+  "by_final_label": [
+    {
+      "final_committee_label": "보류",
+      "rows": 5
+    },
+    {
+      "final_committee_label": "부적격",
+      "rows": 1
+    },
+    {
+      "final_committee_label": "적격",
+      "rows": 2
+    }
+  ],
+  "by_evidence_status": [
+    {
+      "evidence_status": "ready",
+      "rows": 8
+    }
+  ],
+  "speed": {
+    "batch_wall_time_seconds": 67.6725,
+    "case_elapsed_seconds_sum": 134.7653,
+    "case_elapsed_seconds_mean": 16.8457,
+    "case_elapsed_seconds_median": 17.66,
+    "case_elapsed_seconds_max": 19.8717,
+    "throughput_cases_per_minute": 7.093
+  },
+  "stage2_speed": {
+    "stage2_total_elapsed_seconds_sum": 131.8284,
+    "stage2_total_elapsed_seconds_mean": 16.4786,
+    "stage2_total_elapsed_seconds_median": 17.3591,
+    "stage2_total_elapsed_seconds_max": 19.8059,
+    "stage2_llm_cache_hit_rows": 0
+  },
+  "paths": {
+    "details": "data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents/committee_review_openai_single_3agent_no_cache_live_8/committee_review_batch_results.csv",
+    "summary": "data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents/committee_review_openai_single_3agent_no_cache_live_8/committee_review_batch_summary.json",
+    "report": "data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents/committee_review_openai_single_3agent_no_cache_live_8/committee_review_batch_report.md"
+  }
+}

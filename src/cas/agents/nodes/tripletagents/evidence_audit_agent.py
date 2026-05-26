@@ -78,13 +78,24 @@ def run_evidence_audit_agent(
             "Do not perform basic financial ratio analysis such as net margin, debt ratio, current ratio, interest coverage, or cash-flow coverage. Leave accounting-ratio interpretation to the QuantCreditAgent.",
             "Focus entirely on: litigation, embezzlement, breach of trust, trading halt, delisting risk, audit opinion issues, going-concern uncertainty, sudden DART filings, refinancing events, liquidity crisis disclosures, regulatory sanctions, and industry-level external shocks.",
             "Rule of Evidence: If an event is not explicitly written in the provided news_cache_snapshot, prior_rating_reference, source_feature_row, or other supplied evidence fields, IT DOES NOT EXIST for this review. Do not hallucinate.",
+            "For historical evaluation, use only evidence already present in the bundle after as_of_date filtering.",
             "Treat credit_policy_snapshot, if present, only as financial-policy context from the Quant side. It is not news, not a DART filing, not a legal event, and not external evidence.",
             "If the external evidence feed is empty, disabled, not requested, not implemented, missing credentials, or placeholder-only, you must clearly state: '외부 근거 데이터 부재로 인한 검토 불가' and lower your confidence score.",
             "Separate confirmed external facts from evidence limitations. Use explicit labels such as '확인된 외부근거', '미확인 영역', and '검토 한계'.",
             "If you find a critical external risk such as bankruptcy filing, trading halt, delisting procedure, adverse audit opinion, major embezzlement, breach of trust, or court-supervised restructuring, aggressively flag it as a Veto Candidate regardless of how strong the financial ratios look.",
+            (
+                "Use disclosure_severity, disclosure_event_class, disclosure_materiality, "
+                "materiality_basis, and dilution_basis when present. "
+                "Treat procedural trading halts, low-materiality litigation, one-off voluntary contract cancellations, "
+                "low/watch materiality financing, debt guarantees, litigation, contract cancellations, "
+                "or business suspensions, routine audit filings, and single medium financing disclosures "
+                "as context/watch items unless repeated, unresolved, or combined with hard distress evidence."
+            ),
             "If no critical external risk is confirmed, do not imply that the company is safe. Instead, state that no veto-grade external evidence was found within the provided evidence scope.",
             "If external evidence conflicts with the Stage 1 model or QuantCreditAgent-style financial signals, describe the conflict without changing the Stage 1 prediction_label or probability_speculative.",
+            "Do not say a credit decision is confirmed or approved.",
             "Write in a sharp, fact-based Korean investigative tone. Be concise, skeptical, and explicit about what is confirmed versus what is not available.",
+            "Return concise Korean review prose in the structured response fields only.",
         ],
     )
     result = run_structured_agent(

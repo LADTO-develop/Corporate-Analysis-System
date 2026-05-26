@@ -15,20 +15,32 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
-from sklearn.metrics import confusion_matrix, f1_score, precision_score, recall_score
 
 from cas.agents.nodes import committee_node, rule_engine_node
 
 ROOT = Path(__file__).resolve().parents[1]
 PREDICTION_SCORES_PATH = ROOT / "data/outputs/dashboard/feature_43_mvp/prediction_scores.csv"
 FEATURE_MASTER_PATH = ROOT / "data/input/credit_43_features/feature_43_master.csv"
-OUTPUT_DIR = ROOT / "data/outputs/modeling/feature_43_xgboost/diagnostics"
+OUTPUT_DIR = ROOT / "data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents"
 
 KEY_COLUMNS = ["market", "stock_code", "corp_name", "fiscal_year", "eval_year"]
 EVALUATION_SPLITS = ("valid", "test")
 VALIDATION_SPLIT = "valid"
 TEST_SPLIT = "test"
 RECALL_FLOOR = 0.88
+TRACE_GATES = (
+    ("stage1_model_view", "1차 모델 원판단"),
+    ("veto_rule", "강제 경고 게이트"),
+    ("hidden_tail_risk", "숨은 꼬리위험 점검"),
+    ("secondary_review_trigger", "2차 보조 레이더"),
+    ("boundary_rating_review", "경계등급 점검"),
+    ("overwarning_mitigation", "과민경고 완화 점검"),
+    ("reject_confirmation", "부적격 확정 게이트"),
+    ("final_committee_decision", "최종 위원회 판단"),
+)
+CONTRIBUTION_TRACE_GATES = tuple(
+    item for item in TRACE_GATES if item[0] not in {"stage1_model_view", "final_committee_decision"}
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -56,17 +68,25 @@ def main() -> None:
     metrics = build_policy_metrics(frame)
     selections = select_validation_policies(metrics)
     segment_metrics = build_segment_metrics(frame, selections)
-    report = build_report(metrics=metrics, selections=selections, segment_metrics=segment_metrics)
+    trace_gate_contribution = build_trace_gate_contribution(frame)
+    report = build_report(
+        metrics=metrics,
+        selections=selections,
+        segment_metrics=segment_metrics,
+        trace_gate_contribution=trace_gate_contribution,
+    )
 
     scores_path = args.output_dir / "stage2_validation_test_policy_scores.csv"
     metrics_path = args.output_dir / "stage2_validation_test_policy_metrics.csv"
     segment_path = args.output_dir / "stage2_validation_test_segment_metrics.csv"
+    trace_gate_path = args.output_dir / "stage2_validation_test_trace_gate_contribution.csv"
     summary_path = args.output_dir / "stage2_validation_test_policy_summary.json"
     report_path = args.output_dir / "stage2_validation_test_policy_report.md"
 
     frame.to_csv(scores_path, index=False, encoding="utf-8-sig")
     metrics.to_csv(metrics_path, index=False, encoding="utf-8-sig")
     segment_metrics.to_csv(segment_path, index=False, encoding="utf-8-sig")
+    trace_gate_contribution.to_csv(trace_gate_path, index=False, encoding="utf-8-sig")
     summary = {
         "created_at": datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z"),
         "selection_rule": "Use validation only; test and 2026 external labels are confirmation sets.",
@@ -76,6 +96,7 @@ def main() -> None:
             "scores": str(scores_path.relative_to(ROOT)),
             "metrics": str(metrics_path.relative_to(ROOT)),
             "segment_metrics": str(segment_path.relative_to(ROOT)),
+            "trace_gate_contribution": str(trace_gate_path.relative_to(ROOT)),
             "report": str(report_path.relative_to(ROOT)),
         },
     }
@@ -88,6 +109,7 @@ def main() -> None:
                 "scores": str(scores_path.relative_to(ROOT)),
                 "metrics": str(metrics_path.relative_to(ROOT)),
                 "segment_metrics": str(segment_path.relative_to(ROOT)),
+                "trace_gate_contribution": str(trace_gate_path.relative_to(ROOT)),
                 "summary": str(summary_path.relative_to(ROOT)),
                 "report": str(report_path.relative_to(ROOT)),
                 "selected_policies": selections,
@@ -161,25 +183,39 @@ def add_current_committee_replay(frame: pd.DataFrame) -> pd.DataFrame:
         state.update(rule_engine_node.run(state))
         state.update(committee_node.run(state))
         committee_view = dict(state.get("committee_view") or {})
-        rows.append(
-            {
-                "market": row["market"],
-                "stock_code": row["stock_code"],
-                "corp_name": row["corp_name"],
-                "fiscal_year": row["fiscal_year"],
-                "eval_year": row["eval_year"],
-                "current_committee_label": committee_view.get("final_committee_label", ""),
-                "current_committee_veto_triggered": bool(
-                    committee_view.get("veto_triggered", False)
-                ),
-                "current_committee_hidden_tail_risk_flag": bool(
-                    committee_view.get("hidden_tail_risk_flag", False)
-                ),
-                "current_committee_conflict_resolution": committee_view.get(
-                    "conflict_resolution", ""
-                ),
-            }
-        )
+        decision_trace = _decision_trace_items(committee_view)
+        trace_by_gate = _decision_trace_by_gate(decision_trace)
+        replay_row: dict[str, Any] = {
+            "market": row["market"],
+            "stock_code": row["stock_code"],
+            "corp_name": row["corp_name"],
+            "fiscal_year": row["fiscal_year"],
+            "eval_year": row["eval_year"],
+            "current_committee_label": committee_view.get("final_committee_label", ""),
+            "current_committee_decision_type": committee_view.get("committee_decision_type", ""),
+            "current_committee_decision_type_label": committee_view.get(
+                "committee_decision_type_label",
+                "",
+            ),
+            "current_committee_risk_signal": bool(
+                committee_view.get("committee_risk_signal", False)
+            ),
+            "current_committee_veto_triggered": bool(committee_view.get("veto_triggered", False)),
+            "current_committee_hidden_tail_risk_flag": bool(
+                committee_view.get("hidden_tail_risk_flag", False)
+            ),
+            "current_committee_conflict_resolution": committee_view.get("conflict_resolution", ""),
+            "current_committee_decision_trace": json.dumps(
+                decision_trace,
+                ensure_ascii=False,
+                sort_keys=True,
+            ),
+        }
+        for gate, _label in TRACE_GATES:
+            trace_item = trace_by_gate.get(gate, {})
+            replay_row[f"trace_{gate}_triggered"] = bool(trace_item.get("triggered", False))
+            replay_row[f"trace_{gate}_severity"] = str(trace_item.get("severity") or "")
+        rows.append(replay_row)
     committee = pd.DataFrame(rows)
     output = frame.merge(committee, on=KEY_COLUMNS, how="left", validate="one_to_one")
     output["policy_current_committee_hold_or_reject"] = output["current_committee_label"].isin(
@@ -241,6 +277,26 @@ def clean_scalar(value: object) -> object:
     return value
 
 
+def _decision_trace_items(committee_view: dict[str, Any]) -> list[dict[str, Any]]:
+    raw_trace = committee_view.get("decision_trace")
+    if not isinstance(raw_trace, list):
+        return []
+    items: list[dict[str, Any]] = []
+    for item in raw_trace:
+        if isinstance(item, dict):
+            items.append(dict(item))
+    return items
+
+
+def _decision_trace_by_gate(trace: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    output: dict[str, dict[str, Any]] = {}
+    for item in trace:
+        gate = str(item.get("gate") or "").strip()
+        if gate:
+            output[gate] = item
+    return output
+
+
 def build_policy_metrics(frame: pd.DataFrame) -> pd.DataFrame:
     policy_columns = [
         column for column in frame.columns if column.startswith("policy_") and column != "policy_"
@@ -273,11 +329,19 @@ def build_policy_metrics(frame: pd.DataFrame) -> pd.DataFrame:
 
 
 def metrics_at_threshold(y_true: pd.Series, y_pred: pd.Series) -> dict[str, Any]:
-    tn, fp, fn, tp = confusion_matrix(y_true, y_pred, labels=[0, 1]).ravel()
+    y_true_int = y_true.astype(int)
+    y_pred_int = y_pred.astype(int)
+    tp = int(y_true_int.eq(1).mul(y_pred_int.eq(1)).sum())
+    fp = int(y_true_int.eq(0).mul(y_pred_int.eq(1)).sum())
+    fn = int(y_true_int.eq(1).mul(y_pred_int.eq(0)).sum())
+    tn = int(y_true_int.eq(0).mul(y_pred_int.eq(0)).sum())
+    precision = tp / (tp + fp) if tp + fp else 0.0
+    recall = tp / (tp + fn) if tp + fn else 0.0
+    f1 = 2 * precision * recall / (precision + recall) if precision + recall else 0.0
     return {
-        "precision": float(precision_score(y_true, y_pred, zero_division=0)),
-        "recall": float(recall_score(y_true, y_pred, zero_division=0)),
-        "f1": float(f1_score(y_true, y_pred, zero_division=0)),
+        "precision": float(precision),
+        "recall": float(recall),
+        "f1": float(f1),
         "tp": int(tp),
         "fp": int(fp),
         "fn": int(fn),
@@ -370,11 +434,125 @@ def build_segment_metrics(
     return pd.DataFrame(rows)
 
 
+def build_trace_gate_contribution(frame: pd.DataFrame) -> pd.DataFrame:
+    if "current_committee_label" not in frame.columns:
+        return _empty_trace_gate_contribution()
+    rows: list[dict[str, Any]] = []
+    for split in EVALUATION_SPLITS:
+        split_frame = frame.loc[frame["split"].eq(split)].copy()
+        if split_frame.empty:
+            continue
+        actual_positive = split_frame["is_speculative"].astype(int).eq(1)
+        stage1_positive = bool_series(split_frame["policy_stage1_model"])
+        committee_review = (
+            split_frame["current_committee_label"].astype(str).isin({"보류", "부적격"})
+        )
+        committee_softened = _committee_softened_stage1_fp(split_frame)
+        stage1_fn = actual_positive & (~stage1_positive)
+        stage1_fp = (~actual_positive) & stage1_positive
+        for gate, gate_label in CONTRIBUTION_TRACE_GATES:
+            column = f"trace_{gate}_triggered"
+            gate_triggered = (
+                bool_series(split_frame[column])
+                if column in split_frame.columns
+                else pd.Series(False, index=split_frame.index)
+            )
+            fn_escalated = stage1_fn & gate_triggered & committee_review
+            fp_softened = stage1_fp & gate_triggered & committee_softened
+            fp_unsoftened = stage1_fp & gate_triggered & (~committee_softened)
+            rows.append(
+                {
+                    "split": split,
+                    "gate": gate,
+                    "gate_label": gate_label,
+                    "triggered_count": int(gate_triggered.sum()),
+                    "triggered_positive_count": int((gate_triggered & actual_positive).sum()),
+                    "triggered_negative_count": int((gate_triggered & ~actual_positive).sum()),
+                    "stage1_fn_total": int(stage1_fn.sum()),
+                    "fn_escalated_count": int(fn_escalated.sum()),
+                    "fn_escalation_share": _safe_divide(
+                        int(fn_escalated.sum()), int(stage1_fn.sum())
+                    ),
+                    "stage1_fp_total": int(stage1_fp.sum()),
+                    "fp_softened_count": int(fp_softened.sum()),
+                    "fp_unsoftened_count": int(fp_unsoftened.sum()),
+                    "fp_softening_share": _safe_divide(
+                        int(fp_softened.sum()),
+                        int(stage1_fp.sum()),
+                    ),
+                    "net_help_count": int(fn_escalated.sum() + fp_softened.sum()),
+                    "dominant_effect": _dominant_gate_effect(
+                        fn_escalated_count=int(fn_escalated.sum()),
+                        fp_softened_count=int(fp_softened.sum()),
+                    ),
+                }
+            )
+    if not rows:
+        return _empty_trace_gate_contribution()
+    return (
+        pd.DataFrame(rows)
+        .sort_values(
+            ["split", "net_help_count", "fn_escalated_count"], ascending=[True, False, False]
+        )
+        .reset_index(drop=True)
+    )
+
+
+def _committee_softened_stage1_fp(frame: pd.DataFrame) -> pd.Series:
+    final_label = frame["current_committee_label"].astype(str)
+    decision_type = frame.get("current_committee_decision_type", pd.Series("", index=frame.index))
+    risk_signal = (
+        bool_series(frame["current_committee_risk_signal"])
+        if "current_committee_risk_signal" in frame.columns
+        else final_label.isin({"보류", "부적격"})
+    )
+    return final_label.eq("적격") | decision_type.astype(str).eq("mitigation_hold") | (~risk_signal)
+
+
+def _dominant_gate_effect(*, fn_escalated_count: int, fp_softened_count: int) -> str:
+    if fn_escalated_count and fp_softened_count:
+        return "fn_and_fp"
+    if fn_escalated_count:
+        return "fn_escalation"
+    if fp_softened_count:
+        return "fp_softening"
+    return "none"
+
+
+def _safe_divide(numerator: int, denominator: int) -> float:
+    if denominator == 0:
+        return 0.0
+    return round(numerator / denominator, 4)
+
+
+def _empty_trace_gate_contribution() -> pd.DataFrame:
+    return pd.DataFrame(
+        columns=[
+            "split",
+            "gate",
+            "gate_label",
+            "triggered_count",
+            "triggered_positive_count",
+            "triggered_negative_count",
+            "stage1_fn_total",
+            "fn_escalated_count",
+            "fn_escalation_share",
+            "stage1_fp_total",
+            "fp_softened_count",
+            "fp_unsoftened_count",
+            "fp_softening_share",
+            "net_help_count",
+            "dominant_effect",
+        ]
+    )
+
+
 def build_report(
     *,
     metrics: pd.DataFrame,
     selections: dict[str, dict[str, Any]],
     segment_metrics: pd.DataFrame,
+    trace_gate_contribution: pd.DataFrame,
 ) -> str:
     lines = [
         "# Stage 2 Validation/Test Policy Evaluation",
@@ -432,8 +610,18 @@ def build_report(
             "",
             "- `stage2_validation_test_segment_metrics.csv`",
             "",
+            "## Decision Trace Gate Contribution",
+            "",
+            "아래 표는 `decision_trace` 게이트가 1차 모델의 FN/FP를 보완한 사례 수를 집계한 결과입니다.",
+            "한 기업에서 여러 게이트가 동시에 켜질 수 있으므로, 게이트별 건수는 서로 배타적이지 않습니다.",
+            "",
+            "| Split | Gate | Triggered | FN escalated | FN share | FP softened | FP share | Effect |",
+            "|---|---|---:|---:|---:|---:|---:|---|",
         ]
     )
+    for _, row in trace_gate_contribution.iterrows():
+        lines.append(trace_gate_row(row))
+    lines.extend([""])
     top_segments = (
         segment_metrics.loc[
             segment_metrics["policy"].eq(str(selections["recall_floor_max_precision"]["policy"]))
@@ -481,6 +669,15 @@ def segment_row(row: pd.Series) -> str:
         f"| {row['dimension']} | {row['segment']} | {int(row['rows'])} | "
         f"{int(row['positive_count'])} | {row['precision']:.4f} | "
         f"{row['recall']:.4f} | {int(row['fp'])} | {int(row['fn'])} |"
+    )
+
+
+def trace_gate_row(row: pd.Series) -> str:
+    return (
+        f"| {row['split']} | {row['gate_label']} | {int(row['triggered_count'])} | "
+        f"{int(row['fn_escalated_count'])} | {float(row['fn_escalation_share']):.4f} | "
+        f"{int(row['fp_softened_count'])} | {float(row['fp_softening_share']):.4f} | "
+        f"{row['dominant_effect']} |"
     )
 
 

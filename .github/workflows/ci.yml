@@ -53,7 +53,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev,viz,agent]"
+          pip install -e ".[dev,viz,agent,dashboard]"
 
       - name: Run unit tests (fast)
         run: pytest tests/unit -v --cov=cas --cov-report=xml -m "not slow and not requires_llm and not requires_gpu"

@@ -40,7 +40,7 @@ def run_quant_credit_agent(
     *,
     bundle: Stage2InputBundle,
     model_name: str,
-    model_provider: str = "anthropic",
+    model_provider: str = "openai",
     max_tokens: int,
 ) -> QuantCreditOutput:
     """Run the Agno QuantCreditAgent and map it to the CAS Stage 2 schema."""

@@ -29,12 +29,12 @@ from cas.agents.nodes import (
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_SAMPLES_PATH = (
     ROOT
-    / "data/outputs/modeling/feature_43_xgboost/diagnostics/"
+    / "data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents/"
     / "committee_review_rolling_validation_tuning_samples.csv"
 )
 DEFAULT_OUTPUT_DIR = (
     ROOT
-    / "data/outputs/modeling/feature_43_xgboost/diagnostics/"
+    / "data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents/"
     / "committee_review_rolling_validation_batch"
 )
 DEFAULT_POLICY = "rolling_stage1_or_near_threshold_0_10"
@@ -45,6 +45,14 @@ CATEGORY_ORDER = [
     "true_positive_risk_explanation",
     "true_negative_overescalation_guardrail",
 ]
+TRACE_GATES = (
+    "veto_rule",
+    "hidden_tail_risk",
+    "secondary_review_trigger",
+    "boundary_rating_review",
+    "overwarning_mitigation",
+    "reject_confirmation",
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -72,21 +80,27 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--stage2-agno-mode",
-        choices=["single", "multi", "multi_llm", "multi_llm_committee"],
+        choices=[
+            "single",
+            "multi",
+            "multi_llm",
+            "multi_llm_committee",
+        ],
         default=os.environ.get("CAS_STAGE2_AGNO_MODE", "single"),
         help=(
-            "Agno routing mode for --stage2-runner agno. Default is single so "
-            "Claude-only API runs do not require Gemini/OpenAI credentials."
+            "Agno routing mode for --stage2-runner agno. Default single uses one "
+            "provider across the three role agents. OpenAI-only API runs do not require "
+            "Claude/Gemini credentials."
         ),
     )
     parser.add_argument(
         "--stage2-model-provider",
-        default=os.environ.get("CAS_STAGE2_MODEL_PROVIDER", "anthropic"),
+        default=os.environ.get("CAS_STAGE2_MODEL_PROVIDER", "openai"),
         help="Provider for single-model Agno mode: anthropic/claude, openai/gpt, or google/gemini.",
     )
     parser.add_argument(
         "--stage2-model",
-        default=os.environ.get("CAS_STAGE2_MODEL", "claude-sonnet-4-5-20250929"),
+        default=os.environ.get("CAS_STAGE2_MODEL", "gpt-4.1-mini"),
         help="Model id for single-model Agno mode.",
     )
     parser.add_argument(
@@ -97,6 +111,43 @@ def parse_args() -> argparse.Namespace:
             "Number of companies to process concurrently. Use 1 for strict sequential "
             "runs or 3-5 for faster live Agno batches when API rate limits allow it."
         ),
+    )
+    parser.add_argument(
+        "--stage2-llm-cache",
+        action=argparse.BooleanOptionalAction,
+        default=_default_stage2_llm_cache(),
+        help=(
+            "Use cached Stage 2 LLM responses. Disable with --no-stage2-llm-cache "
+            "when measuring true live API latency or prompt changes."
+        ),
+    )
+    parser.add_argument(
+        "--retry-failed-attempts",
+        type=int,
+        default=_default_retry_failed_attempts(),
+        help=(
+            "Retry only rows with operational failures, such as Stage 2 error messages, "
+            "empty final labels, or failed evidence collection. Default 0 keeps the "
+            "historical single-pass behavior."
+        ),
+    )
+    parser.add_argument(
+        "--retry-failed-workers",
+        type=int,
+        default=_default_retry_failed_workers(),
+        help="Worker count for retry passes. Use 1 to avoid API TPM bursts.",
+    )
+    parser.add_argument(
+        "--retry-failed-delay-seconds",
+        type=float,
+        default=_default_retry_failed_delay_seconds(),
+        help="Sleep before each retry pass to let provider rate limits cool down.",
+    )
+    parser.add_argument(
+        "--retry-failed-artifacts",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=("Write retry sample/result CSVs under output_dir/retry_artifacts for audit."),
     )
     return parser.parse_args()
 
@@ -139,8 +190,9 @@ def configure_runtime(
     live_external_evidence: bool,
     stage2_runner: str,
     stage2_agno_mode: str = "single",
-    stage2_model_provider: str = "anthropic",
-    stage2_model: str = "claude-sonnet-4-5-20250929",
+    stage2_model_provider: str = "openai",
+    stage2_model: str = "gpt-4.1-mini",
+    stage2_llm_cache: bool = True,
 ) -> None:
     load_dotenv(ROOT / ".env")
     os.environ["CAS_STAGE2_RUNNER"] = stage2_runner
@@ -148,6 +200,7 @@ def configure_runtime(
         os.environ["CAS_STAGE2_AGNO_MODE"] = stage2_agno_mode
         os.environ["CAS_STAGE2_MODEL_PROVIDER"] = stage2_model_provider
         os.environ["CAS_STAGE2_MODEL"] = stage2_model
+        os.environ["CAS_STAGE2_LLM_CACHE_ENABLED"] = "1" if stage2_llm_cache else "0"
     os.environ.setdefault("CAS_STAGE2_FALLBACK_ON_ERROR", "1")
     os.environ.setdefault(
         "CAS_OPENDART_CORP_CODE_CACHE_PATH", "/private/tmp/cas_opendart_corp_codes.csv"
@@ -202,6 +255,129 @@ def run_batch(
     result = pd.DataFrame([row for row in rows if row is not None])
     result["batch_wall_time_seconds"] = round(time.perf_counter() - batch_started_at, 4)
     return result
+
+
+def retry_failed_cases(
+    batch: pd.DataFrame,
+    results: pd.DataFrame,
+    *,
+    use_sample_model_view: bool,
+    attempts: int,
+    workers: int = 1,
+    delay_seconds: float = 0.0,
+    output_dir: Path | None = None,
+    write_artifacts: bool = True,
+) -> tuple[pd.DataFrame, list[dict[str, Any]]]:
+    """Retry operationally failed rows and merge successful retry outputs by row position."""
+    retry_attempts = max(int(attempts), 0)
+    if retry_attempts <= 0 or batch.empty or results.empty:
+        return results, []
+
+    combined = results.reset_index(drop=True).copy()
+    original_batch = batch.reset_index(drop=True).copy()
+    reports: list[dict[str, Any]] = []
+
+    for attempt in range(1, retry_attempts + 1):
+        failed_positions = _failed_result_positions(combined)
+        if not failed_positions:
+            break
+        retry_batch = original_batch.iloc[failed_positions].reset_index(drop=True)
+        print(
+            "[Retry] "
+            f"attempt {attempt}/{retry_attempts}: "
+            f"rerunning {len(retry_batch)} failed row(s) with workers={workers}",
+            flush=True,
+        )
+        if delay_seconds > 0:
+            time.sleep(delay_seconds)
+        retry_results = run_batch(
+            retry_batch,
+            use_sample_model_view=use_sample_model_view,
+            workers=workers,
+        ).reset_index(drop=True)
+        artifacts = _write_retry_artifacts(
+            output_dir=output_dir,
+            attempt=attempt,
+            retry_batch=retry_batch,
+            retry_results=retry_results,
+            enabled=write_artifacts,
+        )
+
+        recovered_rows = 0
+        retry_failed_positions = set(_failed_result_positions(retry_results))
+        for retry_index, original_position in enumerate(failed_positions):
+            if retry_index >= len(retry_results):
+                continue
+            retry_row = retry_results.iloc[retry_index].copy()
+            retry_row["retry_attempt"] = attempt
+            combined.loc[original_position, retry_row.index] = retry_row
+            if retry_index not in retry_failed_positions:
+                recovered_rows += 1
+
+        remaining_failed = _failed_result_positions(combined)
+        reports.append(
+            {
+                "attempt": attempt,
+                "failed_rows_before": len(failed_positions),
+                "retried_rows": len(retry_batch),
+                "recovered_rows": recovered_rows,
+                "remaining_failed_rows": len(remaining_failed),
+                "workers": _bounded_worker_count(workers, len(retry_batch)),
+                "artifact_paths": artifacts,
+            }
+        )
+        if not remaining_failed:
+            break
+
+    return combined, reports
+
+
+def _failed_result_positions(results: pd.DataFrame) -> list[int]:
+    if results.empty:
+        return []
+    return [
+        index
+        for index, row in enumerate(results.to_dict(orient="records"))
+        if _result_needs_retry(row)
+    ]
+
+
+def _result_needs_retry(row: dict[str, Any]) -> bool:
+    if _non_empty(row.get("error_message")):
+        return True
+    if _non_empty(row.get("stage2_error_message")):
+        return True
+    if not _non_empty(row.get("final_committee_label")):
+        return True
+    if str(row.get("committee_effect") or "").strip() == "run_failed":
+        return True
+    if str(row.get("committee_review_safe_effect") or "").strip() == "run_failed":
+        return True
+    evidence_status = str(row.get("evidence_status") or "").strip().lower()
+    return evidence_status in {"error", "failed"}
+
+
+def _write_retry_artifacts(
+    *,
+    output_dir: Path | None,
+    attempt: int,
+    retry_batch: pd.DataFrame,
+    retry_results: pd.DataFrame,
+    enabled: bool,
+) -> dict[str, str]:
+    if not enabled or output_dir is None:
+        return {}
+    target_dir = output_dir if output_dir.is_absolute() else ROOT / output_dir
+    artifact_dir = target_dir / "retry_artifacts"
+    artifact_dir.mkdir(parents=True, exist_ok=True)
+    samples_path = artifact_dir / f"retry_attempt_{attempt}_samples.csv"
+    results_path = artifact_dir / f"retry_attempt_{attempt}_results.csv"
+    retry_batch.to_csv(samples_path, index=False, encoding="utf-8-sig", lineterminator="\n")
+    retry_results.to_csv(results_path, index=False, encoding="utf-8-sig", lineterminator="\n")
+    return {
+        "samples": _path_text(samples_path),
+        "results": _path_text(results_path),
+    }
 
 
 def _run_batch_case(
@@ -362,6 +538,8 @@ def _result_row(
     sample: dict[str, Any], *, state: dict[str, Any], error_message: str
 ) -> dict[str, Any]:
     committee_view = _dict_value(state.get("committee_view"))
+    stage2_runtime = _dict_value(state.get("stage2_runtime_diagnostics"))
+    stage2_agent_timings = _dict_value(stage2_runtime.get("agent_elapsed_seconds"))
     evidence = _dict_value(state.get("news_cache_snapshot"))
     xgboost_result = _dict_value(state.get("xgboost_result"))
     final_label = str(committee_view.get("final_committee_label") or "")
@@ -380,7 +558,10 @@ def _result_row(
     )
     provider_statuses = _provider_statuses(evidence.get("providers"))
     evidence_titles = _evidence_titles(evidence.get("items", []))
-    return {
+    materiality_summary = _materiality_summary(evidence.get("items", []))
+    decision_trace = _decision_trace_items(committee_view)
+    trace_by_gate = _decision_trace_by_gate(decision_trace)
+    result = {
         "run_timestamp_utc": datetime.now(UTC).isoformat(),
         "evaluation_mode": sample.get("evaluation_mode"),
         "committee_policy": sample.get("committee_policy"),
@@ -411,10 +592,62 @@ def _result_row(
         "committee_decision_type": committee_view.get("committee_decision_type"),
         "committee_decision_type_label": committee_view.get("committee_decision_type_label"),
         "committee_risk_signal": bool(committee_view.get("committee_risk_signal", False)),
+        "decision_trace": json.dumps(decision_trace, ensure_ascii=False, sort_keys=True),
         "committee_success": success,
         "committee_effect": effect,
         "committee_review_safe_success": review_safe_success,
         "committee_review_safe_effect": review_safe_effect,
+        "stage2_backend_name": stage2_runtime.get("backend_name"),
+        "stage2_llm_cache_hit": bool(stage2_runtime.get("cache_hit", False)),
+        "stage2_total_elapsed_seconds": stage2_runtime.get("stage2_total_elapsed_seconds"),
+        "stage2_agent_elapsed_seconds_sum": stage2_runtime.get("agent_elapsed_seconds_sum"),
+        "stage2_quant_credit_elapsed_seconds": stage2_agent_timings.get("quant_credit"),
+        "stage2_evidence_audit_elapsed_seconds": stage2_agent_timings.get("evidence_audit"),
+        "stage2_chair_report_elapsed_seconds": stage2_agent_timings.get("chair_report"),
+        "stage2_review_qa_elapsed_seconds": stage2_agent_timings.get("review_qa"),
+        "stage2_risk_recall_qa_elapsed_seconds": stage2_agent_timings.get("risk_recall_qa"),
+        "stage2_parallel_independent_agents": bool(
+            stage2_runtime.get("parallel_independent_agents", False)
+        ),
+        "stage2_review_qa_triggered": bool(stage2_runtime.get("review_qa_triggered", False)),
+        "stage2_review_qa_cache_hit": bool(stage2_runtime.get("review_qa_cache_hit", False)),
+        "stage2_review_qa_trigger_reasons": " / ".join(
+            str(item) for item in stage2_runtime.get("review_qa_trigger_reasons", []) or []
+        ),
+        "stage2_review_qa_recommended_action": stage2_runtime.get(
+            "review_qa_recommended_action", ""
+        ),
+        "stage2_review_qa_advisory_applied": bool(
+            stage2_runtime.get("review_qa_advisory_applied", False)
+        ),
+        "stage2_review_qa_adjusted_decision_type": stage2_runtime.get(
+            "review_qa_adjusted_decision_type", ""
+        ),
+        "stage2_review_qa_advisory_apply_reason": stage2_runtime.get(
+            "review_qa_advisory_apply_reason", ""
+        ),
+        "stage2_risk_recall_qa_triggered": bool(
+            stage2_runtime.get("risk_recall_qa_triggered", False)
+        ),
+        "stage2_risk_recall_qa_cache_hit": bool(
+            stage2_runtime.get("risk_recall_qa_cache_hit", False)
+        ),
+        "stage2_risk_recall_qa_trigger_reasons": " / ".join(
+            str(item) for item in stage2_runtime.get("risk_recall_qa_trigger_reasons", []) or []
+        ),
+        "stage2_risk_recall_qa_recommended_action": stage2_runtime.get(
+            "risk_recall_qa_recommended_action", ""
+        ),
+        "stage2_risk_recall_qa_advisory_applied": bool(
+            stage2_runtime.get("risk_recall_qa_advisory_applied", False)
+        ),
+        "stage2_risk_recall_qa_adjusted_decision_type": stage2_runtime.get(
+            "risk_recall_qa_adjusted_decision_type", ""
+        ),
+        "stage2_risk_recall_qa_advisory_apply_reason": stage2_runtime.get(
+            "risk_recall_qa_advisory_apply_reason", ""
+        ),
+        "stage2_error_message": stage2_runtime.get("error_message", ""),
         "veto_triggered": bool(committee_view.get("veto_triggered", False)),
         "hidden_tail_risk_flag": bool(committee_view.get("hidden_tail_risk_flag", False)),
         "evidence_status": evidence.get("status"),
@@ -426,10 +659,37 @@ def _result_row(
         "high_confidence_critical_count": evidence.get("high_confidence_critical_count"),
         "provider_statuses": json.dumps(provider_statuses, ensure_ascii=False, sort_keys=True),
         "top_evidence_titles": " / ".join(evidence_titles),
+        "materiality_event_count": materiality_summary["event_count"],
+        "materiality_substantive_count": materiality_summary["substantive_count"],
+        "materiality_watch_count": materiality_summary["watch_count"],
+        "materiality_max_ratio": materiality_summary["max_ratio"],
+        "materiality_top_basis": materiality_summary["top_basis"],
+        "materiality_event_classes": materiality_summary["event_classes"],
         "conflict_resolution": committee_view.get("conflict_resolution"),
         "final_review_memo": committee_view.get("final_review_memo"),
         "error_message": error_message,
     }
+    for gate in TRACE_GATES:
+        trace_item = trace_by_gate.get(gate, {})
+        result[f"trace_{gate}_triggered"] = bool(trace_item.get("triggered", False))
+        result[f"trace_{gate}_severity"] = str(trace_item.get("severity") or "")
+    return result
+
+
+def _decision_trace_items(committee_view: dict[str, Any]) -> list[dict[str, Any]]:
+    raw_trace = committee_view.get("decision_trace")
+    if not isinstance(raw_trace, list):
+        return []
+    return [dict(item) for item in raw_trace if isinstance(item, dict)]
+
+
+def _decision_trace_by_gate(trace: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    output: dict[str, dict[str, Any]] = {}
+    for item in trace:
+        gate = str(item.get("gate") or "").strip()
+        if gate:
+            output[gate] = item
+    return output
 
 
 def _committee_success(*, model_error_type: str, final_label: str) -> tuple[bool, str]:
@@ -514,6 +774,38 @@ def _default_workers() -> int:
     return max(workers, 1)
 
 
+def _default_stage2_llm_cache() -> bool:
+    raw_value = os.environ.get("CAS_STAGE2_LLM_CACHE_ENABLED", "1").strip().lower()
+    return raw_value not in {"0", "false", "no", "off"}
+
+
+def _default_retry_failed_attempts() -> int:
+    raw_value = os.environ.get("CAS_COMMITTEE_BATCH_RETRY_FAILED_ATTEMPTS", "0").strip()
+    try:
+        attempts = int(raw_value)
+    except ValueError:
+        return 0
+    return min(max(attempts, 0), 5)
+
+
+def _default_retry_failed_workers() -> int:
+    raw_value = os.environ.get("CAS_COMMITTEE_BATCH_RETRY_FAILED_WORKERS", "1").strip()
+    try:
+        workers = int(raw_value)
+    except ValueError:
+        return 1
+    return max(workers, 1)
+
+
+def _default_retry_failed_delay_seconds() -> float:
+    raw_value = os.environ.get("CAS_COMMITTEE_BATCH_RETRY_FAILED_DELAY_SECONDS", "1.0").strip()
+    try:
+        delay = float(raw_value)
+    except ValueError:
+        return 1.0
+    return min(max(delay, 0.0), 120.0)
+
+
 def _bounded_worker_count(workers: int, row_count: int) -> int:
     if row_count <= 0:
         return 1
@@ -522,6 +814,17 @@ def _bounded_worker_count(workers: int, row_count: int) -> int:
 
 def _dict_value(value: object) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
+
+
+def _non_empty(value: object) -> bool:
+    if value is None:
+        return False
+    try:
+        if pd.isna(value):
+            return False
+    except (TypeError, ValueError):
+        pass
+    return bool(str(value).strip())
 
 
 def _provider_statuses(value: object) -> dict[str, object]:
@@ -546,25 +849,110 @@ def _evidence_titles(items: object, *, limit: int = 3) -> Iterable[str]:
     return titles
 
 
-def write_outputs(results: pd.DataFrame, *, output_dir: Path) -> None:
+def _materiality_summary(items: object) -> dict[str, object]:
+    if not isinstance(items, list):
+        return {
+            "event_count": 0,
+            "substantive_count": 0,
+            "watch_count": 0,
+            "max_ratio": "",
+            "top_basis": "",
+            "event_classes": "",
+        }
+
+    materiality_items: list[dict[str, object]] = []
+    for item in items:
+        if not isinstance(item, dict) or item.get("company_match") is not True:
+            continue
+        if not (
+            item.get("materiality_ratio") not in {None, ""}
+            or item.get("materiality_basis")
+            or item.get("disclosure_materiality")
+        ):
+            continue
+        materiality_items.append(item)
+
+    ratios: list[tuple[float, str]] = []
+    event_classes: list[str] = []
+    substantive_count = 0
+    watch_count = 0
+    for item in materiality_items:
+        event_class = str(item.get("disclosure_event_class") or "").strip()
+        if event_class and event_class not in event_classes:
+            event_classes.append(event_class)
+        materiality = str(item.get("disclosure_materiality") or "").strip().lower()
+        severity = str(item.get("disclosure_severity") or "").strip().lower()
+        if materiality == "substantive_adverse" or severity == "adverse":
+            substantive_count += 1
+        elif materiality in {"watch_context", "procedural_or_one_off"} or severity == "caution":
+            watch_count += 1
+        ratio = _safe_float(item.get("materiality_ratio"), default=-1.0)
+        if ratio >= 0:
+            ratios.append((ratio, str(item.get("materiality_basis") or "").strip()))
+
+    max_ratio = ""
+    top_basis = ""
+    if ratios:
+        ratio, basis = max(ratios, key=lambda pair: pair[0])
+        max_ratio = round(ratio, 4)
+        top_basis = basis
+
+    return {
+        "event_count": len(materiality_items),
+        "substantive_count": substantive_count,
+        "watch_count": watch_count,
+        "max_ratio": max_ratio,
+        "top_basis": top_basis,
+        "event_classes": " / ".join(event_classes[:6]),
+    }
+
+
+def write_outputs(
+    results: pd.DataFrame,
+    *,
+    output_dir: Path,
+    retry_reports: list[dict[str, Any]] | None = None,
+) -> None:
     if not output_dir.is_absolute():
         output_dir = ROOT / output_dir
     output_dir.mkdir(parents=True, exist_ok=True)
     detail_path = output_dir / "committee_review_batch_results.csv"
     summary_path = output_dir / "committee_review_batch_summary.json"
     report_path = output_dir / "committee_review_batch_report.md"
-    results.to_csv(detail_path, index=False, encoding="utf-8-sig")
+    results.to_csv(detail_path, index=False, encoding="utf-8-sig", lineterminator="\n")
     summary = _summary(results)
+    if retry_reports:
+        summary["retry"] = _retry_summary(results, retry_reports)
     summary["paths"] = {
-        "details": str(detail_path.relative_to(ROOT)),
-        "summary": str(summary_path.relative_to(ROOT)),
-        "report": str(report_path.relative_to(ROOT)),
+        "details": _path_text(detail_path),
+        "summary": _path_text(summary_path),
+        "report": _path_text(report_path),
     }
     summary_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
     report_path.write_text(_report(results, summary), encoding="utf-8")
     print(f"[Saved] {detail_path}")
     print(f"[Saved] {summary_path}")
     print(f"[Saved] {report_path}")
+
+
+def _retry_summary(results: pd.DataFrame, retry_reports: list[dict[str, Any]]) -> dict[str, Any]:
+    final_failed_rows = len(_failed_result_positions(results))
+    return {
+        "attempts_run": len(retry_reports),
+        "initial_failed_rows": retry_reports[0]["failed_rows_before"] if retry_reports else 0,
+        "final_failed_rows": final_failed_rows,
+        "total_recovered_rows": sum(
+            int(report.get("recovered_rows", 0)) for report in retry_reports
+        ),
+        "attempts": retry_reports,
+    }
+
+
+def _path_text(path: Path) -> str:
+    try:
+        return str(path.relative_to(ROOT))
+    except ValueError:
+        return str(path)
 
 
 def _summary(results: pd.DataFrame) -> dict[str, Any]:
@@ -608,6 +996,28 @@ def _summary(results: pd.DataFrame) -> dict[str, Any]:
                 round(len(results) / wall_seconds * 60.0, 4) if wall_seconds > 0 else None
             ),
         }
+    if "stage2_total_elapsed_seconds" in results.columns and len(results):
+        stage2_elapsed = pd.to_numeric(results["stage2_total_elapsed_seconds"], errors="coerce")
+        if not stage2_elapsed.dropna().empty:
+            summary["stage2_speed"] = {
+                "stage2_total_elapsed_seconds_sum": round(float(stage2_elapsed.sum()), 4),
+                "stage2_total_elapsed_seconds_mean": round(float(stage2_elapsed.mean()), 4),
+                "stage2_total_elapsed_seconds_median": round(float(stage2_elapsed.median()), 4),
+                "stage2_total_elapsed_seconds_max": round(float(stage2_elapsed.max()), 4),
+                "stage2_llm_cache_hit_rows": int(
+                    results.get("stage2_llm_cache_hit", pd.Series(dtype=bool)).fillna(False).sum()
+                ),
+            }
+    if "materiality_event_count" in results.columns and len(results):
+        event_counts = pd.to_numeric(results["materiality_event_count"], errors="coerce").fillna(0)
+        max_ratios = pd.to_numeric(results.get("materiality_max_ratio"), errors="coerce")
+        summary["materiality"] = {
+            "rows_with_materiality_events": int((event_counts > 0).sum()),
+            "materiality_event_count_sum": int(event_counts.sum()),
+            "materiality_max_ratio": (
+                round(float(max_ratios.max()), 4) if not max_ratios.dropna().empty else None
+            ),
+        }
     return summary
 
 
@@ -628,6 +1038,9 @@ def _report(results: pd.DataFrame, summary: dict[str, Any]) -> str:
         "committee_effect",
         "evidence_status",
         "evidence_items",
+        "materiality_event_count",
+        "materiality_max_ratio",
+        "materiality_top_basis",
     ]
     preview = results.loc[:, [column for column in preview_columns if column in results.columns]]
     return "\n".join(
@@ -637,7 +1050,9 @@ def _report(results: pd.DataFrame, summary: dict[str, Any]) -> str:
             f"- Rows: {summary['rows']}",
             f"- Strict committee success rate: {summary['success_rate']:.1%}",
             f"- Review-safe success rate: {summary['review_safe_success_rate']:.1%}",
+            _retry_report_line(summary),
             _speed_report_line(summary),
+            _stage2_speed_report_line(summary),
             "",
             "## Result Preview",
             "",
@@ -671,6 +1086,31 @@ def _speed_report_line(summary: dict[str, Any]) -> str:
     )
 
 
+def _stage2_speed_report_line(summary: dict[str, Any]) -> str:
+    speed = summary.get("stage2_speed")
+    if not isinstance(speed, dict):
+        return "- Stage 2 LLM speed: not measured"
+    return (
+        "- Stage 2 LLM speed: "
+        f"mean `{speed.get('stage2_total_elapsed_seconds_mean')}` sec, "
+        f"max `{speed.get('stage2_total_elapsed_seconds_max')}` sec, "
+        f"cache hits `{speed.get('stage2_llm_cache_hit_rows')}`"
+    )
+
+
+def _retry_report_line(summary: dict[str, Any]) -> str:
+    retry = summary.get("retry")
+    if not isinstance(retry, dict):
+        return "- Retry: not enabled"
+    return (
+        "- Retry: "
+        f"attempts `{retry.get('attempts_run')}`, "
+        f"initial failed rows `{retry.get('initial_failed_rows')}`, "
+        f"recovered `{retry.get('total_recovered_rows')}`, "
+        f"final failed rows `{retry.get('final_failed_rows')}`"
+    )
+
+
 def main() -> None:
     load_dotenv(ROOT / ".env")
     args = parse_args()
@@ -680,6 +1120,7 @@ def main() -> None:
         stage2_agno_mode=args.stage2_agno_mode,
         stage2_model_provider=args.stage2_model_provider,
         stage2_model=args.stage2_model,
+        stage2_llm_cache=args.stage2_llm_cache,
     )
     samples = read_samples(args.samples)
     batch = select_batch(
@@ -693,7 +1134,17 @@ def main() -> None:
         use_sample_model_view=args.use_sample_model_view,
         workers=args.workers,
     )
-    write_outputs(results, output_dir=args.output_dir)
+    results, retry_reports = retry_failed_cases(
+        batch,
+        results,
+        use_sample_model_view=args.use_sample_model_view,
+        attempts=args.retry_failed_attempts,
+        workers=args.retry_failed_workers,
+        delay_seconds=args.retry_failed_delay_seconds,
+        output_dir=args.output_dir,
+        write_artifacts=args.retry_failed_artifacts,
+    )
+    write_outputs(results, output_dir=args.output_dir, retry_reports=retry_reports)
 
 
 if __name__ == "__main__":

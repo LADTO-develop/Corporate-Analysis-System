@@ -22,7 +22,7 @@ def build_agno_agent[ModelT: BaseModel](
     *,
     name: str,
     model_name: str,
-    model_provider: str = "anthropic",
+    model_provider: str = "openai",
     max_tokens: int,
     response_model: type[ModelT],
     instructions: list[str],
@@ -119,6 +119,7 @@ def _build_agno_model(
             max_tokens=max_tokens,
             temperature=0,
             api_key=api_key,
+            timeout=_stage2_agent_timeout_seconds(),
         )
 
     if normalized_provider == "openai":
@@ -135,6 +136,8 @@ def _build_agno_model(
             max_output_tokens=max_tokens,
             temperature=0,
             api_key=api_key,
+            timeout=_stage2_agent_timeout_seconds(),
+            max_retries=_stage2_provider_max_retries(),
         )
 
     try:
@@ -241,3 +244,23 @@ def _stage2_agent_retry_delay_seconds() -> float:
     except ValueError:
         delay = 1.5
     return min(max(delay, 0.0), 10.0)
+
+
+def _stage2_agent_timeout_seconds() -> float | None:
+    raw_value = os.environ.get("CAS_STAGE2_AGENT_TIMEOUT_SECONDS", "").strip().lower()
+    if raw_value in {"", "0", "false", "no", "none", "off"}:
+        return None
+    try:
+        timeout = float(raw_value)
+    except ValueError:
+        return None
+    return min(max(timeout, 1.0), 600.0)
+
+
+def _stage2_provider_max_retries() -> int:
+    raw_value = os.environ.get("CAS_STAGE2_PROVIDER_MAX_RETRIES", "0").strip()
+    try:
+        retries = int(raw_value)
+    except ValueError:
+        retries = 0
+    return min(max(retries, 0), 5)

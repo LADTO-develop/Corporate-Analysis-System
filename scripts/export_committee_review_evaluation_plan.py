@@ -15,7 +15,7 @@ PREDICTION_SCORES_PATH = ROOT / "data/outputs/dashboard/feature_43_mvp/predictio
 TARGET_LABEL_REFERENCE_PATH = ROOT / "data/evaluation/target_label_reference.csv"
 LABELS_2026_PATH = ROOT / "data/evaluation/credit_rating_labels_2026.csv"
 INFERENCE_2026_PATH = ROOT / "data/input/credit_43_features/feature_43_inference_2026.csv"
-OUTPUT_DIR = ROOT / "data/outputs/modeling/feature_43_xgboost/diagnostics"
+OUTPUT_DIR = ROOT / "data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents"
 
 KEY_COLUMNS = ["market", "stock_code", "corp_name", "fiscal_year", "eval_year"]
 

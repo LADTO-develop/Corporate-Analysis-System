@@ -12,16 +12,19 @@ Corporate Analysis System은 국내 KOSPI/KOSDAQ 상장기업의 다음 연도
 
 ## 1. 프로젝트 목표
 
-CAS는 다음의 2단 구조를 목표로 설계합니다.
+CAS는 다음의 2단 구조로 동작합니다.
 
 | 단계 | 현재 상태 | 역할 |
 |---|---|---|
 | Stage 1. 정량 예측 | 구현 및 대시보드 연결 | XGBoost로 투기등급 위험확률(`y_proba`)과 모델 라벨 산출 |
-| Stage 2. 3에이전트 정성 검토 | 설계 문서 및 파이프라인 구조 정리 중 | 모델 결과를 덮어쓰지 않고 정량 해석, 외부 근거 검증, 최종 보고를 분리 |
+| Stage 2. 3에이전트 정성 검토 | 구현 및 파일럿 검증 완료 | 모델 결과를 덮어쓰지 않고 정량 해석, 외부 근거 검증, 최종 보고를 분리 |
 
-현재 저장소의 중심은 **Stage 1 XGBoost 기반 정량 예측과 설명형 대시보드**입니다.
-Stage 2는 `model_view`와 구분되는 `committee_view`를 생성하는 후속 단계로
-정리되어 있습니다.
+현재 저장소는 **Stage 1 XGBoost 기반 정량 예측**, **설명형 대시보드**,
+**Stage 2 3에이전트 위원회 검토**까지 한 흐름으로 관리합니다. Stage 2는
+`model_view`와 구분되는 `committee_view`를 생성하며, deterministic runner와
+선택형 Agno runner를 모두 제공합니다. 운영 live API 실행은 로컬 opt-in으로
+분리하고, Codex/CI 같은 재현성 중심 환경에서는 기본적으로 외부 API를 호출하지
+않습니다.
 
 ## 2. 현재 기준 데이터
 
@@ -107,7 +110,53 @@ Recall을 유지하면서 Precision과 F1이 개선되었습니다.
 `data/outputs/modeling/feature_43_xgboost/diagnostics/feature_43_vs_44_performance_comparison.md`
 에 남겨두고, 해당 칼럼은 Model V1의 후보 칼럼으로만 보존합니다.
 
-## 5. 시스템 흐름
+## 5. Stage 2 상태와 파일럿 성능
+
+Stage 2는 3개 역할(`QuantCreditAgent`, `EvidenceAuditAgent`, `ChairReportAgent`)로
+구현되어 있으며, `committee_view` strict schema, decision subtype, deterministic
+guardrail, 선택형 Agno runner, 외부근거 수집 노드가 연결되어 있습니다.
+
+`committee_view`는 단순히 `보류`를 출력하는 데서 끝나지 않고, 다음처럼 세부 판단
+유형을 함께 제공합니다.
+
+| 판단 유형 | 의미 |
+|---|---|
+| `적격` | 추가 위험신호를 강하게 보지 않은 상태 |
+| `위험 보류` | FN 보완 또는 강한 위험 근거 때문에 추가 검토가 필요한 상태 |
+| `경계등급 보류` | BBB-/BB+ 등급 경계 또는 확률 경계에 있어 확정 대신 검토가 필요한 상태 |
+| `과민경고 완화 보류` | 모델의 부적격 경고를 바로 확정하지 않고 완화 검토로 낮춘 상태 |
+| `확인필요 보류` | 근거 부족, 외부근거 제한, 판단 충돌 때문에 추가 확인이 필요한 상태 |
+| `부적격` | 위원회가 명확한 위험신호로 본 상태 |
+
+아래 수치는 전체 기업 모집단 정확도가 아니라, FN/FP/경계등급/TP/TN을 의도적으로
+섞은 **30건 stress sample**에서 Stage 2가 1차 모델 오류를 얼마나 보완하는지
+확인한 파일럿 성능입니다. 2026년 전체 예측 정확도나 대시보드 개별 기업의 실제
+정답률로 해석하지 않습니다.
+
+| 기준 | Precision | Recall | F1 | 해석 |
+|---|---:|---:|---:|---|
+| 1차 모델 | 0.3889 | 0.4667 | 0.4243 | XGBoost 단독 판단 |
+| 2차 검토대상(`보류+부적격`) | 0.5172 | 1.0000 | 0.6818 | 위험기업을 모두 추가 검토망에 올림 |
+| 2차 위험신호(`risk_signal`) | 0.8889 | 0.5333 | 0.6666 | 확정 위험 신호를 더 보수적으로 제시 |
+| 2차 `부적격`만 | 0.8000 | 0.2667 | 0.4000 | 고신뢰 위험 근거가 있을 때만 제한적으로 확정 |
+
+핵심 파일럿 결과는 1차 모델 F1 `0.4243`에서 2차 위험신호 F1 `0.6666`으로
+개선되었고, `보류+부적격`을 추가 검토 대상으로 보면 Recall `1.0000`을
+달성했다는 점입니다. 자세한 증빙은
+`data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents/stage2_agent_improvement_summary.md`와
+`data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents/stage2_evaluation_report.md`에
+정리되어 있습니다.
+
+정상기업 과잉 보류를 줄이기 위해 `투자적격 + 기준선 아래 + 외부 치명근거 없음 +
+현금흐름을 포함한 유동성/현금흐름/자본 중 2개 이상 방어적` 조건의 TN guardrail도 추가했습니다.
+관련 로컬 회귀 결과는
+`data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents/stage2_agent_performance_evidence.md`에
+기록되어 있습니다.
+PR 리뷰용 핵심 요약은
+[docs/stage2_agent_experiment_results_ko.md](docs/stage2_agent_experiment_results_ko.md)에
+따로 정리되어 있습니다.
+
+## 6. 시스템 흐름
 
 ```mermaid
 flowchart TD
@@ -124,17 +173,19 @@ flowchart TD
 
 `model_view`는 XGBoost의 원본 판단입니다. Agent나 LLM은 이 값을 직접 수정하지
 않고, 후속 Stage 2에서 정성 근거를 보완한 `committee_view`를 별도로 생성하는
-구조를 목표로 합니다.
+구조를 유지합니다.
 
 `committee_view`는 `final_committee_label`, `veto_triggered`,
-`hidden_tail_risk_flag`, `conflict_resolution`, `key_risk_factors`,
-`mitigating_factors`, `evidence_summary`, `final_review_memo`를 포함합니다. 즉, 모델 판단을 바꿨는지보다
-왜 최종 위원회 의견이 그렇게 정리됐는지를 설명하는 데 초점을 둡니다.
+`hidden_tail_risk_flag`, `committee_decision_type`,
+`committee_decision_type_label`, `committee_risk_signal`, `conflict_resolution`,
+`key_risk_factors`, `mitigating_factors`, `evidence_summary`,
+`final_review_memo`를 포함합니다. 즉, 모델 판단을 바꿨는지보다 왜 최종 위원회
+의견이 그렇게 정리됐는지를 설명하는 데 초점을 둡니다.
 `hidden_tail_risk_flag`는 모델이 `투자적격`으로 본 기업에 직접 관련 외부 위험 근거가
 확인되어 false negative 가능성을 보수적으로 점검해야 할 때 켜집니다.
 
 Stage 2 코드도 이 기준에 맞춰 분리되어 있습니다.
-`src/cas/agents/stage2_specs.py`는 향후 Agno/Claude에 넘길 역할 계약을 정의하고,
+`src/cas/agents/stage2_specs.py`는 Agno/LLM에 넘길 역할 계약을 정의하고,
 `src/cas/agents/stage2_bundle.py`는 LangGraph state를 에이전트 입력 번들로
 정규화합니다. `src/cas/agents/stage2_outputs.py`는 Agent별 출력 schema를 검증한 뒤
 공통 `AgentOutput`으로 변환합니다. `src/cas/agents/stage2_runner.py`는 기본
@@ -147,19 +198,21 @@ EvidenceAuditAgent의 부채/유동성, 거시환경, 외부 근거 신호는 `s
 
 Stage 2는 CI와 기본 로컬 실행에서 `CAS_STAGE2_RUNNER=deterministic`을 사용합니다.
 Agno 기반 로컬 데모에서는 optional dependency를 설치한 뒤 `CAS_STAGE2_RUNNER=agno`를
-설정합니다. 기본 Agno 모드는 `CAS_STAGE2_AGNO_MODE=multi_llm_committee`이며,
-Claude가 정량 관점(`QuantCreditAgent`), GPT가 외부근거/반론 관점(`EvidenceAuditAgent`),
-Gemini가 최종 종합(`ChairReportAgent`)을 맡습니다. 이 모드에는
+설정합니다. 기본 Agno 모드는 `CAS_STAGE2_AGNO_MODE=single`이며,
+`CAS_STAGE2_MODEL_PROVIDER=openai`, `CAS_STAGE2_MODEL=gpt-4.1-mini` 기준으로
+`OPENAI_API_KEY`만 있으면 세 역할 agent를 모두 OpenAI로 실행할 수 있게 맞췄습니다.
+live 지연시간을 재려면 `CAS_STAGE2_LLM_CACHE_ENABLED=0` 또는 batch CLI의
+`--no-stage2-llm-cache`를 같이 사용합니다. 여러 모델 관점을 비교하고 싶을 때만
+`CAS_STAGE2_AGNO_MODE=multi_llm_committee`를 선택해 Claude가 정량 관점,
+GPT가 외부근거/반론 관점, Gemini가 최종 종합을 맡도록 확장합니다. 이 멀티 모드에는
 `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GOOGLE_API_KEY` 또는 `GEMINI_API_KEY`가 필요합니다.
-기존 Claude 단일 실행을 사용하려면 `CAS_STAGE2_AGNO_MODE=single`,
-`CAS_STAGE2_MODEL=claude-sonnet-4-5-20250929`, `ANTHROPIC_API_KEY`를 설정하면 됩니다.
 
 외부 근거 수집은 기본적으로 꺼져 있습니다. 로컬 데모에서만 `.env`에
 `CAS_ENABLE_EXTERNAL_EVIDENCE=1`과 `OPENDART_API_KEY`, `NAVER_CLIENT_ID`,
 `NAVER_CLIENT_SECRET`, `TAVILY_API_KEY`를 설정하면 `news_cache` 노드가
 뉴스/공시/웹 검색 근거를 EvidenceAuditAgent 입력으로 전달합니다.
 
-## 6. 저장소 구조
+## 7. 저장소 구조
 
 ```text
 .
@@ -198,17 +251,18 @@ Gemini가 최종 종합(`ChairReportAgent`)을 맡습니다. 이 모드에는
 └── tests/
 ```
 
-## 7. 주요 문서
+## 8. 주요 문서
 
 | 문서 | 내용 |
 |---|---|
 | [docs/preprocessing_rules_ko.md](docs/preprocessing_rules_ko.md) | 신용등급 타겟, 재무/거시 결합, 모델 입력셋 전처리 기준 |
-| [docs/three_agent_credit_review_design_ko.md](docs/three_agent_credit_review_design_ko.md) | 3에이전트 기반 Stage 2 정성 검토 구조 |
+| [docs/three_agent_credit_review_design_ko.md](docs/three_agent_credit_review_design_ko.md) | 3에이전트 기반 Stage 2 정성 검토 구조와 구현 상태 |
+| [docs/live_agno_external_api_runbook_ko.md](docs/live_agno_external_api_runbook_ko.md) | live Agno/API 로컬 실행과 Codex 정책 분리 기준 |
 | [docs/credit_dashboard_quickstart_ko.md](docs/credit_dashboard_quickstart_ko.md) | Streamlit 대시보드 실행 안내 |
 | [docs/pipeline/data_pipeline.md](docs/pipeline/data_pipeline.md) | 웹 리스팅 입력과 `company_selection` 계약 |
 | [data/README.md](data/README.md) | CAS 데이터 디렉터리와 재생성 흐름 |
 
-## 8. 실행 방법
+## 9. 실행 방법
 
 Python 3.12 단일 환경을 기준으로 합니다. 새 로컬 환경은 repo 루트에서 다음처럼 만듭니다.
 
@@ -288,7 +342,7 @@ python scripts/run_credit_dashboard.py
 
 실행 후 브라우저에서 Streamlit이 표시하는 로컬 주소로 접속합니다.
 
-## 9. CLI 파이프라인
+## 10. CLI 파이프라인
 
 웹 리스팅 또는 JSON 입력은 `company_selection` 계약으로 정규화되어
 LangGraph 파이프라인에 들어갑니다.
@@ -303,7 +357,7 @@ cas-agent --company-selection-file path/to/company_selection.json
 cas-agent --company-id sample-company
 ```
 
-## 10. 개발 및 검증
+## 11. 개발 및 검증
 
 ```bash
 python scripts/check_dev_environment.py
@@ -317,7 +371,7 @@ python -m pytest tests/integration -v -m "not requires_llm and not requires_gpu"
 현재 주요 테스트는 `company_selection` 입력 계약, 기본 예측 노드,
 위원회 노드, 그래프 스모크 테스트를 포함합니다.
 
-## 11. 운영 원칙
+## 12. 운영 원칙
 
 - CAS 기준 데이터와 실행 파일은 저장소 내부 경로만 참조합니다.
 - Model V1은 CAS의 기준 원본이며, 공식 43-feature 입력셋은 이 파일에서 재생성합니다.
@@ -327,6 +381,10 @@ python -m pytest tests/integration -v -m "not requires_llm and not requires_gpu"
 - 43-feature 입력셋과 artifact는 현재 공식 Stage 1 기준으로 유지합니다.
 - `model_view`와 `committee_view`는 분리합니다.
 - 모델 예측은 LLM이나 Agent가 직접 수정하지 않습니다.
+- Stage 2 파일럿 수치는 hard sample 보완 성능이며, 전체 모집단 정확도로
+  해석하지 않습니다.
+- live Agno/API 실행은 로컬 opt-in으로 분리하고, CI/Codex 재현성 환경에서는
+  외부 API 호출 없이 deterministic 경로와 캐시 산출물을 사용합니다.
 - 모든 성능 평가는 시간순 OOT split 기준으로 해석합니다.
 - 미래 정보는 과거 예측에 사용하지 않습니다.
 
