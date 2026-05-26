@@ -30,6 +30,21 @@
         "accounting_ratio_distress_literature",
         "internal_validation_required"
       ]
+    },
+    {
+      "criterion_id": "accruals.accruals_ratio.high",
+      "feature": "accruals_ratio",
+      "operator": ">=",
+      "threshold": 0.1,
+      "direction": "risk_increasing",
+      "severity": "moderate",
+      "score_delta": 0.04,
+      "reason_kr": "발생액 비율이 높아 이익의 현금전환 품질과 회계적 지속가능성에 대한 점검이 필요합니다.",
+      "basis": [
+        "Beneish_accrual_quality_theme",
+        "earnings_quality_policy",
+        "internal_validation_required"
+      ]
     }
   ]
 }
