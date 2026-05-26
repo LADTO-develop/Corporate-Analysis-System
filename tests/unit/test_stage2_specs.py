@@ -34,6 +34,8 @@ def test_chair_report_spec_owns_committee_view_fields() -> None:
     assert "committee_risk_signal" in spec.output_fields
     assert "veto_triggered" in spec.output_fields
     assert "hidden_tail_risk_flag" in spec.output_fields
+    assert "risk_hold_reason_tags" in spec.output_fields
+    assert "risk_hold_reason_summary" in spec.output_fields
     assert "conflict_resolution" in spec.output_fields
     assert "decision_trace" in spec.output_fields
     assert "final_review_memo" in spec.output_fields
@@ -45,6 +47,9 @@ def test_evidence_audit_spec_exposes_evidence_limitations() -> None:
     assert "evidence_strength" in spec.output_fields
     assert "model_challenge" in spec.output_fields
     assert "evidence_limitations" in spec.output_fields
+    assert "critical_evidence_count" in spec.output_fields
+    assert "watch_context_count" in spec.output_fields
+    assert "recommended_evidence_treatment" in spec.output_fields
 
 
 def test_review_qa_spec_is_optional_post_committee_agent() -> None:

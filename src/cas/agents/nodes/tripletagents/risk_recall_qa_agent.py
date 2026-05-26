@@ -73,6 +73,7 @@ def run_risk_recall_qa_agent(
             "Audit only already-eligible committee decisions for missed-risk recall safety.",
             "Do not rewrite model_view. Treat committee_view as decision-support, not an official rating.",
             "Do not invent external news, DART filings, macro events, or industry events not present in the input.",
+            "Use EvidenceAudit recommended_evidence_treatment and hard_distress_detected before prose when judging missed-risk recall.",
             "Escalate to risk_hold only when verified adverse evidence or severe financial stress is present.",
             "Use boundary_hold or manual review for near-threshold uncertainty without confirmed adverse evidence.",
             "If financial defenses and external evidence are adequate, keep committee_view unchanged.",
@@ -112,23 +113,14 @@ def _query(
     chair_report: ChairReportOutput,
     trigger_reasons: list[str],
 ) -> str:
+    prompt_context = bundle.to_compact_prompt_payload(role="risk_recall_qa")
     prompt_payload = {
-        "company": {
-            "company_id": bundle.company_id,
-            "company_name": bundle.company_name,
-            "market": bundle.market,
-            "analysis_year": bundle.analysis_year,
-        },
-        "stage1_model": {
-            "prediction_label": bundle.prediction_label,
-            "probability_speculative": bundle.probability_speculative,
-            "threshold": bundle.threshold,
-            "stage2_secondary_trigger": bundle.model_view.get("stage2_secondary_trigger"),
-            "stage2_review_priority": bundle.model_view.get("stage2_review_priority"),
-        },
-        "source_feature_row": bundle.source_feature_row,
-        "prior_rating_reference": bundle.prior_rating_reference,
-        "news_cache_snapshot": bundle.news_cache_snapshot,
+        "company": prompt_context["company"],
+        "stage1_model": prompt_context["stage1_model"],
+        "source_feature_row": prompt_context["financial_metrics"],
+        "prior_rating_reference": prompt_context["prior_rating_reference"],
+        "news_cache_snapshot": prompt_context["news_cache_snapshot"],
+        "materiality_summary": prompt_context["materiality_summary"],
         "committee_view": committee_view,
         "agent_outputs": {
             "quant_credit": quant_credit.model_dump(mode="json"),

@@ -50,6 +50,7 @@ def test_evidence_audit_output_flattens_to_common_agent_output() -> None:
 
     assert agent.role == "evidence_audit"
     assert "collected" in agent.findings[0]
+    assert "recommended_evidence_treatment=context_only" in " ".join(agent.findings)
     assert "추가 점검 필요" in " ".join(agent.findings)
     assert "근거 한계: 기준일 이후 근거는 제외했습니다." in agent.findings
 

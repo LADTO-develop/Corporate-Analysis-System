@@ -72,6 +72,7 @@ def run_review_qa_agent(
             "Treat your output as advisory QA only. Do not claim an official credit rating decision.",
             "Do not invent external news, DART filings, macro events, or industry events not present in the input.",
             "For historical replay, use only evidence that passes the supplied cutoff context.",
+            "Use EvidenceAudit recommended_evidence_treatment before prose when judging whether evidence is watch-context or substantive.",
             "If a single medium financing, procedural halt, or routine audit filing is the only concern, prefer subtype downgrade or manual review over risk escalation.",
             "If final reject relies on model confidence plus financial weakness but external evidence is only routine/caution/watch-context, consider downgrade_reject_to_boundary_hold instead of a hard reject.",
             "Return concise Korean review prose in the structured response fields only.",
@@ -110,21 +111,13 @@ def _query(
     chair_report: ChairReportOutput,
     trigger_reasons: list[str],
 ) -> str:
+    prompt_context = bundle.to_compact_prompt_payload(role="review_qa")
     prompt_payload = {
-        "company": {
-            "company_id": bundle.company_id,
-            "company_name": bundle.company_name,
-            "market": bundle.market,
-            "analysis_year": bundle.analysis_year,
-        },
-        "stage1_model": {
-            "prediction_label": bundle.prediction_label,
-            "probability_speculative": bundle.probability_speculative,
-            "threshold": bundle.threshold,
-            "stage2_secondary_trigger": bundle.model_view.get("stage2_secondary_trigger"),
-            "stage2_review_priority": bundle.model_view.get("stage2_review_priority"),
-        },
-        "news_cache_snapshot": bundle.news_cache_snapshot,
+        "company": prompt_context["company"],
+        "stage1_model": prompt_context["stage1_model"],
+        "source_feature_row": prompt_context["financial_metrics"],
+        "news_cache_snapshot": prompt_context["news_cache_snapshot"],
+        "materiality_summary": prompt_context["materiality_summary"],
         "committee_view": committee_view,
         "agent_outputs": {
             "quant_credit": quant_credit.model_dump(mode="json"),

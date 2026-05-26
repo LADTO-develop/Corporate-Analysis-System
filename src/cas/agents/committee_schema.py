@@ -15,6 +15,14 @@ CommitteeDecisionType = Literal[
     "review_hold",
     "reject",
 ]
+RiskHoldReasonTag = Literal[
+    "combined_watch_hold",
+    "financial_stress_hold",
+    "external_materiality_hold",
+    "secondary_radar_hold",
+    "model_reject_confirmation_hold",
+    "model_risk_hold",
+]
 
 
 class _StrictModel(BaseModel):
@@ -46,6 +54,9 @@ class CommitteeViewPayload(_StrictModel):
     committee_decision_type: CommitteeDecisionType = "review_hold"
     committee_decision_type_label: str = "확인필요 보류"
     committee_risk_signal: bool = True
+    risk_hold_reason_tags: list[RiskHoldReasonTag] = Field(default_factory=list)
+    risk_hold_reason_labels: list[str] = Field(default_factory=list)
+    risk_hold_reason_summary: str = ""
     veto_triggered: bool
     hidden_tail_risk_flag: bool = False
     hidden_tail_risk_reason: str = ""
@@ -63,4 +74,5 @@ __all__ = [
     "CommitteeViewPayload",
     "DecisionTraceItem",
     "EvidenceSummaryItem",
+    "RiskHoldReasonTag",
 ]

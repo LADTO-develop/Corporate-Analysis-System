@@ -8,7 +8,6 @@ from datetime import UTC, datetime
 from importlib import import_module
 from typing import Any, Literal, TypedDict, cast
 
-from cas.agents.committee_assessments import FINANCING_EVIDENCE_TERMS
 from cas.agents.committee_view import build_committee_view
 from cas.agents.nodes.committee_feature_formatting import (
     describe_top_drivers,
@@ -18,10 +17,17 @@ from cas.agents.nodes.committee_feature_formatting import (
 )
 from cas.agents.signals import (
     evaluate_debt_liquidity,
+    evaluate_evidence_treatment,
     evaluate_external_evidence,
     evaluate_macro_market,
 )
 from cas.agents.signals.credit_policy_signals import evaluate_credit_policy
+from cas.agents.signals.materiality_signals import (
+    has_substantive_external_risk as _shared_has_substantive_external_risk,
+)
+from cas.agents.signals.materiality_signals import (
+    substantive_external_risk_item as _shared_substantive_external_risk_item,
+)
 from cas.agents.stage2_bundle import Stage2InputBundle, build_stage2_input_bundle
 from cas.agents.stage2_outputs import (
     ChairReportOutput,
@@ -46,8 +52,8 @@ from cas.agents.state import (
 from cas.utils.live_cache import read_json_cache, stable_cache_key, write_json_cache
 
 _EvidenceStrength = Literal["none", "weak", "moderate", "strong", "critical"]
-_REVIEW_QA_CACHE_VERSION = "stage2_review_qa_v2"
-_RISK_RECALL_QA_CACHE_VERSION = "stage2_risk_recall_qa_v2"
+_REVIEW_QA_CACHE_VERSION = "stage2_review_qa_v4"
+_RISK_RECALL_QA_CACHE_VERSION = "stage2_risk_recall_qa_v3"
 
 
 class _EvidenceProfile(TypedDict):
@@ -333,6 +339,7 @@ def _apply_review_qa_advisory(
         return _apply_review_qa_risk_hold_advisory(
             committee_view=committee_view,
             review_qa_output=review_qa_output,
+            bundle=bundle,
             news_cache_snapshot=news_cache_snapshot,
             runtime_diagnostics=runtime_diagnostics,
         )
@@ -351,12 +358,14 @@ def _apply_review_qa_risk_hold_advisory(
     *,
     committee_view: dict[str, Any],
     review_qa_output: ReviewQAOutput,
+    bundle: Stage2InputBundle | None,
     news_cache_snapshot: dict[str, Any] | None,
     runtime_diagnostics: dict[str, Any],
 ) -> dict[str, Any]:
     apply_reason = _review_qa_advisory_apply_reason(
         review_qa_output=review_qa_output,
         news_cache_snapshot=news_cache_snapshot,
+        source_feature_row=bundle.source_feature_row if bundle else None,
     )
     if not apply_reason:
         return committee_view
@@ -365,6 +374,9 @@ def _apply_review_qa_risk_hold_advisory(
     adjusted["committee_decision_type"] = "boundary_hold"
     adjusted["committee_decision_type_label"] = "경계등급 보류"
     adjusted["committee_risk_signal"] = False
+    adjusted["risk_hold_reason_tags"] = []
+    adjusted["risk_hold_reason_labels"] = []
+    adjusted["risk_hold_reason_summary"] = ""
     if apply_reason == "watch_context_only_risk_hold_override":
         adjustment_note = (
             "ReviewQAAgent는 외부 공시가 caution/watch_context 수준에 머무르고 "
@@ -425,6 +437,9 @@ def _apply_review_qa_reject_advisory(
     adjusted["committee_decision_type"] = "boundary_hold"
     adjusted["committee_decision_type_label"] = "경계등급 보류"
     adjusted["committee_risk_signal"] = False
+    adjusted["risk_hold_reason_tags"] = []
+    adjusted["risk_hold_reason_labels"] = []
+    adjusted["risk_hold_reason_summary"] = ""
     adjustment_note = (
         "ReviewQAAgent는 부적격 확정 근거가 모델 고확률과 재무 약점에 치우쳐 있고, "
         "외부 공시는 routine/caution/watch-context 수준에 머문다고 보아 "
@@ -462,6 +477,7 @@ def _review_qa_advisory_apply_reason(
     *,
     review_qa_output: ReviewQAOutput,
     news_cache_snapshot: dict[str, Any] | None,
+    source_feature_row: dict[str, Any] | None = None,
 ) -> str:
     if (
         review_qa_output.risk_hold_assessment == "overstated"
@@ -474,7 +490,10 @@ def _review_qa_advisory_apply_reason(
         return ""
     if review_qa_output.confidence < 0.45:
         return ""
-    if _external_evidence_is_watch_context_only(news_cache_snapshot or {}):
+    if _external_evidence_is_watch_context_only(
+        news_cache_snapshot or {},
+        source_feature_row=source_feature_row,
+    ):
         return "watch_context_only_risk_hold_override"
     return ""
 
@@ -497,7 +516,10 @@ def _review_qa_reject_advisory_apply_reason(
         return ""
 
     news_cache = news_cache_snapshot or {}
-    profile = _external_evidence_profile(news_cache)
+    profile = _external_evidence_profile(
+        news_cache,
+        source_feature_row=bundle.source_feature_row if bundle else None,
+    )
     if profile["strength"] in {"strong", "critical"}:
         return ""
     if profile["veto_candidate_count"] > 0 or profile["high_confidence_critical_count"] > 0:
@@ -507,7 +529,10 @@ def _review_qa_reject_advisory_apply_reason(
         source_feature_row=bundle.source_feature_row if bundle else None,
     ):
         return ""
-    if not _external_evidence_is_watch_context_only(news_cache):
+    if not _external_evidence_is_watch_context_only(
+        news_cache,
+        source_feature_row=bundle.source_feature_row if bundle else None,
+    ):
         return ""
     if not _has_review_qa_reject_boundary_defense(bundle):
         return ""
@@ -571,7 +596,11 @@ def _has_review_qa_extreme_financial_distress(row: dict[str, Any]) -> bool:
     )
 
 
-def _external_evidence_is_watch_context_only(news_cache: dict[str, Any]) -> bool:
+def _external_evidence_is_watch_context_only(
+    news_cache: dict[str, Any],
+    *,
+    source_feature_row: dict[str, Any] | None = None,
+) -> bool:
     raw_items = news_cache.get("items", [])
     items = (
         [item for item in raw_items if isinstance(item, dict)]
@@ -581,41 +610,36 @@ def _external_evidence_is_watch_context_only(news_cache: dict[str, Any]) -> bool
     if not items:
         return False
 
-    profile = _external_evidence_profile(news_cache)
+    profile = _external_evidence_profile(
+        news_cache,
+        source_feature_row=source_feature_row,
+    )
     if profile["veto_candidate_count"] > 0 or profile["high_confidence_critical_count"] > 0:
         return False
 
     watch_context_count = 0
     for item in items:
-        if _is_substantive_external_risk_item(item):
+        if _is_substantive_external_risk_item(
+            item,
+            source_feature_row=source_feature_row,
+        ):
             return False
         if _is_watch_context_external_item(item):
             watch_context_count += 1
     return watch_context_count > 0
 
 
-def _is_substantive_external_risk_item(item: dict[str, Any]) -> bool:
-    if item.get("veto_candidate") is True:
-        return True
-    if item.get("critical_context_confirmed") is True:
-        return True
-
-    severity = str(item.get("disclosure_severity", "")).lower()
-    event_class = str(item.get("disclosure_event_class", "")).lower()
-    materiality = str(item.get("disclosure_materiality", "")).lower()
-    if severity in {"veto", "adverse"}:
-        return True
-    if event_class in {"substantive_adverse", "distress", "insolvency", "audit_failure"}:
-        return True
-    if materiality in {"substantive_adverse", "critical", "veto"}:
-        return True
-
-    materiality_ratio = _safe_float(item.get("materiality_ratio"))
-    if materiality_ratio is not None and materiality_ratio >= 0.10:
-        return True
-
-    provider_relevance = str(item.get("provider_relevance", "")).lower()
-    return provider_relevance == "risk" and severity not in {"routine", "caution"}
+def _is_substantive_external_risk_item(
+    item: dict[str, Any],
+    *,
+    source_feature_row: dict[str, Any] | None = None,
+) -> bool:
+    return bool(
+        _shared_substantive_external_risk_item(
+            item,
+            source_feature_row=source_feature_row,
+        )
+    )
 
 
 def _is_watch_context_external_item(item: dict[str, Any]) -> bool:
@@ -658,31 +682,68 @@ def _review_qa_trigger_reasons(
     reasons: list[str] = []
     final_label = str(committee_view.get("final_committee_label") or "")
     decision_type = str(committee_view.get("committee_decision_type") or "")
-    model_investment_grade = bundle.prediction_label == "투자적격"
-    evidence_profile = _external_evidence_profile(bundle.news_cache_snapshot)
-    if model_investment_grade and final_label == "보류":
-        reasons.append("investment_model_hold")
-    if (
-        decision_type == "risk_hold"
-        and evidence_profile["strength"] in {"none", "weak", "moderate"}
-        and evidence_profile["veto_candidate_count"] <= 0
-        and evidence_profile["high_confidence_critical_count"] <= 0
-    ):
+    evidence_profile = _external_evidence_profile(
+        bundle.news_cache_snapshot,
+        source_feature_row=bundle.source_feature_row,
+    )
+
+    has_critical_evidence = (
+        evidence_profile["strength"] in {"strong", "critical"}
+        or evidence_profile["veto_candidate_count"] > 0
+        or evidence_profile["high_confidence_critical_count"] > 0
+    )
+    watch_context_only = _external_evidence_is_watch_context_only(
+        bundle.news_cache_snapshot,
+        source_feature_row=bundle.source_feature_row,
+    )
+    risk_hold_review_candidate = (
+        final_label == "보류"
+        and decision_type == "risk_hold"
+        and not has_critical_evidence
+        and (
+            watch_context_only
+            or _has_review_qa_risk_hold_boundary_defense(bundle)
+            or _review_qa_memo_conflict_possible(committee_view)
+        )
+    )
+    if risk_hold_review_candidate:
         reasons.append("risk_hold_without_critical_evidence")
-    if _review_qa_memo_conflict_possible(committee_view):
+    if risk_hold_review_candidate and _review_qa_memo_conflict_possible(committee_view):
         reasons.append("label_memo_conflict_candidate")
-    if final_label != "적격" and _has_ambiguous_external_evidence(bundle.news_cache_snapshot):
-        reasons.append("ambiguous_external_evidence")
     if (
         final_label == "부적격"
         and decision_type == "reject"
-        and evidence_profile["strength"] in {"weak", "moderate"}
-        and evidence_profile["veto_candidate_count"] <= 0
-        and evidence_profile["high_confidence_critical_count"] <= 0
-        and _external_evidence_is_watch_context_only(bundle.news_cache_snapshot)
+        and not has_critical_evidence
+        and watch_context_only
+        and _has_review_qa_reject_boundary_defense(bundle)
     ):
         reasons.append("reject_without_critical_evidence")
     return reasons[:5]
+
+
+def _has_review_qa_risk_hold_boundary_defense(bundle: Stage2InputBundle) -> bool:
+    """Return whether a risk hold has enough defense to justify optional QA."""
+    row = bundle.source_feature_row
+    if not row or _has_review_qa_extreme_financial_distress(row):
+        return False
+
+    defensive_axes = [
+        _metric_at_least_value(row, "current_ratio", 1.2)
+        or _metric_at_least_value(row, "cash_ratio", 0.15),
+        _metric_at_least_value(row, "cashflow_coverage_ratio", 1.0)
+        or _metric_at_least_value(row, "ocf_to_total_liabilities", 0.05)
+        or _metric_at_least_value(row, "ocf_to_sales", 0.0),
+        _metric_at_least_value(row, "interest_coverage_ratio", 1.0)
+        and not _truthy(row.get("icr_under_1")),
+        _metric_at_least_value(row, "equity_ratio", 0.40)
+        and _metric_at_most_value(row, "debt_ratio", 1.50)
+        and _metric_at_most_value(row, "capital_impairment_ratio", 0.0),
+        _metric_at_most_value(row, "total_borrowings_ratio", 0.50)
+        or _metric_at_most_value(row, "short_term_borrowings_share", 0.70),
+        not _truthy(row.get("is_2y_consecutive_operating_loss"))
+        and not _truthy(row.get("is_2y_consecutive_ocf_deficit")),
+    ]
+    return sum(1 for passed in defensive_axes if passed) >= 3
 
 
 def _review_qa_memo_conflict_possible(committee_view: dict[str, Any]) -> bool:
@@ -701,30 +762,6 @@ def _review_qa_memo_conflict_possible(committee_view: dict[str, Any]) -> bool:
         "최종 라벨을 투자적격",
     )
     return any(marker in memo for marker in conflict_markers)
-
-
-def _has_ambiguous_external_evidence(news_cache: dict[str, Any]) -> bool:
-    raw_items = news_cache.get("items", [])
-    if not isinstance(raw_items, list):
-        return False
-    markers = (
-        "유상증자",
-        "전환사채",
-        "신주인수권",
-        "자금조달",
-        "거래정지",
-        "거래정지해제",
-        "상장예비심사",
-        "감사보고서",
-        "채무보증",
-    )
-    for item in raw_items:
-        if not isinstance(item, dict):
-            continue
-        text = " ".join(str(item.get(key) or "") for key in ("title", "summary", "description"))
-        if any(marker in text for marker in markers):
-            return True
-    return False
 
 
 def _stage2_review_qa_enabled(runtime_backend_name: str) -> bool:
@@ -830,7 +867,7 @@ def _review_qa_cache_payload(
         "cache_version": _REVIEW_QA_CACHE_VERSION,
         "model_provider": model_provider,
         "model_name": model_name,
-        "stage2_input_bundle": bundle.to_prompt_payload(),
+        "stage2_input_bundle": bundle.to_compact_prompt_payload(role="review_qa"),
         "committee_view": committee_view,
         "agent_outputs": {
             "quant_credit": quant_credit.model_dump(mode="json"),
@@ -973,6 +1010,15 @@ def _apply_risk_recall_qa_advisory(
         "위험 보류" if target_type == "risk_hold" else "경계등급 보류"
     )
     adjusted["committee_risk_signal"] = target_type == "risk_hold"
+    if target_type == "risk_hold":
+        reason_tags, reason_labels, reason_summary = _risk_recall_hold_reason_fields(apply_reason)
+        adjusted["risk_hold_reason_tags"] = reason_tags
+        adjusted["risk_hold_reason_labels"] = reason_labels
+        adjusted["risk_hold_reason_summary"] = reason_summary
+    else:
+        adjusted["risk_hold_reason_tags"] = []
+        adjusted["risk_hold_reason_labels"] = []
+        adjusted["risk_hold_reason_summary"] = ""
     adjustment_note = (
         "RiskRecallQAAgent는 최종 적격 판단을 유지하기에는 기준선/재무/외부근거의 "
         "잔여 위험이 남아 있다고 보아, 최종 라벨을 보류로 재검수하도록 권고했습니다."
@@ -989,6 +1035,19 @@ def _apply_risk_recall_qa_advisory(
         adjusted.get("key_risk_factors"),
         "RiskRecallQA 적격 재검수 경고",
     )
+    risk_hold_reason_trace = (
+        [
+            {
+                "gate": "risk_hold_reason_tagging",
+                "label": "위험 보류 이유 태그",
+                "triggered": True,
+                "severity": "risk",
+                "summary": adjusted.get("risk_hold_reason_summary") or "",
+            }
+        ]
+        if target_type == "risk_hold"
+        else []
+    )
     adjusted["decision_trace"] = [
         *list(adjusted.get("decision_trace") or []),
         {
@@ -998,6 +1057,7 @@ def _apply_risk_recall_qa_advisory(
             "severity": "risk" if target_type == "risk_hold" else "watch",
             "summary": adjustment_note,
         },
+        *risk_hold_reason_trace,
     ]
     runtime_diagnostics["risk_recall_qa_advisory_applied"] = True
     runtime_diagnostics["risk_recall_qa_adjusted_decision_type"] = target_type
@@ -1042,6 +1102,35 @@ def _risk_recall_qa_advisory_apply_reason(
     ):
         return ""
     return "risk_recall_boundary_safety_review"
+
+
+def _risk_recall_hold_reason_fields(apply_reason: str) -> tuple[list[str], list[str], str]:
+    if apply_reason == "risk_recall_substantive_external_risk":
+        return (
+            ["external_materiality_hold"],
+            ["외부 중요도 근거"],
+            (
+                "위험 보류 이유 태그는 외부 중요도 근거입니다. RiskRecallQA가 적격 판단에서 "
+                "놓칠 수 있는 실질 외부근거를 확인해 위험 보류로 올렸습니다."
+            ),
+        )
+    if apply_reason == "risk_recall_severe_financial_weakness":
+        return (
+            ["financial_stress_hold"],
+            ["재무 스트레스"],
+            (
+                "위험 보류 이유 태그는 재무 스트레스입니다. RiskRecallQA가 현금흐름, "
+                "이자보상, 손익, 유동성 중 복수 약점을 확인해 위험 보류로 올렸습니다."
+            ),
+        )
+    return (
+        ["model_risk_hold"],
+        ["모델 위험 보류"],
+        (
+            "위험 보류 이유 태그는 모델 위험 보류입니다. 적격으로 유지하기에는 잔여 위험 "
+            "신호가 남아 위험 보류로 올렸습니다."
+        ),
+    )
 
 
 def _risk_recall_qa_trigger_reasons(
@@ -1153,160 +1242,12 @@ def _has_substantive_external_risk(
     *,
     source_feature_row: dict[str, Any] | None = None,
 ) -> bool:
-    raw_items = news_cache.get("items", [])
-    if not isinstance(raw_items, list):
-        return False
-    return any(
-        isinstance(item, dict)
-        and _is_risk_recall_substantive_external_risk_item(
-            item,
+    return bool(
+        _shared_has_substantive_external_risk(
+            news_cache,
             source_feature_row=source_feature_row,
         )
-        for item in raw_items
     )
-
-
-def _is_risk_recall_substantive_external_risk_item(
-    item: dict[str, Any],
-    *,
-    source_feature_row: dict[str, Any] | None = None,
-) -> bool:
-    if item.get("company_match") is False:
-        return False
-    if _is_uncorroborated_material_financing_or_guarantee_item(
-        item,
-        source_feature_row=source_feature_row,
-    ):
-        return False
-
-    materiality_ratio = _safe_float(item.get("materiality_ratio"))
-    if materiality_ratio is not None and materiality_ratio >= 0.10:
-        return True
-    if item.get("veto_candidate") is True:
-        return True
-    if item.get("critical_context_confirmed") is True:
-        return True
-
-    event_class = str(item.get("disclosure_event_class", "")).lower()
-    materiality = str(item.get("disclosure_materiality", "")).lower()
-    if event_class in {"substantive_adverse", "distress", "insolvency", "audit_failure"}:
-        return True
-    if materiality in {"substantive_adverse", "critical", "veto"}:
-        return True
-
-    severity = str(item.get("disclosure_severity", "")).lower()
-    title = str(item.get("title") or "")
-    critical_title_markers = (
-        "횡령",
-        "배임",
-        "상장폐지",
-        "관리종목",
-        "감사의견거절",
-        "의견거절",
-        "한정의견",
-        "부도",
-        "파산",
-        "회생절차",
-        "자본잠식",
-    )
-    return severity in {"adverse", "veto"} and any(
-        marker in title for marker in critical_title_markers
-    )
-
-
-def _is_uncorroborated_material_financing_or_guarantee_item(
-    item: dict[str, Any],
-    *,
-    source_feature_row: dict[str, Any] | None,
-) -> bool:
-    if not _is_material_financing_or_guarantee_item(item):
-        return False
-    if item.get("veto_candidate") is True or item.get("critical_context_confirmed") is True:
-        return False
-    if _has_hard_distress_text(item):
-        return False
-    if not source_feature_row:
-        return False
-    return not _material_financing_or_guarantee_has_financial_corroboration(source_feature_row)
-
-
-def _is_material_financing_or_guarantee_item(item: dict[str, Any]) -> bool:
-    if str(item.get("source", "")).lower() != "opendart":
-        return False
-    if item.get("company_match") is False:
-        return False
-    event_class = str(item.get("disclosure_event_class", "")).lower()
-    if event_class in {"material_financing", "material_debt_guarantee"}:
-        return True
-    materiality = str(item.get("disclosure_materiality", "")).lower()
-    ratio = _safe_float(item.get("materiality_ratio"))
-    if materiality != "substantive_adverse" and (ratio is None or ratio < 0.10):
-        return False
-    text = _compact_text(" ".join(str(item.get(key, "")) for key in ("title", "summary")))
-    return any(term in text for term in FINANCING_EVIDENCE_TERMS) or "채무보증" in text
-
-
-def _has_hard_distress_text(item: dict[str, Any]) -> bool:
-    hard_terms = (
-        "자본잠식",
-        "부도",
-        "파산",
-        "회생",
-        "상장폐지",
-        "관리종목",
-        "감사의견거절",
-        "의견거절",
-        "횡령",
-        "배임",
-        "채무불이행",
-    )
-    text = _compact_text(" ".join(str(item.get(key, "")) for key in ("title", "summary")))
-    return any(term in text for term in hard_terms)
-
-
-def _material_financing_or_guarantee_has_financial_corroboration(
-    row: dict[str, Any],
-) -> bool:
-    if _financial_observation_count(row) < 3:
-        return True
-    if _has_review_qa_extreme_financial_distress(row):
-        return True
-    weak_axes = [
-        _metric_below_value(row, "cashflow_coverage_ratio", 0.0)
-        or _metric_below_value(row, "ocf_to_total_liabilities", 0.0)
-        or _metric_below_value(row, "ocf_to_sales", 0.0)
-        or _truthy(row.get("is_2y_consecutive_ocf_deficit")),
-        _metric_below_value(row, "interest_coverage_ratio", 1.0) or _truthy(row.get("icr_under_1")),
-        _metric_below_value(row, "net_margin", -0.10)
-        or _truthy(row.get("is_2y_consecutive_operating_loss")),
-        _metric_below_value(row, "equity_ratio", 0.25)
-        or _metric_above_value(row, "debt_ratio", 3.0)
-        or _metric_above_value(row, "total_borrowings_ratio", 0.65)
-        or _metric_above_value(row, "capital_impairment_ratio", 0.0),
-        _metric_below_value(row, "current_ratio", 1.0)
-        and _metric_below_value(row, "cash_ratio", 0.10),
-    ]
-    return sum(1 for passed in weak_axes if passed) >= 2
-
-
-def _financial_observation_count(row: dict[str, Any]) -> int:
-    keys = (
-        "cashflow_coverage_ratio",
-        "ocf_to_total_liabilities",
-        "ocf_to_sales",
-        "interest_coverage_ratio",
-        "equity_ratio",
-        "debt_ratio",
-        "total_borrowings_ratio",
-        "current_ratio",
-        "cash_ratio",
-        "net_margin",
-    )
-    return sum(1 for key in keys if row.get(key) is not None)
-
-
-def _compact_text(text: str) -> str:
-    return "".join(str(text).lower().split())
 
 
 def _has_rating_boundary_context(bundle: Stage2InputBundle) -> bool:
@@ -1451,7 +1392,7 @@ def _risk_recall_qa_cache_payload(
         "cache_version": _RISK_RECALL_QA_CACHE_VERSION,
         "model_provider": model_provider,
         "model_name": model_name,
-        "stage2_input_bundle": bundle.to_prompt_payload(),
+        "stage2_input_bundle": bundle.to_compact_prompt_payload(role="risk_recall_qa"),
         "committee_view": committee_view,
         "agent_outputs": {
             "quant_credit": quant_credit.model_dump(mode="json"),
@@ -1758,7 +1699,10 @@ def _evidence_audit_agent(bundle: Stage2InputBundle) -> EvidenceAuditOutput:
     debt_signals = evaluate_debt_liquidity(bundle)
     macro_signals = evaluate_macro_market(bundle)
     external_signals = evaluate_external_evidence(bundle.news_cache_snapshot)
-    evidence_profile = _external_evidence_profile(bundle.news_cache_snapshot)
+    evidence_profile = _external_evidence_profile(
+        bundle.news_cache_snapshot,
+        source_feature_row=bundle.source_feature_row,
+    )
     model_challenge = _model_evidence_challenge(
         bundle=bundle,
         debt_findings=debt_signals.findings,
@@ -1768,6 +1712,10 @@ def _evidence_audit_agent(bundle: Stage2InputBundle) -> EvidenceAuditOutput:
         bundle=bundle,
         debt_findings=debt_signals.findings,
         evidence_profile=evidence_profile,
+    )
+    evidence_treatment = evaluate_evidence_treatment(
+        bundle.news_cache_snapshot,
+        source_feature_row=bundle.source_feature_row,
     )
     summary = (
         "EvidenceAuditAgent는 뉴스·공시·거시환경·산업 맥락과 부채/유동성 신호를 "
@@ -1785,12 +1733,23 @@ def _evidence_audit_agent(bundle: Stage2InputBundle) -> EvidenceAuditOutput:
         macro_industry_sensitivity=macro_signals.findings,
         external_evidence_findings=[
             str(evidence_profile["finding"]),
+            (
+                "구조화 근거 판정: "
+                f"recommended_evidence_treatment={evidence_treatment.recommended_evidence_treatment}; "
+                f"critical={evidence_treatment.critical_evidence_count}; "
+                f"watch={evidence_treatment.watch_context_count}"
+            ),
             *external_signals.findings,
         ],
         evidence_limitations=_evidence_limitations(
             bundle.news_cache_snapshot,
             evidence_profile=evidence_profile,
         ),
+        critical_evidence_count=evidence_treatment.critical_evidence_count,
+        watch_context_count=evidence_treatment.watch_context_count,
+        materiality_summary=evidence_treatment.materiality_summary,
+        hard_distress_detected=evidence_treatment.hard_distress_detected,
+        recommended_evidence_treatment=evidence_treatment.recommended_evidence_treatment,
         confidence=_evidence_audit_confidence(
             status=status,
             debt_confidence=debt_signals.confidence,
@@ -1799,7 +1758,11 @@ def _evidence_audit_agent(bundle: Stage2InputBundle) -> EvidenceAuditOutput:
     )
 
 
-def _external_evidence_profile(news_cache: dict[str, Any]) -> _EvidenceProfile:
+def _external_evidence_profile(
+    news_cache: dict[str, Any],
+    *,
+    source_feature_row: dict[str, Any] | None = None,
+) -> _EvidenceProfile:
     status = str(news_cache.get("status", "not_implemented"))
     raw_items = news_cache.get("items", [])
     items = (
@@ -1817,7 +1780,11 @@ def _external_evidence_profile(news_cache: dict[str, Any]) -> _EvidenceProfile:
     verified_count = _safe_int(news_cache.get("verified_item_count"))
     if verified_count == 0:
         verified_count = sum(1 for item in items if _is_verified_evidence_item(item))
-    adverse_items = [item for item in items if _is_adverse_evidence_item(item)]
+    adverse_items = [
+        item
+        for item in items
+        if _is_adverse_evidence_item(item, source_feature_row=source_feature_row)
+    ]
     adverse_count = len(adverse_items)
     verified_adverse_count = sum(1 for item in adverse_items if _is_verified_evidence_item(item))
     veto_candidate_count = _safe_int(news_cache.get("veto_candidate_count"))
@@ -1873,21 +1840,17 @@ def _is_verified_evidence_item(item: dict[str, Any]) -> bool:
     return score is not None and score >= 0.55
 
 
-def _is_adverse_evidence_item(item: dict[str, Any]) -> bool:
-    if item.get("veto_candidate") is True:
-        return True
-    severity = str(item.get("disclosure_severity", "")).lower()
-    if severity in {"veto", "adverse"}:
-        if str(item.get("source", "")).lower() == "opendart":
-            return True
-        return item.get("critical_context_confirmed") is True
-    if severity in {"routine", "caution"}:
-        return False
-    if item.get("critical_context_confirmed") is True:
-        return True
-    if str(item.get("provider_relevance", "")).lower() == "risk":
-        return True
-    return bool(item.get("critical_terms") or [])
+def _is_adverse_evidence_item(
+    item: dict[str, Any],
+    *,
+    source_feature_row: dict[str, Any] | None = None,
+) -> bool:
+    return bool(
+        _shared_substantive_external_risk_item(
+            item,
+            source_feature_row=source_feature_row,
+        )
+    )
 
 
 def _evidence_strength(

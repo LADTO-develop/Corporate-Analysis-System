@@ -183,9 +183,16 @@ def test_evidence_audit_agent_scores_direct_external_risk_evidence() -> None:
     agent = structured_output.to_agent_output()
 
     assert structured_output.evidence_strength == "strong"
+    assert structured_output.critical_evidence_count == 1
+    assert structured_output.watch_context_count == 0
+    assert structured_output.hard_distress_detected is True
+    assert structured_output.recommended_evidence_treatment == "critical_veto_review"
     assert "보수 검토" in structured_output.model_challenge
     assert "보류 또는 부적격 검토" in structured_output.audit_conclusion
     assert any("외부근거 위험" in item for item in agent.findings)
+    assert any(
+        "recommended_evidence_treatment=critical_veto_review" in item for item in agent.findings
+    )
 
 
 def test_committee_view_exposes_final_decision_fields() -> None:
@@ -225,7 +232,7 @@ def test_committee_view_exposes_final_decision_fields() -> None:
     assert "deterministic runner" in result["audit"][0].summary
 
 
-def test_agno_review_qa_runs_for_investment_model_hold(
+def test_agno_review_qa_skips_plain_investment_model_hold(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     def fake_triplet_agents(**_kwargs: Any) -> Stage2LLMResponse:
@@ -258,26 +265,8 @@ def test_agno_review_qa_runs_for_investment_model_hold(
             ),
         )
 
-    def fake_review_qa_agent_with_cache(**kwargs: Any) -> tuple[ReviewQAOutput, dict[str, Any]]:
-        trigger_reasons = list(kwargs["trigger_reasons"])
-        assert "investment_model_hold" in trigger_reasons
-        return (
-            ReviewQAOutput(
-                qa_summary="ReviewQAAgent가 보류 라벨과 메모 일관성을 검수했습니다.",
-                trigger_reasons=trigger_reasons,
-                label_memo_consistency="최종 라벨과 메모가 충돌하지 않습니다.",
-                risk_hold_assessment="not_applicable",
-                evidence_cutoff_check="기준일 이후 근거는 사용하지 않았습니다.",
-                overhold_guardrail_assessment="정상기업 과잉 보류 여부는 별도 검토 대상으로 표시합니다.",
-                recommended_action="keep_committee_view",
-                confidence=0.71,
-            ),
-            {
-                "review_qa_cache_hit": False,
-                "review_qa_cache_key": "qa-cache-key",
-                "agent_elapsed_seconds": {"review_qa": 0.42},
-            },
-        )
+    def fake_review_qa_agent_with_cache(**_kwargs: Any) -> tuple[ReviewQAOutput, dict[str, Any]]:
+        raise AssertionError("ReviewQA should not run for a plain investment-model hold.")
 
     monkeypatch.setenv("CAS_ALLOW_LIVE_STAGE2_IN_TESTS", "1")
     monkeypatch.setenv("CAS_STAGE2_RUNNER", "agno")
@@ -321,16 +310,13 @@ def test_agno_review_qa_runs_for_investment_model_hold(
         "quant_credit",
         "evidence_audit",
         "chair_report",
-        "review_qa",
     ]
     assert result["committee_view"]["final_committee_label"] == "보류"
     assert result["agent_summary"]["synthesis"] == "Triplet chair summary"
-    assert result["agent_summary"]["agents"]["review_qa"]["confidence"] == 0.71
     runtime = result["stage2_runtime_diagnostics"]
-    assert runtime["review_qa_triggered"] is True
-    assert runtime["review_qa_recommended_action"] == "keep_committee_view"
-    assert runtime["agent_elapsed_seconds"]["review_qa"] == 0.42
-    assert runtime["stage2_total_elapsed_seconds"] >= 0.42
+    assert runtime["review_qa_triggered"] is False
+    assert runtime["review_qa_trigger_reasons"] == []
+    assert "review_qa" not in runtime["agent_elapsed_seconds"]
 
 
 def test_review_qa_does_not_trigger_for_eligible_ambiguous_evidence_only() -> None:
@@ -365,6 +351,107 @@ def test_review_qa_does_not_trigger_for_eligible_ambiguous_evidence_only() -> No
     assert reasons == []
 
 
+def test_review_qa_does_not_trigger_for_mitigation_hold_ambiguous_evidence_only() -> None:
+    state: AgentState = {
+        "source_feature_row": {
+            "current_ratio": 2.4,
+            "cash_ratio": 0.35,
+            "cashflow_coverage_ratio": 1.7,
+            "ocf_to_total_liabilities": 0.09,
+            "ocf_to_sales": 0.05,
+            "interest_coverage_ratio": 4.2,
+            "icr_under_1": 0,
+            "equity_ratio": 0.52,
+            "debt_ratio": 0.9,
+            "capital_impairment_ratio": 0.0,
+        },
+        "xgboost_result": {
+            "prediction_label": "부적격",
+            "probability_speculative": 0.34,
+            "threshold": 0.32,
+        },
+        "news_cache_snapshot": {
+            "status": "ready",
+            "items": [
+                {
+                    "source": "opendart",
+                    "title": "주요사항보고서(전환사채권발행결정)",
+                    "summary": "단일 medium 자금조달 공시입니다.",
+                    "company_match": True,
+                    "disclosure_severity": "caution",
+                    "evidence_quality": "medium",
+                    "evidence_score": 0.50,
+                }
+            ],
+        },
+    }
+    committee_view = {
+        "final_committee_label": "보류",
+        "committee_decision_type": "mitigation_hold",
+        "final_review_memo": "부적격 확정이 아닌 과민경고 완화 보류입니다.",
+    }
+
+    reasons = committee_node_module._review_qa_trigger_reasons(
+        bundle=build_stage2_input_bundle(state),
+        committee_view=committee_view,
+    )
+
+    assert reasons == []
+
+
+def test_review_qa_triggers_for_risk_hold_with_watch_context_defense() -> None:
+    state: AgentState = {
+        "source_feature_row": {
+            "current_ratio": 1.8,
+            "cash_ratio": 0.22,
+            "cashflow_coverage_ratio": 2.1,
+            "ocf_to_total_liabilities": 0.12,
+            "ocf_to_sales": 0.08,
+            "interest_coverage_ratio": 3.4,
+            "icr_under_1": 0,
+            "equity_ratio": 0.55,
+            "debt_ratio": 0.8,
+            "capital_impairment_ratio": 0.0,
+            "total_borrowings_ratio": 0.28,
+            "short_term_borrowings_share": 0.35,
+            "is_2y_consecutive_operating_loss": 0,
+            "is_2y_consecutive_ocf_deficit": 0,
+        },
+        "news_cache_snapshot": {
+            "status": "ready",
+            "items": [
+                {
+                    "source": "opendart",
+                    "title": "단일판매ㆍ공급계약해지",
+                    "company_match": True,
+                    "evidence_score": 0.68,
+                    "provider_relevance": "caution",
+                    "disclosure_severity": "caution",
+                    "disclosure_event_class": "watch_context",
+                    "disclosure_materiality": "watch_context",
+                    "materiality_ratio": 0.0592,
+                }
+            ],
+            "direct_match_count": 1,
+            "verified_item_count": 1,
+            "veto_candidate_count": 0,
+            "high_confidence_critical_count": 0,
+        },
+    }
+    committee_view = {
+        "final_committee_label": "보류",
+        "committee_decision_type": "risk_hold",
+        "final_review_memo": "watch-context 공시와 경계 신호 때문에 위험 보류입니다.",
+    }
+
+    reasons = committee_node_module._review_qa_trigger_reasons(
+        bundle=build_stage2_input_bundle(state),
+        committee_view=committee_view,
+    )
+
+    assert reasons == ["risk_hold_without_critical_evidence"]
+
+
 def test_review_qa_advisory_downgrades_risk_hold_subtype_only() -> None:
     committee_view = {
         "final_committee_label": "보류",
@@ -381,7 +468,6 @@ def test_review_qa_advisory_downgrades_risk_hold_subtype_only() -> None:
     review_qa_output = ReviewQAOutput(
         qa_summary="위험 보류 강도가 다소 과합니다.",
         trigger_reasons=[
-            "investment_model_hold",
             "risk_hold_without_critical_evidence",
         ],
         label_memo_consistency="최종 라벨과 메모가 충돌하지 않습니다.",
@@ -424,7 +510,7 @@ def test_review_qa_advisory_does_not_downgrade_hidden_tail_risk() -> None:
     }
     review_qa_output = ReviewQAOutput(
         qa_summary="위험 보류 강도가 다소 과합니다.",
-        trigger_reasons=["investment_model_hold"],
+        trigger_reasons=["risk_hold_without_critical_evidence"],
         label_memo_consistency="충돌 없음",
         risk_hold_assessment="overstated",
         evidence_cutoff_check="기준일 이전 근거만 사용했습니다.",
@@ -461,7 +547,6 @@ def test_review_qa_advisory_downgrades_watch_context_only_risk_hold() -> None:
     review_qa_output = ReviewQAOutput(
         qa_summary="공시는 watch_context 수준이라 위험 보류보다는 경계 보류가 맞습니다.",
         trigger_reasons=[
-            "investment_model_hold",
             "risk_hold_without_critical_evidence",
         ],
         label_memo_consistency="충돌 없음",
@@ -565,6 +650,22 @@ def test_review_qa_advisory_keeps_substantive_external_risk_hold() -> None:
 
 def test_review_qa_triggers_for_reject_with_watch_context_only_evidence() -> None:
     state: AgentState = {
+        "source_feature_row": {
+            "current_ratio": 4.1,
+            "cash_ratio": 1.9,
+            "equity_ratio": 0.60,
+            "debt_ratio": 0.66,
+            "capital_impairment_ratio": 0.0,
+            "total_borrowings_ratio": 0.16,
+            "short_term_borrowings_share": 0.01,
+            "is_2y_consecutive_operating_loss": 0,
+            "is_2y_consecutive_ocf_deficit": 0,
+            "cashflow_coverage_ratio": -20.0,
+            "ocf_to_total_liabilities": -0.07,
+            "ocf_to_sales": -0.03,
+            "icr_under_1": 1,
+            "interest_coverage_ratio": -12.1,
+        },
         "xgboost_result": {
             "prediction_label": "부적격",
             "probability_speculative": 0.91,
@@ -1048,6 +1149,61 @@ def test_risk_recall_qa_treats_materiality_ratio_as_substantive() -> None:
     assert "eligible_with_substantive_evidence" in reasons
 
 
+def test_risk_recall_qa_does_not_treat_uncorroborated_financing_as_substantive() -> None:
+    state: AgentState = {
+        "xgboost_result": {
+            "prediction_label": "투자적격",
+            "probability_speculative": 0.20,
+            "threshold": 0.45,
+        },
+        "source_feature_row": {
+            "current_ratio": 2.1,
+            "cash_ratio": 0.35,
+            "cashflow_coverage_ratio": 1.8,
+            "ocf_to_total_liabilities": 0.09,
+            "ocf_to_sales": 0.04,
+            "interest_coverage_ratio": 5.0,
+            "equity_ratio": 0.55,
+            "debt_ratio": 0.8,
+            "total_borrowings_ratio": 0.22,
+            "capital_impairment_ratio": 0.0,
+            "net_margin": 0.05,
+            "icr_under_1": 0,
+            "is_2y_consecutive_operating_loss": 0,
+            "is_2y_consecutive_ocf_deficit": 0,
+        },
+        "news_cache_snapshot": {
+            "status": "ready",
+            "items": [
+                {
+                    "source": "opendart",
+                    "title": "주요사항보고서(유상증자결정)",
+                    "company_match": True,
+                    "evidence_score": 1.0,
+                    "provider_relevance": "risk",
+                    "disclosure_severity": "adverse",
+                    "disclosure_event_class": "material_financing",
+                    "disclosure_materiality": "substantive_adverse",
+                    "materiality_ratio": 0.20,
+                    "critical_context_confirmed": False,
+                    "veto_candidate": False,
+                }
+            ],
+        },
+    }
+    committee_view = {
+        "final_committee_label": "적격",
+        "committee_decision_type": "eligible",
+    }
+
+    reasons = committee_node_module._risk_recall_qa_trigger_reasons(
+        bundle=build_stage2_input_bundle(state),
+        committee_view=committee_view,
+    )
+
+    assert "eligible_with_substantive_evidence" not in reasons
+
+
 def test_risk_recall_qa_advisory_escalates_eligible_to_boundary_hold() -> None:
     committee_view = {
         "final_committee_label": "적격",
@@ -1161,6 +1317,8 @@ def test_risk_recall_qa_advisory_escalates_substantive_external_risk_to_risk_hol
     assert adjusted["final_committee_label"] == "보류"
     assert adjusted["committee_decision_type"] == "risk_hold"
     assert adjusted["committee_risk_signal"] is True
+    assert adjusted["risk_hold_reason_tags"] == ["external_materiality_hold"]
+    assert adjusted["decision_trace"][-1]["gate"] == "risk_hold_reason_tagging"
     assert runtime["risk_recall_qa_advisory_applied"] is True
     assert (
         runtime["risk_recall_qa_advisory_apply_reason"] == "risk_recall_substantive_external_risk"

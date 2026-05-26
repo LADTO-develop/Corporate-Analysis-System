@@ -57,6 +57,12 @@ def run_chair_report_agent(
             "Treat rule_engine_confidence as a rule-engine review confidence, not as model confidence.",
             "Do not invent external news, DART filings, macro events, or industry events not present in the evidence input.",
             "If external evidence is unavailable, clearly state that the external review is limited.",
+            (
+                "Use EvidenceAudit structured fields first: critical_evidence_count, "
+                "watch_context_count, materiality_summary, hard_distress_detected, and "
+                "recommended_evidence_treatment. Treat watch_context as observation, not "
+                "confirmed distress, unless the structured fields identify substantive or critical evidence."
+            ),
             "Return concise Korean review prose in the structured response fields only.",
             "Use credit_policy_summary only to explain the already computed committee qualification.",
             "Do not convert policy signals into a new official rating, probability, or label.",
@@ -114,18 +120,11 @@ def _query(
     quant_credit: QuantCreditOutput,
     evidence_audit: EvidenceAuditOutput,
 ) -> str:
+    prompt_context = bundle.to_compact_prompt_payload(role="chair_report")
     prompt_payload = {
-        "company": {
-            "company_id": bundle.company_id,
-            "company_name": bundle.company_name,
-            "market": bundle.market,
-            "analysis_year": bundle.analysis_year,
-        },
-        "stage1_model": {
-            "prediction_label": bundle.prediction_label,
-            "probability_speculative": bundle.probability_speculative,
-        },
-        "prior_rating_reference": bundle.prior_rating_reference,
+        "company": prompt_context["company"],
+        "stage1_model": prompt_context["stage1_model"],
+        "prior_rating_reference": prompt_context["prior_rating_reference"],
         "rule_engine": {
             "recommendation": recommendation,
             "rule_engine_confidence": confidence,
@@ -136,6 +135,7 @@ def _query(
         },
         "quant_credit": quant_credit.model_dump(mode="json"),
         "evidence_audit": evidence_audit.model_dump(mode="json"),
+        "materiality_summary": prompt_context["materiality_summary"],
         "credit_policy_summary": _policy_summary(bundle),
     }
     return (

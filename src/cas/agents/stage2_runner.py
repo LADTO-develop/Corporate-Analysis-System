@@ -29,8 +29,8 @@ EvidenceAuditFn = Callable[[Stage2InputBundle], EvidenceAuditOutput]
 ChairReportFn = Callable[[Stage2InputBundle, Recommendation, float], ChairReportOutput]
 Stage2RunnerOutputs = tuple[QuantCreditOutput, EvidenceAuditOutput, ChairReportOutput]
 STAGE2_LLM_CACHE_VERSION = "stage2_llm_response_v2"
-STAGE2_LLM_CLIENT_PROMPT_VERSION = "stage2_llm_client_prompt_v1"
-STAGE2_TRIPLET_PROMPT_VERSION = "stage2_triplet_prompt_v1"
+STAGE2_LLM_CLIENT_PROMPT_VERSION = "stage2_llm_client_prompt_v3"
+STAGE2_TRIPLET_PROMPT_VERSION = "stage2_triplet_prompt_v3"
 
 
 class Stage2LLMResponse(BaseModel):
@@ -334,17 +334,19 @@ def _build_prompt_payload(
             "Use hidden_tail_risk_flag when direct, verified external adverse evidence challenges an eligible model decision.",
             "Do not escalate an eligible near-threshold model call to hold from proximity alone when absolute risk is low and severe financial stress is absent.",
             "EvidenceAuditAgent must separate evidence_limitations from confirmed risks.",
+            "EvidenceAuditAgent must include structured evidence treatment counts and recommendation.",
             "Do not say the system confirms, approves, assigns, or finalizes an official credit rating.",
             "Treat rule_engine_confidence as a rule-engine review confidence, not model confidence.",
             "If direct_match_count is positive, do not claim all external evidence lacks company relevance.",
             "EvidenceAuditAgent must state evidence_strength, model_challenge, and audit_conclusion.",
+            "EvidenceAuditAgent must not treat watch_context evidence as confirmed distress.",
             "Keep all confidence values between 0 and 1.",
             "Keep each list to at most 3 items and each Korean sentence concise.",
             "Return compact JSON only; do not include markdown or commentary outside the schema.",
         ],
         "recommendation": recommendation,
         "rule_engine_confidence": confidence,
-        "stage2_input_bundle": bundle.to_prompt_payload(),
+        "stage2_input_bundle": bundle.to_compact_prompt_payload(role="stage2"),
         "deterministic_draft_outputs": draft_outputs,
     }
 
@@ -377,7 +379,7 @@ def _stage2_cache_payload(
         },
         "recommendation": recommendation,
         "confidence": confidence,
-        "stage2_input_bundle": bundle.to_prompt_payload(),
+        "stage2_input_bundle": bundle.to_compact_prompt_payload(role="stage2"),
         "deterministic_draft_outputs": (
             runner._draft_outputs(bundle, recommendation, confidence)
             if runner.llm_client is not None

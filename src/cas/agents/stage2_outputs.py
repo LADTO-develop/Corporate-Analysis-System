@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -11,6 +11,14 @@ from cas.agents.state import AgentOutput
 
 class _StrictModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
+
+
+EvidenceTreatment = Literal[
+    "context_only",
+    "watch_context",
+    "substantive_review",
+    "critical_veto_review",
+]
 
 
 class QuantCreditOutput(_StrictModel):
@@ -59,6 +67,11 @@ class EvidenceAuditOutput(_StrictModel):
     macro_industry_sensitivity: list[str]
     external_evidence_findings: list[str]
     evidence_limitations: list[str] = Field(default_factory=list)
+    critical_evidence_count: int = Field(default=0, ge=0)
+    watch_context_count: int = Field(default=0, ge=0)
+    materiality_summary: dict[str, Any] = Field(default_factory=dict)
+    hard_distress_detected: bool = False
+    recommended_evidence_treatment: EvidenceTreatment = "context_only"
     confidence: float = Field(ge=0.0, le=1.0)
 
     def to_agent_output(self) -> AgentOutput:
@@ -70,6 +83,14 @@ class EvidenceAuditOutput(_StrictModel):
                 f"외부 근거 상태: 현재 뉴스/공시 근거 번들 상태는 `{self.evidence_status}`입니다.",
                 f"근거 검증 원칙: {self.evidence_reliability}",
                 f"외부근거 강도: {self.evidence_strength}",
+                (
+                    "구조화 근거 판정: "
+                    f"critical_evidence_count={self.critical_evidence_count}; "
+                    f"watch_context_count={self.watch_context_count}; "
+                    f"hard_distress_detected={self.hard_distress_detected}; "
+                    f"recommended_evidence_treatment={self.recommended_evidence_treatment}"
+                    + _materiality_basis_note(self.materiality_summary)
+                ),
                 *([f"모델-근거 충돌 점검: {self.model_challenge}"] if self.model_challenge else []),
                 *(
                     [f"EvidenceAudit 검토 결론: {self.audit_conclusion}"]
@@ -210,9 +231,17 @@ def _join_items(items: list[str], *, fallback: str) -> str:
     return " / ".join(values[:3])
 
 
+def _materiality_basis_note(materiality_summary: dict[str, Any]) -> str:
+    basis = str(materiality_summary.get("top_materiality_basis") or "").strip()
+    if not basis:
+        return ""
+    return f"; top_materiality_basis={basis}"
+
+
 __all__ = [
     "ChairReportOutput",
     "EvidenceAuditOutput",
+    "EvidenceTreatment",
     "QuantCreditOutput",
     "ReviewQAOutput",
     "RiskRecallQAOutput",

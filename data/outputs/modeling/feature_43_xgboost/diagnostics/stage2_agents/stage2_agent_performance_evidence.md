@@ -18,6 +18,7 @@
 | round 3 저확률 guardrail 재평가 | 10 | 9/10 = 90.0% | 10/10 = 100.0% | 같은 샘플 캐시 재평가, TN 1건 개선 |
 | isolated ICR TN guardrail | 8 | 7/8 = 87.5% | 8/8 = 100.0% | 이자보상 단일 플래그 TN 1건 개선 |
 | OpenAI single 3-agent no-cache live | 8 | 7/8 = 87.5% | 8/8 = 100.0% | 캐시 hit 0, 역할별 실행시간 8/8건 기록 |
+| Compact prompt smoke live | 8 | 8/8 = 100.0% | 8/8 = 100.0% | role별 compact payload 적용, cache hit 0, Stage 2 평균 14.9034초 |
 | TN 과잉 보류 30건 확대 | 30 | 22/30 = 73.3% | 30/30 = 100.0% | 레몬 1건 보류→적격, 남은 보류 8건은 재무 차단 신호 보유 |
 | TN 과잉 보류 8건 OpenAI Agno live | 8 | 2/8 = 25.0% | 8/8 = 100.0% | 캐시 hit 0, 외부근거 ready 8/8, 자금조달 공시 민감도 발견 |
 | TN 자금조달 guardrail 재평가 | 8 | 3/8 = 37.5% | 8/8 = 100.0% | 같은 외부근거 캐시 재평가, 머큐리 1건 보류→적격 |
@@ -417,6 +418,143 @@ random rolling 10건 Agno live 실행은 실제 Claude/Agno 및 외부근거 API
 | 부적격 | 1 | 실제 투기등급 TP를 부적격으로 유지한 케이스 |
 
 실행 오류는 0건이었다. 전체 wall time은 193.7719초, 평균 case time은 70.5624초였다. `workers=4` 병렬 실행 기준 사용자가 기다린 시간은 약 19.4초/건 수준이다.
+
+## 최신 materiality guardrail 수치 보존
+
+OpenDART 상세 공시의 금액 중요도를 대시보드와 위원회 판단에 연결하기 위해 FP/TN hard
+sample 10건을 OpenAI Agno 3-agent live no-cache 조건으로 재검증했다. 원시 output
+디렉터리는 PR에 남기지 않고 삭제했으며, 재현에 필요한 수치만 이 문서와
+`docs/stage2_agent_experiment_results_ko.md`에 보존한다.
+
+| 실행 | 건수 | 엄격 기준 | Review-safe | Wall time | Stage 2 평균 | LLM cache hit | 핵심 변화 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| materiality v7 baseline | 10 | 8/10 = 80.0% | 10/10 = 100.0% | 167.4초 | 14.97초 | 0/10 | 상세 중요도 기준선 |
+| materiality guardrail | 10 | 8/10 = 80.0% | 10/10 = 100.0% | 81.4초 | 15.83초 | 0/10 | 다스코·제이엠티 `risk_hold` -> `mitigation_hold` |
+| review-hold calibration | 10 | 8/10 = 80.0% | 10/10 = 100.0% | 91.7초 | 17.86초 | 0/10 | 일지테크 `risk_hold` -> `review_hold`, 위험신호 `True` -> `False` |
+
+strict 성공률이 80.0%로 유지된 이유는 실제 투자적격 TN이 최종 `보류`로 남으면 실패로
+계산하는 엄격 기준 때문이다. 반면 review-safe는 세 실행 모두 100.0%였고, 최신 개선의
+초점은 최종 라벨보다 사용자 화면에 보이는 위험 강도 세분화다.
+
+| 케이스 | 변화 | materiality 근거 | 해석 |
+| --- | --- | --- | --- |
+| 다스코 | `risk_hold` -> `mitigation_hold` | 희석률 21.23% | 규모성 자금조달은 있지만 치명 외부근거와 hard distress 결합이 약해 과민경고 완화 |
+| 제이엠티 | `risk_hold` -> `mitigation_hold` | 채무보증금액/자기자본 12.80% | 단일 규모성 채무보증을 즉시 위험 보류로 확정하지 않음 |
+| 일지테크 | `risk_hold` -> `review_hold` | 채무보증금액/자기자본 14.90% | 반복 채무보증 때문에 보류는 유지하되 치명 문맥이 약해 위험신호는 해제 |
+| 하나투어 | `risk_hold` 유지 | 희석률 20.00%, 영업정지/자금조달 공시 | 종속회사 영업정지와 반복 손실/OCF 적자가 결합되어 보수적 위험 보류 유지 |
+
+삭제한 raw output은 다음 네 가지다.
+
+- `committee_review_materiality_v7_fp_tn_10_agno_openai_live_no_cache/`
+- `committee_review_materiality_guardrail_fp_tn_10_agno_openai_live_no_cache/`
+- `committee_review_materiality_review_hold_calibration_fp_tn_10_agno_openai_live_no_cache/`
+- `committee_review_materiality_v7_fp_tn_10_samples.csv`
+
+## ReviewQA Trigger 축소 속도 검증
+
+ReviewQA는 Stage 2 3-agent 결과를 사후 점검하는 안전장치지만, 최신 mixed hard 40 기준
+30/40건이 호출되고 실제 advisory 적용은 6건이었다. 속도 병목을 줄이기 위해 generic trigger인
+`investment_model_hold`, `ambiguous_external_evidence`를 제거하고, `risk_hold`/`reject` 중
+치명 외부근거가 약하면서 watch-context 또는 재무 방어축이 있는 케이스로 호출 대상을 좁혔다.
+
+동일 10건 비교 결과는 다음과 같다.
+
+| 실행 | 건수 | 엄격 기준 | Review-safe | ReviewQA 호출 | ReviewQA 적용 | ReviewQA 시간 합 | Stage 2 평균 | Stage 2 최대 | LLM cache hit |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 기존 broad trigger 동일 10건 | 10 | 10/10 = 100.0% | 10/10 = 100.0% | 8/10 | 3/10 | 85.3895초 | 25.6557초 | 61.6745초 | 0/10 |
+| narrow trigger OpenAI live no-cache | 10 | 10/10 = 100.0% | 10/10 = 100.0% | 3/10 | 3/10 | 18.1764초 | 22.5787초 | 47.9335초 | 0/10 |
+
+호출 축소 후에도 FN 2건은 모두 보류로 끌어올렸고, FP 4건은 모두 보류로 완화했으며,
+TP 2건은 부적격으로 유지, TN 2건은 적격으로 유지됐다. ReviewQA 호출은 62.5% 줄었고
+ReviewQA 시간 합은 약 78.7% 감소했다. 따라서 ReviewQA는 전수 보조 판단자가 아니라,
+subtype 충돌 가능성이 있는 케이스에만 붙이는 선택형 QA로 운영하는 편이 더 효율적이다.
+
+같은 설정을 20건으로 확대한 검증에서도 호출 축소 효과가 유지됐다.
+
+| 실행 | 건수 | 엄격 기준 | Review-safe | ReviewQA 호출 | ReviewQA 적용 | ReviewQA 시간 합 | Stage 2 평균 | Stage 2 최대 | LLM cache hit |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 기존 broad trigger 동일 20건 | 20 | 19/20 = 95.0% | 20/20 = 100.0% | 16/20 | 5/20 | 168.8237초 | 26.2304초 | 61.6745초 | 0/20 |
+| narrow trigger OpenAI live no-cache 20건 | 20 | 19/20 = 95.0% | 20/20 = 100.0% | 5/20 | 5/20 | 25.5863초 | 17.2261초 | 53.9036초 | 0/20 |
+
+20건 기준 ReviewQA 호출은 68.75% 줄었고, ReviewQA 시간 합은 약 84.84% 감소했다.
+적용 건수는 5건으로 유지되어, 제닉·솔트웨어 같은 `reject_without_critical_evidence` 보정과
+솔디펜스·씨아이에스·아진전자부품 같은 `risk_hold_without_critical_evidence` 보정은 그대로 작동했다.
+strict 실패 1건은 하나투어 TN `보류/risk_hold`로, 종속회사 영업정지와 재무 스트레스 결합을 보수적으로 본 케이스다.
+review-safe 기준에서는 해당 케이스도 정상 통과했다.
+
+이후 구현에서는 materiality 해석을 `materiality_signals` 공통 helper로 분리했다. `committee_view`,
+`EvidenceAudit`, `ReviewQA`, `RiskRecallQA`가 모두 같은 기준을 사용하므로 자금조달·채무보증 공시는
+비율이 10%를 넘더라도 hard distress 또는 재무 스트레스 보강축이 없으면 단독 실질 위험으로 보지 않는다.
+반면 영업정지·소송·계약해지처럼 비자금조달성 중요 공시는 기존처럼 ratio와 event class가 실질 위험 판단에
+반영된다.
+
+## Materiality 28건 확대 검증 및 reject 보정
+
+FP/TN hard sample 28건을 OpenAI Agno 3-agent, live external evidence, `--no-stage2-llm-cache`
+조건으로 재검증했다. 외부근거 수집은 28/28건 `ready`, LLM cache hit는 0/28건이었다.
+
+| 건수 | 엄격 기준 | Review-safe | FP 완화 | TN 적격 유지 | ReviewQA 호출 | RiskRecallQA 호출 | Wall time | Stage 2 평균 |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 28 | 24/28 = 85.7% | 25/28 = 89.3% | 15/18 | 9/10 | 2/28 | 3/28 | 475.0초 | 15.98초 |
+| reject guardrail v2 | 27/28 = 96.4% | 28/28 = 100.0% | 18/18 | 9/10 | 3/28 | 3/28 | 430.0초 | 15.27초 |
+
+TN은 10건 중 9건이 `적격`으로 유지되어 정상기업 과잉 보류 guardrail이 개선됐지만,
+BBB- 경계 FP 3건이 `부적격`으로 남았다. 실패 케이스는 `(주)에스디생명공학`,
+`(주)라닉스`, `대한광통신(주)`이며, 모두 치명 외부근거보다는 고확률 모델 경고와 재무 watch,
+자금조달/소송 materiality가 결합된 과잉 reject 유형이었다.
+
+이 결과를 반영해 reject confirmation gate를 보정했다. 이제 `veto_candidate`,
+`critical_context_confirmed`, hard distress 문맥, 극단 재무위험 중 하나가 확인되는 경우에만
+`부적격` 확정을 유지한다. 그 외의 고확률·재무취약·비치명 외부근거 조합은 `risk_hold`로 낮춰
+검토 대상에 남기므로, recall은 보류 단계에서 방어하면서 FP reject를 줄이는 구조다.
+
+패치 후 같은 28건을 다시 live 재검증한 결과, 기존 실패 3건은 모두 `부적격`에서 `보류/risk_hold`로
+낮아졌다. strict 기준은 85.7%에서 96.4%로, review-safe 기준은 89.3%에서 100.0%로 개선됐다.
+남은 strict 실패 1건은 `(주)휴맥스` TN `보류/risk_hold`이며, review-safe 기준에서는 성공이다.
+
+## Agno prompt 경량화 및 materiality 요약 주입
+
+Stage 2 Agno live 호출은 QuantCredit/EvidenceAudit/ChairReport를 실제 3-agent 구조로 실행하므로
+프롬프트 입력 크기가 속도와 비용에 직접 영향을 준다. 이에 따라 full `Stage2InputBundle`을 그대로
+보내는 대신 role별 compact prompt context를 추가했다. 원본 row와 full evidence snapshot은 내부
+pipeline에는 그대로 남고, LLM 프롬프트에는 필요한 재무 컬럼, top drivers, peer 요약, 압축 evidence
+items, prior rating, credit policy summary만 전달된다.
+
+또한 모든 Agno role에 `materiality_summary`를 공통 주입한다. 이 요약은 실질 외부위험 여부,
+자금조달/채무보증 공시 수, high-risk financing 수, TN hold 차단 여부, hard distress item 수,
+최대 materiality ratio와 근거를 포함한다. 따라서 EvidenceAudit과 ChairReport가 제목 목록만 보고
+위험을 과대평가하지 않고, 이미 공통 helper가 계산한 중요도 기준을 같이 보게 된다.
+
+로컬 샘플 JSON 길이 비교에서는 full payload 13,163자 대비 compact payload 2,061자로 약 84.3%
+감소했다. prompt contract는 `stage2_triplet_prompt_v2`, optional QA cache는 ReviewQA v4,
+RiskRecallQA v3로 올려 기존 캐시와 분리했다.
+
+이후 판단 오류 위험 샘플 중 8건을 OpenAI Agno 3-agent, live external evidence,
+`--no-stage2-llm-cache` 조건으로 다시 실행했다. 결과는 엄격 기준 8/8 = 100.0%,
+review-safe 8/8 = 100.0%, `stage2_backend_name=agno` 8/8, `stage2_llm_cache_hit=False`
+8/8, 외부근거 `ready` 8/8이었다. `stage2_parallel_independent_agents=True`도 8/8로
+확인되어 실제 3-agent 병렬 경로가 유지됐다. 역할별 평균은 QuantCredit 7.4278초,
+EvidenceAudit 5.9740초, ChairReport 5.5899초였고, ReviewQA는 3/8건만 호출되어 평균
+4.6925초였다. RiskRecallQA 호출은 0건이었다. Stage 2 총시간 평균은 14.9034초, 최대는
+19.1055초, batch wall time은 123.5187초였다.
+
+동일 케이스 1:1 비교는 아니지만, 기존 OpenAI single 3-agent no-cache live 8건의 Stage 2
+평균 16.4786초보다 낮은 참고값이다. 따라서 compact prompt는 성능 저하 없이 입력 크기와
+역할별 지연시간을 줄이는 방향으로 작동한 것으로 본다.
+
+후속 구조 개선으로 EvidenceAudit 출력에 `critical_evidence_count`, `watch_context_count`,
+`materiality_summary`, `hard_distress_detected`, `recommended_evidence_treatment`를 추가했다.
+이 값은 공통 evidence treatment helper가 계산하며, ChairReport/ReviewQA/RiskRecallQA는 prose보다
+이 구조화 판정을 먼저 참고한다. 목적은 단일 medium 공시나 watch-context 공시를 Chair 단계에서
+다시 실질 부실처럼 과대해석하는 흔들림을 줄이는 것이다.
+
+또한 남은 strict miss인 휴맥스형 TN `risk_hold`는 무리하게 적격으로 낮추지 않고 설명력을
+높이는 쪽으로 정리했다. `committee_view`와 batch CSV에 `risk_hold_reason_tags`,
+`risk_hold_reason_labels`, `risk_hold_reason_summary`를 추가했으며, 태그는
+`financial_stress_hold`, `external_materiality_hold`, `combined_watch_hold`,
+`secondary_radar_hold`, `model_reject_confirmation_hold`, `model_risk_hold`로 구분한다.
+따라서 실제 라벨이 투자적격인 기업이 보류로 남아도, 재무 스트레스 때문인지, 외부 공시 중요도
+때문인지, 재무와 외부근거가 결합된 관찰 보류인지 발표와 대시보드에서 설명할 수 있다.
 
 ## 증빙 파일
 
