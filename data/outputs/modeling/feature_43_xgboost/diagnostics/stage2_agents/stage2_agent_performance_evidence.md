@@ -24,6 +24,9 @@
 | Disagreement-gated ReviewQA 20건 live | 20 | 18/20 = 90.0% | 20/20 = 100.0% | cache hit 0, ReviewQA 5/20건 실행, advisory 1건 적용, Stage 2 평균 22.9209초 |
 | Disagreement-gated ReviewQA v2 20건 live | 20 | 19/20 = 95.0% | 20/20 = 100.0% | cache hit 0, ReviewQA 3/20건 실행, advisory 2건 적용, Stage 2 평균 18.7126초 |
 | Disagreement-gated ReviewQA v2 40건 live | 40 | 36/40 = 90.0% | 40/40 = 100.0% | cache hit 0, ReviewQA 5/40건 실행, advisory 2건 적용, Stage 2 평균 17.5488초 |
+| PR #53 role split absorption smoke | 10 | 10/10 = 100.0% | 10/10 = 100.0% | cache hit 0, ReviewQA 2/10건 실행, RiskRecallQA 0/10, Stage 2 평균 16.4039초 |
+| EvidenceAudit criticality gate TN smoke | 10 | 7/10 = 70.0% | 10/10 = 100.0% | cache hit 0, TN 7건 적격 유지, `critical_veto_review` 4/10 |
+| Evidence treatment refined TN smoke | 10 | 7/10 = 70.0% | 10/10 = 100.0% | cache hit 0, 최종 분포 유지, `critical_veto_review` 4/10 -> 0/10 |
 | TN 과잉 보류 30건 확대 | 30 | 22/30 = 73.3% | 30/30 = 100.0% | 레몬 1건 보류→적격, 남은 보류 8건은 재무 차단 신호 보유 |
 | TN 과잉 보류 8건 OpenAI Agno live | 8 | 2/8 = 25.0% | 8/8 = 100.0% | 캐시 hit 0, 외부근거 ready 8/8, 자금조달 공시 민감도 발견 |
 | TN 자금조달 guardrail 재평가 | 8 | 3/8 = 37.5% | 8/8 = 100.0% | 같은 외부근거 캐시 재평가, 머큐리 1건 보류→적격 |
@@ -157,6 +160,9 @@ round 3 live 결과에서는 FN 2건은 모두 보류로 끌어올렸고, FP 3�
 | Disagreement-gated ReviewQA 20 OpenAI Agno live no-cache | `committee_review_disagreement_trigger_gated_20_agno_openai_live_no_cache` | 20 | 18/20 = 90.0% | 20/20 = 100.0% | 0 | ReviewQA trigger를 disagreement level/reason에 직접 연결한 뒤 20건 live 재검증, ReviewQA 5/20건 실행 |
 | Disagreement-gated ReviewQA v2 20 OpenAI Agno live no-cache | `committee_review_disagreement_trigger_gated_v2_20_agno_openai_live_no_cache` | 20 | 19/20 = 95.0% | 20/20 = 100.0% | 0 | high disagreement 단독 호출을 제거한 v2 live 재검증, ReviewQA 3/20건 실행 |
 | Disagreement-gated ReviewQA v2 40 OpenAI Agno live no-cache | `committee_review_disagreement_trigger_gated_v2_40_agno_openai_live_no_cache` | 40 | 36/40 = 90.0% | 40/40 = 100.0% | 0 | v2를 mixed hard 40건 전체로 확대 재검증, ReviewQA 5/40건 실행 |
+| PR #53 role split absorption 10 OpenAI Agno live no-cache | `committee_review_after_pr53_role_split_10_agno_openai_live_no_cache` | 10 | 10/10 = 100.0% | 10/10 = 100.0% | 0 | PR #53 역할 분리 의도 선별 흡수 후 mixed hard 10건 smoke, ReviewQA 2/10, RiskRecallQA 0/10 |
+| EvidenceAudit criticality gate TN 10 OpenAI Agno live no-cache | `committee_review_evidence_criticality_gate_tn10_agno_openai_live_no_cache` | 10 | 7/10 = 70.0% | 10/10 = 100.0% | 0 | LLM 단독 critical flag hard gate 후 TN 7/10 적격 유지, 구조화 판정은 critical_veto_review 4/10 |
+| Evidence treatment refined TN 10 OpenAI Agno live no-cache | `committee_review_evidence_treatment_refined_tn10_agno_openai_live_no_cache` | 10 | 7/10 = 70.0% | 10/10 = 100.0% | 0 | routine 감사보고서/검색요약 critical 조건 축소 후 final 분포 유지, critical_veto_review 4/10 -> 0/10 |
 
 Historical 12건 계열은 동일 기업 12건을 반복 검증한 산출물이다. 이 계열에서는 초기 75.0%에서 secondary signal connected 기준 100.0%까지 개선됐다. Rolling validation 계열은 샘플 구성과 평가지표가 달라 별도로 보며, 최종 추가 10건에서 90.0%/100.0%를 기록했다.
 
@@ -681,6 +687,16 @@ evidence-treatment 자체의 critical 판정 품질은 아직 개선 여지가 �
 유지 케이스의 메모에는 "치명적 위험 신호" 같은 표현이 남았다. 따라서 다음 개선은 routine
 감사보고서, 저품질 검색요약, 회사 직접 관련성이 약한 과거 치명 키워드를 `critical_veto_review`로
 올리는 조건을 더 좁히는 것이다.
+
+후속 refined evidence-treatment에서는 routine 감사보고서, 검색요약, 회사 직접 관련성이 약한
+과거 치명 키워드를 `critical_veto_review`로 올리는 조건을 더 좁혔다. 같은 TN overhold 후보
+10건 OpenAI Agno live no-cache 재검증에서 외부근거는 10/10건 `ready`, LLM cache hit는 0/10건,
+실행 실패 행은 0건이었다. 최종 라벨은 `적격` 7건, `보류/boundary_hold` 3건, `부적격` 0건으로
+유지되어 strict 7/10 = 70.0%, review-safe 10/10 = 100.0%였다. 핵심 변화는 구조화
+EvidenceAudit 판정으로, `critical_veto_review`가 4건에서 0건으로 줄고
+`hard_distress_detected=True`도 4건에서 0건으로 줄었다. `recommended_evidence_treatment`는
+`substantive_review` 4건, `watch_context` 6건으로 재분류됐다. Stage 2 평균은 21.8159초,
+최대는 48.2240초, wall time은 113.2332초였다.
 
 최종 PR 정리 시 원시 batch output 폴더는 남기지 않고, 위 수치와 해석만 이 증빙 문서에 보존한다.
 

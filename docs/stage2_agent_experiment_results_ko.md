@@ -29,6 +29,7 @@ FN, FP, BBB-/BB+ 경계, TP, TN 과잉 보류 후보처럼 Stage 2 검토가 필
 | Disagreement-gated ReviewQA v2 live | 20 | 엄격 기준 19/20 = 95.0%, review-safe 20/20 = 100.0%, ReviewQA 3/20 | high disagreement 단독 호출을 제거해 QA 호출을 더 줄이고 성공률도 회복 |
 | Disagreement-gated ReviewQA v2 full live | 40 | 엄격 기준 36/40 = 90.0%, review-safe 40/40 = 100.0%, ReviewQA 5/40 | QA 호출 절감은 유지됐지만 TN 4건 보류로 strict는 mixed hard 최고치보다 낮음 |
 | EvidenceAudit criticality gate TN smoke | 10 | 엄격 기준 7/10 = 70.0%, review-safe 10/10 = 100.0%, cache hit 0 | TN overhold 후보 10건 중 7건 적격 유지, 3건은 경계 보류, 부적격 과잉 경고 0건 |
+| Evidence treatment refined TN smoke | 10 | 엄격 기준 7/10 = 70.0%, review-safe 10/10 = 100.0%, cache hit 0 | 최종 라벨은 유지하면서 `critical_veto_review` 4건 -> 0건, `hard_distress_detected` 4건 -> 0건으로 과민 치명 판정 완화 |
 
 상세 누적 로그는 `data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents/stage2_agent_performance_evidence.md`에 남겨 두었다.
 이 문서는 그중 PR에서 확인해야 할 핵심 숫자와 최신 materiality guardrail 검증만 요약한다.
@@ -293,6 +294,9 @@ OpenAI single 3-agent no-cache live 8건의 Stage 2 평균은 16.4786초였고, 
 - `committee_review_disagreement_trigger_gated_20_agno_openai_live_no_cache/`
 - `committee_review_disagreement_trigger_gated_v2_20_agno_openai_live_no_cache/`
 - `committee_review_disagreement_trigger_gated_v2_40_agno_openai_live_no_cache/`
+- `committee_review_after_pr53_role_split_10_agno_openai_live_no_cache/`
+- `committee_review_evidence_criticality_gate_tn10_agno_openai_live_no_cache/`
+- `committee_review_evidence_treatment_refined_tn10_agno_openai_live_no_cache/`
 
 ## Disagreement 기반 ReviewQA 트리거 구현
 
@@ -353,6 +357,7 @@ live external evidence, `--no-stage2-llm-cache` 조건으로 재검증했다.
 | 실행 | 건수 | 엄격 기준 | Review-safe | Cache hit | Evidence ready | Stage 2 평균 | Stage 2 최대 | QA 호출 |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | criticality gate TN smoke | 10 | 7/10 = 70.0% | 10/10 = 100.0% | 0/10 | 10/10 | 24.3308초 | 42.3019초 | ReviewQA 1/10, RiskRecallQA 4/10 |
+| evidence treatment refined TN smoke | 10 | 7/10 = 70.0% | 10/10 = 100.0% | 0/10 | 10/10 | 21.8159초 | 48.2240초 | ReviewQA 1/10, RiskRecallQA 4/10 |
 
 최종 라벨은 `적격` 7건, `보류/boundary_hold` 3건이었다. `부적격`은 0건이라 review-safe
 기준은 유지됐다. 다만 EvidenceAudit의 deterministic 구조화 판정 자체가
@@ -361,8 +366,18 @@ live external evidence, `--no-stage2-llm-cache` 조건으로 재검증했다.
 구조화 evidence-treatment 단계에서 routine 감사보고서/검색요약/과거 치명 키워드를
 `critical_veto_review`로 잡는 품질을 더 좁히는 쪽이 맞다.
 
+후속 refined evidence-treatment에서는 routine 감사보고서, 검색요약, 직접 관련성이 약한 과거
+치명 키워드가 곧바로 `critical_veto_review`가 되지 않도록 조건을 더 좁혔다. 같은 TN 10건
+OpenAI Agno live no-cache 재검증에서 최종 라벨 분포는 그대로 `적격` 7건, `보류/boundary_hold`
+3건, `부적격` 0건이었고 strict/review-safe도 70.0%/100.0%를 유지했다. 대신 구조화 근거 판정은
+`critical_veto_review` 4건 -> 0건, `hard_distress_detected=True` 4건 -> 0건으로 줄었다.
+`recommended_evidence_treatment`는 `substantive_review` 4건, `watch_context` 6건으로 남아,
+정상기업을 부적격으로 악화시키지 않으면서 EvidenceAudit 설명의 치명도 과잉 표현을 낮추는
+방향이 확인됐다.
+
 ## 다음 확인 후보
 
-다음 단계는 structured evidence-treatment의 critical 판정을 더 좁히는 것이다. 특히
-routine 감사보고서, 저품질 검색요약, 회사 직접 관련성이 약한 과거 치명 키워드는
-`critical_veto_review`가 아니라 `watch_context` 또는 `substantive_review`로 낮춰야 한다.
+다음 단계는 refined evidence-treatment를 mixed hard 20~40건으로 확대해, `critical_veto_review`
+감소가 TN 10건에만 맞춘 결과가 아닌지 확인하는 것이다. 특히 FP/TP가 섞인 샘플에서도 실제
+치명 근거는 유지하고 routine 감사보고서·검색요약·직접 관련성 약한 과거 키워드만 낮추는지
+검증해야 한다.
