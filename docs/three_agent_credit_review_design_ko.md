@@ -15,6 +15,16 @@ CAS의 Stage 2는 다음 3개 역할로 정리한다.
 2. `EvidenceAuditAgent`: 외부 근거와 숨은 꼬리 위험을 검증한다.
 3. `ChairReportAgent`: 두 관점을 종합해 최종 위원회 의견을 작성한다.
 
+현재 구현 상태는 설계 초안이 아니라, deterministic runner와 선택형 Agno runner가
+같은 `Stage2AgentRunner` 계약으로 동작하는 파일럿 검증 단계다. `committee_view`
+strict schema, 보류 세부 유형, `committee_risk_signal`, decision trace, live API
+runbook, 성능 리포트 산출물까지 연결되어 있다.
+
+파일럿 성능은 전체 기업 모집단 정확도가 아니라, FN/FP/경계등급/TP/TN을 의도적으로
+섞은 hard sample에서 Stage 2가 1차 모델 판단을 얼마나 보완하는지 보는 지표다.
+30건 stress sample 기준 1차 모델 F1은 `0.4243`, 2차 위험신호 F1은 `0.6666`,
+2차 검토대상(`보류+부적격`) Recall은 `1.0000`이다.
+
 ## 2. 기본 원칙
 
 Stage 2는 Stage 1 모델 결과를 덮어쓰지 않는다.
@@ -211,11 +221,51 @@ OpenDART `corpCode.xml` 캐시에서 `stock_code -> corp_code`를 자동 보강�
 외부감사관련, 거래소공시, 정기공시로 나누고, 횡령·배임·감사의견·상장폐지 등
 위험 공시는 `provider_relevance=risk`로 우선 검토한다.
 
-Agno/Claude 추론은 기본 실행에서는 꺼 둔다.
-`CAS_STAGE2_RUNNER=deterministic`이면 현재 코드의 규칙 기반 scaffold가 실행되고,
-`CAS_STAGE2_RUNNER=agno`로 바꾸면 `Stage2AgentRunner` 인터페이스를 통해
-Agno structured output 기반 실행으로 교체된다. 이때 모델 판단은 계속
-`model_view`에 보존하고, Agno 결과는 `committee_view`를 설명·보완하는 용도로만 사용한다.
+OpenDART 공시는 제목 키워드만으로 즉시 치명 리스크로 보지 않고,
+`disclosure_severity`, `disclosure_event_class`, `disclosure_materiality`로 한 번 더
+분류한다. 일정금액 미만 또는 자율공시 소송, 자율공시 단일 계약해지,
+SPAC 합병 예비심사 등 절차성 거래정지는 `caution/procedural_or_one_off` 맥락으로
+낮춰 EvidenceAuditAgent가 참고 근거로만 다루게 한다. 반대로 횡령·배임,
+감사의견 거절, 상장폐지, 관리종목, 영업정지, 자본잠식처럼 실질 부실 사건은
+`adverse` 또는 `veto`로 유지한다.
+
+계약해지, 영업정지, 자금조달, 채무보증, 소송은 제목만으로는 실질성을 알기 어렵기
+때문에 OpenDART 상세 공시 보강을 추가했다. `단일판매ㆍ공급계약해지` 후보는
+`document.xml` 원문에서 매출 대비 계약해지 비율을 파싱하고, `영업정지` 후보는
+`bsnSp.json`의 `sl_vs` 또는 `bsnsp_amt/rsl`로 매출 대비 영업정지 비율을 계산한다.
+자금조달은 발행금액/자기자본과 희석률, 채무보증은 보증금액/자기자본, 소송은
+청구금액/자기자본 또는 매출액을 파싱한다. 이 값은 `materiality_ratio`,
+`materiality_basis`, `materiality_source`, 필요 시 `dilution_ratio`로
+EvidenceAuditAgent에 전달된다. 기업 규모 대비 3% 미만은 절차성/일회성, 3~10%는
+관찰 수준, 10% 이상은 실질 부정 공시로 유지해 정상기업 과잉 보류를 줄이는 재료로
+사용한다.
+다만 자금조달·채무보증의 10% 이상 materiality는 단독으로 정상기업을 `risk_hold`로
+올리는 근거가 아니다. `veto_candidate`, `critical_context_confirmed`, 자본잠식·부도·
+상장폐지 같은 hard distress 문맥, 또는 현금흐름/이자보상/손익/레버리지 중 2축 이상의
+재무 스트레스가 함께 있을 때 숨은 꼬리위험 또는 RiskRecallQA의 실질 외부 위험으로 본다.
+이 guardrail은 일회성 또는 계열사 지원성 채무보증을 실제 부실 전이와 구분하기 위한
+정상기업 과잉 보류 방어 장치다.
+반복 채무보증처럼 일부 재무약점과 함께 있어 보류 자체는 유지하되 치명 문맥과 현금흐름
+악화가 없는 경우에는 hidden-tail-risk를 `risk_hold`가 아니라 `review_hold`로 표시한다.
+`bsnSp.json`에 상세 비율이 없으면 `document.xml` 원문 fallback으로 `최근매출액 대비`,
+`영업정지금액`, `최근매출액` 표 값을 다시 파싱한다. 이 fallback은 종속회사 영업정지가
+모회사 신용위험으로 바로 전이되는지 판단하는 보조 근거다.
+
+Agno/LLM 추론은 CI와 일반 재현 실행에서는 꺼 둔다.
+`CAS_STAGE2_RUNNER=deterministic`이면 규칙 기반 scaffold가 실행되고,
+`CAS_STAGE2_RUNNER=agno`로 바꾸면 `Stage2AgentRunner` 인터페이스를 통해 Agno
+structured output 기반 실행으로 교체된다. 기본 live 모드는
+`CAS_STAGE2_AGNO_MODE=single`이며 provider/model은 `CAS_STAGE2_MODEL_PROVIDER`,
+`CAS_STAGE2_MODEL` 또는 batch CLI의 `--stage2-model-provider`, `--stage2-model`로
+선택한다. `single` 모드는 한 provider를 쓰되 QuantCredit/EvidenceAudit/ChairReport
+세 역할 agent를 분리 실행한다. live 지연시간을 측정할 때는 LLM 응답 캐시를 끄기 위해
+`CAS_STAGE2_LLM_CACHE_ENABLED=0` 또는 batch CLI의 `--no-stage2-llm-cache`를 사용한다.
+여러 LLM 관점을 비교할 때만 `multi_llm_committee` 모드를 사용한다.
+
+이때 모델 판단은 계속 `model_view`에 보존하고, Agno 결과는 `committee_view`를
+설명·보완하는 용도로만 사용한다. 실제 기업-회계연도와 외부근거 질의를 API로
+전송하는 live batch는 로컬 opt-in 실행으로 분리하며, Codex/CI 환경에서는 정책과
+재현성 때문에 deterministic 경로 또는 기존 캐시 산출물을 사용한다.
 
 ## 6. 최종 출력 구조
 
@@ -229,8 +279,7 @@ Agno structured output 기반 실행으로 교체된다. 이때 모델 판단은
 
 ### committee_view
 
-`committee_view`는 팀원 repo의 구현 코드를 직접 가져오지 않고,
-최종 위원회 결과를 설명하기 위한 출력 필드 아이디어만 반영한다.
+`committee_view`는 최종 위원회 결과를 설명하기 위한 구현된 출력 계약이다.
 
 ```json
 {
@@ -279,13 +328,15 @@ Agno structured output 기반 실행으로 교체된다. 이때 모델 판단은
 
 ## 7. 코드 구조
 
-현재 구현은 실제 LLM 호출을 바로 붙이기보다, CI에서 안정적으로 검증 가능한
-결정론적 scaffold와 향후 Agno에 넘길 역할 명세를 분리한다.
+현재 구현은 CI에서 안정적으로 검증 가능한 결정론적 scaffold와 선택형 Agno runner를
+분리한다.
 
-- `src/cas/agents/stage2_specs.py`: 3개 에이전트의 역할, 필수 입력, 출력 필드, 향후 Agno instruction 계약
+- `src/cas/agents/stage2_specs.py`: 3개 에이전트의 역할, 필수 입력, 출력 필드, Agno instruction 계약
 - `src/cas/agents/stage2_bundle.py`: LangGraph `AgentState`를 Stage 2 전용 입력 번들로 정규화
 - `src/cas/agents/stage2_outputs.py`: Agent별 Pydantic 출력 schema를 정의하고 공통 `AgentOutput`으로 변환
-- `src/cas/agents/stage2_runner.py`: deterministic runner와 향후 Agno runner가 공유할 실행 adapter 인터페이스
+- `src/cas/agents/stage2_runner.py`: deterministic runner와 Agno runner가 공유할 실행 adapter 인터페이스
+- `src/cas/agents/nodes/tripletagents/review_qa_agent.py`: 특정 조건에서만 실행되는 Agno ReviewQAAgent. 최종 라벨과 메모 일관성, `risk_hold` 세부유형, 외부근거 기준일, 정상기업 과잉 보류 가능성을 검수한다.
+- `src/cas/agents/nodes/tripletagents/risk_recall_qa_agent.py`: 특정 조건에서만 실행되는 Agno RiskRecallQAAgent. 최종 `적격` 판단이 기준선/재무취약/외부근거 맥락에서 위험을 놓친 것은 아닌지 재검수한다.
 - `src/cas/agents/committee_schema.py`: `committee_view` Pydantic strict schema 정의
 - `src/cas/agents/signals/debt_liquidity_signals.py`: 부채상환능력, 유동성, 현금흐름 신호 계산
 - `src/cas/agents/signals/macro_signals.py`: 거시·시장 맥락 신호 계산
@@ -295,35 +346,66 @@ Agno structured output 기반 실행으로 교체된다. 이때 모델 판단은
 - `src/cas/veto_rules.py`: `configs/agent/committee.yaml`의 veto rule을 읽어 강제 경고 기준을 공유
 - `src/cas/evidence/collectors.py`: Naver, Tavily, OpenDART 기반 외부 근거 수집 기능
 
-이렇게 나누면 나중에 Claude/Agno 호출을 붙일 때도 `committee_view` 출력 형식과
-대시보드 계약은 유지하면서, 각 agent 내부 구현만 LLM 기반으로 교체할 수 있다.
-특히 `Stage2InputBundle.to_prompt_payload()`는 향후 Agno agent에 넘길 입력
-payload의 기준 형태로 사용할 수 있고, `CommitteeViewPayload`는 LLM이 만든
-최종 의견도 반드시 같은 출력 형식으로 검증하는 기준이 된다.
+이렇게 나누면 `committee_view` 출력 형식과 대시보드 계약은 유지하면서, 각 agent
+내부 구현만 deterministic 또는 LLM 기반으로 선택할 수 있다. 특히
+`Stage2InputBundle.to_prompt_payload()`는 Agno agent에 넘길 입력 payload의 기준
+형태이고, `CommitteeViewPayload`는 LLM이 만든 최종 의견도 반드시 같은 출력 형식으로
+검증하는 기준이다.
+
+기본 본심 경로는 계속 `QuantCreditAgent → EvidenceAuditAgent → ChairReportAgent` 3개
+역할이다. 다만 Agno live 실행에서 최종 위원회 라벨이 `보류`인데 Stage 1 모델은
+`투자적격`인 경우, `risk_hold`가 치명 근거 없이 만들어진 경우, chair memo와 최종
+라벨 충돌 가능성이 있는 경우, 또는 자금조달·거래정지·감사보고서처럼 해석이 애매한
+공시가 보류 판단에 관여한 경우에는 선택형 `ReviewQAAgent`가 사후 검수를 수행한다. ReviewQA는
+`agent_summary.agents.review_qa`와 runtime diagnostics에 advisory 결과를 남긴다. 최종
+라벨은 직접 바꾸지 않는다. 다만 `risk_hold`가 치명 근거 없이 과도하다고 판단되고
+veto 또는 hidden-tail-risk가 없을 때만 `committee_decision_type`을 `boundary_hold`로
+낮추는 보수적 subtype 보정을 적용할 수 있다. ReviewQA live 응답의 표현이 조금 흔들려도
+같은 결론을 재현할 수 있도록, 외부 공시가 모두 `caution/watch_context` 수준이고
+중대성 비율 10% 이상·veto·hidden-tail-risk가 없는 경우에는 `risk_hold_without_critical_evidence`
+downgrade 권고를 안정적으로 `boundary_hold` 보정에 연결한다.
+
+RiskRecallQAAgent는 반대 방향의 안전망이다. 최종 위원회 라벨이 `적격`이고,
+투기등급 확률이 기준선 근처라는 이유만으로는 실행하지 않는다. 기준선 근처와
+유동성·현금흐름·이자보상·차입부담 취약 2축 이상이 함께 있거나, 재무 취약 3축
+이상이거나, 실질 외부 위험 근거가 있을 때만 실행된다. 직접 관련 watch 공시나
+BBB-/BB+ 경계 맥락은 단독 trigger가 아니라 이 핵심 조건에 붙는 보조 맥락으로만 쓴다.
+이 에이전트는 정상기업 과잉 보류를 다시 늘리지 않도록 기본 권고를
+`keep_committee_view`로 두고, 재무/외부근거가 정말 불안한 경우에만 `boundary_hold`
+또는 제한적 `risk_hold` 상향을 권고한다. 특히
+`eligible_with_substantive_evidence`는 routine 감사보고서나 단순 공시가 아니라,
+`substantive_adverse`, veto/critical context, 또는 횡령·배임·상장폐지·감사의견 거절
+같은 명시적 치명 제목에만 켜지도록 좁힌다. 자금조달·채무보증은 중대성 비율이
+10% 이상이어도 재무 스트레스나 hard distress 문맥이 함께 있을 때만 실질 외부 위험으로 본다.
+
 횡령, 배임, 상장폐지, fraud 같은 강제 경고 키워드는 코드가 아니라
 `configs/agent/committee.yaml`의 `veto_rules`에서 관리한다.
-현재 실행은 `DeterministicStage2AgentRunner`를 사용하며, 향후 Claude/Agno 호출을
-붙일 때는 같은 `Stage2AgentRunner` 인터페이스를 구현하는 runner로 교체한다.
+현재 기본 실행은 `DeterministicStage2AgentRunner`를 사용하며, live 실험에서는 같은
+인터페이스의 `AgnoStage2AgentRunner`를 선택한다.
 
-## 8. 구현 순서
+## 8. 구현 및 검증 상태
 
-### 1단계
+### 완료
 
 - Stage 1 결과를 `QuantCreditAgent` 입력 번들로 정리
 - `EvidenceAuditAgent`가 사용할 뉴스/공시/거시/산업/부채 신호 필드 정의
-- `committee_view` 기본 JSON 구조 정의
+- `committee_view` strict schema와 decision subtype 정의
+- deterministic runner와 선택형 Agno runner 연결
+- Naver, Tavily, OpenDART 기반 외부근거 수집 노드 연결
+- rolling/historical hard sample 성능 리포트와 속도 로그 생성
+- `보류`를 `위험 보류`, `경계등급 보류`, `과민경고 완화 보류`, `확인필요 보류`로 분리
+- 30건 stress sample 기준 1차 모델 대비 2차 위험신호 F1 개선 확인
+- 정상기업 과잉 보류 guardrail 구현 및 로컬 회귀 검증
+- 조건부 Agno ReviewQAAgent 추가. 전체 기업에 4번째 LLM 호출을 붙이지 않고, 보류/근거/메모 충돌 위험이 있는 케이스만 사후 검수한다.
+- ReviewQA subtype advisory 안정화. `caution/watch_context` 외부근거만 있는 TN overhold 후보는 위험 보류가 아니라 경계등급 보류로 일관되게 낮추되, 자금조달·채무보증은 중대성 10% 이상이어도 재무 스트레스나 hard distress 문맥이 없으면 단독 `risk_hold` 근거로 쓰지 않는다.
+- 조건부 Agno RiskRecallQAAgent 추가. 최종 적격 케이스 중 기준선/재무취약/외부근거 조건이 있는 경우만 적격 판단의 위험 누락 가능성을 사후 검수한다.
 
-### 2단계
+### 남은 개선 후보
 
-- 뉴스/공시/주석 수집 파이프라인 연결
-- Evidence bundle 신뢰도 필드 정의
-- 샘플 기업 기준 로컬 테스트 수행
-
-### 3단계
-
-- `ChairReportAgent` 종합 메모 구현
-- 대시보드와 연결
-- 심사 메모 다운로드 및 보고서 형식 연동
+- 정상기업 과잉 보류 guardrail의 live Agno/Claude 표본 재검증 확대
+- 대시보드에서 decision subtype과 decision trace를 더 직관적으로 표시
+- live Agno 설명 품질 비교 표본 확대
+- 운영 환경에서 live API 호출 권한과 데이터 전송 승인 절차를 프로젝트 문서에 더 명확히 분리
 
 ## 9. 요약 메시지
 

@@ -421,6 +421,948 @@ def test_committee_view_holds_investment_model_with_secondary_review_trigger() -
     assert "경계" in committee_view["final_review_memo"]
 
 
+def test_committee_view_keeps_defensive_secondary_radar_case_eligible() -> None:
+    state: AgentState = {
+        "company_id": "115160",
+        "company_name": "(주)휴맥스",
+        "source_feature_row": {
+            "stock_code": "115160",
+            "current_ratio": 1.36,
+            "cash_ratio": 0.18,
+            "cashflow_coverage_ratio": 0.12,
+            "ocf_to_sales": 0.04,
+            "ocf_to_total_liabilities": 0.03,
+            "interest_coverage_ratio": 3.8,
+            "equity_ratio": 0.47,
+            "debt_ratio": 1.12,
+            "total_borrowings_ratio": 0.34,
+            "capital_impairment_ratio": 0.0,
+            "icr_under_1": 0,
+            "is_2y_consecutive_operating_loss": 0,
+            "is_2y_consecutive_ocf_deficit": 0,
+        },
+        "prior_rating_reference": {
+            "has_prior_rating": True,
+            "prior_credit_rating": "BBB-",
+            "prior_credit_rating_rank": 10,
+            "prior_rating_boundary_group": "exact_bbb_minus_bb_plus_boundary",
+            "prior_rating_date": "2021-06-30",
+            "prior_rating_age_days": 184,
+            "prior_rating_agency": "NICE평가정보주식회사",
+        },
+        "model_view": {
+            "prediction_label": "투자적격",
+            "probability_speculative": 0.3042,
+            "threshold": 0.31,
+            "stage2_secondary_trigger": True,
+            "stage2_review_priority": "high",
+            "trigger_reason": "45개 보조 레이더가 기준선 근처로 추가 검토를 요구했습니다.",
+        },
+        "xgboost_result": {
+            "prediction_label": "투자적격",
+            "probability_speculative": 0.3042,
+            "threshold": 0.31,
+        },
+        "rule_result": {
+            "risk_band": "stable",
+            "recommendation": "priority",
+            "reasons": ["model_probability_speculative=0.304"],
+            "blocking_flags": [],
+        },
+        "news_cache_snapshot": {
+            "status": "ready",
+            "items": [
+                {
+                    "source": "opendart",
+                    "title": "사업보고서",
+                    "summary": "(주)휴맥스 직접 관련 정기 공시입니다.",
+                    "company_match": True,
+                    "provider_relevance": "routine",
+                    "disclosure_severity": "routine",
+                    "critical_terms": [],
+                    "evidence_quality": "high",
+                    "evidence_score": 0.88,
+                }
+            ],
+        },
+    }
+    agents = [
+        AgentOutput(role="quant_credit", summary="정량 결과", findings=[], confidence=0.8),
+        AgentOutput(role="evidence_audit", summary="근거 검토", findings=[], confidence=0.7),
+        AgentOutput(role="chair_report", summary="종합", findings=[], confidence=0.7),
+    ]
+
+    committee_view = build_committee_view(
+        bundle=build_stage2_input_bundle(state),
+        recommendation="priority",
+        agents=agents,
+    )
+
+    assert committee_view["final_committee_label"] == "적격"
+    assert committee_view["committee_decision_type"] == "eligible"
+    assert committee_view["committee_risk_signal"] is False
+    assert committee_view["key_risk_factors"] == [
+        "현재 scaffold 기준 추가 위험 요인은 제한적입니다."
+    ]
+    assert "정상기업 과잉 보류 방어 guardrail" in committee_view["mitigating_factors"][0]
+    assert "Stage 2는 판단을 덮어쓰기보다" in committee_view["conflict_resolution"]
+    assert "경계등급 보류" not in committee_view["conflict_resolution"]
+
+
+def test_committee_view_keeps_isolated_icr_flag_with_cashflow_buffer_eligible() -> None:
+    state: AgentState = {
+        "company_id": "263800",
+        "company_name": "(주)데이타솔루션",
+        "source_feature_row": {
+            "stock_code": "263800",
+            "current_ratio": 1.36,
+            "cash_ratio": 0.34,
+            "cashflow_coverage_ratio": 7.83,
+            "ocf_to_sales": 0.076,
+            "ocf_to_total_liabilities": 0.157,
+            "interest_coverage_ratio": 0.61,
+            "equity_ratio": 0.37,
+            "debt_ratio": 1.70,
+            "total_borrowings_ratio": 0.076,
+            "capital_impairment_ratio": 0.0,
+            "net_margin": 0.005,
+            "icr_under_1": 1,
+            "is_2y_consecutive_operating_loss": 0,
+            "is_2y_consecutive_ocf_deficit": 0,
+        },
+        "prior_rating_reference": {
+            "has_prior_rating": True,
+            "prior_credit_rating": "BBB-",
+            "prior_credit_rating_rank": 10,
+            "prior_rating_boundary_group": "exact_bbb_minus_bb_plus_boundary",
+            "prior_rating_date": "2020-04-03",
+            "prior_rating_age_days": 272,
+            "prior_rating_agency": "이크레더블",
+        },
+        "model_view": {
+            "prediction_label": "투자적격",
+            "probability_speculative": 0.3225,
+            "threshold": 0.325,
+            "stage2_secondary_trigger": True,
+            "stage2_review_priority": "high",
+            "trigger_reason": "45개 보조 레이더가 기준선 근처로 추가 검토를 요구했습니다.",
+        },
+        "xgboost_result": {
+            "prediction_label": "투자적격",
+            "probability_speculative": 0.3225,
+            "threshold": 0.325,
+        },
+        "rule_result": {
+            "risk_band": "high_risk",
+            "recommendation": "defer",
+            "reasons": ["interest_coverage_ratio=0.61 indicates potential debt stress"],
+            "blocking_flags": ["interest_coverage_under_1"],
+        },
+        "news_cache_snapshot": {
+            "status": "ready",
+            "items": [
+                {
+                    "source": "opendart",
+                    "title": "사업보고서",
+                    "summary": "(주)데이타솔루션 직접 관련 정기 공시입니다.",
+                    "company_match": True,
+                    "provider_relevance": "routine",
+                    "disclosure_severity": "routine",
+                    "critical_terms": [],
+                    "evidence_quality": "high",
+                    "evidence_score": 0.88,
+                }
+            ],
+        },
+    }
+    agents = [
+        AgentOutput(role="quant_credit", summary="정량 결과", findings=[], confidence=0.8),
+        AgentOutput(role="evidence_audit", summary="근거 검토", findings=[], confidence=0.7),
+        AgentOutput(role="chair_report", summary="종합", findings=[], confidence=0.7),
+    ]
+
+    committee_view = build_committee_view(
+        bundle=build_stage2_input_bundle(state),
+        recommendation="defer",
+        agents=agents,
+    )
+
+    assert committee_view["final_committee_label"] == "적격"
+    assert committee_view["committee_decision_type"] == "eligible"
+    assert committee_view["committee_risk_signal"] is False
+    assert "정상기업 과잉 보류 방어 guardrail" in committee_view["mitigating_factors"][0]
+    assert "현금흐름" in committee_view["mitigating_factors"][0]
+
+
+def test_committee_view_holds_secondary_radar_case_with_negative_cashflow() -> None:
+    state: AgentState = {
+        "company_id": "250930",
+        "company_name": "(주)예선테크",
+        "source_feature_row": {
+            "stock_code": "250930",
+            "current_ratio": 2.60,
+            "cash_ratio": 0.23,
+            "cashflow_coverage_ratio": -2.88,
+            "ocf_to_sales": -0.018,
+            "ocf_to_total_liabilities": -0.031,
+            "interest_coverage_ratio": 13.78,
+            "equity_ratio": 0.53,
+            "debt_ratio": 0.90,
+            "total_borrowings_ratio": 0.32,
+            "capital_impairment_ratio": 0.0,
+            "net_margin": 0.03,
+            "icr_under_1": 0,
+            "is_2y_consecutive_operating_loss": 0,
+            "is_2y_consecutive_ocf_deficit": 0,
+        },
+        "model_view": {
+            "prediction_label": "투자적격",
+            "probability_speculative": 0.3141,
+            "threshold": 0.325,
+            "stage2_secondary_trigger": True,
+            "stage2_review_priority": "high",
+            "trigger_reason": "45개 보조 레이더가 기준선 근처로 추가 검토를 요구했습니다.",
+        },
+        "xgboost_result": {
+            "prediction_label": "투자적격",
+            "probability_speculative": 0.3141,
+            "threshold": 0.325,
+        },
+        "rule_result": {"risk_band": "stable", "recommendation": "priority"},
+        "news_cache_snapshot": {"status": "ready", "items": []},
+    }
+    agents = [
+        AgentOutput(role="quant_credit", summary="정량 결과", findings=[], confidence=0.8),
+        AgentOutput(role="evidence_audit", summary="근거 검토", findings=[], confidence=0.7),
+        AgentOutput(role="chair_report", summary="종합", findings=[], confidence=0.7),
+    ]
+
+    committee_view = build_committee_view(
+        bundle=build_stage2_input_bundle(state),
+        recommendation="priority",
+        agents=agents,
+    )
+
+    assert committee_view["final_committee_label"] == "보류"
+    assert committee_view["committee_decision_type"] == "boundary_hold"
+    assert "정상기업 과잉 보류 방어 guardrail" not in " ".join(committee_view["mitigating_factors"])
+
+
+def test_committee_view_keeps_cashflow_backed_current_ratio_watch_eligible() -> None:
+    state: AgentState = {
+        "company_id": "294140",
+        "company_name": "(주)레몬",
+        "source_feature_row": {
+            "stock_code": "294140",
+            "current_ratio": 0.7443,
+            "cash_ratio": 0.2969,
+            "cashflow_coverage_ratio": 24.3625,
+            "ocf_to_sales": 0.2612,
+            "ocf_to_total_liabilities": 0.5441,
+            "interest_coverage_ratio": 18.7971,
+            "equity_ratio": 0.6099,
+            "debt_ratio": 0.6396,
+            "total_borrowings_ratio": 0.2635,
+            "short_term_borrowings_share": 1.0,
+            "capital_impairment_ratio": 0.0,
+            "net_margin": 0.1554,
+            "icr_under_1": 0,
+            "is_2y_consecutive_operating_loss": 0,
+            "is_2y_consecutive_ocf_deficit": 0,
+        },
+        "model_view": {
+            "prediction_label": "투자적격",
+            "probability_speculative": 0.3113,
+            "threshold": 0.325,
+            "stage2_secondary_trigger": True,
+            "stage2_review_priority": "high",
+            "trigger_reason": "45개 보조 레이더가 기준선 근처로 추가 검토를 요구했습니다.",
+        },
+        "xgboost_result": {
+            "prediction_label": "투자적격",
+            "probability_speculative": 0.3113,
+            "threshold": 0.325,
+        },
+        "rule_result": {
+            "risk_band": "watch",
+            "recommendation": "watch",
+            "reasons": ["current_ratio=0.74 is below the watch floor"],
+            "blocking_flags": [],
+        },
+        "news_cache_snapshot": {"status": "ready", "items": []},
+    }
+    agents = [
+        AgentOutput(role="quant_credit", summary="정량 결과", findings=[], confidence=0.8),
+        AgentOutput(role="evidence_audit", summary="근거 검토", findings=[], confidence=0.7),
+        AgentOutput(role="chair_report", summary="종합", findings=[], confidence=0.7),
+    ]
+
+    committee_view = build_committee_view(
+        bundle=build_stage2_input_bundle(state),
+        recommendation="watch",
+        agents=agents,
+    )
+
+    assert committee_view["final_committee_label"] == "적격"
+    assert committee_view["committee_decision_type"] == "eligible"
+    assert committee_view["committee_risk_signal"] is False
+    assert "정상기업 과잉 보류 방어 guardrail" in committee_view["mitigating_factors"][0]
+
+
+def test_committee_view_allows_single_medium_financing_when_defensive_tn() -> None:
+    state: AgentState = {
+        "company_id": "100590",
+        "company_name": "(주)머큐리",
+        "source_feature_row": {
+            "stock_code": "100590",
+            "current_ratio": 2.1984,
+            "cash_ratio": 0.5520,
+            "cashflow_coverage_ratio": 2.9206,
+            "ocf_to_sales": 0.0297,
+            "ocf_to_total_liabilities": 0.0763,
+            "interest_coverage_ratio": 2.7991,
+            "equity_ratio": 0.6358,
+            "debt_ratio": 0.5727,
+            "total_borrowings_ratio": 0.1229,
+            "short_term_borrowings_share": 0.0,
+            "capital_impairment_ratio": 0.0,
+            "net_margin": 0.0697,
+            "icr_under_1": 0,
+            "is_2y_consecutive_operating_loss": 0,
+            "is_2y_consecutive_ocf_deficit": 0,
+        },
+        "model_view": {
+            "prediction_label": "투자적격",
+            "probability_speculative": 0.3113,
+            "threshold": 0.325,
+            "stage2_secondary_trigger": True,
+            "stage2_review_priority": "high",
+            "trigger_reason": "45개 보조 레이더가 기준선 근처로 추가 검토를 요구했습니다.",
+        },
+        "xgboost_result": {
+            "prediction_label": "투자적격",
+            "probability_speculative": 0.3113,
+            "threshold": 0.325,
+        },
+        "rule_result": {"risk_band": "stable", "recommendation": "priority"},
+        "news_cache_snapshot": {
+            "status": "ready",
+            "items": [
+                {
+                    "source": "opendart",
+                    "title": "주요사항보고서(전환사채권발행결정)",
+                    "summary": "(주)머큐리 직접 관련 자금조달성 공시입니다.",
+                    "company_match": True,
+                    "provider_relevance": "caution",
+                    "disclosure_severity": "caution",
+                    "evidence_quality": "medium",
+                    "evidence_score": 0.50,
+                },
+            ],
+        },
+    }
+    agents = [
+        AgentOutput(role="quant_credit", summary="정량 결과", findings=[], confidence=0.8),
+        AgentOutput(role="evidence_audit", summary="근거 검토", findings=[], confidence=0.7),
+        AgentOutput(role="chair_report", summary="종합", findings=[], confidence=0.7),
+    ]
+
+    committee_view = build_committee_view(
+        bundle=build_stage2_input_bundle(state),
+        recommendation="priority",
+        agents=agents,
+    )
+
+    assert committee_view["final_committee_label"] == "적격"
+    assert committee_view["committee_decision_type"] == "eligible"
+    assert committee_view["committee_risk_signal"] is False
+    assert "정상기업 과잉 보류 방어 guardrail" in committee_view["mitigating_factors"][0]
+
+
+def test_committee_view_lowers_stable_prior_cashflow_tn_boundary_hold_to_eligible() -> None:
+    state: AgentState = {
+        "company_id": "127710",
+        "company_name": "(주)아시아경제",
+        "source_feature_row": {
+            "stock_code": "127710",
+            "current_ratio": 0.76,
+            "cash_ratio": 0.16,
+            "cashflow_coverage_ratio": 52.18,
+            "ocf_to_sales": 0.92,
+            "ocf_to_total_liabilities": 0.15,
+            "interest_coverage_ratio": -0.76,
+            "equity_ratio": 0.26,
+            "debt_ratio": 2.79,
+            "total_borrowings_ratio": 0.50,
+            "short_term_borrowings_share": 0.69,
+            "capital_impairment_ratio": -9.89,
+            "net_margin": 0.20,
+            "icr_under_1": 1,
+            "is_2y_consecutive_operating_loss": 0,
+            "is_2y_consecutive_ocf_deficit": 0,
+        },
+        "prior_rating_reference": {
+            "has_prior_rating": True,
+            "prior_credit_rating": "BBB+",
+            "prior_credit_rating_rank": 8,
+            "prior_rating_boundary_group": "investment_grade_non_boundary",
+            "prior_rating_date": "2021-07-10",
+            "prior_rating_age_days": 539,
+            "prior_rating_agency": "(주)이크레더블",
+        },
+        "model_view": {
+            "prediction_label": "투자적격",
+            "probability_speculative": 0.2422,
+            "threshold": 0.25,
+            "stage2_secondary_trigger": True,
+            "stage2_review_priority": "high",
+            "trigger_reason": "rolling OOT 모델은 투자적격이지만 기준선 근처입니다.",
+        },
+        "xgboost_result": {
+            "prediction_label": "투자적격",
+            "probability_speculative": 0.2422,
+            "threshold": 0.25,
+        },
+        "rule_result": {
+            "risk_band": "high_risk",
+            "recommendation": "defer",
+            "reasons": [
+                "current_ratio=0.76 is below the watch floor",
+                "interest_coverage_ratio=-0.76 indicates potential debt stress",
+            ],
+            "blocking_flags": ["interest_coverage_under_1"],
+        },
+        "news_cache_snapshot": {
+            "status": "ready",
+            "items": [
+                {
+                    "source": "opendart",
+                    "title": "주요사항보고서(전환사채권발행결정)",
+                    "summary": "(주)아시아경제 직접 관련 단일 자금조달성 공시입니다.",
+                    "company_match": True,
+                    "provider_relevance": "caution",
+                    "disclosure_severity": "caution",
+                    "critical_terms": [],
+                    "critical_context_confirmed": False,
+                    "veto_candidate": False,
+                    "evidence_quality": "medium",
+                    "evidence_score": 0.60,
+                }
+            ],
+        },
+    }
+    agents = [
+        AgentOutput(role="quant_credit", summary="정량 결과", findings=[], confidence=0.8),
+        AgentOutput(role="evidence_audit", summary="근거 검토", findings=[], confidence=0.7),
+        AgentOutput(role="chair_report", summary="종합", findings=[], confidence=0.7),
+    ]
+
+    committee_view = build_committee_view(
+        bundle=build_stage2_input_bundle(state),
+        recommendation="defer",
+        agents=agents,
+    )
+
+    assert committee_view["final_committee_label"] == "적격"
+    assert committee_view["committee_decision_type"] == "eligible"
+    assert committee_view["committee_risk_signal"] is False
+    assert "guardrail v2" in committee_view["mitigating_factors"][0]
+    assert "경계등급 보류" not in committee_view["conflict_resolution"]
+
+
+def test_committee_view_keeps_tn_hold_with_substantive_external_risk() -> None:
+    state: AgentState = {
+        "company_id": "039130",
+        "company_name": "(주)하나투어",
+        "source_feature_row": {
+            "stock_code": "039130",
+            "current_ratio": 1.16,
+            "cash_ratio": 0.40,
+            "cashflow_coverage_ratio": -3.63,
+            "ocf_to_sales": -0.09,
+            "ocf_to_total_liabilities": -0.03,
+            "interest_coverage_ratio": -35.91,
+            "equity_ratio": 0.22,
+            "debt_ratio": 3.57,
+            "total_borrowings_ratio": 0.05,
+            "short_term_borrowings_share": 0.65,
+            "capital_impairment_ratio": -11.43,
+            "net_margin": -0.56,
+            "icr_under_1": 1,
+            "is_2y_consecutive_operating_loss": 1,
+            "is_2y_consecutive_ocf_deficit": 1,
+        },
+        "prior_rating_reference": {
+            "has_prior_rating": True,
+            "prior_credit_rating": "BBB+",
+            "prior_credit_rating_rank": 8,
+            "prior_rating_boundary_group": "investment_grade_non_boundary",
+            "prior_rating_date": "2021-12-01",
+            "prior_rating_age_days": 395,
+            "prior_rating_agency": "한국평가데이터",
+        },
+        "model_view": {
+            "prediction_label": "투자적격",
+            "probability_speculative": 0.2353,
+            "threshold": 0.25,
+            "stage2_secondary_trigger": True,
+            "stage2_review_priority": "high",
+            "trigger_reason": "rolling OOT 모델은 투자적격이지만 기준선 근처입니다.",
+        },
+        "xgboost_result": {
+            "prediction_label": "투자적격",
+            "probability_speculative": 0.2353,
+            "threshold": 0.25,
+        },
+        "rule_result": {
+            "risk_band": "high_risk",
+            "recommendation": "defer",
+            "reasons": ["two-year consecutive operating loss flag is active"],
+            "blocking_flags": ["interest_coverage_under_1"],
+        },
+        "news_cache_snapshot": {
+            "status": "ready",
+            "items": [
+                {
+                    "source": "opendart",
+                    "title": "영업정지(종속회사의주요경영사항)",
+                    "summary": "(주)하나투어 직접 관련 영업정지 공시입니다.",
+                    "company_match": True,
+                    "provider_relevance": "risk",
+                    "disclosure_severity": "adverse",
+                    "disclosure_event_class": "substantive_adverse",
+                    "disclosure_materiality": "substantive_adverse",
+                    "materiality_ratio": 0.1137,
+                    "critical_terms": ["영업정지"],
+                    "critical_context_confirmed": True,
+                    "veto_candidate": False,
+                    "evidence_quality": "high",
+                    "evidence_score": 0.95,
+                }
+            ],
+        },
+    }
+    agents = [
+        AgentOutput(role="quant_credit", summary="정량 결과", findings=[], confidence=0.8),
+        AgentOutput(role="evidence_audit", summary="근거 검토", findings=[], confidence=0.7),
+        AgentOutput(role="chair_report", summary="종합", findings=[], confidence=0.7),
+    ]
+
+    committee_view = build_committee_view(
+        bundle=build_stage2_input_bundle(state),
+        recommendation="defer",
+        agents=agents,
+    )
+
+    assert committee_view["final_committee_label"] == "보류"
+    assert committee_view["committee_decision_type"] == "risk_hold"
+    assert committee_view["committee_risk_signal"] is True
+    assert "guardrail v2" not in " ".join(committee_view["mitigating_factors"])
+
+
+def test_committee_view_does_not_hidden_tail_on_uncorroborated_material_debt_guarantee() -> None:
+    state: AgentState = {
+        "company_id": "019540",
+        "company_name": "(주)일지테크",
+        "source_feature_row": {
+            "stock_code": "019540",
+            "current_ratio": 1.85,
+            "cash_ratio": 0.22,
+            "cashflow_coverage_ratio": 2.4,
+            "ocf_to_sales": 0.05,
+            "ocf_to_total_liabilities": 0.08,
+            "interest_coverage_ratio": 5.2,
+            "equity_ratio": 0.52,
+            "debt_ratio": 0.92,
+            "total_borrowings_ratio": 0.18,
+            "capital_impairment_ratio": 0.0,
+            "net_margin": 0.04,
+            "icr_under_1": 0,
+            "is_2y_consecutive_operating_loss": 0,
+            "is_2y_consecutive_ocf_deficit": 0,
+        },
+        "model_view": {
+            "prediction_label": "투자적격",
+            "probability_speculative": 0.2191,
+            "threshold": 0.225,
+            "stage2_secondary_trigger": True,
+            "stage2_review_priority": "high",
+            "trigger_reason": "rolling OOT 모델은 투자적격이지만 기준선 근처입니다.",
+        },
+        "xgboost_result": {
+            "prediction_label": "투자적격",
+            "probability_speculative": 0.2191,
+            "threshold": 0.225,
+        },
+        "rule_result": {"risk_band": "stable", "recommendation": "priority", "blocking_flags": []},
+        "news_cache_snapshot": {
+            "status": "ready",
+            "items": [
+                {
+                    "source": "opendart",
+                    "title": "타인에대한채무보증결정",
+                    "summary": "(주)일지테크 직접 관련 채무보증 공시입니다.",
+                    "company_match": True,
+                    "provider_relevance": "risk",
+                    "disclosure_severity": "adverse",
+                    "disclosure_event_class": "material_debt_guarantee",
+                    "disclosure_materiality": "substantive_adverse",
+                    "materiality_ratio": 0.149,
+                    "materiality_basis": "채무보증금액/자기자본: 14.90%",
+                    "critical_terms": [],
+                    "critical_context_confirmed": False,
+                    "veto_candidate": False,
+                    "evidence_quality": "high",
+                    "evidence_score": 0.95,
+                }
+            ],
+        },
+    }
+    agents = [
+        AgentOutput(role="quant_credit", summary="정량 결과", findings=[], confidence=0.8),
+        AgentOutput(role="evidence_audit", summary="근거 검토", findings=[], confidence=0.7),
+        AgentOutput(role="chair_report", summary="종합", findings=[], confidence=0.7),
+    ]
+
+    committee_view = build_committee_view(
+        bundle=build_stage2_input_bundle(state),
+        recommendation="priority",
+        agents=agents,
+    )
+
+    assert committee_view["final_committee_label"] == "적격"
+    assert committee_view["committee_decision_type"] == "eligible"
+    assert committee_view["committee_risk_signal"] is False
+    assert committee_view["hidden_tail_risk_flag"] is False
+
+
+def test_committee_view_keeps_material_financing_risk_when_financial_stress_corroborates() -> None:
+    state: AgentState = {
+        "company_id": "039130",
+        "company_name": "(주)하나투어",
+        "source_feature_row": {
+            "stock_code": "039130",
+            "current_ratio": 0.82,
+            "cash_ratio": 0.06,
+            "cashflow_coverage_ratio": -1.2,
+            "ocf_to_sales": -0.05,
+            "ocf_to_total_liabilities": -0.02,
+            "interest_coverage_ratio": -3.0,
+            "equity_ratio": 0.22,
+            "debt_ratio": 3.4,
+            "net_margin": -0.25,
+            "icr_under_1": 1,
+            "is_2y_consecutive_operating_loss": 1,
+            "is_2y_consecutive_ocf_deficit": 1,
+        },
+        "model_view": {
+            "prediction_label": "투자적격",
+            "probability_speculative": 0.2353,
+            "threshold": 0.25,
+        },
+        "xgboost_result": {
+            "prediction_label": "투자적격",
+            "probability_speculative": 0.2353,
+            "threshold": 0.25,
+        },
+        "news_cache_snapshot": {
+            "status": "ready",
+            "items": [
+                {
+                    "source": "opendart",
+                    "title": "주요사항보고서(유상증자결정)",
+                    "summary": "(주)하나투어 직접 관련 유상증자 공시입니다.",
+                    "company_match": True,
+                    "provider_relevance": "risk",
+                    "disclosure_severity": "adverse",
+                    "disclosure_event_class": "material_financing",
+                    "disclosure_materiality": "substantive_adverse",
+                    "materiality_ratio": 0.20,
+                    "materiality_basis": "희석률: 20.00%",
+                    "dilution_ratio": 0.20,
+                    "critical_context_confirmed": False,
+                    "veto_candidate": False,
+                    "evidence_quality": "high",
+                    "evidence_score": 0.95,
+                }
+            ],
+        },
+    }
+    agents = [
+        AgentOutput(role="quant_credit", summary="정량 결과", findings=[], confidence=0.8),
+        AgentOutput(role="evidence_audit", summary="근거 검토", findings=[], confidence=0.7),
+        AgentOutput(role="chair_report", summary="종합", findings=[], confidence=0.7),
+    ]
+
+    committee_view = build_committee_view(
+        bundle=build_stage2_input_bundle(state),
+        recommendation="priority",
+        agents=agents,
+    )
+
+    assert committee_view["final_committee_label"] == "보류"
+    assert committee_view["committee_decision_type"] == "risk_hold"
+    assert committee_view["committee_risk_signal"] is True
+    assert committee_view["hidden_tail_risk_flag"] is True
+
+
+def test_committee_view_softens_repeated_guarantee_hidden_tail_to_review_hold() -> None:
+    state: AgentState = {
+        "company_id": "019540",
+        "company_name": "(주)일지테크",
+        "source_feature_row": {
+            "stock_code": "019540",
+            "current_ratio": 0.49,
+            "cash_ratio": 0.05,
+            "cashflow_coverage_ratio": 5.33,
+            "ocf_to_sales": 0.17,
+            "ocf_to_total_liabilities": 0.14,
+            "interest_coverage_ratio": -2.46,
+            "equity_ratio": 0.34,
+            "debt_ratio": 1.94,
+            "total_borrowings_ratio": 0.29,
+            "short_term_borrowings_share": 0.97,
+            "capital_impairment_ratio": 0.0,
+            "net_margin": -0.02,
+            "icr_under_1": 1,
+            "is_2y_consecutive_operating_loss": 0,
+            "is_2y_consecutive_ocf_deficit": 0,
+        },
+        "model_view": {
+            "prediction_label": "투자적격",
+            "probability_speculative": 0.2191,
+            "threshold": 0.225,
+            "stage2_secondary_trigger": True,
+            "stage2_review_priority": "high",
+            "trigger_reason": "rolling OOT 모델은 투자적격이지만 기준선 근처입니다.",
+        },
+        "xgboost_result": {
+            "prediction_label": "투자적격",
+            "probability_speculative": 0.2191,
+            "threshold": 0.225,
+        },
+        "rule_result": {
+            "risk_band": "high_risk",
+            "recommendation": "defer",
+            "blocking_flags": ["interest_coverage_under_1"],
+        },
+        "news_cache_snapshot": {
+            "status": "ready",
+            "items": [
+                {
+                    "source": "opendart",
+                    "title": "타인에대한채무보증결정",
+                    "summary": "(주)일지테크 직접 관련 채무보증 공시입니다.",
+                    "company_match": True,
+                    "provider_relevance": "risk",
+                    "disclosure_severity": "adverse",
+                    "disclosure_event_class": "material_debt_guarantee",
+                    "disclosure_materiality": "substantive_adverse",
+                    "materiality_ratio": 0.149,
+                    "materiality_basis": "채무보증금액/자기자본: 14.90%",
+                    "critical_context_confirmed": False,
+                    "veto_candidate": False,
+                    "evidence_quality": "high",
+                    "evidence_score": 0.95,
+                },
+                {
+                    "source": "opendart",
+                    "title": "타인에대한채무보증결정",
+                    "summary": "(주)일지테크 직접 관련 채무보증 공시입니다.",
+                    "company_match": True,
+                    "provider_relevance": "risk",
+                    "disclosure_severity": "adverse",
+                    "disclosure_event_class": "material_debt_guarantee",
+                    "disclosure_materiality": "substantive_adverse",
+                    "materiality_ratio": 0.1226,
+                    "materiality_basis": "채무보증금액/자기자본: 12.26%",
+                    "critical_context_confirmed": False,
+                    "veto_candidate": False,
+                    "evidence_quality": "high",
+                    "evidence_score": 0.93,
+                },
+            ],
+        },
+    }
+    agents = [
+        AgentOutput(role="quant_credit", summary="정량 결과", findings=[], confidence=0.8),
+        AgentOutput(role="evidence_audit", summary="근거 검토", findings=[], confidence=0.7),
+        AgentOutput(role="chair_report", summary="종합", findings=[], confidence=0.7),
+    ]
+
+    committee_view = build_committee_view(
+        bundle=build_stage2_input_bundle(state),
+        recommendation="defer",
+        agents=agents,
+    )
+
+    assert committee_view["final_committee_label"] == "보류"
+    assert committee_view["committee_decision_type"] == "review_hold"
+    assert committee_view["committee_decision_type_label"] == "확인필요 보류"
+    assert committee_view["committee_risk_signal"] is False
+    assert committee_view["hidden_tail_risk_flag"] is True
+    assert "위험 보류가 아닌 확인필요 보류" in committee_view["hidden_tail_risk_reason"]
+
+
+@pytest.mark.parametrize(
+    "conflicting_chair_memo",
+    [
+        "Stage 1 모델의 투자적격 판단을 유지하되, 단기 유동성 취약점은 관찰합니다.",
+        (
+            "Stage 1 모델의 투자적격 판단과 외부 증거의 낮은 위험 수준이 일치하여, "
+            "모델 라벨을 유지하되 단기 유동성 취약점과 현금흐름 변동성에 대한 "
+            "주의가 필요함을 명확히 함."
+        ),
+        "최종 라벨은 투자적격 유지하되 조건부 검토 필요로 명시함.",
+    ],
+)
+def test_committee_view_blocks_overhold_guardrail_for_repeated_financing(
+    conflicting_chair_memo: str,
+) -> None:
+    state: AgentState = {
+        "company_id": "294140",
+        "company_name": "(주)레몬",
+        "source_feature_row": {
+            "stock_code": "294140",
+            "current_ratio": 0.7443,
+            "cash_ratio": 0.2969,
+            "cashflow_coverage_ratio": 24.3625,
+            "ocf_to_sales": 0.2612,
+            "ocf_to_total_liabilities": 0.5441,
+            "interest_coverage_ratio": 18.7971,
+            "equity_ratio": 0.6099,
+            "debt_ratio": 0.6396,
+            "total_borrowings_ratio": 0.2635,
+            "short_term_borrowings_share": 1.0,
+            "capital_impairment_ratio": 0.0,
+            "net_margin": 0.1554,
+            "icr_under_1": 0,
+            "is_2y_consecutive_operating_loss": 0,
+            "is_2y_consecutive_ocf_deficit": 0,
+        },
+        "model_view": {
+            "prediction_label": "투자적격",
+            "probability_speculative": 0.3113,
+            "threshold": 0.325,
+            "stage2_secondary_trigger": True,
+            "stage2_review_priority": "high",
+            "trigger_reason": "45개 보조 레이더가 기준선 근처로 추가 검토를 요구했습니다.",
+        },
+        "xgboost_result": {
+            "prediction_label": "투자적격",
+            "probability_speculative": 0.3113,
+            "threshold": 0.325,
+        },
+        "rule_result": {
+            "risk_band": "watch",
+            "recommendation": "watch",
+            "reasons": ["current_ratio=0.74 is below the watch floor"],
+            "blocking_flags": [],
+        },
+        "news_cache_snapshot": {
+            "status": "ready",
+            "items": [
+                {
+                    "source": "opendart",
+                    "title": "주요사항보고서(유상증자결정)",
+                    "summary": "(주)레몬 직접 관련 자금조달성 공시입니다.",
+                    "company_match": True,
+                    "provider_relevance": "caution",
+                    "disclosure_severity": "caution",
+                    "evidence_quality": "medium",
+                    "evidence_score": 0.50,
+                },
+                {
+                    "source": "opendart",
+                    "title": "주요사항보고서(전환사채권발행결정)",
+                    "summary": "(주)레몬 직접 관련 자금조달성 공시입니다.",
+                    "company_match": True,
+                    "provider_relevance": "caution",
+                    "disclosure_severity": "caution",
+                    "evidence_quality": "medium",
+                    "evidence_score": 0.50,
+                },
+            ],
+        },
+    }
+    agents = [
+        AgentOutput(role="quant_credit", summary="정량 결과", findings=[], confidence=0.8),
+        AgentOutput(role="evidence_audit", summary="근거 검토", findings=[], confidence=0.7),
+        AgentOutput(
+            role="chair_report",
+            summary=conflicting_chair_memo,
+            findings=[],
+            confidence=0.7,
+        ),
+    ]
+
+    committee_view = build_committee_view(
+        bundle=build_stage2_input_bundle(state),
+        recommendation="watch",
+        agents=agents,
+    )
+
+    assert committee_view["final_committee_label"] == "보류"
+    assert committee_view["committee_decision_type"] == "risk_hold"
+    assert committee_view["committee_risk_signal"] is True
+    assert "정상기업 과잉 보류 방어 guardrail" not in " ".join(committee_view["mitigating_factors"])
+    assert conflicting_chair_memo not in committee_view["final_review_memo"]
+
+
+def test_committee_view_holds_secondary_radar_case_with_profitability_stress() -> None:
+    state: AgentState = {
+        "company_id": "009900",
+        "company_name": "명신산업(주)",
+        "source_feature_row": {
+            "stock_code": "009900",
+            "current_ratio": 1.27,
+            "cash_ratio": 0.39,
+            "cashflow_coverage_ratio": 1.46,
+            "ocf_to_sales": 0.06,
+            "ocf_to_total_liabilities": 0.16,
+            "interest_coverage_ratio": 2.00,
+            "equity_ratio": 0.39,
+            "debt_ratio": 1.59,
+            "total_borrowings_ratio": 0.20,
+            "capital_impairment_ratio": 0.0,
+            "net_margin": -0.11,
+            "icr_under_1": 0,
+            "is_2y_consecutive_operating_loss": 0,
+            "is_2y_consecutive_ocf_deficit": 0,
+        },
+        "model_view": {
+            "prediction_label": "투자적격",
+            "probability_speculative": 0.3110,
+            "threshold": 0.325,
+            "stage2_secondary_trigger": True,
+            "stage2_review_priority": "high",
+            "trigger_reason": "45개 보조 레이더가 기준선 근처로 추가 검토를 요구했습니다.",
+        },
+        "xgboost_result": {
+            "prediction_label": "투자적격",
+            "probability_speculative": 0.3110,
+            "threshold": 0.325,
+        },
+        "rule_result": {"risk_band": "stable", "recommendation": "priority"},
+        "news_cache_snapshot": {"status": "ready", "items": []},
+    }
+    agents = [
+        AgentOutput(role="quant_credit", summary="정량 결과", findings=[], confidence=0.8),
+        AgentOutput(role="evidence_audit", summary="근거 검토", findings=[], confidence=0.7),
+        AgentOutput(role="chair_report", summary="종합", findings=[], confidence=0.7),
+    ]
+
+    committee_view = build_committee_view(
+        bundle=build_stage2_input_bundle(state),
+        recommendation="priority",
+        agents=agents,
+    )
+
+    assert committee_view["final_committee_label"] == "보류"
+    assert committee_view["committee_decision_type"] == "boundary_hold"
+    assert "정상기업 과잉 보류 방어 guardrail" not in " ".join(committee_view["mitigating_factors"])
+
+
 def test_committee_view_appends_informative_chair_report_memo() -> None:
     state: AgentState = {
         "company_id": "311390",
@@ -1494,6 +2436,86 @@ def test_committee_view_softens_resolved_reverse_listing_halt_boundary_warning()
     assert committee_view["committee_decision_type_label"] == "과민경고 완화 보류"
     assert committee_view["committee_risk_signal"] is False
     assert "경계등급 과민경고 완화" in committee_view["mitigating_factors"][0]
+
+
+def test_committee_view_treats_resolved_spac_merger_halt_as_procedural_context() -> None:
+    state: AgentState = {
+        "company_id": "319400",
+        "company_name": "현대무벡스(주)",
+        "source_feature_row": {
+            "stock_code": "319400",
+            "cashflow_coverage_ratio": 3.2559,
+            "ocf_to_total_liabilities": 0.0758,
+            "interest_coverage_ratio": -0.5055,
+            "equity_ratio": 0.8399,
+            "debt_ratio": 0.1907,
+            "total_borrowings_ratio": 0.1560,
+            "short_term_borrowings_share": 0.0,
+            "capital_impairment_ratio": 0.0,
+            "icr_under_1": 1,
+            "is_2y_consecutive_operating_loss": 0,
+            "is_2y_consecutive_ocf_deficit": 0,
+        },
+        "model_view": {
+            "prediction_label": "투자적격",
+            "probability_speculative": 0.3113,
+            "threshold": 0.325,
+            "stage2_secondary_trigger": True,
+            "stage2_review_priority": "high",
+            "trigger_reason": "45개 보조 레이더가 기준선 근처로 추가 검토를 요구했습니다.",
+        },
+        "xgboost_result": {
+            "prediction_label": "투자적격",
+            "probability_speculative": 0.3113,
+            "threshold": 0.325,
+        },
+        "rule_result": {"risk_band": "stable", "recommendation": "priority"},
+        "news_cache_snapshot": {
+            "status": "ready",
+            "items": [
+                {
+                    "source": "opendart",
+                    "title": "주권매매거래정지(SPAC 합병(예비심사청구대상))",
+                    "summary": "현대무벡스(주) OpenDART 거래소공시 공시입니다.",
+                    "company_match": True,
+                    "provider_relevance": "risk",
+                    "disclosure_severity": "adverse",
+                    "critical_terms": ["거래정지"],
+                    "critical_context_confirmed": True,
+                    "veto_candidate": True,
+                    "evidence_quality": "high",
+                    "evidence_score": 1.0,
+                },
+                {
+                    "source": "opendart",
+                    "title": "주권매매거래정지해제(상장예비심사결과 통지(승인))",
+                    "summary": "현대무벡스(주) OpenDART 거래소공시 공시입니다.",
+                    "company_match": True,
+                    "provider_relevance": "caution",
+                    "disclosure_severity": "caution",
+                    "evidence_quality": "medium",
+                    "evidence_score": 0.68,
+                },
+            ],
+        },
+    }
+    agents = [
+        AgentOutput(role="quant_credit", summary="정량 결과", findings=[], confidence=0.8),
+        AgentOutput(role="evidence_audit", summary="근거 검토", findings=[], confidence=0.6),
+        AgentOutput(role="chair_report", summary="종합", findings=[], confidence=0.7),
+    ]
+
+    committee_view = build_committee_view(
+        bundle=build_stage2_input_bundle(state),
+        recommendation="priority",
+        agents=agents,
+    )
+
+    assert committee_view["final_committee_label"] == "보류"
+    assert committee_view["committee_decision_type"] == "boundary_hold"
+    assert committee_view["committee_decision_type_label"] == "경계등급 보류"
+    assert committee_view["committee_risk_signal"] is False
+    assert committee_view["hidden_tail_risk_flag"] is False
 
 
 def test_committee_view_treats_bonus_issue_trading_halt_as_procedural_context() -> None:

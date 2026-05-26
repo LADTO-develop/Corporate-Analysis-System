@@ -30,10 +30,11 @@ def evaluate_external_evidence(news_cache: dict[str, Any]) -> ExternalEvidenceSi
         reliability = str(item.get("reliability", "unknown"))
         evidence_quality = str(item.get("evidence_quality", "unknown"))
         relevance = _relevance_label(item.get("company_match"))
+        disclosure_note = _disclosure_note(item)
         keyword_note = _keyword_note(item)
         findings.append(
             f"외부 근거({source}, {relevance}, 품질 {evidence_quality}, "
-            f"신뢰도 {reliability}): {title}{keyword_note}"
+            f"신뢰도 {reliability}{disclosure_note}): {title}{keyword_note}"
         )
     if news_cache.get("has_critical_risk"):
         terms = ", ".join(str(term) for term in news_cache.get("critical_terms", []) or [])
@@ -65,3 +66,20 @@ def _keyword_note(item: dict[str, Any]) -> str:
     if item.get("veto_candidate") is True:
         return f" / 직접 관련 위험 키워드 후보: {', '.join(terms)}"
     return f" / 미확인 키워드 히트: {', '.join(terms)}"
+
+
+def _disclosure_note(item: dict[str, Any]) -> str:
+    severity = str(item.get("disclosure_severity", "")).strip()
+    event_class = str(item.get("disclosure_event_class", "")).strip()
+    materiality = str(item.get("disclosure_materiality", "")).strip()
+    materiality_basis = str(item.get("materiality_basis", "")).strip()
+    pieces = []
+    if severity and severity.lower() not in {"unknown", "none"}:
+        pieces.append(f"공시강도 {severity}")
+    if event_class:
+        pieces.append(f"유형 {event_class}")
+    if materiality:
+        pieces.append(f"실질성 {materiality}")
+    if materiality_basis:
+        pieces.append(f"상세중요도 {materiality_basis}")
+    return f", {', '.join(pieces)}" if pieces else ""

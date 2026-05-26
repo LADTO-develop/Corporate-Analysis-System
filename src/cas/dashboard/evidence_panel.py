@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass
 
@@ -40,6 +41,40 @@ EXTERNAL_EVIDENCE_RELIABILITY_LABELS = {
     "low": "낮음",
     "low_relevance": "관련성 낮음",
     "unknown": "미확인",
+}
+
+EXTERNAL_EVIDENCE_MATERIALITY_LABELS = {
+    "critical": "치명",
+    "substantive_adverse": "실질 부정",
+    "watch_context": "관찰",
+    "procedural_or_one_off": "절차/일회성",
+    "routine_context": "일상",
+}
+
+EXTERNAL_EVIDENCE_EVENT_CLASS_LABELS = {
+    "veto_event": "강제 경고",
+    "procedural_trading_halt": "절차성 거래정지",
+    "low_materiality_litigation": "저중요 소송",
+    "one_off_contract_cancellation": "일회성 계약해지",
+    "material_contract_cancellation": "중요 계약해지",
+    "low_materiality_contract_cancellation": "저중요 계약해지",
+    "contract_cancellation_watch": "계약해지 관찰",
+    "financing_watch": "자금조달 관찰",
+    "low_materiality_financing": "저중요 자금조달",
+    "material_financing": "중요 자금조달",
+    "debt_guarantee_watch": "채무보증 관찰",
+    "low_materiality_debt_guarantee": "저중요 채무보증",
+    "material_debt_guarantee": "중요 채무보증",
+    "material_litigation": "중요 소송",
+    "litigation_watch": "소송 관찰",
+    "financing_or_governance_watch": "자금조달/지배구조 관찰",
+    "business_suspension_low_materiality": "저중요 영업정지",
+    "subsidiary_business_suspension_low_materiality": "저중요 종속회사 영업정지",
+    "business_suspension_watch": "영업정지 관찰",
+    "subsidiary_business_suspension_watch": "종속회사 영업정지 관찰",
+    "substantive_adverse": "실질 부정",
+    "routine_context": "일상 공시",
+    "unclassified": "미분류",
 }
 
 
@@ -133,6 +168,9 @@ def render_external_evidence_items(
             "일자",
             "링크",
         ]
+        materiality_columns = ["상세 중요도", "중요도 단계", "공시 성격"]
+        if _frame_has_materiality_values(evidence_frame, materiality_columns):
+            display_columns[6:6] = materiality_columns
         if include_summary:
             display_columns.insert(-1, "요약")
         stretch_dataframe(
@@ -140,6 +178,8 @@ def render_external_evidence_items(
             hide_index=True,
             column_config={
                 "제목/공시명": st.column_config.TextColumn("제목/공시명", width="large"),
+                "상세 중요도": st.column_config.TextColumn("상세 중요도", width="medium"),
+                "공시 성격": st.column_config.TextColumn("공시 성격", width="medium"),
                 "요약": st.column_config.TextColumn("요약", width="large"),
                 "링크": st.column_config.LinkColumn("링크", display_text="열기"),
             },
@@ -217,6 +257,12 @@ def render_external_evidence_judgment(
             renderers.render_decision_badge(veto_label),
         )
 
+        render_external_evidence_materiality_summary(
+            evidence_snapshot,
+            colors=colors,
+            renderers=renderers,
+        )
+
         evidence_cols = st.columns(3)
         renderers.render_list_card(
             evidence_cols[0],
@@ -235,6 +281,66 @@ def render_external_evidence_judgment(
             "수집 경로와 반영 방식",
             _external_evidence_collection_note(evidence_snapshot, veto_label=veto_label),
         )
+
+
+def render_external_evidence_materiality_summary(
+    evidence_snapshot: dict[str, object] | None,
+    *,
+    colors: EvidencePanelColors,
+    renderers: EvidencePanelRenderers,
+) -> None:
+    """Render OpenDART materiality ratios extracted from detailed disclosures."""
+    summary = _external_materiality_summary(evidence_snapshot)
+    if not bool(summary["has_materiality"]):
+        return
+
+    st.markdown("#### 공시 중요도 근거")
+    st.caption(
+        "OpenDART 상세 공시에서 금액/자기자본, 금액/매출액, 희석률처럼 기업 규모 대비 "
+        "얼마나 큰 사건인지 뽑아 판단에 반영합니다."
+    )
+
+    materiality_cols = st.columns(4)
+    renderers.render_text_card(
+        materiality_cols[0],
+        "가장 큰 규모 수치",
+        str(summary["max_basis"]),
+    )
+    renderers.render_bold_value_block(
+        materiality_cols[1],
+        "실질 부정 근거",
+        f"{summary['substantive_count']}건",
+    )
+    renderers.render_bold_value_block(
+        materiality_cols[2],
+        "관찰/절차성 근거",
+        f"{summary['watch_or_low_count']}건",
+    )
+    renderers.render_text_card(
+        materiality_cols[3],
+        "주요 공시 유형",
+        str(summary["top_events"]),
+    )
+
+    detail_cols = st.columns(2)
+    raw_top_findings = summary.get("top_findings")
+    top_findings = (
+        [str(item) for item in raw_top_findings] if isinstance(raw_top_findings, list) else []
+    )
+    renderers.render_list_card(
+        detail_cols[0],
+        "수치로 확인한 근거",
+        top_findings or ["상세 중요도 수치는 확인됐지만 표시할 핵심 항목이 없습니다."],
+        colors.neutral,
+    )
+    renderers.render_text_card(
+        detail_cols[1],
+        "판단에 반영한 방식",
+        (
+            "비율이 크고 직접 관련성이 높으면 위험 근거로 보고, 낮은 비율이나 절차성 공시는 "
+            "위험 보류를 확인필요/완화 보류로 낮출 수 있는 근거로 봅니다."
+        ),
+    )
 
 
 def _external_evidence_judgment_text(
@@ -348,6 +454,128 @@ def _external_evidence_collection_note(
     return " ".join(part for part in (provider_text, date_filter_text, action_text) if part)
 
 
+def _external_materiality_summary(snapshot: dict[str, object] | None) -> dict[str, object]:
+    """Summarize materiality ratios into compact dashboard copy."""
+    items = _external_materiality_items(snapshot)
+    if not items:
+        return {
+            "has_materiality": False,
+            "max_basis": "-",
+            "substantive_count": 0,
+            "watch_or_low_count": 0,
+            "top_events": "-",
+            "top_findings": [],
+        }
+
+    stage_counts = Counter(str(item.get("materiality_key") or "") for item in items)
+    event_counts = Counter(
+        str(item.get("event_label") or "-")
+        for item in items
+        if str(item.get("event_label") or "-") not in {"-", "미분류", "일상 공시"}
+    )
+    sorted_items = sorted(items, key=_external_materiality_sort_key, reverse=True)
+    ratio_items = [
+        item
+        for item in sorted_items
+        if isinstance(item.get("ratio"), int | float) and item.get("ratio") is not None
+    ]
+    max_item = (
+        max(ratio_items, key=_external_materiality_ratio_sort_value)
+        if ratio_items
+        else sorted_items[0]
+    )
+    max_basis = str(max_item.get("basis") or "-")
+    top_events = ", ".join(label for label, _ in event_counts.most_common(3)) or "-"
+
+    top_findings: list[str] = []
+    for item in sorted_items[:3]:
+        finding = _external_materiality_finding_text(item)
+        if finding:
+            top_findings.append(finding)
+    return {
+        "has_materiality": True,
+        "max_basis": max_basis,
+        "substantive_count": stage_counts["critical"] + stage_counts["substantive_adverse"],
+        "watch_or_low_count": stage_counts["watch_context"] + stage_counts["procedural_or_one_off"],
+        "top_events": top_events,
+        "top_findings": top_findings,
+    }
+
+
+def _external_materiality_items(
+    snapshot: dict[str, object] | None,
+) -> list[dict[str, object]]:
+    """Return evidence items that carry disclosure materiality context."""
+    if not snapshot:
+        return []
+    raw_items = snapshot.get("items", [])
+    if not isinstance(raw_items, list):
+        return []
+
+    materiality_items: list[dict[str, object]] = []
+    for item in raw_items:
+        if not isinstance(item, dict):
+            continue
+        stage_key = str(item.get("disclosure_materiality") or "").strip().lower()
+        event_key = str(item.get("disclosure_event_class") or "").strip().lower()
+        basis = _external_evidence_materiality_basis(item)
+        ratio = _external_evidence_materiality_ratio(item)
+        has_materiality_context = (
+            basis != "-"
+            or ratio is not None
+            or stage_key
+            in {"critical", "substantive_adverse", "watch_context", "procedural_or_one_off"}
+        )
+        if not has_materiality_context:
+            continue
+        materiality_items.append(
+            {
+                "source": _external_evidence_source_label(item.get("source")),
+                "title": _short_text(str(item.get("title") or "제목 없음"), limit=62),
+                "basis": basis,
+                "ratio": ratio,
+                "materiality_key": stage_key,
+                "materiality_label": _external_evidence_materiality_label(stage_key),
+                "event_key": event_key,
+                "event_label": _external_evidence_event_class_label(event_key),
+            }
+        )
+    return materiality_items
+
+
+def _external_materiality_sort_key(item: dict[str, object]) -> tuple[int, float]:
+    """Sort materiality items by severity, then scale."""
+    stage_key = str(item.get("materiality_key") or "")
+    stage_score = {
+        "critical": 4,
+        "substantive_adverse": 3,
+        "watch_context": 2,
+        "procedural_or_one_off": 1,
+    }.get(stage_key, 0)
+    ratio = item.get("ratio")
+    ratio_score = float(ratio) if isinstance(ratio, int | float) else -1.0
+    return stage_score, ratio_score
+
+
+def _external_materiality_ratio_sort_value(item: dict[str, object]) -> float:
+    """Sort materiality items by the displayed scale."""
+    ratio = item.get("ratio")
+    return float(ratio) if isinstance(ratio, int | float) else -1.0
+
+
+def _external_materiality_finding_text(item: dict[str, object]) -> str:
+    """Build one short materiality finding for cards."""
+    source = str(item.get("source") or "외부 근거")
+    title = str(item.get("title") or "제목 없음")
+    basis = str(item.get("basis") or "-")
+    stage = str(item.get("materiality_label") or "-")
+    event = str(item.get("event_label") or "-")
+    basis_text = basis if basis != "-" else event
+    if basis_text == "-":
+        return ""
+    return f"{source}: {title} - {basis_text}, {stage}"
+
+
 def _external_evidence_items_frame(snapshot: dict[str, object] | None) -> pd.DataFrame:
     """Build a user-friendly table of collected external evidence items."""
     if not snapshot:
@@ -367,6 +595,13 @@ def _external_evidence_items_frame(snapshot: dict[str, object] | None) -> pd.Dat
                 "관련성": _external_evidence_match_label(item),
                 "검증 품질": _external_evidence_quality_label(item.get("evidence_quality")),
                 "신뢰도": _external_evidence_reliability_label(item.get("reliability")),
+                "상세 중요도": _external_evidence_materiality_basis(item),
+                "중요도 단계": _external_evidence_materiality_label(
+                    item.get("disclosure_materiality")
+                ),
+                "공시 성격": _external_evidence_event_class_label(
+                    item.get("disclosure_event_class")
+                ),
                 "위험 키워드": _external_evidence_terms_text(item.get("critical_terms")),
                 "강제 경고": _external_evidence_veto_label(item),
                 "일자": _external_evidence_date_text(item.get("published_at")),
@@ -441,6 +676,70 @@ def _external_evidence_date_filter_text(snapshot: dict[str, object] | None) -> s
     )
 
 
+def _frame_has_materiality_values(frame: pd.DataFrame, columns: list[str]) -> bool:
+    """Return True when the evidence table has display-worthy materiality values."""
+    empty_values = {"", "-", "미분류", "일상", "일상 공시"}
+    for column in columns:
+        if column not in frame.columns:
+            continue
+        values = [str(value).strip() for value in frame[column].tolist()]
+        if any(value not in empty_values for value in values):
+            return True
+    return False
+
+
+def _external_evidence_materiality_label(value: object) -> str:
+    """Return a Korean label for disclosure materiality."""
+    text = str(value or "").strip().lower()
+    if not text:
+        return "-"
+    return EXTERNAL_EVIDENCE_MATERIALITY_LABELS.get(text, text)
+
+
+def _external_evidence_event_class_label(value: object) -> str:
+    """Return a Korean label for disclosure event classes."""
+    text = str(value or "").strip().lower()
+    if not text:
+        return "-"
+    return EXTERNAL_EVIDENCE_EVENT_CLASS_LABELS.get(text, text)
+
+
+def _external_evidence_materiality_basis(item: dict[str, object]) -> str:
+    """Format disclosure materiality ratios, including dilution when available."""
+    basis_values: list[str] = []
+    for key in ("materiality_basis", "dilution_basis"):
+        text = str(item.get(key) or "").strip()
+        if text and text not in basis_values:
+            basis_values.append(text)
+    if basis_values:
+        return " / ".join(basis_values)
+
+    ratio = _external_evidence_materiality_ratio(item)
+    if ratio is None:
+        return "-"
+    return f"규모 대비 비율: {_format_materiality_percent(ratio)}"
+
+
+def _external_evidence_materiality_ratio(item: dict[str, object]) -> float | None:
+    """Return the largest materiality-style ratio on an evidence item."""
+    ratios = [
+        ratio
+        for ratio in (
+            _optional_float(item.get("materiality_ratio")),
+            _optional_float(item.get("dilution_ratio")),
+        )
+        if ratio is not None
+    ]
+    if not ratios:
+        return None
+    return max(ratios)
+
+
+def _format_materiality_percent(value: float) -> str:
+    """Format decimal materiality ratios as percentages."""
+    return f"{value * 100:.2f}%"
+
+
 def _external_evidence_source_label(value: object) -> str:
     """Return a Korean label for an external evidence source."""
     text = str(value or "unknown")
@@ -510,6 +809,24 @@ def _optional_int(value: object) -> int | None:
         return int(float(str(value)))
     except (TypeError, ValueError):
         return None
+
+
+def _optional_float(value: object) -> float | None:
+    """Return a finite float when the value is numeric."""
+    if value is None:
+        return None
+    try:
+        if pd.isna(value):
+            return None
+    except (TypeError, ValueError):
+        return None
+    try:
+        numeric = float(str(value).strip())
+    except (TypeError, ValueError):
+        return None
+    if pd.isna(numeric):
+        return None
+    return numeric
 
 
 def _short_text(text: str, *, limit: int) -> str:

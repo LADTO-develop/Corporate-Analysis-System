@@ -7,10 +7,12 @@ import math
 import os
 import re
 from collections.abc import Callable
-from datetime import date
+from concurrent.futures import Future, ThreadPoolExecutor
+from datetime import date, datetime
 from html import escape
 from pathlib import Path
 from typing import cast
+from zoneinfo import ZoneInfo
 
 import altair as alt
 import pandas as pd
@@ -47,6 +49,7 @@ from cas.dashboard.committee_panel import (
     CommitteePanelRenderers,
     render_committee_decision_trace,
     render_committee_full_review,
+    render_committee_hold_subtype_guide,
     render_committee_key_highlights,
     render_committee_loading_state,
     render_committee_metric_guide,
@@ -91,9 +94,13 @@ from cas.dashboard.streamlit_compat import (
 from cas.dashboard.theme import inject_dashboard_theme
 from cas.evidence import collect_external_evidence
 from cas.ratings import lookup_prior_rating_reference
-from cas.utils.live_cache import read_json_cache, stable_cache_key, write_json_cache
+from cas.utils.live_cache import live_cache_dir, read_json_cache, stable_cache_key, write_json_cache
 
 LOGGER = logging.getLogger(__name__)
+
+DASHBOARD_BASE_STAGE2_RUNNER = "deterministic"
+DASHBOARD_LIVE_STAGE2_RUNNER = "agno"
+DASHBOARD_COMMITTEE_CONTEXT_CACHE_VERSION = "dashboard_committee_context_v2"
 
 PREFERRED_DEFAULT_COMPANIES = [
     "현대모비스(주)",
@@ -740,6 +747,52 @@ def _dashboard_cache_write(
     )
 
 
+def _dashboard_cache_file_path(namespace: str, key: str) -> Path:
+    """Return the dashboard cache file path for metadata display."""
+    safe_namespace = namespace.replace("/", "_").replace("..", "_")
+    return Path(live_cache_dir()) / safe_namespace / f"{key}.json"
+
+
+def _dashboard_cache_saved_at_label(namespace: str, key: str) -> str | None:
+    """Return a user-facing saved timestamp for an existing dashboard cache file."""
+    path = _dashboard_cache_file_path(namespace, key)
+    if not path.exists():
+        return None
+    try:
+        saved_at = datetime.fromtimestamp(path.stat().st_mtime, tz=ZoneInfo("Asia/Seoul"))
+    except OSError:
+        return None
+    return saved_at.strftime("%Y-%m-%d %H:%M")
+
+
+def _dashboard_stage2_async_workers() -> int:
+    """Return the small worker pool size for live Stage 2 dashboard jobs."""
+    try:
+        raw_value = int(os.environ.get("CAS_DASHBOARD_STAGE2_ASYNC_WORKERS", "2"))
+    except ValueError:
+        raw_value = 2
+    return max(1, min(raw_value, 4))
+
+
+_stage2_executor_cache = cast(
+    Callable[[Callable[[int], ThreadPoolExecutor]], Callable[[int], ThreadPoolExecutor]],
+    st.cache_resource(show_spinner=False),
+)
+
+
+@_stage2_executor_cache
+def _dashboard_stage2_executor(max_workers: int) -> ThreadPoolExecutor:
+    """Share a bounded executor across Streamlit reruns."""
+    return ThreadPoolExecutor(
+        max_workers=max_workers,
+        thread_name_prefix="cas-dashboard-stage2",
+    )
+
+
+def _dashboard_get_stage2_executor() -> ThreadPoolExecutor:
+    return _dashboard_stage2_executor(_dashboard_stage2_async_workers())
+
+
 def _dashboard_evidence_cache_key(selected_row: pd.Series) -> str:
     """Build a stable file-cache key for dashboard external evidence."""
     return cast(
@@ -758,19 +811,43 @@ def _dashboard_evidence_cache_key(selected_row: pd.Series) -> str:
     )
 
 
-def _dashboard_stage2_runner_name() -> str:
+def _dashboard_stage2_runner_name(stage2_runner: str | None = None) -> str:
     """Return the dashboard Stage 2 runner name used for cache separation."""
-    return (
-        os.environ.get("CAS_DASHBOARD_STAGE2_RUNNER")
+    runner = (
+        stage2_runner
+        or os.environ.get("CAS_DASHBOARD_STAGE2_RUNNER")
         or os.environ.get("CAS_STAGE2_RUNNER")
-        or "deterministic"
-    ).strip().lower() or "deterministic"
+        or DASHBOARD_BASE_STAGE2_RUNNER
+    )
+    return runner.strip().lower() or DASHBOARD_BASE_STAGE2_RUNNER
+
+
+def _dashboard_stage2_cache_config(stage2_runner: str | None = None) -> dict[str, object]:
+    """Return the Stage 2 prompt/model knobs that should invalidate dashboard cache."""
+    return {
+        "cache_version": DASHBOARD_COMMITTEE_CONTEXT_CACHE_VERSION,
+        "runner": _dashboard_stage2_runner_name(stage2_runner),
+        "model_provider": os.environ.get("CAS_STAGE2_MODEL_PROVIDER", "openai"),
+        "model": os.environ.get("CAS_STAGE2_MODEL", "gpt-4.1-mini"),
+        "agno_mode": os.environ.get("CAS_STAGE2_AGNO_MODE", "single"),
+        "quant_provider": os.environ.get("CAS_STAGE2_QUANT_PROVIDER"),
+        "quant_model": os.environ.get("CAS_STAGE2_QUANT_MODEL"),
+        "evidence_provider": os.environ.get("CAS_STAGE2_EVIDENCE_PROVIDER"),
+        "evidence_model": os.environ.get("CAS_STAGE2_EVIDENCE_MODEL"),
+        "chair_provider": os.environ.get("CAS_STAGE2_CHAIR_PROVIDER"),
+        "chair_model": os.environ.get("CAS_STAGE2_CHAIR_MODEL"),
+        "review_qa_enabled": os.environ.get("CAS_STAGE2_REVIEW_QA_ENABLED"),
+        "risk_recall_qa_enabled": os.environ.get("CAS_STAGE2_RISK_RECALL_QA_ENABLED"),
+        "max_tokens": os.environ.get("CAS_STAGE2_MAX_TOKENS", "6000"),
+    }
 
 
 def _dashboard_committee_cache_key(
     selected_row: pd.Series,
     prediction_row: pd.Series | None,
     external_evidence_snapshot: dict[str, object],
+    *,
+    stage2_runner: str | None = None,
 ) -> str | None:
     """Build a stable cache key for the rendered committee decision context."""
     if prediction_row is None:
@@ -779,8 +856,8 @@ def _dashboard_committee_cache_key(
         str,
         stable_cache_key(
             {
-                "cache_version": "dashboard_committee_context_v1",
-                "runner": _dashboard_stage2_runner_name(),
+                "cache_version": DASHBOARD_COMMITTEE_CONTEXT_CACHE_VERSION,
+                "stage2_cache_config": _dashboard_stage2_cache_config(stage2_runner),
                 "stock_code": _stock_code_text(selected_row.get("stock_code")),
                 "corp_name": str(selected_row.get("corp_name") or ""),
                 "fiscal_year": _optional_int(selected_row.get("fiscal_year")),
@@ -807,6 +884,63 @@ def _dashboard_committee_cache_key(
     )
 
 
+def _dashboard_stage2_job_key(
+    selected_row: pd.Series,
+    prediction_row: pd.Series | None,
+) -> str | None:
+    """Build a session key for one in-flight live Agno dashboard job."""
+    if prediction_row is None:
+        return None
+    return "dashboard_stage2_live_job:" + cast(
+        str,
+        stable_cache_key(
+            {
+                "cache_version": "dashboard_stage2_live_job_v1",
+                "stage2_cache_config": _dashboard_stage2_cache_config(DASHBOARD_LIVE_STAGE2_RUNNER),
+                "stock_code": _stock_code_text(selected_row.get("stock_code")),
+                "corp_name": str(selected_row.get("corp_name") or ""),
+                "fiscal_year": _optional_int(selected_row.get("fiscal_year")),
+                "eval_year": _optional_int(selected_row.get("eval_year")),
+                "probability_speculative": _optional_float(prediction_row.get("prob_speculative")),
+                "threshold": _optional_float(prediction_row.get("threshold")),
+                "predicted_label": _clean_dashboard_value(prediction_row.get("predicted_label")),
+                "risk_band": _clean_dashboard_value(prediction_row.get("risk_band")),
+            }
+        ),
+    )
+
+
+def _dashboard_stage2_header_request_key(selected_row: pd.Series) -> str:
+    """Return the key used when the selected-company header requests precise review."""
+    fiscal_year = _optional_int(selected_row.get("fiscal_year"))
+    fiscal_year_text = (
+        str(fiscal_year) if fiscal_year is not None else str(selected_row.get("fiscal_year"))
+    )
+    return f"{_stock_code_text(selected_row.get('stock_code'))}:{fiscal_year_text}"
+
+
+def _persist_dashboard_committee_context(
+    *,
+    selected_row: pd.Series,
+    prediction_row: pd.Series | None,
+    external_evidence_snapshot: dict[str, object],
+    committee_context: dict[str, object] | None,
+    stage2_runner: str | None = None,
+) -> None:
+    """Persist a dashboard committee context in session and disk cache."""
+    if committee_context is None:
+        return
+    cache_key = _dashboard_committee_cache_key(
+        selected_row,
+        prediction_row,
+        external_evidence_snapshot,
+        stage2_runner=stage2_runner,
+    )
+    if cache_key:
+        st.session_state[cache_key] = committee_context
+        _dashboard_cache_write("dashboard_committee_context", cache_key, committee_context)
+
+
 def resolve_dashboard_committee_context(
     *,
     selected_row: pd.Series,
@@ -814,12 +948,15 @@ def resolve_dashboard_committee_context(
     local_shap: pd.DataFrame,
     peer_slice: pd.DataFrame,
     external_evidence_snapshot: dict[str, object],
+    stage2_runner: str | None = None,
+    build_if_missing: bool = True,
 ) -> tuple[dict[str, object] | None, bool]:
     """Return the dashboard committee context, reusing it within the current session."""
     cache_key = _dashboard_committee_cache_key(
         selected_row,
         prediction_row,
         external_evidence_snapshot,
+        stage2_runner=stage2_runner,
     )
     if cache_key:
         cached = st.session_state.get(cache_key)
@@ -829,16 +966,23 @@ def resolve_dashboard_committee_context(
         if isinstance(disk_cached, dict):
             st.session_state[cache_key] = disk_cached
             return disk_cached, True
+    if not build_if_missing:
+        return None, False
     committee_context = build_dashboard_committee_context(
         selected_row=selected_row,
         prediction_row=prediction_row,
         local_shap=local_shap,
         peer_slice=peer_slice,
         external_evidence_snapshot=external_evidence_snapshot,
+        stage2_runner=stage2_runner,
     )
-    if cache_key and committee_context is not None:
-        st.session_state[cache_key] = committee_context
-        _dashboard_cache_write("dashboard_committee_context", cache_key, committee_context)
+    _persist_dashboard_committee_context(
+        selected_row=selected_row,
+        prediction_row=prediction_row,
+        external_evidence_snapshot=external_evidence_snapshot,
+        committee_context=committee_context,
+        stage2_runner=stage2_runner,
+    )
     return committee_context, False
 
 
@@ -870,8 +1014,23 @@ def collect_dashboard_external_evidence(selected_row: pd.Series) -> dict[str, ob
     )
 
 
-def resolve_dashboard_external_evidence(selected_row: pd.Series) -> dict[str, object]:
-    """Return cached live evidence, collecting it automatically on first tab render."""
+def _persist_dashboard_external_evidence(
+    selected_row: pd.Series,
+    snapshot: dict[str, object],
+) -> None:
+    """Persist a successful external-evidence snapshot in session and disk cache."""
+    evidence_key = _dashboard_evidence_key(selected_row)
+    st.session_state[evidence_key] = snapshot
+    if snapshot.get("status") != "error":
+        _dashboard_cache_write(
+            "dashboard_external_evidence",
+            _dashboard_evidence_cache_key(selected_row),
+            snapshot,
+        )
+
+
+def resolve_dashboard_external_evidence_cached(selected_row: pd.Series) -> dict[str, object]:
+    """Return cached dashboard evidence without triggering network calls."""
     evidence_key = _dashboard_evidence_key(selected_row)
     cached = st.session_state.get(evidence_key)
     if isinstance(cached, dict):
@@ -881,6 +1040,14 @@ def resolve_dashboard_external_evidence(selected_row: pd.Series) -> dict[str, ob
     if isinstance(disk_cached, dict):
         st.session_state[evidence_key] = disk_cached
         return disk_cached
+    return _empty_dashboard_evidence_snapshot()
+
+
+def resolve_dashboard_external_evidence(selected_row: pd.Series) -> dict[str, object]:
+    """Return cached live evidence, collecting it automatically on first tab render."""
+    cached = resolve_dashboard_external_evidence_cached(selected_row)
+    if cached.get("status") != "not_requested":
+        return cached
     try:
         with st.spinner("외부 근거를 자동 수집하고 2차 위원회 판단에 반영하는 중입니다..."):
             snapshot = collect_dashboard_external_evidence(selected_row)
@@ -895,9 +1062,7 @@ def resolve_dashboard_external_evidence(selected_row: pd.Series) -> dict[str, ob
             "critical_terms": [],
             "message": str(error),
         }
-    st.session_state[evidence_key] = snapshot
-    if snapshot.get("status") != "error":
-        _dashboard_cache_write("dashboard_external_evidence", disk_cache_key, snapshot)
+    _persist_dashboard_external_evidence(selected_row, snapshot)
     return snapshot
 
 
@@ -994,8 +1159,9 @@ def build_dashboard_committee_context(
     local_shap: pd.DataFrame,
     peer_slice: pd.DataFrame,
     external_evidence_snapshot: dict[str, object] | None = None,
+    stage2_runner: str | None = None,
 ) -> dict[str, object] | None:
-    """Run the deterministic Stage 2 review for the selected dashboard company."""
+    """Run Stage 2 review for the selected dashboard company."""
     if prediction_row is None:
         return None
 
@@ -1048,7 +1214,7 @@ def build_dashboard_committee_context(
     }
     state = cast(AgentState, state_payload)
     state.update(rule_engine_node.run(state))
-    stage2_result = _run_dashboard_stage2(state)
+    stage2_result = _run_dashboard_stage2(state, requested_runner=stage2_runner)
     state.update(stage2_result)
 
     return {
@@ -1060,17 +1226,22 @@ def build_dashboard_committee_context(
     }
 
 
-def _run_dashboard_stage2(state: AgentState) -> dict[str, object]:
+def _run_dashboard_stage2(
+    state: AgentState,
+    *,
+    requested_runner: str | None = None,
+) -> dict[str, object]:
     """Run Stage 2 using the dashboard-selected runner."""
     previous_runner = os.environ.get("CAS_STAGE2_RUNNER")
-    requested_runner = (
-        os.environ.get("CAS_DASHBOARD_STAGE2_RUNNER")
+    runner_request = (
+        requested_runner
+        or os.environ.get("CAS_DASHBOARD_STAGE2_RUNNER")
         or os.environ.get("CAS_STAGE2_RUNNER")
-        or "deterministic"
+        or DASHBOARD_BASE_STAGE2_RUNNER
     ).strip()
     dashboard_runner = _dashboard_stage2_runner_for_state(
         state,
-        requested_runner=requested_runner or "deterministic",
+        requested_runner=runner_request or DASHBOARD_BASE_STAGE2_RUNNER,
     )
     os.environ["CAS_STAGE2_RUNNER"] = dashboard_runner
     try:
@@ -1103,6 +1274,15 @@ def _dashboard_stage2_trigger_only_enabled() -> bool:
 
 def _dashboard_needs_live_stage2(state: AgentState) -> bool:
     model_view = dict(state.get("model_view") or {})
+    news_cache = dict(state.get("news_cache_snapshot") or {})
+    return _dashboard_needs_live_stage2_from_views(model_view, news_cache)
+
+
+def _dashboard_needs_live_stage2_from_views(
+    model_view: dict[str, object],
+    evidence_snapshot: dict[str, object],
+) -> bool:
+    """Return whether the dashboard should suggest live Agno review."""
     if bool(model_view.get("stage2_review_trigger")):
         return True
     if bool(model_view.get("stage2_secondary_trigger")):
@@ -1110,12 +1290,162 @@ def _dashboard_needs_live_stage2(state: AgentState) -> bool:
     if str(model_view.get("stage2_review_priority") or "").strip().lower() in {"medium", "high"}:
         return True
 
-    news_cache = dict(state.get("news_cache_snapshot") or {})
     return (
-        bool(news_cache.get("has_critical_risk"))
-        or (_optional_int(news_cache.get("veto_candidate_count")) or 0) > 0
-        or (_optional_int(news_cache.get("high_confidence_critical_count")) or 0) > 0
+        bool(evidence_snapshot.get("has_critical_risk"))
+        or (_optional_int(evidence_snapshot.get("veto_candidate_count")) or 0) > 0
+        or (_optional_int(evidence_snapshot.get("high_confidence_critical_count")) or 0) > 0
     )
+
+
+def _render_dashboard_live_stage2_notice(
+    container: st.delta_generator.DeltaGenerator,
+    *,
+    tone: str,
+    title: str,
+    body: str,
+    status: str | None = None,
+    loading: bool = False,
+) -> None:
+    """Render the live Stage 2 review notice in a calm dashboard style."""
+    tone_class = tone if tone in {"info", "running", "ready", "error"} else "info"
+    status_html = ""
+    if status:
+        status_html = f"<div class='committee-live-note-badge'>{escape(status)}</div>"
+    loading_html = ""
+    if loading:
+        loading_html = (
+            "<div class='committee-live-note-loader' aria-hidden='true'>"
+            "<span class='committee-live-note-spinner'></span>"
+            "<span class='committee-live-note-progress'><span></span></span>"
+            "</div>"
+        )
+    container.markdown(
+        (
+            f"<div class='committee-live-note {escape(tone_class)}'>"
+            f"{status_html}"
+            f"<div class='committee-live-note-title'>{escape(title)}</div>"
+            f"<div class='committee-live-note-body'>{escape(body)}</div>"
+            f"{loading_html}"
+            "</div>"
+        ),
+        unsafe_allow_html=True,
+    )
+
+
+def _render_dashboard_live_stage2_loading_screen() -> None:
+    """Render a loading-only state while precise AI review is running."""
+    st.markdown(
+        (
+            "<div class='committee-live-loading-screen'>"
+            "<div class='committee-live-loading-header'>"
+            "<span class='committee-live-loading-spinner' aria-hidden='true'></span>"
+            "<div>"
+            "<div class='committee-live-loading-title'>정밀 AI 검토 결과를 준비하고 있어요</div>"
+            "<div class='committee-live-loading-body'>"
+            "뉴스·공시 근거를 다시 읽고 위험 근거와 완화 근거를 맞춰보는 중입니다. "
+            "완료되면 새로고침 버튼으로 결과를 반영할 수 있어요."
+            "</div>"
+            "</div>"
+            "</div>"
+            "<div class='committee-live-loading-steps'>"
+            "<div><span></span><p>외부 근거 재확인</p></div>"
+            "<div><span></span><p>위험·완화 요인 정리</p></div>"
+            "<div><span></span><p>최종 위원회 의견 생성</p></div>"
+            "</div>"
+            "</div>"
+        ),
+        unsafe_allow_html=True,
+    )
+
+
+def _run_dashboard_live_stage2_job(
+    *,
+    selected_row: pd.Series,
+    prediction_row: pd.Series | None,
+    local_shap: pd.DataFrame,
+    peer_slice: pd.DataFrame,
+) -> dict[str, object]:
+    """Run network-backed evidence collection and Agno Stage 2 off the Streamlit thread."""
+    evidence_snapshot = collect_dashboard_external_evidence(selected_row)
+    committee_context = build_dashboard_committee_context(
+        selected_row=selected_row,
+        prediction_row=prediction_row,
+        local_shap=local_shap,
+        peer_slice=peer_slice,
+        external_evidence_snapshot=evidence_snapshot,
+        stage2_runner=DASHBOARD_LIVE_STAGE2_RUNNER,
+    )
+    return {
+        "evidence_snapshot": evidence_snapshot,
+        "committee_context": committee_context or {},
+    }
+
+
+def _start_dashboard_live_stage2_job(
+    *,
+    selected_row: pd.Series,
+    prediction_row: pd.Series | None,
+    local_shap: pd.DataFrame,
+    peer_slice: pd.DataFrame,
+) -> Future[dict[str, object]] | None:
+    """Start one in-flight live Agno job for the selected dashboard company."""
+    job_key = _dashboard_stage2_job_key(selected_row, prediction_row)
+    if job_key is None:
+        return None
+    existing = st.session_state.get(job_key)
+    if isinstance(existing, Future) and not existing.done():
+        return cast(Future[dict[str, object]], existing)
+    future = _dashboard_get_stage2_executor().submit(
+        _run_dashboard_live_stage2_job,
+        selected_row=selected_row.copy(deep=True),
+        prediction_row=prediction_row.copy(deep=True) if prediction_row is not None else None,
+        local_shap=local_shap.copy(deep=True),
+        peer_slice=peer_slice.copy(deep=True),
+    )
+    st.session_state[job_key] = future
+    return future
+
+
+def _consume_dashboard_live_stage2_job(
+    *,
+    selected_row: pd.Series,
+    prediction_row: pd.Series | None,
+) -> tuple[dict[str, object] | None, dict[str, object] | None, str | None]:
+    """Resolve a completed live Agno job and persist its caches."""
+    job_key = _dashboard_stage2_job_key(selected_row, prediction_row)
+    if job_key is None:
+        return None, None, None
+    future = st.session_state.get(job_key)
+    if not isinstance(future, Future):
+        return None, None, None
+    if not future.done():
+        return None, None, "running"
+    st.session_state.pop(job_key, None)
+    try:
+        result = future.result()
+    except Exception as error:  # pragma: no cover - runtime/network dependent
+        LOGGER.exception("dashboard_live_stage2_job_failed")
+        return None, None, f"error:{format_stage2_error_detail(error)}"
+
+    evidence_snapshot = cast(
+        dict[str, object],
+        result.get("evidence_snapshot") or _empty_dashboard_evidence_snapshot(),
+    )
+    raw_committee_context = result.get("committee_context")
+    committee_context = (
+        cast(dict[str, object], raw_committee_context)
+        if isinstance(raw_committee_context, dict) and raw_committee_context
+        else None
+    )
+    _persist_dashboard_external_evidence(selected_row, evidence_snapshot)
+    _persist_dashboard_committee_context(
+        selected_row=selected_row,
+        prediction_row=prediction_row,
+        external_evidence_snapshot=evidence_snapshot,
+        committee_context=committee_context,
+        stage2_runner=DASHBOARD_LIVE_STAGE2_RUNNER,
+    )
+    return committee_context, evidence_snapshot, "completed"
 
 
 def _committee_evidence_frame(evidence_summary: object) -> pd.DataFrame:
@@ -2799,14 +3129,42 @@ def render_committee_view_tab(
     loading_placeholder = st.empty()
     render_committee_loading_state(loading_placeholder, selected_row)
     try:
-        evidence_snapshot = resolve_dashboard_external_evidence(selected_row)
+        evidence_snapshot = resolve_dashboard_external_evidence_cached(selected_row)
         committee_context, committee_cache_hit = resolve_dashboard_committee_context(
             selected_row=selected_row,
             prediction_row=prediction_row,
             local_shap=local_shap,
             peer_slice=peer_slice,
             external_evidence_snapshot=evidence_snapshot,
+            stage2_runner=DASHBOARD_BASE_STAGE2_RUNNER,
         )
+        committee_context_source = DASHBOARD_BASE_STAGE2_RUNNER
+        live_stage2_status: str | None = None
+        live_committee_context, live_evidence_snapshot, live_stage2_status = (
+            _consume_dashboard_live_stage2_job(
+                selected_row=selected_row,
+                prediction_row=prediction_row,
+            )
+        )
+        if live_committee_context is not None and live_evidence_snapshot is not None:
+            evidence_snapshot = live_evidence_snapshot
+            committee_context = live_committee_context
+            committee_cache_hit = False
+            committee_context_source = DASHBOARD_LIVE_STAGE2_RUNNER
+        else:
+            cached_live_context, live_cache_hit = resolve_dashboard_committee_context(
+                selected_row=selected_row,
+                prediction_row=prediction_row,
+                local_shap=local_shap,
+                peer_slice=peer_slice,
+                external_evidence_snapshot=evidence_snapshot,
+                stage2_runner=DASHBOARD_LIVE_STAGE2_RUNNER,
+                build_if_missing=False,
+            )
+            if cached_live_context is not None:
+                committee_context = cached_live_context
+                committee_cache_hit = live_cache_hit
+                committee_context_source = DASHBOARD_LIVE_STAGE2_RUNNER
     except Exception as error:
         LOGGER.exception("dashboard_stage2_committee_context_failed")
         st.error("2차 에이전트 위원회 판단을 생성하는 중 문제가 발생했습니다.")
@@ -2823,8 +3181,27 @@ def render_committee_view_tab(
             "기업별 prediction_scores.csv가 연결되면 이 탭에서 1차 모델 판단과 2차 위원회 판단을 함께 볼 수 있습니다."
         )
         return
+    committee_cache_saved_at = None
     if committee_cache_hit:
-        st.caption("방금 확인한 기업이라 저장된 위원회 검토 결과를 바로 불러왔어요.")
+        resolved_committee_cache_key = _dashboard_committee_cache_key(
+            selected_row,
+            prediction_row,
+            evidence_snapshot,
+            stage2_runner=committee_context_source,
+        )
+        if resolved_committee_cache_key:
+            committee_cache_saved_at = _dashboard_cache_saved_at_label(
+                "dashboard_committee_context",
+                resolved_committee_cache_key,
+            )
+    if committee_cache_hit:
+        saved_at_suffix = (
+            f" 저장 시각: {committee_cache_saved_at}" if committee_cache_saved_at else ""
+        )
+        if committee_context_source != DASHBOARD_LIVE_STAGE2_RUNNER:
+            st.caption(
+                f"방금 확인한 기업이라 저장된 빠른 위원회 검토 결과를 바로 불러왔어요.{saved_at_suffix}"
+            )
 
     model_view = _as_plain_dict(committee_context.get("model_view"))
     committee_view = _as_plain_dict(committee_context.get("committee_view"))
@@ -2876,6 +3253,124 @@ def render_committee_view_tab(
         format_percent=format_percent,
     )
 
+    requested_dashboard_runner = _dashboard_stage2_runner_name()
+    live_review_suggested = _dashboard_needs_live_stage2_from_views(model_view, evidence_snapshot)
+    if requested_dashboard_runner == DASHBOARD_LIVE_STAGE2_RUNNER:
+        live_job_key = _dashboard_stage2_job_key(selected_row, prediction_row)
+        live_job_running = False
+        if live_job_key:
+            live_job = st.session_state.get(live_job_key)
+            live_job_running = isinstance(live_job, Future) and not live_job.done()
+        header_start_request = st.session_state.get("dashboard_stage2_header_start_request")
+        if header_start_request == _dashboard_stage2_header_request_key(selected_row):
+            st.session_state.pop("dashboard_stage2_header_start_request", None)
+            if not live_job_running and prediction_row is not None:
+                _start_dashboard_live_stage2_job(
+                    selected_row=selected_row,
+                    prediction_row=prediction_row,
+                    local_shap=local_shap,
+                    peer_slice=peer_slice,
+                )
+                st.rerun()
+
+        live_control_cols = st.columns([0.70, 0.15, 0.15])
+        if committee_context_source == DASHBOARD_LIVE_STAGE2_RUNNER:
+            displayed_review_status = (
+                (
+                    f"현재 화면: 저장된 정밀 AI 검토 · 저장됨: {committee_cache_saved_at}"
+                    if committee_cache_saved_at
+                    else "현재 화면: 저장된 정밀 AI 검토"
+                )
+                if committee_cache_hit
+                else "현재 화면: 방금 실행한 정밀 AI 검토"
+            )
+        else:
+            displayed_review_status = (
+                (
+                    f"현재 화면: 저장된 빠른 검토 · 저장됨: {committee_cache_saved_at}"
+                    if committee_cache_saved_at
+                    else "현재 화면: 저장된 빠른 검토"
+                )
+                if committee_cache_hit
+                else "현재 화면: 빠른 검토"
+            )
+        if live_stage2_status == "running":
+            _render_dashboard_live_stage2_notice(
+                live_control_cols[0],
+                tone="running",
+                status="정밀 AI 검토 진행 중",
+                title="정밀 AI 검토를 실행 중입니다",
+                body=(
+                    "뉴스와 공시를 다시 읽는 중이에요. 완료 전까지는 정밀 검토 영역을 "
+                    "로딩 화면으로 표시합니다."
+                ),
+                loading=True,
+            )
+        elif committee_context_source == DASHBOARD_LIVE_STAGE2_RUNNER:
+            ready_status = displayed_review_status.replace("현재 화면: ", "")
+            live_control_cols[0].caption(f"정밀 AI 검토 결과 표시 중 · {ready_status}")
+        elif isinstance(live_stage2_status, str) and live_stage2_status.startswith("error:"):
+            _render_dashboard_live_stage2_notice(
+                live_control_cols[0],
+                tone="error",
+                status=displayed_review_status,
+                title="정밀 검토를 완료하지 못했습니다",
+                body=(
+                    "현재는 빠른 검토 결과를 보여줍니다. "
+                    f"{live_stage2_status.removeprefix('error:')}"
+                ),
+            )
+        elif live_review_suggested:
+            _render_dashboard_live_stage2_notice(
+                live_control_cols[0],
+                tone="info",
+                status=f"{displayed_review_status} · 정밀 AI 검토 미실행",
+                title="현재는 빠른 검토 결과입니다",
+                body=(
+                    "모델 판단만으로 끝내기 애매한 신호가 있어요. 정밀 검토 버튼을 누르면 "
+                    "AI가 뉴스·공시를 다시 읽고 위험 근거와 완화 근거를 더 꼼꼼히 확인합니다."
+                ),
+            )
+        else:
+            _render_dashboard_live_stage2_notice(
+                live_control_cols[0],
+                tone="info",
+                status=displayed_review_status,
+                title="빠른 검토 결과를 보여주는 중입니다",
+                body=(
+                    "현재 기업은 추가로 깊게 볼 위험 신호가 크지 않아 빠른 결과를 먼저 보여줍니다. "
+                    "필요하면 정밀 검토로 뉴스·공시를 다시 읽을 수 있어요."
+                ),
+            )
+
+        if live_control_cols[1].button(
+            "정밀 검토",
+            key=f"{live_job_key}:start" if live_job_key else "dashboard_stage2_live_start",
+            disabled=live_job_running or prediction_row is None,
+            type="secondary",
+        ):
+            _start_dashboard_live_stage2_job(
+                selected_row=selected_row,
+                prediction_row=prediction_row,
+                local_shap=local_shap,
+                peer_slice=peer_slice,
+            )
+            st.rerun()
+        if live_control_cols[2].button(
+            "새로고침",
+            key=f"{live_job_key}:refresh" if live_job_key else "dashboard_stage2_live_refresh",
+            disabled=not live_job_running,
+        ):
+            st.rerun()
+        if live_stage2_status == "running":
+            _render_dashboard_live_stage2_loading_screen()
+            return
+    elif st.session_state.get(
+        "dashboard_stage2_header_start_request"
+    ) == _dashboard_stage2_header_request_key(selected_row):
+        st.session_state.pop("dashboard_stage2_header_start_request", None)
+        st.info("정밀 AI 검토 실행 모드가 꺼져 있어 현재는 빠른 검토 결과를 보여줍니다.")
+
     if veto_triggered:
         summary_text = (
             "강제 경고가 발동되었습니다. 강한 외부 위험 신호나 차단 규칙이 감지되어, "
@@ -2925,10 +3420,10 @@ def render_committee_view_tab(
         feature_map,
     )
     highlight_risk_items = (
-        full_risk_items[:2] if selected_output_format == "brief" else full_risk_items
+        full_risk_items if selected_output_format == "detailed" else full_risk_items[:2]
     )
     highlight_mitigation_items = (
-        full_mitigation_items[:2] if selected_output_format == "brief" else full_mitigation_items
+        full_mitigation_items if selected_output_format == "detailed" else full_mitigation_items[:2]
     )
     conflict_text = _friendly_committee_text(
         committee_view.get("conflict_resolution")
@@ -2941,18 +3436,9 @@ def render_committee_view_tab(
         feature_map,
     )
 
-    conclusion_tab, factor_tab, external_tab = st.tabs(
-        ["위원회 결론", "위험·완화 근거", "외부근거 확인"]
-    )
+    factor_tab, external_tab = st.tabs(["위험·완화 근거", "외부근거 확인"])
 
-    with conclusion_tab:
-        render_committee_section_divider("결론")
-        st.subheader("먼저 볼 위원회 판단")
-        st.caption(
-            "이 탭은 사용자가 가장 먼저 확인할 결론 화면입니다. "
-            "2차 에이전트 위원회가 최종적으로 어느 단계로 봤는지와, "
-            "1차 모델 판단과 달라진 이유를 먼저 보여줍니다."
-        )
+    with factor_tab:
         render_committee_key_highlights(
             committee_label=committee_stage_label,
             committee_decision_type_label=committee_reason_label,
@@ -2967,6 +3453,7 @@ def render_committee_view_tab(
             risk_items=highlight_risk_items,
             mitigation_items=highlight_mitigation_items,
             renderers=committee_panel_renderers,
+            max_highlight_items=3 if selected_output_format == "detailed" else 2,
         )
 
         with st.expander("1차 모델과 비교해서 보기", expanded=False):
@@ -3058,26 +3545,31 @@ def render_committee_view_tab(
             )
             render_summary_banner("판단 차이 해석", summary_text, summary_color)
 
-        st.markdown("#### 판단 단계 설명")
-        st.caption(
-            "같은 보류라도 이유가 다를 수 있어요. 위원회가 이 기업을 어떤 관점에서 "
-            "다시 봐야 한다고 판단했는지 단계별로 보여줍니다."
-        )
-        render_committee_signal_guide(
-            decision_type_label=committee_decision_type_label,
-            risk_signal=committee_risk_signal,
-            renderers=committee_panel_renderers,
-        )
-        raw_decision_trace = committee_view.get("decision_trace")
-        decision_trace = (
-            [item for item in raw_decision_trace if isinstance(item, dict)]
-            if isinstance(raw_decision_trace, list)
-            else []
-        )
-        render_committee_decision_trace(
-            decision_trace,
-            expanded=selected_output_format == "detailed",
-        )
+        with st.expander("판단 단계와 규칙 자세히 보기", expanded=False):
+            st.caption(
+                "같은 보류라도 이유가 다를 수 있어요. 위원회가 이 기업을 어떤 관점에서 "
+                "다시 봐야 한다고 판단했는지 단계별로 보여줍니다."
+            )
+            render_committee_hold_subtype_guide(
+                decision_type_label=committee_decision_type_label,
+                risk_signal=committee_risk_signal,
+                renderers=committee_panel_renderers,
+            )
+            render_committee_signal_guide(
+                decision_type_label=committee_decision_type_label,
+                risk_signal=committee_risk_signal,
+                renderers=committee_panel_renderers,
+            )
+            raw_decision_trace = committee_view.get("decision_trace")
+            decision_trace = (
+                [item for item in raw_decision_trace if isinstance(item, dict)]
+                if isinstance(raw_decision_trace, list)
+                else []
+            )
+            render_committee_decision_trace(
+                decision_trace,
+                expanded=selected_output_format == "detailed",
+            )
 
     with factor_tab:
         render_committee_section_divider("위험·완화 근거")

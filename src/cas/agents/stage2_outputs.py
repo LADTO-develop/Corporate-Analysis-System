@@ -109,7 +109,98 @@ class ChairReportOutput(_StrictModel):
         )
 
 
-Stage2StructuredOutput = QuantCreditOutput | EvidenceAuditOutput | ChairReportOutput
+class ReviewQAOutput(_StrictModel):
+    """Structured advisory output produced by the optional ReviewQAAgent."""
+
+    role: Literal["review_qa"] = "review_qa"
+    qa_summary: str
+    trigger_reasons: list[str] = Field(default_factory=list)
+    label_memo_consistency: str
+    risk_hold_assessment: Literal["adequate", "overstated", "not_applicable"]
+    evidence_cutoff_check: str
+    overhold_guardrail_assessment: str
+    recommended_action: Literal[
+        "keep_committee_view",
+        "downgrade_risk_hold_to_boundary_hold",
+        "downgrade_reject_to_boundary_hold",
+        "request_manual_review",
+        "memo_only_fix",
+    ]
+    confidence: float = Field(ge=0.0, le=1.0)
+
+    def to_agent_output(self) -> AgentOutput:
+        """Convert the QA output into the common graph payload."""
+        return AgentOutput(
+            role=self.role,
+            summary=self.qa_summary,
+            findings=[
+                "QA 트리거: "
+                + _join_items(
+                    self.trigger_reasons,
+                    fallback="명시적 QA 트리거는 기록되지 않았습니다.",
+                ),
+                f"라벨-메모 일관성: {self.label_memo_consistency}",
+                f"위험 보류 적정성: {self.risk_hold_assessment}",
+                f"외부근거 기준일 점검: {self.evidence_cutoff_check}",
+                f"정상기업 과잉 보류 guardrail 점검: {self.overhold_guardrail_assessment}",
+                f"QA 권고: {self.recommended_action}",
+            ],
+            confidence=self.confidence,
+        )
+
+
+class RiskRecallQAOutput(_StrictModel):
+    """Structured advisory output produced by the optional RiskRecallQAAgent."""
+
+    role: Literal["risk_recall_qa"] = "risk_recall_qa"
+    qa_summary: str
+    trigger_reasons: list[str] = Field(default_factory=list)
+    eligible_safety_assessment: Literal[
+        "safe_to_keep_eligible",
+        "needs_boundary_review",
+        "material_missed_risk",
+        "not_applicable",
+    ]
+    financial_resilience_check: str
+    evidence_recall_check: str
+    rating_boundary_check: str
+    recommended_action: Literal[
+        "keep_committee_view",
+        "escalate_eligible_to_boundary_hold",
+        "escalate_eligible_to_risk_hold",
+        "request_manual_review",
+        "memo_only_fix",
+    ]
+    confidence: float = Field(ge=0.0, le=1.0)
+
+    def to_agent_output(self) -> AgentOutput:
+        """Convert the recall QA output into the common graph payload."""
+        return AgentOutput(
+            role=self.role,
+            summary=self.qa_summary,
+            findings=[
+                "Recall QA 트리거: "
+                + _join_items(
+                    self.trigger_reasons,
+                    fallback="명시적 recall QA 트리거는 기록되지 않았습니다.",
+                ),
+                f"적격 안전성 평가: {self.eligible_safety_assessment}",
+                f"재무 방어축 점검: {self.financial_resilience_check}",
+                f"외부근거 누락위험 점검: {self.evidence_recall_check}",
+                f"등급/기준선 경계 점검: {self.rating_boundary_check}",
+                f"Recall QA 권고: {self.recommended_action}",
+            ],
+            confidence=self.confidence,
+        )
+
+
+Stage2StructuredOutput = (
+    QuantCreditOutput
+    | EvidenceAuditOutput
+    | ChairReportOutput
+    | ReviewQAOutput
+    | RiskRecallQAOutput
+)
 
 
 def _join_items(items: list[str], *, fallback: str) -> str:
@@ -123,5 +214,7 @@ __all__ = [
     "ChairReportOutput",
     "EvidenceAuditOutput",
     "QuantCreditOutput",
+    "ReviewQAOutput",
+    "RiskRecallQAOutput",
     "Stage2StructuredOutput",
 ]

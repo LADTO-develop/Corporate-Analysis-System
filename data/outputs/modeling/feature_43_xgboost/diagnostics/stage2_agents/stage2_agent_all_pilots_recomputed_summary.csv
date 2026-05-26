@@ -11,6 +11,7 @@ committee_review_rolling_validation_agno_claude_round2_batch,10,0.9,1.0,0,,,
 committee_review_rolling_validation_agno_claude_round3_after_guardrail_batch,10,0.9,1.0,0,1.4552,0.4295,412.3145
 rerun_check_round2_agno,10,0.9,1.0,0,1.2696,0.3738,472.5898
 rerun_check_round3_after_guardrail,10,0.9,1.0,0,1.2387,0.3644,484.3788
+committee_review_isolated_icr_guardrail_deterministic_8,8,0.875,1.0,0,1.8684,0.4666,256.9043
 committee_review_live_claude_12case_label_alignment,12,0.833333,,0,,,
 rerun_check_historical_test_12,12,0.833333,0.833333,0,1.8694,0.4665,385.1503
 committee_review_rolling_validation_agno_claude_round3_batch,10,0.8,1.0,0,259.331,69.3528,2.3136

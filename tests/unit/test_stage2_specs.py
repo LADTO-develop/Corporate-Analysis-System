@@ -5,6 +5,7 @@ from __future__ import annotations
 from cas.agents.stage2_specs import (
     STAGE2_AGENT_ROLES,
     STAGE2_AGENT_SPECS,
+    STAGE2_OPTIONAL_AGENT_ROLES,
     get_stage2_agent_spec,
 )
 
@@ -44,3 +45,23 @@ def test_evidence_audit_spec_exposes_evidence_limitations() -> None:
     assert "evidence_strength" in spec.output_fields
     assert "model_challenge" in spec.output_fields
     assert "evidence_limitations" in spec.output_fields
+
+
+def test_review_qa_spec_is_optional_post_committee_agent() -> None:
+    assert STAGE2_OPTIONAL_AGENT_ROLES == ("review_qa", "risk_recall_qa")
+
+    spec = get_stage2_agent_spec("review_qa")
+
+    assert spec.display_name == "ReviewQAAgent"
+    assert "committee_view" in spec.required_inputs
+    assert "recommended_action" in spec.output_fields
+
+
+def test_risk_recall_qa_spec_is_optional_post_committee_agent() -> None:
+    spec = get_stage2_agent_spec("risk_recall_qa")
+
+    assert spec.display_name == "RiskRecallQAAgent"
+    assert "committee_view" in spec.required_inputs
+    assert "source_feature_row" in spec.required_inputs
+    assert "eligible_safety_assessment" in spec.output_fields
+    assert "recommended_action" in spec.output_fields

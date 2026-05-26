@@ -1,0 +1,45 @@
+{
+  "generated_at_utc": "2026-05-22T06:43:56.154910+00:00",
+  "rows": 1,
+  "success_rate": 0.0,
+  "review_safe_success_rate": 1.0,
+  "by_error_type": [
+    {
+      "model_error_type": "true_negative",
+      "committee_effect": "tn_escalated",
+      "rows": 1
+    }
+  ],
+  "by_review_safe_effect": [
+    {
+      "model_error_type": "true_negative",
+      "committee_review_safe_effect": "review_safe_tn_not_rejected",
+      "rows": 1
+    }
+  ],
+  "by_final_label": [
+    {
+      "final_committee_label": "보류",
+      "rows": 1
+    }
+  ],
+  "by_evidence_status": [
+    {
+      "evidence_status": "disabled",
+      "rows": 1
+    }
+  ],
+  "speed": {
+    "batch_wall_time_seconds": 0.8843,
+    "case_elapsed_seconds_sum": 0.8838,
+    "case_elapsed_seconds_mean": 0.8838,
+    "case_elapsed_seconds_median": 0.8838,
+    "case_elapsed_seconds_max": 0.8838,
+    "throughput_cases_per_minute": 67.8503
+  },
+  "paths": {
+    "details": "data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents/committee_review_secondary_overhold_guardrail_humax_local/committee_review_batch_results.csv",
+    "summary": "data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents/committee_review_secondary_overhold_guardrail_humax_local/committee_review_batch_summary.json",
+    "report": "data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents/committee_review_secondary_overhold_guardrail_humax_local/committee_review_batch_report.md"
+  }
+}

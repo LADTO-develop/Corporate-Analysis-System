@@ -26,6 +26,7 @@ class HiddenTailRiskAssessment:
     reason: str
     adverse_item_count: int
     verified_adverse_item_count: int
+    risk_signal: bool = True
 
 
 @dataclass(frozen=True)
