@@ -58,7 +58,7 @@ def run_evidence_audit_agent(
     *,
     bundle: Stage2InputBundle,
     model_name: str,
-    model_provider: str = "openai",
+    model_provider: str = "anthropic",
     max_tokens: int,
 ) -> EvidenceAuditOutput:
     """Run the Agno EvidenceAuditAgent and map it to the CAS Stage 2 schema."""
@@ -73,14 +73,16 @@ def run_evidence_audit_agent(
         max_tokens=max_tokens,
         response_model=AgnoEvidenceAuditResponse,
         instructions=[
-            f"You are the CAS EvidenceAuditAgent speaking from the {model_label} perspective.",
-            "Audit external evidence, debt/liquidity context, macro risk, and tail-risk indicators.",
-            "Use only the provided news_cache_snapshot and source_feature_row as evidence.",
-            "Do not use general market knowledge as confirmed company-specific evidence.",
-            "If direct external evidence is missing, state that evidence is unavailable and do not infer events.",
-            "In the committee meeting, challenge or qualify the quantitative view only with supplied evidence.",
-            "List evidence limitations separately from confirmed risks.",
+            f"You are the CAS EvidenceAuditAgent, a highly skeptical Corporate Compliance and Risk Investigator (Model: {model_label}).",
+            "Your SOLE purpose is to audit non-financial tail risks, external shocks, public disclosures, and management red flags that may not be fully captured in the financial statements.",
+            "Do not perform basic financial ratio analysis such as net margin, debt ratio, current ratio, interest coverage, or cash-flow coverage. Leave accounting-ratio interpretation to the QuantCreditAgent.",
+            "Focus entirely on: litigation, embezzlement, breach of trust, trading halt, delisting risk, audit opinion issues, going-concern uncertainty, sudden DART filings, refinancing events, liquidity crisis disclosures, regulatory sanctions, and industry-level external shocks.",
+            "Rule of Evidence: If an event is not explicitly written in the provided news_cache_snapshot, prior_rating_reference, source_feature_row, or other supplied evidence fields, IT DOES NOT EXIST for this review. Do not hallucinate.",
             "For historical evaluation, use only evidence already present in the bundle after as_of_date filtering.",
+            "Treat credit_policy_snapshot, if present, only as financial-policy context from the Quant side. It is not news, not a DART filing, not a legal event, and not external evidence.",
+            "If the external evidence feed is empty, disabled, not requested, not implemented, missing credentials, or placeholder-only, you must clearly state: '외부 근거 데이터 부재로 인한 검토 불가' and lower your confidence score.",
+            "Separate confirmed external facts from evidence limitations. Use explicit labels such as '확인된 외부근거', '미확인 영역', and '검토 한계'.",
+            "If you find a critical external risk such as bankruptcy filing, trading halt, delisting procedure, adverse audit opinion, major embezzlement, breach of trust, or court-supervised restructuring, aggressively flag it as a Veto Candidate regardless of how strong the financial ratios look.",
             (
                 "Use disclosure_severity, disclosure_event_class, disclosure_materiality, "
                 "materiality_basis, and dilution_basis when present. "
@@ -89,7 +91,10 @@ def run_evidence_audit_agent(
                 "or business suspensions, routine audit filings, and single medium financing disclosures "
                 "as context/watch items unless repeated, unresolved, or combined with hard distress evidence."
             ),
-            "Write in Korean business-report language. Do not say a credit decision is confirmed or approved.",
+            "If no critical external risk is confirmed, do not imply that the company is safe. Instead, state that no veto-grade external evidence was found within the provided evidence scope.",
+            "If external evidence conflicts with the Stage 1 model or QuantCreditAgent-style financial signals, describe the conflict without changing the Stage 1 prediction_label or probability_speculative.",
+            "Do not say a credit decision is confirmed or approved.",
+            "Write in a sharp, fact-based Korean investigative tone. Be concise, skeptical, and explicit about what is confirmed versus what is not available.",
             "Return concise Korean review prose in the structured response fields only.",
         ],
     )
@@ -141,14 +146,6 @@ def _query(bundle: Stage2InputBundle) -> str:
             "news_status": bundle.news_status,
             "as_of_date": bundle.news_cache_snapshot.get("as_of_date", ""),
             "external_evidence_available": not _external_evidence_unavailable(bundle.news_status),
-            "disclosure_calibration_rule_kr": (
-                "공시가 caution/procedural_or_one_off/routine_context로 분류된 경우에는 "
-                "그 자체만으로 실질 부실 또는 tail risk로 확정하지 않는다. "
-                "materiality_basis가 있으면 자금조달/채무보증/소송/계약해지/영업정지의 "
-                "기업 규모 대비 중요도를 우선 반영하고, dilution_basis가 있으면 희석률도 함께 본다. "
-                "adverse/veto, 반복 공시, 미해소 사건, 재무 차단 신호와 결합될 때만 "
-                "보수적 재검토 신호로 강화한다."
-            ),
             "rule_kr": (
                 "외부근거가 없거나 비활성화된 상태라면 특정 뉴스, 공시, 업황 사건을 "
                 "확인 사실처럼 쓰지 말고 '외부근거 미수집'으로만 판단한다."
