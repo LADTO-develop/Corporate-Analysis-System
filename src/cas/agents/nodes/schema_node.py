@@ -94,6 +94,9 @@ def _build_response_payload(state: AgentState) -> dict[str, Any]:
                 )
             ),
             "agents": _agent_payloads(agent_summary),
+            "runtime": _runtime_payload(
+                agent_summary.get("runtime") or state.get("stage2_runtime_diagnostics")
+            ),
         },
         "committee_view": _committee_view_payload(
             committee_view,
@@ -184,6 +187,7 @@ def _committee_view_payload(
                 str(item) for item in committee_view.get("mitigating_factors", []) or []
             ],
             "evidence_summary": _evidence_items(committee_view.get("evidence_summary", [])),
+            "decision_trace": _decision_trace_items(committee_view.get("decision_trace", [])),
             "final_review_memo": str(committee_view.get("final_review_memo", "")),
         }
     if insufficient:
@@ -215,6 +219,7 @@ def _committee_view_payload(
         "key_risk_factors": [],
         "mitigating_factors": [],
         "evidence_summary": [],
+        "decision_trace": [],
         "final_review_memo": memo,
     }
 
@@ -234,6 +239,82 @@ def _evidence_items(raw_items: object) -> list[dict[str, str]]:
             }
         )
     return items
+
+
+def _decision_trace_items(raw_items: object) -> list[dict[str, Any]]:
+    if not isinstance(raw_items, list):
+        return []
+    items: list[dict[str, Any]] = []
+    for item in raw_items:
+        if not isinstance(item, dict):
+            continue
+        items.append(
+            {
+                "gate": str(item.get("gate", "")),
+                "label": str(item.get("label", "")),
+                "triggered": _bool_diagnostic(item.get("triggered")),
+                "severity": _trace_severity(item.get("severity")),
+                "summary": str(item.get("summary", "")),
+            }
+        )
+    return items
+
+
+def _runtime_payload(raw_runtime: object) -> dict[str, Any]:
+    if not isinstance(raw_runtime, dict):
+        raw_runtime = {}
+    runtime = dict(raw_runtime)
+    backend_name = str(runtime.get("backend_name") or "")
+    fallback_reason = str(runtime.get("error_message") or "").strip()
+    fallback_used = "fallback" in backend_name.lower() or bool(fallback_reason)
+    return {
+        "backend_name": backend_name,
+        "cache_hit": _bool_diagnostic(runtime.get("cache_hit")),
+        "fallback_used": fallback_used,
+        "fallback_reason": fallback_reason,
+        "stage2_total_elapsed_seconds": _optional_float(
+            runtime.get("stage2_total_elapsed_seconds")
+        ),
+        "agent_elapsed_seconds": _agent_elapsed_seconds(runtime.get("agent_elapsed_seconds")),
+        "agent_elapsed_seconds_sum": _optional_float(runtime.get("agent_elapsed_seconds_sum")),
+        "parallel_independent_agents": _optional_bool(
+            runtime.get("parallel_independent_agents")
+        ),
+        "review_qa_triggered": _bool_diagnostic(runtime.get("review_qa_triggered")),
+        "review_qa_trigger_reasons": _string_list(runtime.get("review_qa_trigger_reasons")),
+        "review_qa_recommended_action": str(
+            runtime.get("review_qa_recommended_action") or ""
+        ),
+        "review_qa_cache_hit": _bool_diagnostic(runtime.get("review_qa_cache_hit")),
+        "review_qa_advisory_applied": _bool_diagnostic(
+            runtime.get("review_qa_advisory_applied")
+        ),
+        "review_qa_advisory_apply_reason": str(
+            runtime.get("review_qa_advisory_apply_reason") or ""
+        ),
+        "review_qa_error_message": str(runtime.get("review_qa_error_message") or ""),
+        "risk_recall_qa_triggered": _bool_diagnostic(
+            runtime.get("risk_recall_qa_triggered")
+        ),
+        "risk_recall_qa_trigger_reasons": _string_list(
+            runtime.get("risk_recall_qa_trigger_reasons")
+        ),
+        "risk_recall_qa_recommended_action": str(
+            runtime.get("risk_recall_qa_recommended_action") or ""
+        ),
+        "risk_recall_qa_cache_hit": _bool_diagnostic(
+            runtime.get("risk_recall_qa_cache_hit")
+        ),
+        "risk_recall_qa_advisory_applied": _bool_diagnostic(
+            runtime.get("risk_recall_qa_advisory_applied")
+        ),
+        "risk_recall_qa_advisory_apply_reason": str(
+            runtime.get("risk_recall_qa_advisory_apply_reason") or ""
+        ),
+        "risk_recall_qa_error_message": str(
+            runtime.get("risk_recall_qa_error_message") or ""
+        ),
+    }
 
 
 def _build_schema_failure_response(
@@ -300,6 +381,7 @@ def _build_schema_failure_response(
                     "confidence": 0.0,
                 }
             },
+            "runtime": _runtime_payload(agent_summary.get("runtime")),
         },
         "committee_view": {
             "final_committee_label": str(committee_view.get("final_committee_label") or "보류"),
@@ -331,6 +413,7 @@ def _build_schema_failure_response(
             ],
             "mitigating_factors": [],
             "evidence_summary": [],
+            "decision_trace": _decision_trace_items(committee_view.get("decision_trace", [])),
             "final_review_memo": (
                 "The generated payload did not satisfy the strict dashboard schema, "
                 "so committee_view was reduced to a safe fallback."
@@ -426,6 +509,51 @@ def _int_value(value: object, *, fallback: int) -> int:
         return int(value) if isinstance(value, int | float | str) else fallback
     except (TypeError, ValueError):
         return fallback
+
+
+def _optional_float(value: object) -> float | None:
+    try:
+        if value is None or value == "":
+            return None
+        return float(value) if isinstance(value, int | float | str) else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _optional_bool(value: object) -> bool | None:
+    if value is None or value == "":
+        return None
+    return _bool_diagnostic(value)
+
+
+def _bool_diagnostic(value: object) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int | float):
+        return value != 0
+    return str(value).strip().lower() in {"1", "true", "yes", "y", "on"}
+
+
+def _string_list(value: object) -> list[str]:
+    if not isinstance(value, list | tuple | set):
+        return []
+    return [str(item) for item in value if str(item)]
+
+
+def _agent_elapsed_seconds(value: object) -> dict[str, float]:
+    if not isinstance(value, dict):
+        return {}
+    timings: dict[str, float] = {}
+    for role, elapsed in value.items():
+        numeric = _optional_float(elapsed)
+        if numeric is not None:
+            timings[str(role)] = numeric
+    return timings
+
+
+def _trace_severity(value: object) -> str:
+    text = str(value or "info").strip().lower()
+    return text if text in {"info", "watch", "risk", "mitigation"} else "info"
 
 
 def _clamp_probability(value: object) -> float:

@@ -55,6 +55,33 @@ class AgentRolePayload(_StrictModel):
     confidence: float = Field(ge=0.0, le=1.0)
 
 
+class Stage2RuntimePayload(_StrictModel):
+    """Dashboard-safe Stage 2 execution diagnostics."""
+
+    backend_name: str = ""
+    cache_hit: bool = False
+    fallback_used: bool = False
+    fallback_reason: str = ""
+    stage2_total_elapsed_seconds: float | None = None
+    agent_elapsed_seconds: dict[str, float] = Field(default_factory=dict)
+    agent_elapsed_seconds_sum: float | None = None
+    parallel_independent_agents: bool | None = None
+    review_qa_triggered: bool = False
+    review_qa_trigger_reasons: list[str] = Field(default_factory=list)
+    review_qa_recommended_action: str = ""
+    review_qa_cache_hit: bool = False
+    review_qa_advisory_applied: bool = False
+    review_qa_advisory_apply_reason: str = ""
+    review_qa_error_message: str = ""
+    risk_recall_qa_triggered: bool = False
+    risk_recall_qa_trigger_reasons: list[str] = Field(default_factory=list)
+    risk_recall_qa_recommended_action: str = ""
+    risk_recall_qa_cache_hit: bool = False
+    risk_recall_qa_advisory_applied: bool = False
+    risk_recall_qa_advisory_apply_reason: str = ""
+    risk_recall_qa_error_message: str = ""
+
+
 class AgentSummaryPayload(_StrictModel):
     """Synthesized multi-agent explanation payload."""
 
@@ -62,6 +89,7 @@ class AgentSummaryPayload(_StrictModel):
     final_confidence: float = Field(ge=0.0, le=1.0)
     synthesis: str
     agents: dict[str, AgentRolePayload]
+    runtime: Stage2RuntimePayload = Field(default_factory=Stage2RuntimePayload)
 
 
 class DashboardResponse(_StrictModel):

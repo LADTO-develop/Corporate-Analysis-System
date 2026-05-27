@@ -18,6 +18,7 @@ def render_report(state: AgentState | dict[str, Any]) -> dict[str, Any]:
     news = dict(response.get("news_analysis") or {})
     agent_summary = dict(response.get("agent_summary") or {})
     committee_view = dict(response.get("committee_view") or {})
+    runtime = dict(agent_summary.get("runtime") or {})
     audit = s.get("audit") or []
     schema_errors = [str(error) for error in s.get("json_schema_errors", [])]
     company_name = _clean_report_text(str(company.get("company_name", s.get("company_id", "?"))))
@@ -81,6 +82,53 @@ def render_report(state: AgentState | dict[str, Any]) -> dict[str, Any]:
         f"- **최종 검토 메모**: {final_review_memo}",
         "",
     ]
+
+    if runtime:
+        md_lines += [
+            "## Stage 2 실행 진단",
+            "",
+            f"- **Backend**: `{runtime.get('backend_name', '')}`",
+            f"- **Cache hit**: `{bool(runtime.get('cache_hit', False))}`",
+            f"- **Fallback used**: `{bool(runtime.get('fallback_used', False))}`",
+        ]
+        if runtime.get("fallback_reason"):
+            md_lines.append(f"- **Fallback reason**: {_clean_report_text(str(runtime['fallback_reason']))}")
+        if runtime.get("stage2_total_elapsed_seconds") is not None:
+            md_lines.append(
+                f"- **Stage 2 elapsed**: {float(runtime['stage2_total_elapsed_seconds']):.3f}s"
+            )
+        md_lines += [
+            f"- **ReviewQA**: triggered=`{bool(runtime.get('review_qa_triggered', False))}`, "
+            f"applied=`{bool(runtime.get('review_qa_advisory_applied', False))}`, "
+            f"reason=`{runtime.get('review_qa_advisory_apply_reason', '')}`",
+            f"- **RiskRecallQA**: triggered=`{bool(runtime.get('risk_recall_qa_triggered', False))}`, "
+            f"applied=`{bool(runtime.get('risk_recall_qa_advisory_applied', False))}`, "
+            f"reason=`{runtime.get('risk_recall_qa_advisory_apply_reason', '')}`",
+            "",
+        ]
+
+    decision_trace = _decision_trace_rows(committee_view.get("decision_trace", []) or [])
+    if decision_trace:
+        md_lines += [
+            "### 결정 추적",
+            "",
+            "| 게이트 | 상태 | 심각도 | 요약 |",
+            "|---|---:|---|---|",
+        ]
+        for item in decision_trace:
+            md_lines.append(
+                "| "
+                + " | ".join(
+                    (
+                        item["label"].replace("|", r"\|"),
+                        "`Y`" if item["triggered"] else "`N`",
+                        f"`{item['severity']}`",
+                        item["summary"].replace("|", r"\|"),
+                    )
+                )
+                + " |"
+            )
+        md_lines.append("")
 
     risk_factors = _clean_report_items(committee_view.get("key_risk_factors", []) or [])
     mitigating_factors = _clean_report_items(committee_view.get("mitigating_factors", []) or [])
@@ -186,6 +234,7 @@ def _fallback_response(state: dict[str, Any]) -> dict[str, Any]:
             "final_confidence": float(state.get("final_confidence", 0.0) or 0.0),
             "synthesis": "No agent summary was generated.",
             "agents": {},
+            "runtime": {},
         },
         "committee_view": {
             "final_committee_label": "보류",
@@ -196,6 +245,25 @@ def _fallback_response(state: dict[str, Any]) -> dict[str, Any]:
             "key_risk_factors": [],
             "mitigating_factors": [],
             "evidence_summary": [],
+            "decision_trace": [],
             "final_review_memo": "No committee_view was generated.",
         },
     }
+
+
+def _decision_trace_rows(raw_items: object) -> list[dict[str, Any]]:
+    if not isinstance(raw_items, list):
+        return []
+    rows: list[dict[str, Any]] = []
+    for item in raw_items:
+        if not isinstance(item, dict):
+            continue
+        rows.append(
+            {
+                "label": _clean_report_text(str(item.get("label") or item.get("gate") or "")),
+                "triggered": bool(item.get("triggered", False)),
+                "severity": str(item.get("severity", "info")),
+                "summary": _clean_report_text(str(item.get("summary", ""))),
+            }
+        )
+    return rows

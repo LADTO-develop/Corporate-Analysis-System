@@ -174,3 +174,77 @@ def test_render_report_uses_korean_headings_and_softens_official_rating_language
     assert "위원회는 적격으로 정리했습니다." in markdown
     assert "투자적격 검토 의견을 제시합니다" in markdown
     assert "최종 승인" not in markdown
+
+
+def test_render_report_includes_stage2_runtime_and_decision_trace() -> None:
+    rendered = render_report(
+        {
+            "company_id": "005930",
+            "response_json": {
+                "company_overview": {
+                    "company_id": "005930",
+                    "company_name": "삼성전자(주)",
+                    "market": "KOSPI",
+                    "analysis_year": 2024,
+                    "summary": "",
+                },
+                "model_result": {
+                    "model_name": "credit_46_features",
+                    "model_version": "test",
+                    "prediction_label": "투자적격",
+                    "risk_band": "stable",
+                    "probability_speculative": 0.001,
+                    "top_drivers": [],
+                    "rule_label": "투자적격:stable",
+                },
+                "news_analysis": {
+                    "status": "disabled",
+                    "summary": "External evidence collection is disabled.",
+                },
+                "agent_summary": {
+                    "final_recommendation": "review",
+                    "final_confidence": 0.67,
+                    "synthesis": "위원회 종합 의견",
+                    "agents": {},
+                    "runtime": {
+                        "backend_name": "agno",
+                        "cache_hit": False,
+                        "fallback_used": False,
+                        "stage2_total_elapsed_seconds": 12.345,
+                        "review_qa_triggered": True,
+                        "review_qa_advisory_applied": True,
+                        "review_qa_advisory_apply_reason": "watch_context_only_risk_hold_override",
+                        "risk_recall_qa_triggered": False,
+                        "risk_recall_qa_advisory_applied": False,
+                    },
+                },
+                "committee_view": {
+                    "final_committee_label": "보류",
+                    "veto_triggered": False,
+                    "hidden_tail_risk_flag": False,
+                    "hidden_tail_risk_reason": "",
+                    "conflict_resolution": "경계 보류로 정리했습니다.",
+                    "key_risk_factors": ["기준선 근처"],
+                    "mitigating_factors": ["방어축 확인"],
+                    "evidence_summary": [],
+                    "decision_trace": [
+                        {
+                            "gate": "boundary_rating_review",
+                            "label": "경계등급 점검",
+                            "triggered": True,
+                            "severity": "watch",
+                            "summary": "기준선 근처라 보류했습니다.",
+                        }
+                    ],
+                    "final_review_memo": "최종 보류 의견입니다.",
+                },
+            },
+        }
+    )
+
+    markdown = str(rendered["markdown"])
+    assert "## Stage 2 실행 진단" in markdown
+    assert "**Backend**: `agno`" in markdown
+    assert "ReviewQA" in markdown
+    assert "### 결정 추적" in markdown
+    assert "경계등급 점검" in markdown
