@@ -499,6 +499,8 @@ def _metric_float(metrics: dict[str, Any] | pd.Series, key: str) -> float:
 def _safe_float(value: object) -> float | None:
     if value is None:
         return None
+    if not isinstance(value, int | float | str):
+        return None
     try:
         number = float(value)
     except (TypeError, ValueError):

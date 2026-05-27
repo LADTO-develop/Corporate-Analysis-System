@@ -479,7 +479,7 @@ def _event_date_key(published_at: str) -> str:
     parsed = _parse_published_at(published_at)
     if parsed is None:
         return "undated"
-    return parsed.date().isoformat()
+    return str(parsed.date().isoformat())
 
 
 def _evidence_score_from_item(item: dict[str, object]) -> float:

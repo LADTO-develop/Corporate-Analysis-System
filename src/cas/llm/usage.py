@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
-from typing import Any
+from typing import Any, cast
 
 from pydantic import BaseModel
 
@@ -354,10 +354,10 @@ def _value_for_keys(candidate: object, keys: tuple[str, ...]) -> object | None:
     if isinstance(candidate, Mapping):
         for key in keys:
             if key in candidate:
-                return candidate[key]
+                return cast(object, candidate[key])
     for key in keys:
         try:
-            return getattr(candidate, key)
+            return cast(object, getattr(candidate, key))
         except Exception:
             continue
     return None

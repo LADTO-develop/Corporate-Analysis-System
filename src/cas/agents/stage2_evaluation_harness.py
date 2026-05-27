@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import pandas as pd
 
@@ -667,7 +667,7 @@ def _first_existing_value(row: pd.Series, columns: tuple[str, ...]) -> object | 
             continue
         value = row.get(column)
         if _non_empty_value(value):
-            return value
+            return cast(object, value)
     return None
 
 

@@ -33,8 +33,8 @@ from cas.agents.stage2_orchestrator import (
 from cas.agents.state import AgentState
 
 __all__ = [
-    "_apply_review_qa_advisory",
     "_apply_deterministic_risk_recall_guardrail",
+    "_apply_review_qa_advisory",
     "_apply_risk_recall_qa_advisory",
     "_chair_summary",
     "_committee_confidence",

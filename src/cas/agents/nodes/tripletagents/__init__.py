@@ -6,7 +6,7 @@ import os
 import time
 from collections.abc import Callable, Mapping
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any, TypeVar
+from typing import Any, TypeVar, cast
 
 from pydantic import BaseModel
 
@@ -26,7 +26,7 @@ from .quant_credit_agent import run_quant_credit_agent
 from .review_qa_agent import run_review_qa_agent
 from .risk_recall_qa_agent import run_risk_recall_qa_agent
 
-OutputT = TypeVar("OutputT")
+OutputT = TypeVar("OutputT", bound=BaseModel)
 STAGE2_ROLE_CACHE_VERSION = "stage2_llm_role_response_v1"
 _PRIMARY_ROLES: tuple[Stage2AgentRole, ...] = (
     "quant_credit",
@@ -278,7 +278,7 @@ def _cached_role_call(
         env=cache_env,
     )
     if cached_output is not None:
-        output, cached_usage = cached_output
+        cached_model, cached_usage = cached_output
         role_cache_hits[role] = True
         role_cache_keys[role] = cache_key
         role_token_usage[role] = usage_for_cache_hit(
@@ -288,14 +288,15 @@ def _cached_role_call(
             role=role,
         )
         timings[role] = round(time.perf_counter() - started_at, 4)
-        return output  # type: ignore[return-value]
+        return cast(OutputT, cached_model)
 
     usage: dict[str, object] = {}
     fallback_fn = kwargs.pop("fallback_fn", None)
     fallback_kwargs = kwargs.pop("fallback_kwargs", None)
-    retry_count = int(kwargs.pop("retry_count", 0) or 0)
+    raw_retry_count = kwargs.pop("retry_count", 0)
+    retry_count = int(raw_retry_count) if isinstance(raw_retry_count, int | float | str) else 0
     try:
-        output = fn(**kwargs, usage=usage)
+        agent_output = fn(**kwargs, usage=usage)
         normalized_usage = normalize_usage_record(
             usage,
             provider=model_provider,
@@ -311,15 +312,16 @@ def _cached_role_call(
         _write_cached_role_output(
             cache_key=cache_key,
             cache_version=STAGE2_ROLE_CACHE_VERSION,
-            output=output,
+            output=agent_output,
             usage=normalized_usage,
             env=cache_env,
         )
-        return output
+        return agent_output
     except Exception as error:
         if not callable(fallback_fn):
             raise
-        output = fallback_fn(**_fallback_kwargs(fallback_kwargs))
+        fallback_callable = cast(Callable[..., OutputT], fallback_fn)
+        fallback_output = fallback_callable(**_fallback_kwargs(fallback_kwargs))
         role_fallback_used[role] = True
         role_error_messages[role] = str(error)
         role_retry_counts[role] = retry_count
@@ -333,7 +335,7 @@ def _cached_role_call(
             cache_hit=False,
             billable=False,
         )
-        return output
+        return fallback_output
     finally:
         timings[role] = round(time.perf_counter() - started_at, 4)
 

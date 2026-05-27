@@ -618,8 +618,10 @@ def _coerce_retry_counts(value: object) -> dict[str, int]:
 
 
 def _coerce_int(value: object) -> int | None:
+    if not isinstance(value, int | float | str):
+        return None
     try:
-        return int(value)  # type: ignore[arg-type]
+        return int(value)
     except (TypeError, ValueError):
         return None
 

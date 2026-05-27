@@ -629,7 +629,7 @@ def _has_rating_boundary_context(bundle: Stage2InputBundle) -> bool:
 
 
 def _has_prior_hard_distress_context(bundle: Stage2InputBundle) -> bool:
-    return prior_rating_has_hard_distress_context(bundle.prior_rating_reference)
+    return bool(prior_rating_has_hard_distress_context(bundle.prior_rating_reference))
 
 
 def _stage2_risk_recall_qa_enabled(runtime_backend_name: str) -> bool:
