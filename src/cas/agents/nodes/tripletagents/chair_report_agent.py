@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import cast
+
 from pydantic import BaseModel, ConfigDict, Field
 
 from cas.agents.stage2_bundle import Stage2InputBundle
@@ -130,10 +132,7 @@ def _query(
         "materiality_summary": prompt_context["materiality_summary"],
         "credit_policy_summary": _policy_summary(bundle),
     }
-    return build_stage2_role_query(
-        "chair_report",
-        prompt_payload=prompt_payload,
-    )
+    return cast(str, build_stage2_role_query("chair_report", prompt_payload=prompt_payload))
 
 
 def _safe_committee_text(text: str) -> str:

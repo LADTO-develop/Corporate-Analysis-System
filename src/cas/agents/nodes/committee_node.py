@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 from cas.agents.nodes.deterministic_agents import (
     _evidence_audit_agent,
@@ -56,4 +56,4 @@ __all__ = [
 
 def run(state: AgentState) -> dict[str, Any]:
     """Run the Stage 2 committee scaffold through the shared orchestrator."""
-    return run_stage2_committee(state)
+    return cast(dict[str, Any], run_stage2_committee(state))

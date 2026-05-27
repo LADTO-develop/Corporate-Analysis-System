@@ -20,8 +20,7 @@ if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
 ROLE_ASSIGNMENT_DIR = (
-    ROOT
-    / "data/outputs/modeling/feature_46_xgboost/diagnostics/stage2_agents/"
+    ROOT / "data/outputs/modeling/feature_46_xgboost/diagnostics/stage2_agents/"
     "feature46_full_review_trigger_73_role_assignment_20"
 )
 DEFAULT_CANDIDATE_A = "gemini_quant_claude_evidence_openai_chair"
@@ -47,7 +46,9 @@ def main() -> None:
     load_dotenv(ROOT / ".env")
     if not os.environ.get("OPENAI_API_KEY"):
         raise RuntimeError("OPENAI_API_KEY is required for OpenAI memo judge.")
-    assignment_dir = args.assignment_dir if args.assignment_dir.is_absolute() else ROOT / args.assignment_dir
+    assignment_dir = (
+        args.assignment_dir if args.assignment_dir.is_absolute() else ROOT / args.assignment_dir
+    )
     output_dir = args.output_dir or assignment_dir / "openai_memo_judge_top2"
     output_dir = output_dir if output_dir.is_absolute() else ROOT / output_dir
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -84,7 +85,11 @@ def main() -> None:
     summary.to_csv(summary_path, index=False, encoding="utf-8-sig")
     usage.to_csv(usage_path, index=False, encoding="utf-8-sig")
     raw_prompt_path.write_text(
-        json.dumps(_judge_payload(args.candidate_a, args.candidate_b, joined.head(2)), ensure_ascii=False, indent=2),
+        json.dumps(
+            _judge_payload(args.candidate_a, args.candidate_b, joined.head(2)),
+            ensure_ascii=False,
+            indent=2,
+        ),
         encoding="utf-8",
     )
     report_path.write_text(
@@ -113,7 +118,12 @@ def main() -> None:
 
 
 def _load_candidate(assignment_dir: Path, assignment_id: str) -> pd.DataFrame:
-    path = assignment_dir / "runs" / f"multi_role_{assignment_id}" / "committee_review_batch_results.csv"
+    path = (
+        assignment_dir
+        / "runs"
+        / f"multi_role_{assignment_id}"
+        / "committee_review_batch_results.csv"
+    )
     if not path.exists():
         raise FileNotFoundError(f"Candidate result not found: {path}")
     frame = pd.read_csv(path)
@@ -150,7 +160,9 @@ def _paired_cases(candidate_a: pd.DataFrame, candidate_b: pd.DataFrame) -> pd.Da
     left = candidate_a.loc[:, columns].add_prefix("a_")
     right = candidate_b.loc[:, columns].add_prefix("b_")
     paired = left.merge(right, left_on="a_case_key", right_on="b_case_key", how="inner")
-    paired = paired.sort_values(["a_sample_category", "a_corp_name", "a_fiscal_year"]).reset_index(drop=True)
+    paired = paired.sort_values(["a_sample_category", "a_corp_name", "a_fiscal_year"]).reset_index(
+        drop=True
+    )
     paired.insert(0, "case_id", [f"case_{index + 1:02d}" for index in range(len(paired))])
     return paired
 
@@ -219,11 +231,10 @@ def _judge_chunk(
         "on financial_specificity, evidence_grounding, decision_consistency, actionability, "
         "and clarity. Also provide overall_score from 1 to 5, winner as candidate_a/candidate_b/tie, "
         "and a short Korean rationale. JSON schema: "
-        "{\"cases\":[{\"case_id\":\"case_01\",\"candidate_a\":{\"financial_specificity\":1,"
-        "\"evidence_grounding\":1,\"decision_consistency\":1,\"actionability\":1,\"clarity\":1,"
-        "\"overall_score\":1},\"candidate_b\":{...},\"winner\":\"candidate_a\","
-        "\"rationale_ko\":\"...\"}]}.\n\n"
-        + json.dumps(payload, ensure_ascii=False)
+        '{"cases":[{"case_id":"case_01","candidate_a":{"financial_specificity":1,'
+        '"evidence_grounding":1,"decision_consistency":1,"actionability":1,"clarity":1,'
+        '"overall_score":1},"candidate_b":{...},"winner":"candidate_a",'
+        '"rationale_ko":"..."}]}.\n\n' + json.dumps(payload, ensure_ascii=False)
     )
     response = client.chat.completions.create(
         model=model,
@@ -259,7 +270,10 @@ def _candidate_summary(
     args: argparse.Namespace,
 ) -> pd.DataFrame:
     rows = []
-    for label, assignment_id in (("candidate_a", args.candidate_a), ("candidate_b", args.candidate_b)):
+    for label, assignment_id in (
+        ("candidate_a", args.candidate_a),
+        ("candidate_b", args.candidate_b),
+    ):
         prefix = label + "."
         extracted = pd.json_normalize(case_scores[label])
         winner_count = int(case_scores["winner"].astype(str).eq(label).sum())
@@ -270,16 +284,22 @@ def _candidate_summary(
                 "judge_model": args.model,
                 "cases": len(case_scores),
                 "mean_overall_score": round(float(extracted["overall_score"].mean()), 4),
-                "mean_financial_specificity": round(float(extracted["financial_specificity"].mean()), 4),
+                "mean_financial_specificity": round(
+                    float(extracted["financial_specificity"].mean()), 4
+                ),
                 "mean_evidence_grounding": round(float(extracted["evidence_grounding"].mean()), 4),
-                "mean_decision_consistency": round(float(extracted["decision_consistency"].mean()), 4),
+                "mean_decision_consistency": round(
+                    float(extracted["decision_consistency"].mean()), 4
+                ),
                 "mean_actionability": round(float(extracted["actionability"].mean()), 4),
                 "mean_clarity": round(float(extracted["clarity"].mean()), 4),
                 "wins": winner_count,
                 "ties": tie_count,
                 "total_judge_prompt_tokens": int(usage["prompt_tokens"].sum()),
                 "total_judge_completion_tokens": int(usage["completion_tokens"].sum()),
-                "total_judge_estimated_cost_usd": round(float(usage["estimated_cost_usd"].sum()), 6),
+                "total_judge_estimated_cost_usd": round(
+                    float(usage["estimated_cost_usd"].sum()), 6
+                ),
                 "score_column_prefix": prefix,
             }
         )

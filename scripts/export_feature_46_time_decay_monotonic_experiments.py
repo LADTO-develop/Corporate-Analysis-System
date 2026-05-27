@@ -133,9 +133,21 @@ RISK_PROXY_SPECS = [
     ("accruals_ratio", "risk_proxy_accruals_ratio_industry_year_pct", "direct"),
     ("current_ratio", "risk_proxy_current_ratio_inverse_industry_year_pct", "inverse"),
     ("cash_ratio", "risk_proxy_cash_ratio_inverse_industry_year_pct", "inverse"),
-    ("interest_coverage_ratio", "risk_proxy_interest_coverage_inverse_industry_year_pct", "inverse"),
-    ("cashflow_coverage_ratio", "risk_proxy_cashflow_coverage_inverse_industry_year_pct", "inverse"),
-    ("ocf_to_total_borrowings", "risk_proxy_ocf_to_borrowings_inverse_industry_year_pct", "inverse"),
+    (
+        "interest_coverage_ratio",
+        "risk_proxy_interest_coverage_inverse_industry_year_pct",
+        "inverse",
+    ),
+    (
+        "cashflow_coverage_ratio",
+        "risk_proxy_cashflow_coverage_inverse_industry_year_pct",
+        "inverse",
+    ),
+    (
+        "ocf_to_total_borrowings",
+        "risk_proxy_ocf_to_borrowings_inverse_industry_year_pct",
+        "inverse",
+    ),
     ("operating_roa", "risk_proxy_operating_roa_inverse_industry_year_pct", "inverse"),
 ]
 RISK_PROXY_COLUMNS = [proxy for _, proxy, _ in RISK_PROXY_SPECS]
@@ -519,11 +531,11 @@ def add_baseline_deltas(frame: pd.DataFrame, *, scope: str) -> pd.DataFrame:
             "eval_f1_at_threshold_mean",
         ]:
             output[f"{column}_delta_vs_baseline"] = output[column] - float(base[column])
-        output["total_false_positive_delta_vs_baseline"] = (
-            output["total_false_positive"] - int(base["total_false_positive"])
+        output["total_false_positive_delta_vs_baseline"] = output["total_false_positive"] - int(
+            base["total_false_positive"]
         )
-        output["total_false_negative_delta_vs_baseline"] = (
-            output["total_false_negative"] - int(base["total_false_negative"])
+        output["total_false_negative_delta_vs_baseline"] = output["total_false_negative"] - int(
+            base["total_false_negative"]
         )
     else:
         for column in [
@@ -533,14 +545,12 @@ def add_baseline_deltas(frame: pd.DataFrame, *, scope: str) -> pd.DataFrame:
             "eval_f1_at_threshold",
         ]:
             output[f"{column}_delta_vs_baseline"] = output[column] - float(base[column])
-        output["eval_false_positive_at_threshold_delta_vs_baseline"] = (
-            output["eval_false_positive_at_threshold"]
-            - int(base["eval_false_positive_at_threshold"])
-        )
-        output["eval_false_negative_at_threshold_delta_vs_baseline"] = (
-            output["eval_false_negative_at_threshold"]
-            - int(base["eval_false_negative_at_threshold"])
-        )
+        output["eval_false_positive_at_threshold_delta_vs_baseline"] = output[
+            "eval_false_positive_at_threshold"
+        ] - int(base["eval_false_positive_at_threshold"])
+        output["eval_false_negative_at_threshold_delta_vs_baseline"] = output[
+            "eval_false_negative_at_threshold"
+        ] - int(base["eval_false_negative_at_threshold"])
     return output
 
 
@@ -591,7 +601,9 @@ def format_signed(value: object, digits: int = 4) -> str:
 
 def markdown_table(frame: pd.DataFrame, columns: list[tuple[str, str, str]]) -> str:
     header = "| " + " | ".join(label for label, _, _ in columns) + " |"
-    separator = "| " + " | ".join("---:" if kind != "text" else "---" for _, _, kind in columns) + " |"
+    separator = (
+        "| " + " | ".join("---:" if kind != "text" else "---" for _, _, kind in columns) + " |"
+    )
     rows = [header, separator]
     for _, row in frame.iterrows():
         values = []
@@ -857,7 +869,9 @@ def main() -> None:
         seed=args.seed,
     )
 
-    fold_metrics.to_csv(output_dir / ROLLING_FOLD_METRICS_FILENAME, index=False, encoding="utf-8-sig")
+    fold_metrics.to_csv(
+        output_dir / ROLLING_FOLD_METRICS_FILENAME, index=False, encoding="utf-8-sig"
+    )
     rolling_summary.to_csv(output_dir / ROLLING_SUMMARY_FILENAME, index=False, encoding="utf-8-sig")
     final_test.to_csv(output_dir / FINAL_TEST_FILENAME, index=False, encoding="utf-8-sig")
     (output_dir / SUMMARY_FILENAME).write_text(

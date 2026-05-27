@@ -489,24 +489,33 @@ def _evidence_treatment_summary(
 ) -> dict[str, Any]:
     from cas.agents.signals.evidence_treatment_signals import evaluate_evidence_treatment
 
-    return evaluate_evidence_treatment(
-        news_cache,
-        source_feature_row=source_feature_row,
-        materiality_summary=materiality_profile,
-    ).as_payload()
+    return cast(
+        dict[str, Any],
+        evaluate_evidence_treatment(
+            news_cache,
+            source_feature_row=source_feature_row,
+            materiality_summary=materiality_profile,
+        ).as_payload(),
+    )
 
 
 def _boundary_context(prior_rating_reference: dict[str, Any]) -> dict[str, Any]:
     policy = load_stage2_policy()
-    rating = str(
-        prior_rating_reference.get("prior_credit_rating")
-        or prior_rating_reference.get("credit_rating")
-        or ""
-    ).strip().upper()
+    rating = (
+        str(
+            prior_rating_reference.get("prior_credit_rating")
+            or prior_rating_reference.get("credit_rating")
+            or ""
+        )
+        .strip()
+        .upper()
+    )
     group = str(prior_rating_reference.get("prior_rating_boundary_group") or "").strip()
     group_normalized = group.lower()
     rank = _optional_int(prior_rating_reference.get("prior_credit_rating_rank"))
-    speculative_min_rank = policy.int("committee_guardrails", "prior_rating", "speculative_min_rank")
+    speculative_min_rank = policy.int(
+        "committee_guardrails", "prior_rating", "speculative_min_rank"
+    )
     stable_investment_max_rank = policy.int(
         "committee_guardrails",
         "prior_rating",
@@ -567,16 +576,13 @@ def _secondary_trigger_profile(
             or "none"
         ),
         "trigger_reason_code": str(
-            _first_present(xgboost_result, model_view, key="trigger_reason_code", default="")
-            or ""
+            _first_present(xgboost_result, model_view, key="trigger_reason_code", default="") or ""
         ),
         "trigger_reason": str(
-            _first_present(xgboost_result, model_view, key="trigger_reason", default="")
-            or ""
+            _first_present(xgboost_result, model_view, key="trigger_reason", default="") or ""
         ),
         "risk_band": str(
-            _first_present(xgboost_result, model_view, key="risk_band", default="")
-            or ""
+            _first_present(xgboost_result, model_view, key="risk_band", default="") or ""
         ),
         "stage2_overwarning_filter_candidate": _truthy(
             _first_present(
@@ -600,9 +606,7 @@ def _secondary_trigger_profile(
             and threshold > 0
             and 0.0 <= margin_to_threshold <= near_threshold_margin
         ),
-        "absolute_near_threshold": bool(
-            threshold > 0 and absolute_margin <= near_threshold_margin
-        ),
+        "absolute_near_threshold": bool(threshold > 0 and absolute_margin <= near_threshold_margin),
     }
 
 

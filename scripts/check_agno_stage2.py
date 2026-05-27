@@ -317,7 +317,9 @@ def _missing_packages(
     checker = import_checker or _default_import_checker
     missing: list[str] = []
     for package_name, import_names in package_specs.items():
-        missing_imports = tuple(import_name for import_name in import_names if not checker(import_name))
+        missing_imports = tuple(
+            import_name for import_name in import_names if not checker(import_name)
+        )
         if missing_imports:
             missing.append(
                 f"Missing package '{package_name}' imports {', '.join(missing_imports)}. "

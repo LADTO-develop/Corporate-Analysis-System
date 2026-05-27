@@ -200,7 +200,9 @@ def add_macro_features(master: pd.DataFrame, raw_ts2000_path: Path) -> pd.DataFr
 
     output["macro_short_term_borrowings_pressure"] = short_term_share.clip(lower=0, upper=1)
     output["macro_total_borrowings_pressure"] = total_borrowings.clip(lower=0, upper=2)
-    output["macro_interest_coverage_pressure"] = (1.0 - interest_coverage.clip(lower=-4, upper=1)).clip(
+    output["macro_interest_coverage_pressure"] = (
+        1.0 - interest_coverage.clip(lower=-4, upper=1)
+    ).clip(
         lower=0,
         upper=5,
     )
@@ -584,7 +586,7 @@ def build_report(
             "# 46-Feature Macro Interaction Feature Pack Experiments",
             "",
             "공식 `credit_46_features` 입력에 macro regime 변화량과 "
-            "macro shock × 재무 취약도 interaction 후보를 추가해 walk-forward rolling OOT로 비교했습니다.",
+            "macro shock x 재무 취약도 interaction 후보를 추가해 walk-forward rolling OOT로 비교했습니다.",
             "",
             f"Rolling 평가연도는 `{', '.join(str(year) for year in eval_years)}`이고, "
             "Final Test는 공식 test split인 2023~2024 구간입니다.",
@@ -696,7 +698,7 @@ def build_report(
             + ", ".join(f"`{column}`" for column in MACRO_SHOCK_COLUMNS),
             "- Vulnerability proxy: "
             + ", ".join(f"`{column}`" for column in VULNERABILITY_COLUMNS),
-            "- Macro × vulnerability interaction: "
+            "- Macro x vulnerability interaction: "
             + ", ".join(f"`{column}`" for column in INTERACTION_COLUMNS),
             "",
             "## 8. 해석 주의",
@@ -797,9 +799,7 @@ def main() -> None:
                 "best_final_test_f1": float(best["final_eval_f1_at_threshold"]),
                 "baseline_final_test_f1": float(baseline["final_eval_f1_at_threshold"]),
                 "report": str(
-                    (args.output_dir / "macro_interaction_feature_pack_report.md").relative_to(
-                        ROOT
-                    )
+                    (args.output_dir / "macro_interaction_feature_pack_report.md").relative_to(ROOT)
                 ),
             },
             ensure_ascii=False,

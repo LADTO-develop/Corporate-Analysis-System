@@ -21,8 +21,7 @@ import export_stage2_feature46_full_review_trigger_harness as harness  # noqa: E
 import export_stage2_rolling_validation_samples as sample_export  # noqa: E402
 
 OUTPUT_DIR = (
-    ROOT
-    / "data/outputs/modeling/feature_46_xgboost/diagnostics/stage2_agents/"
+    ROOT / "data/outputs/modeling/feature_46_xgboost/diagnostics/stage2_agents/"
     "feature46_full_review_trigger_73_role_assignment_20"
 )
 PROVIDER_MODELS = {
@@ -57,7 +56,9 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-dir", type=Path, default=OUTPUT_DIR)
     parser.add_argument("--policy", default=harness.DEFAULT_POLICY)
-    parser.add_argument("--eval-years", type=int, nargs="+", default=sample_export.ROLLING_EVAL_YEARS)
+    parser.add_argument(
+        "--eval-years", type=int, nargs="+", default=sample_export.ROLLING_EVAL_YEARS
+    )
     parser.add_argument("--sample-per-category", type=int, default=15)
     parser.add_argument("--batch-per-category", type=int, default=4)
     parser.add_argument("--max-cases", type=int, default=20)
@@ -107,7 +108,9 @@ def main() -> None:
             category_frames.append(category_summary)
 
     provider_summary = harness.provider_summary_frame(summaries)
-    provider_summary.insert(4, "role_assignment_id", provider_summary["run_id"].str.removeprefix("multi_role_"))
+    provider_summary.insert(
+        4, "role_assignment_id", provider_summary["run_id"].str.removeprefix("multi_role_")
+    )
     provider_summary.insert(
         5,
         "selected_default",
@@ -232,9 +235,7 @@ def _attach_assignment_metrics(provider_summary: pd.DataFrame, output_dir: Path)
         }
     if not metric_rows:
         return enriched
-    metrics = pd.DataFrame(
-        [{"run_id": run_id, **values} for run_id, values in metric_rows.items()]
-    )
+    metrics = pd.DataFrame([{"run_id": run_id, **values} for run_id, values in metric_rows.items()])
     return enriched.merge(metrics, on="run_id", how="left")
 
 
@@ -272,8 +273,12 @@ def _review_or_reject_metrics(results: pd.DataFrame) -> dict[str, Any]:
 
 def _risk_review_positive(results: pd.DataFrame) -> pd.Series:
     final_label = results["final_committee_label"].astype(str)
-    decision_type = results.get("committee_decision_type", pd.Series("", index=results.index)).astype(str)
-    risk_signal = results.get("committee_risk_signal", pd.Series("", index=results.index)).astype(str)
+    decision_type = results.get(
+        "committee_decision_type", pd.Series("", index=results.index)
+    ).astype(str)
+    risk_signal = results.get("committee_risk_signal", pd.Series("", index=results.index)).astype(
+        str
+    )
     hold_tags = results.get("risk_hold_reason_tags", pd.Series("", index=results.index)).astype(str)
     risk_hold_types = decision_type.isin({"risk_hold", "review_hold", "boundary_hold", "reject"})
     risk_tagged_hold = final_label.eq("보류") & (
@@ -313,7 +318,9 @@ def _assignment_cost_estimate(
     for role in ("quant_credit", "evidence_audit", "chair_report"):
         _add_role_tokens(token_counts, assignment[role], role, rows)
     _add_role_tokens(token_counts, assignment["chair_report"], "review_qa", review_qa_rows)
-    _add_role_tokens(token_counts, assignment["chair_report"], "risk_recall_qa", risk_recall_qa_rows)
+    _add_role_tokens(
+        token_counts, assignment["chair_report"], "risk_recall_qa", risk_recall_qa_rows
+    )
     total_cost = 0.0
     total_input_tokens = 0
     total_output_tokens = 0

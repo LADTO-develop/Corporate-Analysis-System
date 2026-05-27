@@ -13,9 +13,7 @@ FN_RESCUE_DEFAULT_PROB_CEILING = 0.30
 FN_RESCUE_DEFAULT_SCORE_THRESHOLD = 0.65
 FN_RESCUE_DEFAULT_MIN_GROUPS = 2
 FN_RESCUE_GROUP_THRESHOLD = 0.70
-FN_RESCUE_POLICY_NAME = (
-    "kosdaq_manufacturing_low_stage1_probability_financial_stress_rescue_gate"
-)
+FN_RESCUE_POLICY_NAME = "kosdaq_manufacturing_low_stage1_probability_financial_stress_rescue_gate"
 
 FN_RESCUE_RAW_COLUMNS = [
     "accounts_receivable_ratio",
@@ -45,6 +43,7 @@ FN_RESCUE_SCORE_COLUMNS = [
 
 
 def require_fn_rescue_columns(frame: pd.DataFrame, columns: Iterable[str] | None = None) -> None:
+    """Raise when required FN-rescue source columns are absent."""
     required = list(columns or FN_RESCUE_RAW_COLUMNS)
     missing = [column for column in required if column not in frame.columns]
     if missing:
@@ -83,15 +82,23 @@ def add_manufacturing_fn_rescue_scores(frame: pd.DataFrame) -> pd.DataFrame:
     require_fn_rescue_columns(frame)
     output = frame.copy().replace([np.inf, -np.inf], np.nan)
 
-    output["_fn_risk_receivables"] = _risk_rank(output, _numeric(output, "accounts_receivable_ratio"))
+    output["_fn_risk_receivables"] = _risk_rank(
+        output, _numeric(output, "accounts_receivable_ratio")
+    )
     output["_fn_risk_inventory"] = _risk_rank(output, _numeric(output, "inventory_ratio"))
-    output["_fn_risk_contract_assets"] = _risk_rank(output, _numeric(output, "contract_assets_ratio"))
-    output["_fn_risk_ar_days_worsening"] = _risk_rank(output, _positive_part(output, "ar_days_diff"))
+    output["_fn_risk_contract_assets"] = _risk_rank(
+        output, _numeric(output, "contract_assets_ratio")
+    )
+    output["_fn_risk_ar_days_worsening"] = _risk_rank(
+        output, _positive_part(output, "ar_days_diff")
+    )
     output["_fn_risk_inventory_days_worsening"] = _risk_rank(
         output,
         _positive_part(output, "inventory_days_diff"),
     )
-    output["_fn_risk_ap_days_worsening"] = _risk_rank(output, _positive_part(output, "ap_days_diff"))
+    output["_fn_risk_ap_days_worsening"] = _risk_rank(
+        output, _positive_part(output, "ap_days_diff")
+    )
     output["fn_rescue_working_capital_stress_score"] = _mean_score(
         output,
         [
@@ -198,7 +205,9 @@ def build_manufacturing_fn_rescue_gate(
     """Return a review-only trigger for likely low-score manufacturing FN cases."""
     market = frame["market"].astype(str).eq(FN_RESCUE_TARGET_MARKET)
     industry = frame["industry_macro_category"].astype(str).eq(FN_RESCUE_TARGET_INDUSTRY)
-    stage1_normal = pd.to_numeric(frame[prediction_column], errors="coerce").fillna(0).astype(int).eq(0)
+    stage1_normal = (
+        pd.to_numeric(frame[prediction_column], errors="coerce").fillna(0).astype(int).eq(0)
+    )
     low_probability = pd.to_numeric(frame[probability_column], errors="coerce").le(
         probability_ceiling
     )

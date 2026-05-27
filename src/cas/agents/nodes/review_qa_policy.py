@@ -344,11 +344,16 @@ def _has_review_qa_reject_boundary_defense(bundle: Stage2InputBundle | None) -> 
             "ocf_to_total_liabilities",
             policy.float(*section, "ocf_to_total_liabilities_floor"),
         )
-        or _metric_at_least_value(row, "ocf_to_sales", policy.float(*section, "ocf_to_sales_floor")),
+        or _metric_at_least_value(
+            row, "ocf_to_sales", policy.float(*section, "ocf_to_sales_floor")
+        ),
     ]
-    return sum(1 for passed in axes if passed) >= policy.int(
-        *section,
-        "min_defensive_axes",
+    return bool(
+        sum(1 for passed in axes if passed)
+        >= policy.int(
+            *section,
+            "min_defensive_axes",
+        )
     )
 
 
@@ -595,7 +600,9 @@ def _has_review_qa_risk_hold_boundary_defense(bundle: Stage2InputBundle) -> bool
             "ocf_to_total_liabilities",
             policy.float(*section, "ocf_to_total_liabilities_floor"),
         )
-        or _metric_at_least_value(row, "ocf_to_sales", policy.float(*section, "ocf_to_sales_floor")),
+        or _metric_at_least_value(
+            row, "ocf_to_sales", policy.float(*section, "ocf_to_sales_floor")
+        ),
         _metric_at_least_value(
             row,
             "interest_coverage_ratio",
@@ -622,9 +629,12 @@ def _has_review_qa_risk_hold_boundary_defense(bundle: Stage2InputBundle) -> bool
         not _truthy(row.get("is_2y_consecutive_operating_loss"))
         and not _truthy(row.get("is_2y_consecutive_ocf_deficit")),
     ]
-    return sum(1 for passed in defensive_axes if passed) >= policy.int(
-        *section,
-        "min_defensive_axes",
+    return bool(
+        sum(1 for passed in defensive_axes if passed)
+        >= policy.int(
+            *section,
+            "min_defensive_axes",
+        )
     )
 
 

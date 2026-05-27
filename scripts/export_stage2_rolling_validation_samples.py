@@ -267,9 +267,7 @@ def add_full_review_trigger_signals(scores: pd.DataFrame) -> pd.DataFrame:
     ) & pd.to_numeric(
         output["prob_speculative_stage2_review_aux"],
         errors="coerce",
-    ).ge(
-        pd.to_numeric(output["threshold_stage2_review_aux_it_services_review"], errors="coerce")
-    )
+    ).ge(pd.to_numeric(output["threshold_stage2_review_aux_it_services_review"], errors="coerce"))
     output["stage2_review_aux_trigger"] = aux_risk | it_services_review
     output["stage2_review_aux_secondary_trigger"] = (~stage1_risk) & output[
         "stage2_review_aux_trigger"
@@ -279,14 +277,14 @@ def add_full_review_trigger_signals(scores: pd.DataFrame) -> pd.DataFrame:
         probability_column="prob_speculative",
         prediction_column="pred_label_tuned",
     ).astype(bool)
-    output["stage2_secondary_trigger"] = (
-        output["stage2_review_aux_secondary_trigger"].astype(bool)
-        | output["stage2_fn_rescue_trigger"].astype(bool)
-    )
+    output["stage2_secondary_trigger"] = output["stage2_review_aux_secondary_trigger"].astype(
+        bool
+    ) | output["stage2_fn_rescue_trigger"].astype(bool)
     output["stage2_review_trigger"] = stage1_risk | output["stage2_secondary_trigger"].astype(bool)
     output["stage2_review_priority"] = np.select(
         [
-            stage1_risk & pd.to_numeric(output["prob_speculative"], errors="coerce").ge(
+            stage1_risk
+            & pd.to_numeric(output["prob_speculative"], errors="coerce").ge(
                 pd.to_numeric(output["threshold"], errors="coerce") + 0.10
             ),
             output["stage2_secondary_trigger"].astype(bool),

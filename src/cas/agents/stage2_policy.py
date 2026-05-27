@@ -6,7 +6,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from cas.utils.io import read_yaml
 
@@ -280,11 +280,11 @@ class Stage2Policy:
 
     def float(self, *path: str) -> float:
         """Return a policy value as float."""
-        return float(self.value(*path))
+        return float(cast(Any, self.value(*path)))
 
     def int(self, *path: str) -> int:
         """Return a policy value as int."""
-        return int(self.value(*path))
+        return int(cast(Any, self.value(*path)))
 
 
 @lru_cache(maxsize=4)

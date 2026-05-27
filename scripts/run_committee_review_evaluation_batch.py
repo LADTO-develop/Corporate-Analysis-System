@@ -228,9 +228,7 @@ def _load_dotenv_preserving_stage2_env() -> dict[str, str]:
     """Load .env for provider credentials without mutating Stage 2 runtime knobs."""
     env_path = ROOT / ".env"
     dotenv_env = {
-        str(key): str(value)
-        for key, value in dotenv_values(env_path).items()
-        if value is not None
+        str(key): str(value) for key, value in dotenv_values(env_path).items() if value is not None
     }
     stage2_keys = {
         key

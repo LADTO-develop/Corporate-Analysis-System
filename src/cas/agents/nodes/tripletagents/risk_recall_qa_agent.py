@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -130,10 +130,7 @@ def _query(
         },
         "qa_trigger_reasons": trigger_reasons,
     }
-    return build_stage2_role_query(
-        "risk_recall_qa",
-        prompt_payload=prompt_payload,
-    )
+    return cast(str, build_stage2_role_query("risk_recall_qa", prompt_payload=prompt_payload))
 
 
 def _safe_qa_text(text: str) -> str:

@@ -32,7 +32,9 @@ def test_stage2_role_instructions_and_query_include_contract_version() -> None:
         prompt_payload={"company": {"name": "테스트기업"}},
     )
 
-    assert instructions[0] == "You are the CAS ChairReportAgent speaking from the Gemini perspective."
+    assert (
+        instructions[0] == "You are the CAS ChairReportAgent speaking from the Gemini perspective."
+    )
     assert "stage2_role_prompt_contract_v2:chair_report" in instructions[1]
     assert "normalized_signal_summary" in instructions[4]
     assert "stage2_role_prompt_contract_v2:review_qa" in query
@@ -48,9 +50,7 @@ def test_llm_client_prompt_payload_records_all_role_contracts() -> None:
     )
     versions = stage2_llm_client_prompt_contract_versions()
 
-    assert payload["prompt_contract"]["prompt_contract_version"] == (
-        "stage2_llm_client_prompt_v5"
-    )
+    assert payload["prompt_contract"]["prompt_contract_version"] == ("stage2_llm_client_prompt_v5")
     assert payload["prompt_contract"]["role_prompt_contract_versions"] == {
         key: value for key, value in versions.items() if key != "stage2_llm_client"
     }

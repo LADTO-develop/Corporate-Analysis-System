@@ -8,7 +8,6 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-import numpy as np
 import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -302,7 +301,7 @@ def summarize_rolling(fold_metrics: pd.DataFrame) -> pd.DataFrame:
             "probability_ceiling": float(group["probability_ceiling"].iloc[0]),
             "score_threshold": float(group["score_threshold"].iloc[0]),
             "min_group_count": int(group["min_group_count"].iloc[0]),
-            "folds": int(len(group)),
+            "folds": len(group),
         }
         for column in metric_columns:
             row[f"{column}_mean"] = float(group[column].mean())
@@ -318,22 +317,21 @@ def summarize_rolling(fold_metrics: pd.DataFrame) -> pd.DataFrame:
         rows.append(row)
     summary = pd.DataFrame(rows)
     baseline = summary.loc[summary["policy_id"].eq("baseline_stage1_only")].iloc[0]
-    summary["rolling_f1_delta_vs_baseline"] = (
-        summary["trigger_f1_mean"] - float(baseline["trigger_f1_mean"])
+    summary["rolling_f1_delta_vs_baseline"] = summary["trigger_f1_mean"] - float(
+        baseline["trigger_f1_mean"]
     )
-    summary["rolling_recall_delta_vs_baseline"] = (
-        summary["trigger_recall_mean"] - float(baseline["trigger_recall_mean"])
+    summary["rolling_recall_delta_vs_baseline"] = summary["trigger_recall_mean"] - float(
+        baseline["trigger_recall_mean"]
     )
-    summary["rolling_fp_delta_vs_baseline"] = (
-        summary["trigger_false_positive_sum"] - int(baseline["trigger_false_positive_sum"])
+    summary["rolling_fp_delta_vs_baseline"] = summary["trigger_false_positive_sum"] - int(
+        baseline["trigger_false_positive_sum"]
     )
-    summary["rolling_fn_delta_vs_baseline"] = (
-        summary["trigger_false_negative_sum"] - int(baseline["trigger_false_negative_sum"])
+    summary["rolling_fn_delta_vs_baseline"] = summary["trigger_false_negative_sum"] - int(
+        baseline["trigger_false_negative_sum"]
     )
-    summary["rolling_target_fn_delta_vs_baseline"] = (
-        summary["target_trigger_false_negative_sum"]
-        - int(baseline["target_trigger_false_negative_sum"])
-    )
+    summary["rolling_target_fn_delta_vs_baseline"] = summary[
+        "target_trigger_false_negative_sum"
+    ] - int(baseline["target_trigger_false_negative_sum"])
     return summary.sort_values(
         [
             "rolling_fn_delta_vs_baseline",
@@ -363,22 +361,21 @@ def merge_final(summary: pd.DataFrame, final_metrics: pd.DataFrame) -> pd.DataFr
     )
     output = summary.merge(final, on="policy_id", how="left")
     baseline = output.loc[output["policy_id"].eq("baseline_stage1_only")].iloc[0]
-    output["final_f1_delta_vs_baseline"] = (
-        output["final_trigger_f1"] - float(baseline["final_trigger_f1"])
+    output["final_f1_delta_vs_baseline"] = output["final_trigger_f1"] - float(
+        baseline["final_trigger_f1"]
     )
-    output["final_recall_delta_vs_baseline"] = (
-        output["final_trigger_recall"] - float(baseline["final_trigger_recall"])
+    output["final_recall_delta_vs_baseline"] = output["final_trigger_recall"] - float(
+        baseline["final_trigger_recall"]
     )
-    output["final_fp_delta_vs_baseline"] = (
-        output["final_trigger_false_positive"] - int(baseline["final_trigger_false_positive"])
+    output["final_fp_delta_vs_baseline"] = output["final_trigger_false_positive"] - int(
+        baseline["final_trigger_false_positive"]
     )
-    output["final_fn_delta_vs_baseline"] = (
-        output["final_trigger_false_negative"] - int(baseline["final_trigger_false_negative"])
+    output["final_fn_delta_vs_baseline"] = output["final_trigger_false_negative"] - int(
+        baseline["final_trigger_false_negative"]
     )
-    output["final_target_fn_delta_vs_baseline"] = (
-        output["final_target_trigger_false_negative"]
-        - int(baseline["final_target_trigger_false_negative"])
-    )
+    output["final_target_fn_delta_vs_baseline"] = output[
+        "final_target_trigger_false_negative"
+    ] - int(baseline["final_target_trigger_false_negative"])
     return output
 
 
@@ -429,9 +426,9 @@ def build_report(
 ) -> str:
     baseline = summary.loc[summary["policy_id"].eq("baseline_stage1_only")].iloc[0]
     best = summary.iloc[0]
-    recommended = summary.loc[
-        summary["policy_id"].eq("conservative_group2_prob030_score065")
-    ].iloc[0]
+    recommended = summary.loc[summary["policy_id"].eq("conservative_group2_prob030_score065")].iloc[
+        0
+    ]
     baseline_rows = fold_metrics.loc[fold_metrics["policy_id"].eq("baseline_stage1_only")]
     best_rows = fold_metrics.loc[fold_metrics["policy_id"].eq(str(best["policy_id"]))]
     final_ranked = final_metrics.sort_values(
@@ -595,7 +592,9 @@ def write_outputs(
         "best_by_rolling_fn": summary.iloc[0].to_dict(),
         "recommended_operating_policy": summary.loc[
             summary["policy_id"].eq("conservative_group2_prob030_score065")
-        ].iloc[0].to_dict(),
+        ]
+        .iloc[0]
+        .to_dict(),
         "output_files": {name: str(path.relative_to(ROOT)) for name, path in paths.items()},
     }
     paths["metadata"].write_text(
@@ -642,9 +641,7 @@ def main() -> None:
                 "final_fn_delta_vs_baseline": int(best["final_fn_delta_vs_baseline"]),
                 "final_fp_delta_vs_baseline": int(best["final_fp_delta_vs_baseline"]),
                 "report": str(
-                    (args.output_dir / "manufacturing_fn_rescue_gate_report.md").relative_to(
-                        ROOT
-                    )
+                    (args.output_dir / "manufacturing_fn_rescue_gate_report.md").relative_to(ROOT)
                 ),
             },
             ensure_ascii=False,

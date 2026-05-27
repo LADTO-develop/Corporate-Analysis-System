@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Literal, cast
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -205,10 +205,7 @@ def _query(bundle: Stage2InputBundle) -> str:
             ),
         },
     }
-    return build_stage2_role_query(
-        "evidence_audit",
-        prompt_payload=prompt_payload,
-    )
+    return cast(str, build_stage2_role_query("evidence_audit", prompt_payload=prompt_payload))
 
 
 def _evidence_strength(

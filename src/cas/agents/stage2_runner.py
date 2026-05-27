@@ -347,11 +347,14 @@ def _build_prompt_payload(
     confidence: float,
     draft_outputs: dict[str, Any],
 ) -> dict[str, Any]:
-    return build_stage2_llm_client_prompt_payload(
-        recommendation=recommendation,
-        confidence=confidence,
-        stage2_input_bundle=bundle.to_compact_prompt_payload(role="stage2"),
-        deterministic_draft_outputs=draft_outputs,
+    return cast(
+        dict[str, Any],
+        build_stage2_llm_client_prompt_payload(
+            recommendation=recommendation,
+            confidence=confidence,
+            stage2_input_bundle=bundle.to_compact_prompt_payload(role="stage2"),
+            deterministic_draft_outputs=draft_outputs,
+        ),
     )
 
 
@@ -396,14 +399,14 @@ def _stage2_cache_payload(
 
 def _prompt_contract_version(runner: AgnoStage2AgentRunner) -> str:
     if runner.llm_client is not None:
-        return stage2_llm_client_prompt_contract_version()
+        return str(stage2_llm_client_prompt_contract_version())
     return "stage2_triplet_prompt_contract_v1"
 
 
 def _prompt_contract_versions(runner: AgnoStage2AgentRunner) -> dict[str, str]:
     if runner.llm_client is not None:
-        return stage2_llm_client_prompt_contract_versions()
-    return stage2_prompt_contract_versions(STAGE2_TRIPLET_AGENT_ROLES)
+        return cast(dict[str, str], stage2_llm_client_prompt_contract_versions())
+    return cast(dict[str, str], stage2_prompt_contract_versions(STAGE2_TRIPLET_AGENT_ROLES))
 
 
 def _read_stage2_cached_response(

@@ -233,16 +233,12 @@ def _risk_recall_qa_advisory_apply_reason(
         and len(weak_axes)
         >= policy.int("risk_recall_qa", "advisory", "near_threshold_min_weak_axes")
     )
-    multi_axis_weak = (
-        "eligible_with_multiple_weak_financial_axes" in trigger_reasons
-        and len(weak_axes)
-        >= policy.int("risk_recall_qa", "advisory", "multi_axis_min_weak_axes")
-    )
-    boundary_weak = (
-        "eligible_boundary_rating_context" in trigger_reasons
-        and len(weak_axes)
-        >= policy.int("risk_recall_qa", "advisory", "boundary_rating_min_weak_axes")
-    )
+    multi_axis_weak = "eligible_with_multiple_weak_financial_axes" in trigger_reasons and len(
+        weak_axes
+    ) >= policy.int("risk_recall_qa", "advisory", "multi_axis_min_weak_axes")
+    boundary_weak = "eligible_boundary_rating_context" in trigger_reasons and len(
+        weak_axes
+    ) >= policy.int("risk_recall_qa", "advisory", "boundary_rating_min_weak_axes")
     if not (confirmed_external_evidence or near_threshold_weak or multi_axis_weak or boundary_weak):
         return ""
     return "risk_recall_boundary_safety_review"
@@ -294,7 +290,8 @@ def _risk_recall_evidence_item_is_confirmed(item: dict[str, Any]) -> bool:
     if quality == "low":
         return False
     if quality in {"medium", "high"} and (
-        score is None or score >= policy.float("risk_recall_qa", "evidence", "medium_high_min_score")
+        score is None
+        or score >= policy.float("risk_recall_qa", "evidence", "medium_high_min_score")
     ):
         return True
     return score is not None and score >= policy.float(
@@ -394,9 +391,7 @@ def _risk_recall_near_threshold(bundle: Stage2InputBundle) -> bool:
     if threshold is None or threshold <= 0:
         return False
     margin = threshold - (probability or 0.0)
-    return bool(
-        0.0 <= margin <= policy.float("risk_recall_qa", "trigger", "near_threshold_margin")
-    )
+    return bool(0.0 <= margin <= policy.float("risk_recall_qa", "trigger", "near_threshold_margin"))
 
 
 def _risk_recall_weak_financial_axes(bundle: Stage2InputBundle) -> list[str]:

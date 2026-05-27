@@ -297,9 +297,7 @@ def build_historical_samples(
     sample_frames: list[pd.DataFrame] = []
     policy_columns = {
         "feature46_full_review_trigger_73": "balanced_committee_review_trigger",
-        "recall_first_feature46_full_review_trigger_73": (
-            "recall_first_committee_review_trigger"
-        ),
+        "recall_first_feature46_full_review_trigger_73": ("recall_first_committee_review_trigger"),
     }
     for policy_name, trigger_column in policy_columns.items():
         triggered = split_frame[trigger_column].astype(bool)

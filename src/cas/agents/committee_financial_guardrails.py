@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 from cas.agents.committee_assessments import (
     FinancialResilienceAssessment,
@@ -32,12 +32,12 @@ from cas.agents.stage2_policy import load_stage2_policy
 
 def _committee_float(*path: str) -> float:
     """Return a committee guardrail policy value as float."""
-    return load_stage2_policy().float("committee_guardrails", *path)
+    return cast(float, load_stage2_policy().float("committee_guardrails", *path))
 
 
 def _committee_int(*path: str) -> int:
     """Return a committee guardrail policy value as int."""
-    return load_stage2_policy().int("committee_guardrails", *path)
+    return cast(int, load_stage2_policy().int("committee_guardrails", *path))
 
 
 def has_stage2_secondary_trigger(bundle: Stage2InputBundle) -> bool:
@@ -369,9 +369,7 @@ def secondary_overhold_guardrail_supports(row: dict[str, Any]) -> list[str]:
         row,
         "interest_coverage_ratio",
         _committee_float(section, "interest_coverage_ratio_floor"),
-    ) and not (
-        flag_is_true(row.get("icr_under_1"))
-    )
+    ) and not (flag_is_true(row.get("icr_under_1")))
     if cashflow_signal and (
         interest_service_signal or has_isolated_interest_cover_row_defense(row)
     ):
@@ -403,7 +401,9 @@ def has_secondary_overhold_guardrail_blocker(row: dict[str, Any]) -> bool:
     section = "secondary_overhold_blocker"
     if metric_below(row, "net_margin", _committee_float(section, "net_margin_floor")):
         return True
-    if metric_below(row, "ocf_to_sales", _committee_float(section, "ocf_to_sales_floor")) and metric_below(
+    if metric_below(
+        row, "ocf_to_sales", _committee_float(section, "ocf_to_sales_floor")
+    ) and metric_below(
         row,
         "ocf_to_total_liabilities",
         _committee_float(section, "ocf_to_total_liabilities_floor"),
@@ -499,7 +499,9 @@ def risk_hold_has_financial_stress(
         return True
     if has_secondary_overhold_guardrail_blocker(row):
         return True
-    if reject_confirmation.signal_count >= _committee_int(section, "reject_confirmation_min_signals"):
+    if reject_confirmation.signal_count >= _committee_int(
+        section, "reject_confirmation_min_signals"
+    ):
         return True
     financial_flags = [
         flag_is_true(row.get("icr_under_1"))
@@ -554,10 +556,15 @@ def secondary_review_risk_assessment(bundle: Stage2InputBundle) -> SecondaryRevi
         threshold - policy.float(*section, "threshold_buffer"),
     )
     meets_probability_floor = probability >= probability_floor
-    near_threshold = probability >= threshold - policy.float(
-        *section,
-        "threshold_buffer",
-    ) and meets_probability_floor
+    near_threshold = (
+        probability
+        >= threshold
+        - policy.float(
+            *section,
+            "threshold_buffer",
+        )
+        and meets_probability_floor
+    )
     priority_requires_hold = review_priority in {"medium", "high", "critical"}
     severe_watch = has_severe_financial_watch_signal(bundle.source_feature_row)
     secondary_liquidity_watch = has_secondary_rule_liquidity_watch_signal(bundle)
@@ -935,15 +942,54 @@ def financial_resilience_overwarning_assessment(
     """Detect high-risk model calls that still show broad financial defense capacity."""
     section = "financial_resilience_overwarning"
     support_checks = [
-        ("유동비율 1.2배 이상", metric_at_least(row, "current_ratio", _committee_float(section, "current_ratio_floor"))),
-        ("현금비율 15% 이상", metric_at_least(row, "cash_ratio", _committee_float(section, "cash_ratio_floor"))),
-        ("자기자본비율 40% 이상", metric_at_least(row, "equity_ratio", _committee_float(section, "equity_ratio_floor"))),
-        ("부채비율 150% 이하", metric_at_most(row, "debt_ratio", _committee_float(section, "debt_ratio_ceiling"))),
-        ("총차입금 비중 50% 이하", metric_at_most(row, "total_borrowings_ratio", _committee_float(section, "total_borrowings_ratio_ceiling"))),
-        ("자본잠식 신호 없음", metric_at_most(row, "capital_impairment_ratio", _committee_float(section, "capital_impairment_ratio_ceiling"))),
-        ("이자보상배율 1배 이상", metric_at_least(row, "interest_coverage_ratio", _committee_float(section, "interest_coverage_ratio_floor"))),
-        ("순이익률 흑자", metric_at_least(row, "net_margin", _committee_float(section, "net_margin_floor"))),
-        ("OCF/매출액 양수", metric_at_least(row, "ocf_to_sales", _committee_float(section, "ocf_to_sales_floor"))),
+        (
+            "유동비율 1.2배 이상",
+            metric_at_least(row, "current_ratio", _committee_float(section, "current_ratio_floor")),
+        ),
+        (
+            "현금비율 15% 이상",
+            metric_at_least(row, "cash_ratio", _committee_float(section, "cash_ratio_floor")),
+        ),
+        (
+            "자기자본비율 40% 이상",
+            metric_at_least(row, "equity_ratio", _committee_float(section, "equity_ratio_floor")),
+        ),
+        (
+            "부채비율 150% 이하",
+            metric_at_most(row, "debt_ratio", _committee_float(section, "debt_ratio_ceiling")),
+        ),
+        (
+            "총차입금 비중 50% 이하",
+            metric_at_most(
+                row,
+                "total_borrowings_ratio",
+                _committee_float(section, "total_borrowings_ratio_ceiling"),
+            ),
+        ),
+        (
+            "자본잠식 신호 없음",
+            metric_at_most(
+                row,
+                "capital_impairment_ratio",
+                _committee_float(section, "capital_impairment_ratio_ceiling"),
+            ),
+        ),
+        (
+            "이자보상배율 1배 이상",
+            metric_at_least(
+                row,
+                "interest_coverage_ratio",
+                _committee_float(section, "interest_coverage_ratio_floor"),
+            ),
+        ),
+        (
+            "순이익률 흑자",
+            metric_at_least(row, "net_margin", _committee_float(section, "net_margin_floor")),
+        ),
+        (
+            "OCF/매출액 양수",
+            metric_at_least(row, "ocf_to_sales", _committee_float(section, "ocf_to_sales_floor")),
+        ),
         ("2년 연속 영업손실 아님", flag_is_false(row.get("is_2y_consecutive_operating_loss"))),
         ("2년 연속 OCF 적자 아님", flag_is_false(row.get("is_2y_consecutive_ocf_deficit"))),
         ("ICR 1 미만 플래그 없음", flag_is_false(row.get("icr_under_1"))),

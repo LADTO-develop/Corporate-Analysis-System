@@ -224,25 +224,25 @@ def _strip_json_fence(value: str) -> str:
 
 
 def _stage2_agent_retry_attempts(runtime_config: Stage2RuntimeConfig | None = None) -> int:
-    return _resolved_runtime_config(runtime_config).agent_retries
+    return int(_resolved_runtime_config(runtime_config).agent_retries)
 
 
 def _stage2_agent_retry_delay_seconds(runtime_config: Stage2RuntimeConfig | None = None) -> float:
-    return _resolved_runtime_config(runtime_config).agent_retry_delay_seconds
+    return float(_resolved_runtime_config(runtime_config).agent_retry_delay_seconds)
 
 
 def _stage2_agent_timeout_seconds(
     runtime_config: Stage2RuntimeConfig | None = None,
 ) -> float | None:
-    return _resolved_runtime_config(runtime_config).agent_timeout_seconds
+    return cast(float | None, _resolved_runtime_config(runtime_config).agent_timeout_seconds)
 
 
 def _stage2_provider_max_retries(runtime_config: Stage2RuntimeConfig | None = None) -> int:
-    return _resolved_runtime_config(runtime_config).provider_max_retries
+    return int(_resolved_runtime_config(runtime_config).provider_max_retries)
 
 
 def _stage2_provider_retry_delay_seconds(runtime_config: Stage2RuntimeConfig | None = None) -> int:
-    delay = _resolved_runtime_config(runtime_config).agent_retry_delay_seconds
+    delay = float(_resolved_runtime_config(runtime_config).agent_retry_delay_seconds)
     return max(1, round(delay))
 
 

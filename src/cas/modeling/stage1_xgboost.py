@@ -61,7 +61,9 @@ def read_stage1_master(
         frame["stock_code"] = stock_code.where(stock_code.isna(), stock_code.str.zfill(6))
     duplicates = int(frame.duplicated(list(duplicate_keys)).sum())
     if duplicates:
-        raise ValueError(f"{dataset_name} has duplicate rows for {list(duplicate_keys)}: {duplicates}")
+        raise ValueError(
+            f"{dataset_name} has duplicate rows for {list(duplicate_keys)}: {duplicates}"
+        )
     return frame
 
 
@@ -86,11 +88,11 @@ def split_xy(frame: pd.DataFrame, columns: Sequence[str]) -> tuple[pd.DataFrame,
 
 
 def _float_param(params: Mapping[str, object], key: str) -> float:
-    return float(params[key])
+    return float(cast(Any, params[key]))
 
 
 def _int_param(params: Mapping[str, object], key: str) -> int:
-    return int(params[key])
+    return int(cast(Any, params[key]))
 
 
 def build_time_decay_weights(
@@ -191,7 +193,7 @@ def train_stage1_xgboost(
     if policy_weights is not None:
         fit_kwargs["sample_weight_eval_set"] = [policy_weights]
     model.fit(x_train, y_train, eval_set=[(x_policy, y_policy)], verbose=False, **fit_kwargs)
-    return cast("XGBClassifier", model)
+    return model
 
 
 def classification_counts(
@@ -247,7 +249,9 @@ def choose_policy_threshold(
     rows: list[dict[str, float | int]] = []
     for threshold in np.asarray(threshold_grid, dtype=np.float64):
         predictions = prob_array >= threshold
-        rows.append({"threshold": float(threshold), **classification_metrics(y_policy, predictions)})
+        rows.append(
+            {"threshold": float(threshold), **classification_metrics(y_policy, predictions)}
+        )
     sweep = pd.DataFrame(rows)
     candidates = sweep.loc[sweep["recall"] >= recall_floor]
     selection_rule = f"policy_max_precision_with_recall_ge_{recall_floor:.2f}"

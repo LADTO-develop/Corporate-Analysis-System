@@ -321,8 +321,7 @@ def _markdown_table(frame: pd.DataFrame) -> str:
     headers = [str(column) for column in display.columns]
     rows = [[_format_cell(value) for value in row] for row in display.to_numpy()]
     widths = [
-        max(len(header), *(len(row[index]) for row in rows))
-        for index, header in enumerate(headers)
+        max(len(header), *(len(row[index]) for row in rows)) for index, header in enumerate(headers)
     ]
     header_line = "| " + " | ".join(headers[i].ljust(widths[i]) for i in range(len(headers))) + " |"
     sep_line = "| " + " | ".join("-" * widths[i] for i in range(len(headers))) + " |"

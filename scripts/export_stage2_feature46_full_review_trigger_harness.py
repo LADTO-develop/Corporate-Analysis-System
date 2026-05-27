@@ -50,7 +50,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
     parser.add_argument("--providers", nargs="+", default=DEFAULT_PROVIDERS)
     parser.add_argument("--policy", default=DEFAULT_POLICY)
-    parser.add_argument("--eval-years", type=int, nargs="+", default=sample_export.ROLLING_EVAL_YEARS)
+    parser.add_argument(
+        "--eval-years", type=int, nargs="+", default=sample_export.ROLLING_EVAL_YEARS
+    )
     parser.add_argument("--sample-per-category", type=int, default=15)
     parser.add_argument("--batch-per-category", type=int, default=15)
     parser.add_argument("--max-cases", type=int, default=FULL_SAMPLE_ROWS)
@@ -106,7 +108,9 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def generate_rolling_samples(output_dir: Path, args: argparse.Namespace) -> tuple[Path, dict[str, Any]]:
+def generate_rolling_samples(
+    output_dir: Path, args: argparse.Namespace
+) -> tuple[Path, dict[str, Any]]:
     rolling_dir = output_dir / "rolling_samples"
     master = sample_export.read_master(sample_export.MASTER_PATH)
     frame = sample_export.build_feature_frame(master, sample_export.RAW_TS2000_PATH)
@@ -118,7 +122,9 @@ def generate_rolling_samples(output_dir: Path, args: argparse.Namespace) -> tupl
         eval_years=args.eval_years,
         seed=sample_export.DEFAULT_STAGE1_RANDOM_STATE,
     )
-    scores = sample_export.attach_rating_reference(scores, sample_export.TARGET_LABEL_REFERENCE_PATH)
+    scores = sample_export.attach_rating_reference(
+        scores, sample_export.TARGET_LABEL_REFERENCE_PATH
+    )
     scores = sample_export.add_sample_policy_flags(scores)
     samples = sample_export.build_samples(scores, args.sample_per_category)
     sample_export.write_outputs(

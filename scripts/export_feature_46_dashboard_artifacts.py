@@ -71,21 +71,13 @@ STAGE2_REVIEW_MACRO_REGIME_FEATURES = [
 ]
 STAGE2_REVIEW_RAW_FEATURES = [
     *STAGE2_REVIEW_AUX_BASE_FEATURES,
-    *[
-        column
-        for column in FN_RESCUE_RAW_COLUMNS
-        if column not in STAGE2_REVIEW_AUX_BASE_FEATURES
-    ],
+    *[column for column in FN_RESCUE_RAW_COLUMNS if column not in STAGE2_REVIEW_AUX_BASE_FEATURES],
     *STAGE2_REVIEW_MACRO_REGIME_FEATURES,
 ]
 STAGE2_REVIEW_FEATURES = [
     *STAGE2_REVIEW_AUX_BASE_FEATURES,
     *FN_RESCUE_SCORE_COLUMNS,
-    *[
-        column
-        for column in FN_RESCUE_RAW_COLUMNS
-        if column not in STAGE2_REVIEW_AUX_BASE_FEATURES
-    ],
+    *[column for column in FN_RESCUE_RAW_COLUMNS if column not in STAGE2_REVIEW_AUX_BASE_FEATURES],
     *STAGE2_REVIEW_MACRO_REGIME_FEATURES,
 ]
 STAGE2_REVIEW_AUX_FEATURE_SET = "full_review_trigger_73"
@@ -204,9 +196,7 @@ def attach_stage2_review_features(
     raw_path: Path,
 ) -> dict[str, pd.DataFrame]:
     raw = pd.read_csv(raw_path, encoding="utf-8-sig", dtype={"stock_code": str})
-    missing_columns = [
-        column for column in STAGE2_REVIEW_RAW_FEATURES if column not in raw.columns
-    ]
+    missing_columns = [column for column in STAGE2_REVIEW_RAW_FEATURES if column not in raw.columns]
     if missing_columns:
         raise KeyError(
             f"Stage 2 review feature columns are missing from raw data: {missing_columns}"

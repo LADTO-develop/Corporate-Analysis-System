@@ -421,7 +421,7 @@ def summarize_rolling(fold_metrics: pd.DataFrame) -> pd.DataFrame:
             "added_features": group["added_features"].iloc[0],
             "added_feature_count": int(group["added_feature_count"].iloc[0]),
             "feature_count": int(group["feature_count"].iloc[0]),
-            "folds": int(len(group)),
+            "folds": len(group),
         }
         for column in metric_columns:
             row[f"{column}_mean"] = float(group[column].mean())
@@ -436,17 +436,17 @@ def summarize_rolling(fold_metrics: pd.DataFrame) -> pd.DataFrame:
         rows.append(row)
     summary = pd.DataFrame(rows)
     baseline = summary.loc[summary["candidate_id"].eq("stage2_aux_48_baseline")].iloc[0]
-    summary["rolling_recall_delta_vs_stage2_aux_48"] = (
-        summary["trigger_recall_mean"] - float(baseline["trigger_recall_mean"])
+    summary["rolling_recall_delta_vs_stage2_aux_48"] = summary["trigger_recall_mean"] - float(
+        baseline["trigger_recall_mean"]
     )
-    summary["rolling_f1_delta_vs_stage2_aux_48"] = (
-        summary["trigger_f1_mean"] - float(baseline["trigger_f1_mean"])
+    summary["rolling_f1_delta_vs_stage2_aux_48"] = summary["trigger_f1_mean"] - float(
+        baseline["trigger_f1_mean"]
     )
-    summary["rolling_fp_delta_vs_stage2_aux_48"] = (
-        summary["trigger_false_positive_sum"] - int(baseline["trigger_false_positive_sum"])
+    summary["rolling_fp_delta_vs_stage2_aux_48"] = summary["trigger_false_positive_sum"] - int(
+        baseline["trigger_false_positive_sum"]
     )
-    summary["rolling_fn_delta_vs_stage2_aux_48"] = (
-        summary["trigger_false_negative_sum"] - int(baseline["trigger_false_negative_sum"])
+    summary["rolling_fn_delta_vs_stage2_aux_48"] = summary["trigger_false_negative_sum"] - int(
+        baseline["trigger_false_negative_sum"]
     )
     return summary.sort_values(
         [
@@ -477,17 +477,17 @@ def merge_final_metrics(summary: pd.DataFrame, final_metrics: pd.DataFrame) -> p
     )
     output = summary.merge(final, on="candidate_id", how="left")
     baseline = output.loc[output["candidate_id"].eq("stage2_aux_48_baseline")].iloc[0]
-    output["final_recall_delta_vs_stage2_aux_48"] = (
-        output["final_trigger_recall"] - float(baseline["final_trigger_recall"])
+    output["final_recall_delta_vs_stage2_aux_48"] = output["final_trigger_recall"] - float(
+        baseline["final_trigger_recall"]
     )
-    output["final_f1_delta_vs_stage2_aux_48"] = (
-        output["final_trigger_f1"] - float(baseline["final_trigger_f1"])
+    output["final_f1_delta_vs_stage2_aux_48"] = output["final_trigger_f1"] - float(
+        baseline["final_trigger_f1"]
     )
-    output["final_fp_delta_vs_stage2_aux_48"] = (
-        output["final_trigger_false_positive"] - int(baseline["final_trigger_false_positive"])
+    output["final_fp_delta_vs_stage2_aux_48"] = output["final_trigger_false_positive"] - int(
+        baseline["final_trigger_false_positive"]
     )
-    output["final_fn_delta_vs_stage2_aux_48"] = (
-        output["final_trigger_false_negative"] - int(baseline["final_trigger_false_negative"])
+    output["final_fn_delta_vs_stage2_aux_48"] = output["final_trigger_false_negative"] - int(
+        baseline["final_trigger_false_negative"]
     )
     return output
 
@@ -717,9 +717,7 @@ def main() -> None:
                 "rolling_recall_delta_vs_stage2_aux_48": float(
                     best["rolling_recall_delta_vs_stage2_aux_48"]
                 ),
-                "rolling_fn_delta_vs_stage2_aux_48": int(
-                    best["rolling_fn_delta_vs_stage2_aux_48"]
-                ),
+                "rolling_fn_delta_vs_stage2_aux_48": int(best["rolling_fn_delta_vs_stage2_aux_48"]),
                 "final_recall_delta_vs_stage2_aux_48": float(
                     best["final_recall_delta_vs_stage2_aux_48"]
                 ),

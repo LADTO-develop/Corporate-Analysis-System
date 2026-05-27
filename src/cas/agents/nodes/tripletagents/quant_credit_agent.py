@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import cast
+
 from pydantic import BaseModel, ConfigDict, Field
 
 from cas.agents.stage2_bundle import Stage2InputBundle
@@ -102,10 +104,7 @@ def _query(bundle: Stage2InputBundle) -> str:
             ),
         },
     }
-    return build_stage2_role_query(
-        "quant_credit",
-        prompt_payload=prompt_payload,
-    )
+    return cast(str, build_stage2_role_query("quant_credit", prompt_payload=prompt_payload))
 
 
 def _confidence_from_risk_level(risk_level: str) -> float:
