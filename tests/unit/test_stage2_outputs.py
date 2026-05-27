@@ -84,6 +84,9 @@ def test_review_qa_output_flattens_to_common_agent_output() -> None:
         evidence_cutoff_check="기준일 이후 근거는 사용하지 않았습니다.",
         overhold_guardrail_assessment="정상기업 과잉 보류 guardrail 검토가 필요합니다.",
         recommended_action="downgrade_risk_hold_to_boundary_hold",
+        manual_review_tasks=["보류 사유를 수동 확인합니다."],
+        missing_evidence=["기준일 이전 직접 공시"],
+        monitoring_triggers=["신규 공시 발생"],
         confidence=0.72,
     )
 
@@ -92,7 +95,10 @@ def test_review_qa_output_flattens_to_common_agent_output() -> None:
     assert agent.role == "review_qa"
     assert agent.summary == "최종 라벨과 메모를 검수했습니다."
     assert "investment_model_hold" in agent.findings[0]
-    assert agent.findings[-1] == "QA 권고: downgrade_risk_hold_to_boundary_hold"
+    assert "QA 권고: downgrade_risk_hold_to_boundary_hold" in agent.findings
+    assert "수동 검토 과제: 보류 사유를 수동 확인합니다." in agent.findings
+    assert "누락 근거: 기준일 이전 직접 공시" in agent.findings
+    assert "모니터링 트리거: 신규 공시 발생" in agent.findings
 
 
 def test_risk_recall_qa_output_flattens_to_common_agent_output() -> None:
@@ -104,6 +110,9 @@ def test_risk_recall_qa_output_flattens_to_common_agent_output() -> None:
         evidence_recall_check="외부 공시는 watch_context 수준입니다.",
         rating_boundary_check="모델 확률이 기준선 근처입니다.",
         recommended_action="escalate_eligible_to_boundary_hold",
+        manual_review_tasks=["재무 방어축을 확인합니다."],
+        missing_evidence=["최신 신용등급 reference"],
+        monitoring_triggers=["기준선 재상회"],
         confidence=0.66,
     )
 
@@ -112,7 +121,10 @@ def test_risk_recall_qa_output_flattens_to_common_agent_output() -> None:
     assert agent.role == "risk_recall_qa"
     assert agent.summary == "적격 판단의 위험 누락 가능성을 재검수했습니다."
     assert "eligible_near_threshold" in agent.findings[0]
-    assert agent.findings[-1] == "Recall QA 권고: escalate_eligible_to_boundary_hold"
+    assert "Recall QA 권고: escalate_eligible_to_boundary_hold" in agent.findings
+    assert "수동 검토 과제: 재무 방어축을 확인합니다." in agent.findings
+    assert "누락 근거: 최신 신용등급 reference" in agent.findings
+    assert "모니터링 트리거: 기준선 재상회" in agent.findings
 
 
 def test_stage2_output_schema_rejects_invalid_confidence() -> None:

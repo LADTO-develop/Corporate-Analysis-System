@@ -130,6 +130,9 @@ def test_schema_node_exposes_stage2_runtime_diagnostics() -> None:
             "key_risk_factors": [],
             "mitigating_factors": [],
             "evidence_summary": [],
+            "manual_review_tasks": ["직접 공시를 확인합니다."],
+            "missing_evidence": ["기준일 이전 공시 원문"],
+            "monitoring_triggers": ["신규 DART 공시"],
             "decision_trace": [],
             "final_review_memo": "검토 보류",
         },
@@ -143,3 +146,7 @@ def test_schema_node_exposes_stage2_runtime_diagnostics() -> None:
     assert runtime["degraded"] is True
     assert runtime["failed_role"] == "evidence_audit"
     assert runtime["retry_count"] == 2
+    committee_view = result["response_json"]["committee_view"]
+    assert committee_view["manual_review_tasks"] == ["직접 공시를 확인합니다."]
+    assert committee_view["missing_evidence"] == ["기준일 이전 공시 원문"]
+    assert committee_view["monitoring_triggers"] == ["신규 DART 공시"]

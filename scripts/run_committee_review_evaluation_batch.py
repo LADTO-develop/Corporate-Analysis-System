@@ -737,6 +737,15 @@ def _result_row(
             str(item) for item in committee_view.get("agent_disagreement_reasons", []) or []
         ),
         "agent_disagreement_summary": committee_view.get("agent_disagreement_summary", ""),
+        "manual_review_tasks": " / ".join(
+            str(item) for item in committee_view.get("manual_review_tasks", []) or []
+        ),
+        "missing_evidence": " / ".join(
+            str(item) for item in committee_view.get("missing_evidence", []) or []
+        ),
+        "monitoring_triggers": " / ".join(
+            str(item) for item in committee_view.get("monitoring_triggers", []) or []
+        ),
         "decision_trace": json.dumps(decision_trace, ensure_ascii=False, sort_keys=True),
         "committee_success": success,
         "committee_effect": effect,

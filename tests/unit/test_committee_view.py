@@ -53,6 +53,10 @@ def test_committee_view_maps_review_to_hold_label() -> None:
         "단기 유동성 추가 점검이 필요합니다.",
     ]
     assert committee_view["mitigating_factors"] == ["배당 이력이 있습니다."]
+    assert committee_view["manual_review_tasks"]
+    assert "외부근거 수집" in " ".join(committee_view["manual_review_tasks"])
+    assert "기준일 이전 직접 공시/뉴스" in " ".join(committee_view["missing_evidence"])
+    assert committee_view["monitoring_triggers"]
     trace = committee_view["decision_trace"]
     assert trace[0]["gate"] == "stage1_model_view"
     assert trace[-1]["gate"] == "final_committee_decision"

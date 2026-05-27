@@ -50,6 +50,18 @@ class AgnoRiskRecallQAResponse(BaseModel):
         "request_manual_review",
         "memo_only_fix",
     ] = Field(description="Advisory recall QA recommendation.")
+    manual_review_tasks: list[str] = Field(
+        default_factory=list,
+        description="Concrete manual-review tasks needed before accepting or escalating the case.",
+    )
+    missing_evidence: list[str] = Field(
+        default_factory=list,
+        description="Evidence still missing or too weak for the eligible/hold safety decision.",
+    )
+    monitoring_triggers: list[str] = Field(
+        default_factory=list,
+        description="Future events or thresholds that should trigger re-review.",
+    )
     confidence: float = Field(ge=0.0, le=1.0)
 
 
@@ -105,6 +117,9 @@ def run_risk_recall_qa_agent(
         evidence_recall_check=_safe_qa_text(result.evidence_recall_check),
         rating_boundary_check=_safe_qa_text(result.rating_boundary_check),
         recommended_action=result.recommended_action,
+        manual_review_tasks=_safe_qa_items(result.manual_review_tasks),
+        missing_evidence=_safe_qa_items(result.missing_evidence),
+        monitoring_triggers=_safe_qa_items(result.monitoring_triggers),
         confidence=round(clamp(result.confidence, minimum=0.3, maximum=0.9), 4),
     )
 
@@ -149,6 +164,10 @@ def _safe_qa_text(text: str) -> str:
     for old, new in replacements.items():
         cleaned = cleaned.replace(old, new)
     return cleaned
+
+
+def _safe_qa_items(items: list[str]) -> list[str]:
+    return [_safe_qa_text(str(item)) for item in items if str(item).strip()][:5]
 
 
 __all__ = ["AgnoRiskRecallQAResponse", "run_risk_recall_qa_agent"]

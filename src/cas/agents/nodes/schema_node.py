@@ -210,6 +210,15 @@ def _committee_view_payload(
                 str(item) for item in committee_view.get("mitigating_factors", []) or []
             ],
             "evidence_summary": _evidence_items(committee_view.get("evidence_summary", [])),
+            "manual_review_tasks": [
+                str(item) for item in committee_view.get("manual_review_tasks", []) or []
+            ],
+            "missing_evidence": [
+                str(item) for item in committee_view.get("missing_evidence", []) or []
+            ],
+            "monitoring_triggers": [
+                str(item) for item in committee_view.get("monitoring_triggers", []) or []
+            ],
             "final_review_memo": str(committee_view.get("final_review_memo", "")),
         }
     if insufficient:
@@ -241,6 +250,13 @@ def _committee_view_payload(
         "key_risk_factors": [],
         "mitigating_factors": [],
         "evidence_summary": [],
+        "manual_review_tasks": [
+            "필수 입력 또는 committee_view 생성 실패 원인을 확인한 뒤 Stage 2를 재실행합니다."
+        ]
+        if insufficient
+        else [],
+        "missing_evidence": [],
+        "monitoring_triggers": [],
         "final_review_memo": memo,
     }
 
@@ -360,6 +376,11 @@ def _build_schema_failure_response(
             ],
             "mitigating_factors": [],
             "evidence_summary": [],
+            "manual_review_tasks": [
+                "strict schema validation 실패 원인을 확인한 뒤 Stage 2 payload를 재생성합니다."
+            ],
+            "missing_evidence": [],
+            "monitoring_triggers": [],
             "final_review_memo": (
                 "The generated payload did not satisfy the strict dashboard schema, "
                 "so committee_view was reduced to a safe fallback."

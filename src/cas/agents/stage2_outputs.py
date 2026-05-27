@@ -147,6 +147,9 @@ class ReviewQAOutput(_StrictModel):
         "request_manual_review",
         "memo_only_fix",
     ]
+    manual_review_tasks: list[str] = Field(default_factory=list)
+    missing_evidence: list[str] = Field(default_factory=list)
+    monitoring_triggers: list[str] = Field(default_factory=list)
     confidence: float = Field(ge=0.0, le=1.0)
 
     def to_agent_output(self) -> AgentOutput:
@@ -165,6 +168,9 @@ class ReviewQAOutput(_StrictModel):
                 f"외부근거 기준일 점검: {self.evidence_cutoff_check}",
                 f"정상기업 과잉 보류 guardrail 점검: {self.overhold_guardrail_assessment}",
                 f"QA 권고: {self.recommended_action}",
+                *[f"수동 검토 과제: {item}" for item in self.manual_review_tasks],
+                *[f"누락 근거: {item}" for item in self.missing_evidence],
+                *[f"모니터링 트리거: {item}" for item in self.monitoring_triggers],
             ],
             confidence=self.confidence,
         )
@@ -192,6 +198,9 @@ class RiskRecallQAOutput(_StrictModel):
         "request_manual_review",
         "memo_only_fix",
     ]
+    manual_review_tasks: list[str] = Field(default_factory=list)
+    missing_evidence: list[str] = Field(default_factory=list)
+    monitoring_triggers: list[str] = Field(default_factory=list)
     confidence: float = Field(ge=0.0, le=1.0)
 
     def to_agent_output(self) -> AgentOutput:
@@ -210,6 +219,9 @@ class RiskRecallQAOutput(_StrictModel):
                 f"외부근거 누락위험 점검: {self.evidence_recall_check}",
                 f"등급/기준선 경계 점검: {self.rating_boundary_check}",
                 f"Recall QA 권고: {self.recommended_action}",
+                *[f"수동 검토 과제: {item}" for item in self.manual_review_tasks],
+                *[f"누락 근거: {item}" for item in self.missing_evidence],
+                *[f"모니터링 트리거: {item}" for item in self.monitoring_triggers],
             ],
             confidence=self.confidence,
         )

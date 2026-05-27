@@ -135,6 +135,9 @@ STAGE2_AGENT_SPECS: tuple[Stage2AgentSpec, ...] = (
             "mitigating_factors",
             "evidence_summary",
             "decision_trace",
+            "manual_review_tasks",
+            "missing_evidence",
+            "monitoring_triggers",
             "final_review_memo",
         ),
         future_agno_instruction=(
@@ -170,6 +173,9 @@ STAGE2_OPTIONAL_AGENT_SPECS: tuple[Stage2AgentSpec, ...] = (
             "evidence_cutoff_check",
             "overhold_guardrail_assessment",
             "recommended_action",
+            "manual_review_tasks",
+            "missing_evidence",
+            "monitoring_triggers",
             "confidence",
         ),
         future_agno_instruction=(
@@ -205,6 +211,9 @@ STAGE2_OPTIONAL_AGENT_SPECS: tuple[Stage2AgentSpec, ...] = (
             "evidence_recall_check",
             "rating_boundary_check",
             "recommended_action",
+            "manual_review_tasks",
+            "missing_evidence",
+            "monitoring_triggers",
             "confidence",
         ),
         future_agno_instruction=(

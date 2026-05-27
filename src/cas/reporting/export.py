@@ -84,6 +84,9 @@ def render_report(state: AgentState | dict[str, Any]) -> dict[str, Any]:
 
     risk_factors = _clean_report_items(committee_view.get("key_risk_factors", []) or [])
     mitigating_factors = _clean_report_items(committee_view.get("mitigating_factors", []) or [])
+    manual_review_tasks = _clean_report_items(committee_view.get("manual_review_tasks", []) or [])
+    missing_evidence = _clean_report_items(committee_view.get("missing_evidence", []) or [])
+    monitoring_triggers = _clean_report_items(committee_view.get("monitoring_triggers", []) or [])
     if risk_factors:
         md_lines += ["### 주요 위험 요인", "", *[f"- {item}" for item in risk_factors], ""]
     if mitigating_factors:
@@ -93,6 +96,14 @@ def render_report(state: AgentState | dict[str, Any]) -> dict[str, Any]:
             *[f"- {item}" for item in mitigating_factors],
             "",
         ]
+    if manual_review_tasks or missing_evidence or monitoring_triggers:
+        md_lines += ["### 실행 계획", ""]
+        if manual_review_tasks:
+            md_lines += ["**수동 검토 과제**", "", *[f"- {item}" for item in manual_review_tasks], ""]
+        if missing_evidence:
+            md_lines += ["**누락 근거**", "", *[f"- {item}" for item in missing_evidence], ""]
+        if monitoring_triggers:
+            md_lines += ["**모니터링 트리거**", "", *[f"- {item}" for item in monitoring_triggers], ""]
 
     md_lines += [
         "## 에이전트 종합 의견",
@@ -196,6 +207,9 @@ def _fallback_response(state: dict[str, Any]) -> dict[str, Any]:
             "key_risk_factors": [],
             "mitigating_factors": [],
             "evidence_summary": [],
+            "manual_review_tasks": ["No committee_view was generated; rerun Stage 2 after input validation."],
+            "missing_evidence": [],
+            "monitoring_triggers": [],
             "final_review_memo": "No committee_view was generated.",
         },
     }

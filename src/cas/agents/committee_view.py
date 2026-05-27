@@ -306,6 +306,17 @@ def build_committee_view_model(
     evidence_summary = _clean_evidence_summary_items(evidence_summary)
     conflict_resolution = _clean_korean_review_text(conflict_resolution)
     final_review_memo = _clean_korean_review_text(final_review_memo)
+    action_plan = _committee_action_plan(
+        bundle=bundle,
+        committee_label=committee_label,
+        decision_type=decision_type,
+        veto_triggered=veto_triggered,
+        hidden_tail_risk=hidden_tail_risk,
+        boundary_review=boundary_review,
+        secondary_review_risk=secondary_review_risk,
+        overwarning_mitigation=overwarning_mitigation,
+        reject_confirmation=reject_confirmation,
+    )
 
     return CommitteeViewPayload(
         final_committee_label=committee_label,
@@ -336,6 +347,9 @@ def build_committee_view_model(
             risk_hold_reason_tags=risk_hold_reason_tags,
             risk_hold_reason_summary=risk_hold_reason_summary,
         ),
+        manual_review_tasks=action_plan["manual_review_tasks"],
+        missing_evidence=action_plan["missing_evidence"],
+        monitoring_triggers=action_plan["monitoring_triggers"],
         final_review_memo=final_review_memo,
     )
 
@@ -541,6 +555,98 @@ def _evidence_summary_items(
                 }
             )
     return items
+
+
+def _committee_action_plan(
+    *,
+    bundle: Stage2InputBundle,
+    committee_label: CommitteeLabel,
+    decision_type: CommitteeDecisionType,
+    veto_triggered: bool,
+    hidden_tail_risk: HiddenTailRiskAssessment,
+    boundary_review: BoundaryReviewAssessment,
+    secondary_review_risk: SecondaryReviewRiskAssessment,
+    overwarning_mitigation: OverwarningMitigationAssessment,
+    reject_confirmation: RejectConfirmationAssessment,
+) -> dict[str, list[str]]:
+    """Return dashboard-facing next actions for hold/reject/manual-review cases."""
+    tasks: list[str] = []
+    missing: list[str] = []
+    monitoring: list[str] = []
+
+    if committee_label == "보류":
+        tasks.append("보류 사유와 최종 메모가 같은 결론을 가리키는지 담당자가 재확인합니다.")
+    elif committee_label == "부적격":
+        tasks.append("부적격 확정 전 재무 원자료와 직접 공시 근거를 승인권자가 교차검토합니다.")
+
+    if decision_type == "risk_hold":
+        tasks.append("위험 보류 근거가 재무 스트레스인지 외부 중요도 근거인지 분리해 확인합니다.")
+        missing.append("위험 보류를 뒷받침하는 직접 공시, 감사의견, 차입/보증, 거래정지 근거")
+    elif decision_type == "boundary_hold":
+        tasks.append("모델 기준선 근접도와 공개등급 경계구간(BBB-/BB+) 맥락을 재확인합니다.")
+    elif decision_type == "mitigation_hold":
+        tasks.append("과민경고 완화 근거가 원자료와 외부근거에서 동시에 지지되는지 확인합니다.")
+    elif decision_type == "review_hold":
+        tasks.append("보류를 해소하기 위해 필요한 재무, 등급, 외부근거 누락 항목을 확인합니다.")
+    elif decision_type == "reject":
+        tasks.append("veto 또는 부적격 확정 게이트의 원문 근거와 기준일 적합성을 확인합니다.")
+
+    if veto_triggered:
+        tasks.append("veto 발동 근거의 회사 일치성, 기준일, 원문 출처를 수동 검증합니다.")
+        monitoring.append("veto 관련 정정공시, 소송/제재 확정, 거래정지 해소 공시 발생 시 재검토")
+    if hidden_tail_risk.triggered:
+        tasks.append("숨은 꼬리위험 근거가 해당 회사 직접 사건인지 원문 기준으로 확인합니다.")
+        monitoring.append("동일 사건의 후속 공시, 감사의견 변형, 차입/보증 확대 발생 시 재검토")
+    if boundary_review.triggered:
+        missing.append("최근 공개 신용등급, 등급전망, 기준선 근접 사유를 확인할 수 있는 reference")
+    if secondary_review_risk.triggered:
+        missing.append("2차 보조 레이더가 감지한 유동성/현금흐름 약점의 최신 원자료")
+    if overwarning_mitigation.triggered:
+        monitoring.append("방어축이 약화되거나 투기등급 확률이 기준선을 재상회하면 보류 해소 판단 재검토")
+    if reject_confirmation.triggered and not reject_confirmation.confirmed:
+        missing.append("부적격 확정에 필요한 치명 외부근거 또는 복수 재무부실 신호")
+
+    if _external_evidence_unavailable(bundle.news_status):
+        tasks.append("외부근거 수집을 활성화한 뒤 기준일 이전 직접 공시/뉴스를 재조회합니다.")
+        missing.append("기준일 이전 직접 공시/뉴스 원문과 회사명/종목코드 일치 확인")
+    if bundle.prior_rating_reference.get("has_prior_rating") is not True:
+        missing.append("기준일 이전 공개 신용등급 reference")
+
+    if committee_label == "보류":
+        monitoring.append("신규 DART 수시공시, 감사의견 변형, 거래정지, 대규모 차입/보증 발생 시 재심사")
+    elif committee_label == "적격" and _external_evidence_unavailable(bundle.news_status):
+        monitoring.append("외부근거 수집이 가능해지면 적격 판단의 누락위험을 재점검")
+
+    return {
+        "manual_review_tasks": _unique_action_items(tasks),
+        "missing_evidence": _unique_action_items(missing),
+        "monitoring_triggers": _unique_action_items(monitoring),
+    }
+
+
+def _external_evidence_unavailable(status: str) -> bool:
+    return status.strip().lower() in {
+        "disabled",
+        "missing_credentials",
+        "not_implemented",
+        "not_requested",
+        "placeholder",
+        "no_results",
+    }
+
+
+def _unique_action_items(items: list[str], *, limit: int = 5) -> list[str]:
+    output: list[str] = []
+    seen: set[str] = set()
+    for item in items:
+        cleaned = _clean_korean_review_text(str(item))
+        if not cleaned or cleaned in seen:
+            continue
+        output.append(cleaned)
+        seen.add(cleaned)
+        if len(output) >= limit:
+            break
+    return output
 
 
 def _decision_trace_items(
