@@ -45,6 +45,8 @@ SUMMARY_COLUMNS = [
     "review_qa_trigger_rows",
     "risk_recall_qa_trigger_rate",
     "risk_recall_qa_trigger_rows",
+    "risk_recall_guardrail_rate",
+    "risk_recall_guardrail_rows",
     "any_qa_trigger_rate",
     "any_qa_trigger_rows",
     "llm_cache_hit_rate",
@@ -89,6 +91,10 @@ def summarize_batch_results(
     risk_recall_cache_hit = _bool_column(frame, "stage2_risk_recall_qa_cache_hit")
     review_qa_triggered = _bool_column(frame, "stage2_review_qa_triggered")
     risk_recall_qa_triggered = _bool_column(frame, "stage2_risk_recall_qa_triggered")
+    risk_recall_guardrail_applied = _bool_column(
+        frame,
+        "stage2_risk_recall_guardrail_applied",
+    )
     any_qa_triggered = review_qa_triggered | risk_recall_qa_triggered
     any_cache_hit = llm_cache_hit | review_qa_cache_hit | risk_recall_cache_hit
     run_failed = (
@@ -124,6 +130,8 @@ def summarize_batch_results(
         "review_qa_trigger_rows": int(review_qa_triggered.sum()),
         "risk_recall_qa_trigger_rate": _rate(risk_recall_qa_triggered),
         "risk_recall_qa_trigger_rows": int(risk_recall_qa_triggered.sum()),
+        "risk_recall_guardrail_rate": _rate(risk_recall_guardrail_applied),
+        "risk_recall_guardrail_rows": int(risk_recall_guardrail_applied.sum()),
         "any_qa_trigger_rate": _rate(any_qa_triggered),
         "any_qa_trigger_rows": int(any_qa_triggered.sum()),
         "llm_cache_hit_rate": _rate(llm_cache_hit),
@@ -221,6 +229,7 @@ def build_harness_report(
         "- FP over-hold: 1차 모델 false positive가 Stage2에서 부적격은 피했지만 보류로 남은 건수",
         "- latency p95: provider별 긴 꼬리 지연을 보기 위한 95백분위 실행 시간",
         "- QA trigger rate: ReviewQA 또는 RiskRecallQA가 실제로 트리거된 행 비율",
+        "- RiskRecall guardrail: LLM QA 이후에도 적격으로 남은 고위험 누락 후보를 deterministic 규칙으로 위험 보류 승격한 비율",
         "- cache hit: Stage2 본 실행, ReviewQA, RiskRecallQA cache hit 중 하나라도 켜진 행을 별도로 집계",
         "- quality gate: memo/evidence/decision consistency와 hallucination flag를 함께 보는 보고서 품질 회귀 게이트",
         "",
@@ -266,6 +275,7 @@ def _report_provider_columns(frame: pd.DataFrame) -> pd.DataFrame:
         "estimated_cost_usd",
         "review_qa_trigger_rate",
         "risk_recall_qa_trigger_rate",
+        "risk_recall_guardrail_rate",
         "any_qa_trigger_rate",
         "llm_cache_hit_rows",
         "any_cache_hit_rows",
@@ -731,6 +741,13 @@ def _series_quantile(series: pd.Series, quantile: float) -> float | None:
 
 
 def _bool_value(value: object) -> bool:
+    if value is None:
+        return False
+    try:
+        if pd.isna(value):
+            return False
+    except TypeError:
+        pass
     if isinstance(value, bool):
         return value
     if isinstance(value, int | float):

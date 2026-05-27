@@ -58,7 +58,9 @@ TRACE_GATES = (
     "hidden_tail_risk",
     "secondary_review_trigger",
     "boundary_rating_review",
+    "prior_hard_distress_context",
     "overwarning_mitigation",
+    "mitigation_residual_risk",
     "reject_confirmation",
     "risk_hold_reason_tagging",
 )
@@ -851,6 +853,18 @@ def _result_row(
         ),
         "stage2_risk_recall_qa_advisory_apply_reason": stage2_runtime.get(
             "risk_recall_qa_advisory_apply_reason", ""
+        ),
+        "stage2_risk_recall_guardrail_applied": bool(
+            stage2_runtime.get("risk_recall_guardrail_applied", False)
+        ),
+        "stage2_risk_recall_guardrail_adjusted_decision_type": stage2_runtime.get(
+            "risk_recall_guardrail_adjusted_decision_type", ""
+        ),
+        "stage2_risk_recall_guardrail_apply_reason": stage2_runtime.get(
+            "risk_recall_guardrail_apply_reason", ""
+        ),
+        "stage2_risk_recall_guardrail_weak_axes": " / ".join(
+            str(item) for item in stage2_runtime.get("risk_recall_guardrail_weak_axes", []) or []
         ),
         "stage2_error_message": stage2_runtime.get("error_message", ""),
         "veto_triggered": bool(committee_view.get("veto_triggered", False)),

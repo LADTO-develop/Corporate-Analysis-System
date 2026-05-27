@@ -17,6 +17,7 @@ CommitteeDecisionType = Literal[
 ]
 RiskHoldReasonTag = Literal[
     "combined_watch_hold",
+    "prior_hard_distress_hold",
     "financial_stress_hold",
     "external_materiality_hold",
     "secondary_radar_hold",

@@ -7,6 +7,7 @@ from typing import Any
 
 from cas.agents.nodes.committee_diagnostics import _attach_agent_disagreement
 from cas.agents.nodes.post_committee_qa import (
+    _apply_deterministic_risk_recall_guardrail,
     _apply_review_qa_advisory,
     _apply_risk_recall_qa_advisory,
     _maybe_run_review_qa,
@@ -105,6 +106,19 @@ def run_post_committee_pipeline(
             runtime_diagnostics=diagnostics,
         )
         agents.append(risk_recall_qa_output.to_agent_output())
+
+    committee_view = _apply_deterministic_risk_recall_guardrail(
+        committee_view=committee_view,
+        bundle=bundle,
+        runtime_diagnostics=diagnostics,
+    )
+    if diagnostics.get("risk_recall_guardrail_applied") is True:
+        committee_view = _attach_agent_disagreement(
+            bundle=bundle,
+            committee_view=committee_view,
+            structured_outputs=structured_outputs,
+            runtime_diagnostics=diagnostics,
+        )
 
     validate_agent_order(agents)
     return PostCommitteePipelineResult(

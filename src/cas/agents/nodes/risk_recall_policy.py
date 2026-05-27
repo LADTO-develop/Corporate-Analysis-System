@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from cas.agents.committee_financial_guardrails import prior_rating_has_hard_distress_context
 from cas.agents.nodes.evidence_profile import (
     _external_evidence_profile,
     _has_substantive_external_risk,
@@ -97,6 +98,86 @@ def _apply_risk_recall_qa_advisory(
         if risk_recall_qa_output.recommended_action == "escalate_eligible_to_risk_hold"
         else "boundary_hold"
     )
+    adjustment_note = (
+        "RiskRecallQAAgent는 최종 적격 판단을 유지하기에는 기준선/재무/외부근거의 "
+        "잔여 위험이 남아 있다고 보아, 최종 라벨을 보류로 재검수하도록 권고했습니다."
+    )
+    adjusted = _apply_risk_recall_escalation(
+        committee_view=committee_view,
+        target_type=target_type,
+        apply_reason=apply_reason,
+        adjustment_note=adjustment_note,
+        memo_note=(
+            "RiskRecallQA 보강 의견: 적격 판단의 위험 누락 가능성을 재점검해 "
+            "최종 표시 라벨을 보류로 올립니다."
+        ),
+        key_risk_factor="RiskRecallQA 적격 재검수 경고",
+        trace_gate="risk_recall_qa_escalation",
+        trace_label="RiskRecallQA 적격 재검수",
+        reason_source_subject="RiskRecallQA가",
+    )
+    runtime_diagnostics["risk_recall_qa_advisory_applied"] = True
+    runtime_diagnostics["risk_recall_qa_adjusted_decision_type"] = target_type
+    runtime_diagnostics["risk_recall_qa_advisory_apply_reason"] = apply_reason
+    return adjusted
+
+
+def _apply_deterministic_risk_recall_guardrail(
+    *,
+    committee_view: dict[str, Any],
+    bundle: Stage2InputBundle,
+    runtime_diagnostics: dict[str, Any],
+) -> dict[str, Any]:
+    """Escalate high-confidence eligible misses even when optional LLM QA is unavailable."""
+    runtime_diagnostics["risk_recall_guardrail_applied"] = False
+    runtime_diagnostics["risk_recall_guardrail_apply_reason"] = ""
+    if str(committee_view.get("final_committee_label") or "") != "적격":
+        return committee_view
+    if str(committee_view.get("committee_decision_type") or "") != "eligible":
+        return committee_view
+
+    apply_reason = _deterministic_risk_recall_guardrail_apply_reason(bundle=bundle)
+    weak_axes = _risk_recall_weak_financial_axes(bundle)
+    runtime_diagnostics["risk_recall_guardrail_weak_axes"] = weak_axes
+    if not apply_reason:
+        return committee_view
+
+    adjustment_note = (
+        "RiskRecall 보강 규칙은 최종 적격 판단을 유지하기에는 기준선/재무/외부근거의 "
+        "잔여 위험이 크다고 보아, 최종 라벨을 위험 보류로 재검수하도록 조정했습니다."
+    )
+    adjusted = _apply_risk_recall_escalation(
+        committee_view=committee_view,
+        target_type="risk_hold",
+        apply_reason=apply_reason,
+        adjustment_note=adjustment_note,
+        memo_note=(
+            "RiskRecall 보강 규칙: 적격 판단의 위험 누락 가능성을 재점검해 "
+            "최종 표시 라벨을 위험 보류로 올립니다."
+        ),
+        key_risk_factor="RiskRecall 적격 누락 방지 경고",
+        trace_gate="risk_recall_guardrail_escalation",
+        trace_label="RiskRecall deterministic guardrail",
+        reason_source_subject="RiskRecall 보강 규칙이",
+    )
+    runtime_diagnostics["risk_recall_guardrail_applied"] = True
+    runtime_diagnostics["risk_recall_guardrail_adjusted_decision_type"] = "risk_hold"
+    runtime_diagnostics["risk_recall_guardrail_apply_reason"] = apply_reason
+    return adjusted
+
+
+def _apply_risk_recall_escalation(
+    *,
+    committee_view: dict[str, Any],
+    target_type: str,
+    apply_reason: str,
+    adjustment_note: str,
+    memo_note: str,
+    key_risk_factor: str,
+    trace_gate: str,
+    trace_label: str,
+    reason_source_subject: str,
+) -> dict[str, Any]:
     adjusted = dict(committee_view)
     adjusted["final_committee_label"] = "보류"
     adjusted["committee_decision_type"] = target_type
@@ -105,7 +186,10 @@ def _apply_risk_recall_qa_advisory(
     )
     adjusted["committee_risk_signal"] = target_type == "risk_hold"
     if target_type == "risk_hold":
-        reason_tags, reason_labels, reason_summary = _risk_recall_hold_reason_fields(apply_reason)
+        reason_tags, reason_labels, reason_summary = _risk_recall_hold_reason_fields(
+            apply_reason,
+            source_subject=reason_source_subject,
+        )
         adjusted["risk_hold_reason_tags"] = reason_tags
         adjusted["risk_hold_reason_labels"] = reason_labels
         adjusted["risk_hold_reason_summary"] = reason_summary
@@ -113,24 +197,17 @@ def _apply_risk_recall_qa_advisory(
         adjusted["risk_hold_reason_tags"] = []
         adjusted["risk_hold_reason_labels"] = []
         adjusted["risk_hold_reason_summary"] = ""
-    adjustment_note = (
-        "RiskRecallQAAgent는 최종 적격 판단을 유지하기에는 기준선/재무/외부근거의 "
-        "잔여 위험이 남아 있다고 보아, 최종 라벨을 보류로 재검수하도록 권고했습니다."
-    )
     adjusted["conflict_resolution"] = _append_sentence(
         str(adjusted.get("conflict_resolution") or ""),
         adjustment_note,
     )
     adjusted["final_review_memo"] = _append_sentence(
         _neutralize_prior_eligible_final_memo(str(adjusted.get("final_review_memo") or "")),
-        (
-            "RiskRecallQA 보강 의견: 적격 판단의 위험 누락 가능성을 재점검해 "
-            "최종 표시 라벨을 보류로 올립니다."
-        ),
+        memo_note,
     )
     adjusted["key_risk_factors"] = _prepend_unique_text(
         adjusted.get("key_risk_factors"),
-        "RiskRecallQA 적격 재검수 경고",
+        key_risk_factor,
     )
     risk_hold_reason_trace = (
         [
@@ -148,17 +225,14 @@ def _apply_risk_recall_qa_advisory(
     adjusted["decision_trace"] = [
         *list(adjusted.get("decision_trace") or []),
         {
-            "gate": "risk_recall_qa_escalation",
-            "label": "RiskRecallQA 적격 재검수",
+            "gate": trace_gate,
+            "label": trace_label,
             "triggered": True,
             "severity": "risk" if target_type == "risk_hold" else "watch",
             "summary": adjustment_note,
         },
         *risk_hold_reason_trace,
     ]
-    runtime_diagnostics["risk_recall_qa_advisory_applied"] = True
-    runtime_diagnostics["risk_recall_qa_adjusted_decision_type"] = target_type
-    runtime_diagnostics["risk_recall_qa_advisory_apply_reason"] = apply_reason
     return adjusted
 
 
@@ -186,6 +260,7 @@ def _risk_recall_qa_advisory_apply_reason(
     trigger_reasons = {str(reason) for reason in risk_recall_qa_output.trigger_reasons}
     weak_axes = _risk_recall_weak_financial_axes(bundle)
     confirmed_external_evidence = _risk_recall_confirmed_external_escalation_evidence(bundle)
+    prior_hard_distress = _has_prior_hard_distress_context(bundle)
     if action == "escalate_eligible_to_risk_hold":
         if assessment != "material_missed_risk" or risk_recall_qa_output.confidence < policy.float(
             "risk_recall_qa",
@@ -195,6 +270,18 @@ def _risk_recall_qa_advisory_apply_reason(
             return ""
         if confirmed_external_evidence:
             return "risk_recall_substantive_external_risk"
+        if prior_hard_distress and len(weak_axes) >= policy.int(
+            "risk_recall_qa",
+            "advisory",
+            "near_threshold_min_weak_axes",
+        ):
+            return "risk_recall_prior_hard_distress_context"
+        if _risk_recall_near_threshold(bundle) and len(weak_axes) >= policy.int(
+            "risk_recall_qa",
+            "advisory",
+            "near_threshold_risk_hold_min_weak_axes",
+        ):
+            return "risk_recall_severe_financial_weakness"
         if len(weak_axes) >= policy.int(
             "risk_recall_qa",
             "advisory",
@@ -242,6 +329,33 @@ def _risk_recall_qa_advisory_apply_reason(
     if not (confirmed_external_evidence or near_threshold_weak or multi_axis_weak or boundary_weak):
         return ""
     return "risk_recall_boundary_safety_review"
+
+
+def _deterministic_risk_recall_guardrail_apply_reason(*, bundle: Stage2InputBundle) -> str:
+    policy = load_stage2_policy()
+    weak_axes = _risk_recall_weak_financial_axes(bundle)
+    confirmed_external_evidence = _risk_recall_confirmed_external_escalation_evidence(bundle)
+    if confirmed_external_evidence:
+        return "risk_recall_substantive_external_risk"
+    if _has_prior_hard_distress_context(bundle) and len(weak_axes) >= policy.int(
+        "risk_recall_qa",
+        "advisory",
+        "prior_hard_distress_min_weak_axes",
+    ):
+        return "risk_recall_prior_hard_distress_context"
+    if _risk_recall_near_threshold(bundle) and len(weak_axes) >= policy.int(
+        "risk_recall_qa",
+        "advisory",
+        "near_threshold_risk_hold_min_weak_axes",
+    ):
+        return "risk_recall_severe_financial_weakness"
+    if len(weak_axes) >= policy.int(
+        "risk_recall_qa",
+        "advisory",
+        "severe_financial_weakness_min_axes",
+    ):
+        return "risk_recall_severe_financial_weakness"
+    return ""
 
 
 def _risk_recall_confirmed_external_escalation_evidence(bundle: Stage2InputBundle) -> bool:
@@ -316,13 +430,17 @@ def _string_list(value: object) -> list[str]:
     return [str(item) for item in value if str(item).strip()]
 
 
-def _risk_recall_hold_reason_fields(apply_reason: str) -> tuple[list[str], list[str], str]:
+def _risk_recall_hold_reason_fields(
+    apply_reason: str,
+    *,
+    source_subject: str = "RiskRecallQA가",
+) -> tuple[list[str], list[str], str]:
     if apply_reason == "risk_recall_substantive_external_risk":
         return (
             ["external_materiality_hold"],
             ["외부 중요도 근거"],
             (
-                "위험 보류 이유 태그는 외부 중요도 근거입니다. RiskRecallQA가 적격 판단에서 "
+                f"위험 보류 이유 태그는 외부 중요도 근거입니다. {source_subject} 적격 판단에서 "
                 "놓칠 수 있는 실질 외부근거를 확인해 위험 보류로 올렸습니다."
             ),
         )
@@ -331,16 +449,26 @@ def _risk_recall_hold_reason_fields(apply_reason: str) -> tuple[list[str], list[
             ["financial_stress_hold"],
             ["재무 스트레스"],
             (
-                "위험 보류 이유 태그는 재무 스트레스입니다. RiskRecallQA가 현금흐름, "
+                f"위험 보류 이유 태그는 재무 스트레스입니다. {source_subject} 현금흐름, "
                 "이자보상, 손익, 유동성 중 복수 약점을 확인해 위험 보류로 올렸습니다."
+            ),
+        )
+    if apply_reason == "risk_recall_prior_hard_distress_context":
+        return (
+            ["prior_hard_distress_hold"],
+            ["기준일 이전 severe 등급"],
+            (
+                f"위험 보류 이유 태그는 기준일 이전 severe 등급입니다. {source_subject} "
+                "CCC/C/D 등 과거 심각 신용위험 컨텍스트와 현재 재무 약점의 조합을 "
+                "확인해 위험 보류로 올렸습니다."
             ),
         )
     return (
         ["model_risk_hold"],
         ["모델 위험 보류"],
         (
-            "위험 보류 이유 태그는 모델 위험 보류입니다. 적격으로 유지하기에는 잔여 위험 "
-            "신호가 남아 위험 보류로 올렸습니다."
+            f"위험 보류 이유 태그는 모델 위험 보류입니다. {source_subject} 적격으로 "
+            "유지하기에는 잔여 위험 신호가 남아 위험 보류로 올렸습니다."
         ),
     )
 
@@ -365,6 +493,7 @@ def _risk_recall_qa_trigger_reasons(
         source_feature_row=bundle.source_feature_row,
     )
     has_boundary_context = _has_rating_boundary_context(bundle)
+    has_prior_hard_distress = _has_prior_hard_distress_context(bundle)
 
     near_threshold_min_axes = policy.int(
         "risk_recall_qa",
@@ -396,6 +525,12 @@ def _risk_recall_qa_trigger_reasons(
         or has_substantive_evidence
     ):
         reasons.append("eligible_boundary_rating_context")
+    if has_prior_hard_distress and (
+        (near_threshold and len(weak_axes) >= 1)
+        or len(weak_axes) >= near_threshold_min_axes
+        or has_substantive_evidence
+    ):
+        reasons.append("eligible_prior_hard_distress_context")
     return reasons[:5]
 
 
@@ -493,6 +628,10 @@ def _has_rating_boundary_context(bundle: Stage2InputBundle) -> bool:
     return rating in {"BBB-", "BB+"}
 
 
+def _has_prior_hard_distress_context(bundle: Stage2InputBundle) -> bool:
+    return prior_rating_has_hard_distress_context(bundle.prior_rating_reference)
+
+
 def _stage2_risk_recall_qa_enabled(runtime_backend_name: str) -> bool:
     config = _stage2_runtime_config()
     if config.risk_recall_qa_enabled is not None:
@@ -510,7 +649,10 @@ def _stage2_risk_recall_qa_fallback_on_error() -> bool:
 
 
 __all__ = [
+    "_apply_deterministic_risk_recall_guardrail",
     "_apply_risk_recall_qa_advisory",
+    "_deterministic_risk_recall_guardrail_apply_reason",
+    "_has_prior_hard_distress_context",
     "_has_rating_boundary_context",
     "_has_risk_recall_watch_evidence",
     "_maybe_run_risk_recall_qa",

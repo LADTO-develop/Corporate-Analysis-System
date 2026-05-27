@@ -118,6 +118,10 @@ _CREDIT_POLICY_PROMPT_KEYS = (
     "mitigating_signal_count",
     "critical_signal_count",
 )
+_SPECULATIVE_PRIOR_RATINGS = frozenset(
+    {"BB+", "BB", "BB-", "B+", "B", "B-", "CCC+", "CCC", "CCC-", "CC", "C", "D"}
+)
+_HARD_DISTRESS_PRIOR_RATINGS = frozenset({"CCC+", "CCC", "CCC-", "CC", "C", "D"})
 
 
 @dataclass(frozen=True)
@@ -527,32 +531,48 @@ def _boundary_context(prior_rating_reference: dict[str, Any]) -> dict[str, Any]:
     speculative_min_rank = policy.int(
         "committee_guardrails", "prior_rating", "speculative_min_rank"
     )
+    hard_distress_min_rank = policy.int(
+        "committee_guardrails", "prior_rating", "hard_distress_min_rank"
+    )
     stable_investment_max_rank = policy.int(
         "committee_guardrails",
         "prior_rating",
         "stable_investment_max_rank",
     )
+    has_prior_rating = _truthy(prior_rating_reference.get("has_prior_rating"))
     exact_boundary = group == "exact_bbb_minus_bb_plus_boundary" or rating in {"BBB-", "BB+"}
     has_boundary_context = "boundary" in group_normalized or exact_boundary
     speculative_prior = bool(
-        (rank is not None and rank >= speculative_min_rank)
-        or rating in {"BB+", "BB", "BB-", "B+", "B", "B-", "CCC+", "CCC", "CCC-", "CC", "C", "D"}
+        has_prior_rating
+        and (
+            (rank is not None and rank >= speculative_min_rank)
+            or rating in _SPECULATIVE_PRIOR_RATINGS
+        )
+    )
+    hard_distress_prior = bool(
+        has_prior_rating
+        and (
+            (rank is not None and rank >= hard_distress_min_rank)
+            or rating in _HARD_DISTRESS_PRIOR_RATINGS
+        )
     )
     stable_investment_non_boundary = bool(
-        group == "investment_grade_non_boundary"
+        has_prior_rating
+        and group == "investment_grade_non_boundary"
         and (
             (rank is not None and rank <= stable_investment_max_rank)
             or rating in {"AAA", "AA+", "AA", "AA-", "A+", "A", "A-", "BBB+"}
         )
     )
     return {
-        "has_prior_rating": _truthy(prior_rating_reference.get("has_prior_rating")),
+        "has_prior_rating": has_prior_rating,
         "prior_credit_rating": rating,
         "prior_credit_rating_rank": rank,
         "prior_rating_boundary_group": group,
         "has_rating_boundary_context": has_boundary_context,
         "is_exact_bbb_minus_bb_plus_boundary": exact_boundary,
         "is_speculative_prior_rating": speculative_prior,
+        "has_prior_hard_distress_context": hard_distress_prior,
         "is_stable_investment_non_boundary": stable_investment_non_boundary,
         "prior_rating_age_days": _optional_int(prior_rating_reference.get("prior_rating_age_days")),
         "prior_rating_agency": str(prior_rating_reference.get("prior_rating_agency") or ""),

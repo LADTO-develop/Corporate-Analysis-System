@@ -30,6 +30,7 @@ def test_summarize_batch_results_reports_requested_harness_metrics() -> None:
                 "stage2_risk_recall_qa_cache_hit": True,
                 "stage2_review_qa_triggered": False,
                 "stage2_risk_recall_qa_triggered": True,
+                "stage2_risk_recall_guardrail_applied": True,
                 "error_message": "",
                 "stage2_error_message": "",
             },
@@ -90,6 +91,8 @@ def test_summarize_batch_results_reports_requested_harness_metrics() -> None:
     assert summary["case_latency_p95_seconds"] == 20.9
     assert summary["review_qa_trigger_rows"] == 1
     assert summary["risk_recall_qa_trigger_rows"] == 1
+    assert summary["risk_recall_guardrail_rows"] == 1
+    assert summary["risk_recall_guardrail_rate"] == 0.3333
     assert summary["any_qa_trigger_rows"] == 2
     assert summary["any_qa_trigger_rate"] == 0.6667
     assert summary["stage2_policy_version"] == "stage2_policy_v1"

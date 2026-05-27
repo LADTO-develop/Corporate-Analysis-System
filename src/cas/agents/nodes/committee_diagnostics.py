@@ -74,6 +74,9 @@ def _runtime_diagnostic_metrics(diagnostics: dict[str, Any]) -> dict[str, float]
     metrics["stage2_risk_recall_qa_advisory_applied"] = (
         1.0 if diagnostics.get("risk_recall_qa_advisory_applied") is True else 0.0
     )
+    metrics["stage2_risk_recall_guardrail_applied"] = (
+        1.0 if diagnostics.get("risk_recall_guardrail_applied") is True else 0.0
+    )
     return metrics
 
 

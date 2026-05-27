@@ -220,8 +220,25 @@ def test_stage2_input_bundle_adds_normalized_signal_summary() -> None:
         "critical_veto_review",
     }
     assert summary["boundary_context"]["has_rating_boundary_context"] is True
+    assert summary["boundary_context"]["has_prior_hard_distress_context"] is False
     assert summary["secondary_trigger_profile"]["stage2_secondary_trigger"] is True
     assert summary["secondary_trigger_profile"]["eligible_near_threshold"] is True
+
+
+def test_stage2_input_bundle_exposes_prior_hard_distress_context() -> None:
+    state: AgentState = {
+        "prior_rating_reference": {
+            "has_prior_rating": True,
+            "prior_credit_rating": "CCC",
+            "prior_credit_rating_rank": 18,
+            "prior_rating_date": "2022-11-30",
+        },
+    }
+
+    summary = build_stage2_input_bundle(state).normalized_signal_summary
+
+    assert summary["boundary_context"]["has_prior_hard_distress_context"] is True
+    assert summary["boundary_context"]["is_speculative_prior_rating"] is True
 
 
 def test_stage2_compact_prompt_payload_is_role_scoped() -> None:

@@ -96,6 +96,12 @@ DEFAULT_SEARCH_SPACE: tuple[ThresholdSpec, ...] = (
         description="Financial stress flag count for risk-hold reason retention.",
     ),
     ThresholdSpec(
+        path="committee_guardrails.mitigation_residual_risk.probability_floor",
+        values=(0.90, 0.92, 0.95),
+        objectives=("strict", "fn_rescue"),
+        description="Probability floor for turning softened over-warning holds back into risk holds.",
+    ),
+    ThresholdSpec(
         path="committee_guardrails.severe_financial_watch.current_ratio_floor",
         values=(0.60, 0.70, 0.80),
         objectives=("strict", "fn_rescue"),
@@ -118,6 +124,12 @@ DEFAULT_SEARCH_SPACE: tuple[ThresholdSpec, ...] = (
         values=(1, 2, 3),
         objectives=("strict", "fn_rescue"),
         description="Weak financial-axis count for near-threshold RiskRecallQA escalation.",
+    ),
+    ThresholdSpec(
+        path="risk_recall_qa.advisory.near_threshold_risk_hold_min_weak_axes",
+        values=(1, 2, 3),
+        objectives=("strict", "fn_rescue"),
+        description="Weak financial-axis count for near-threshold risk-label recall guardrail.",
     ),
     ThresholdSpec(
         path="review_qa.advisory.overstated_risk_hold_min_confidence",

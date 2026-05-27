@@ -76,6 +76,8 @@ _DEFAULT_STAGE2_POLICY: dict[str, Any] = {
             "near_threshold_min_weak_axes": 2,
             "multi_axis_min_weak_axes": 3,
             "boundary_rating_min_weak_axes": 2,
+            "near_threshold_risk_hold_min_weak_axes": 2,
+            "prior_hard_distress_min_weak_axes": 2,
             "severe_financial_weakness_min_axes": 4,
         },
         "evidence": {
@@ -212,6 +214,9 @@ _DEFAULT_STAGE2_POLICY: dict[str, Any] = {
             "threshold_additive_margin": 0.10,
             "probability_ceiling": 0.90,
         },
+        "mitigation_residual_risk": {
+            "probability_floor": 0.92,
+        },
         "cashflow_backed_fp_resilience": {
             "capital_impairment_ratio_ceiling": 0.0,
             "cashflow_coverage_ratio_floor": 0.0,
@@ -262,6 +267,7 @@ _DEFAULT_STAGE2_POLICY: dict[str, Any] = {
         },
         "prior_rating": {
             "speculative_min_rank": 11,
+            "hard_distress_min_rank": 17,
             "stable_investment_max_rank": 8,
         },
     },

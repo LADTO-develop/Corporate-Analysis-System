@@ -39,6 +39,9 @@ from cas.agents.committee_decision_policy import (
     hidden_tail_risk_assessment as _hidden_tail_risk_assessment,
 )
 from cas.agents.committee_decision_policy import (
+    mitigation_hold_residual_risk_reason as _mitigation_hold_residual_risk_reason,
+)
+from cas.agents.committee_decision_policy import (
     model_threshold as _model_threshold,
 )
 from cas.agents.committee_decision_policy import (
@@ -79,6 +82,9 @@ from cas.agents.committee_decision_policy import (
 )
 from cas.agents.committee_decision_policy import (
     veto_triggered_label as _veto_triggered_label,
+)
+from cas.agents.committee_financial_guardrails import (
+    prior_rating_has_hard_distress_context as _prior_rating_has_hard_distress_context,
 )
 from cas.agents.committee_memo import (
     chair_report_memo_seed as _chair_report_memo_seed,
@@ -201,6 +207,13 @@ def build_committee_view_model(
     ):
         committee_label = "보류"
         mitigating_factors = [overwarning_mitigation.reason, *mitigating_factors]
+    mitigation_residual_risk_reason = (
+        _mitigation_hold_residual_risk_reason(bundle)
+        if overwarning_mitigation.triggered and not veto_triggered and not hidden_tail_risk.triggered
+        else ""
+    )
+    if mitigation_residual_risk_reason:
+        risk_factors = [mitigation_residual_risk_reason, *risk_factors]
     prior_boundary_reason = _prior_rating_boundary_hold_reason(
         bundle,
         committee_label=committee_label,
@@ -285,6 +298,7 @@ def build_committee_view_model(
         secondary_review_risk=secondary_review_risk,
         overwarning_mitigation=overwarning_mitigation,
         reject_confirmation=reject_confirmation,
+        mitigation_residual_risk_reason=mitigation_residual_risk_reason,
     )
     risk_hold_reason_tags = _risk_hold_reason_tags(
         bundle=bundle,
@@ -300,6 +314,8 @@ def build_committee_view_model(
     )
     if risk_hold_reason_summary:
         final_review_memo = f"{final_review_memo} {risk_hold_reason_summary}"
+    if mitigation_residual_risk_reason:
+        conflict_resolution = f"{conflict_resolution} 다만 {mitigation_residual_risk_reason}"
 
     risk_factors = _clean_text_items(risk_factors)
     mitigating_factors = _clean_text_items(mitigating_factors)
@@ -344,6 +360,7 @@ def build_committee_view_model(
             secondary_review_risk=secondary_review_risk,
             overwarning_mitigation=overwarning_mitigation,
             reject_confirmation=reject_confirmation,
+            mitigation_residual_risk_reason=mitigation_residual_risk_reason,
             risk_hold_reason_tags=risk_hold_reason_tags,
             risk_hold_reason_summary=risk_hold_reason_summary,
         ),
@@ -606,6 +623,11 @@ def _committee_action_plan(
     if reject_confirmation.triggered and not reject_confirmation.confirmed:
         missing.append("부적격 확정에 필요한 치명 외부근거 또는 복수 재무부실 신호")
 
+    if _prior_rating_has_hard_distress_context(bundle.prior_rating_reference):
+        tasks.append("기준일 이전 CCC/C/D 등 severe 공개등급의 원문과 이후 해소 근거를 확인합니다.")
+        missing.append("기준일 이전 severe 공개등급 원문, 등급전망, 후속 등급조정 또는 해소 공시")
+        monitoring.append("등급하향, 회생/상장폐지/거래정지, 감사의견 변형 후속 이벤트 발생 시 재심사")
+
     if _external_evidence_unavailable(bundle.news_status):
         tasks.append("외부근거 수집을 활성화한 뒤 기준일 이전 직접 공시/뉴스를 재조회합니다.")
         missing.append("기준일 이전 직접 공시/뉴스 원문과 회사명/종목코드 일치 확인")
@@ -660,6 +682,7 @@ def _decision_trace_items(
     secondary_review_risk: SecondaryReviewRiskAssessment,
     overwarning_mitigation: OverwarningMitigationAssessment,
     reject_confirmation: RejectConfirmationAssessment,
+    mitigation_residual_risk_reason: str,
     risk_hold_reason_tags: list[RiskHoldReasonTag],
     risk_hold_reason_summary: str,
 ) -> list[DecisionTraceItem]:
@@ -668,6 +691,7 @@ def _decision_trace_items(
     threshold = _model_threshold(bundle)
     review_priority = _stage2_review_priority(bundle)
     trigger_reason = _stage2_trigger_reason(bundle)
+    prior_hard_distress = _prior_rating_has_hard_distress_context(bundle.prior_rating_reference)
     trace = [
         DecisionTraceItem(
             gate="stage1_model_view",
@@ -723,12 +747,27 @@ def _decision_trace_items(
             or "이전 공개등급 또는 확률 기준의 BBB-/BB+ 경계 보류 조건은 제한적입니다.",
         ),
         DecisionTraceItem(
+            gate="prior_hard_distress_context",
+            label="기준일 이전 severe 등급 컨텍스트",
+            triggered=prior_hard_distress,
+            severity="risk" if prior_hard_distress else "info",
+            summary=_prior_hard_distress_trace_summary(bundle.prior_rating_reference),
+        ),
+        DecisionTraceItem(
             gate="overwarning_mitigation",
             label="과민경고 완화 점검",
             triggered=overwarning_mitigation.triggered,
             severity="mitigation" if overwarning_mitigation.triggered else "info",
             summary=overwarning_mitigation.reason
             or "모델 과민경고를 완화할 만큼의 방어력/비위험 근거는 제한적입니다.",
+        ),
+        DecisionTraceItem(
+            gate="mitigation_residual_risk",
+            label="과민경고 완화 잔여위험",
+            triggered=bool(mitigation_residual_risk_reason),
+            severity="risk" if mitigation_residual_risk_reason else "info",
+            summary=mitigation_residual_risk_reason
+            or "과민경고 완화 보류 안에서 위험 보류로 되돌릴 잔여 재무위험은 제한적입니다.",
         ),
         DecisionTraceItem(
             gate="reject_confirmation",
@@ -760,6 +799,20 @@ def _decision_trace_items(
         ),
     ]
     return trace
+
+
+def _prior_hard_distress_trace_summary(prior: dict[str, Any]) -> str:
+    if not _prior_rating_has_hard_distress_context(prior):
+        return "기준일 이전 CCC/C/D 등 severe 공개등급 컨텍스트는 확인되지 않았습니다."
+    rating = str(prior.get("prior_credit_rating") or prior.get("credit_rating") or "").strip()
+    rating_date = str(prior.get("prior_rating_date") or "").strip()
+    agency = str(prior.get("prior_rating_agency") or "").strip()
+    source = f"{agency} " if agency else ""
+    date_text = f"({rating_date})" if rating_date else ""
+    return (
+        f"기준일 이전 {source}공개등급이 {rating}{date_text}로 CCC/C/D 등 "
+        "심각한 신용위험 영역에 있어, 현재 재무·외부근거에서 해소 여부를 확인해야 합니다."
+    )
 
 
 def _decision_trace_final_severity(
