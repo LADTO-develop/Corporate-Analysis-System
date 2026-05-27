@@ -19,6 +19,7 @@ if str(SRC_DIR) not in sys.path:
 
 import export_stage2_feature46_full_review_trigger_harness as harness  # noqa: E402
 import export_stage2_rolling_validation_samples as sample_export  # noqa: E402
+from cas.agents.stage2_evaluation_harness import explanation_quality_metrics  # noqa: E402
 from cas.llm.usage import MODEL_PRICING_USD_PER_1M, ROLE_TOKEN_ESTIMATES  # noqa: E402
 
 OUTPUT_DIR = (
@@ -219,7 +220,7 @@ def _attach_assignment_metrics(provider_summary: pd.DataFrame, output_dir: Path)
         assignment = _assignment_from_model_label(str(row.get("model") or ""))
         metric_rows[run_id] = {
             **_review_or_reject_metrics(results),
-            **_explanation_quality_metrics(results),
+            **explanation_quality_metrics(results),
             **_assignment_cost_estimate(results, assignment),
         }
     if not metric_rows:
@@ -375,137 +376,6 @@ def _actual_usage_metrics(results: pd.DataFrame) -> dict[str, Any]:
     }
 
 
-def _explanation_quality_metrics(results: pd.DataFrame) -> dict[str, Any]:
-    scores = results.apply(_explanation_quality_row, axis=1, result_type="expand")
-    return {
-        "explanation_quality_score": round(float(scores["explanation_quality_score"].mean()), 4),
-        "memo_quality_score": round(float(scores["memo_quality_score"].mean()), 4),
-        "evidence_grounding_score": round(float(scores["evidence_grounding_score"].mean()), 4),
-        "financial_specificity_score": round(
-            float(scores["financial_specificity_score"].mean()), 4
-        ),
-        "actionability_score": round(float(scores["actionability_score"].mean()), 4),
-        "disagreement_resolution_score": round(
-            float(scores["disagreement_resolution_score"].mean()), 4
-        ),
-        "quality_rubric_method": "deterministic_text_and_diagnostics_v1",
-    }
-
-
-def _explanation_quality_row(row: pd.Series) -> dict[str, float]:
-    text = _combined_explanation_text(row)
-    memo_quality = _memo_quality_score(text)
-    evidence_grounding = _evidence_grounding_score(row, text)
-    financial_specificity = _financial_specificity_score(text)
-    actionability = _actionability_score(row, text)
-    disagreement_resolution = _disagreement_resolution_score(row, text)
-    overall = (
-        0.25 * memo_quality
-        + 0.25 * evidence_grounding
-        + 0.20 * financial_specificity
-        + 0.20 * actionability
-        + 0.10 * disagreement_resolution
-    )
-    return {
-        "memo_quality_score": round(memo_quality, 4),
-        "evidence_grounding_score": round(evidence_grounding, 4),
-        "financial_specificity_score": round(financial_specificity, 4),
-        "actionability_score": round(actionability, 4),
-        "disagreement_resolution_score": round(disagreement_resolution, 4),
-        "explanation_quality_score": round(overall, 4),
-    }
-
-
-def _combined_explanation_text(row: pd.Series) -> str:
-    columns = [
-        "final_review_memo",
-        "decision_trace",
-        "risk_hold_reason_summary",
-        "agent_disagreement_summary",
-        "agent_disagreement_reasons",
-        "conflict_resolution",
-        "top_evidence_titles",
-        "materiality_top_basis",
-    ]
-    return " ".join(str(row.get(column) or "") for column in columns)
-
-
-def _memo_quality_score(text: str) -> float:
-    length = len(text.strip())
-    if length < 80:
-        return 0.25
-    if length < 180:
-        return 0.55
-    if length <= 1400:
-        return 0.9
-    return 0.7
-
-
-def _evidence_grounding_score(row: pd.Series, text: str) -> float:
-    score = 0.0
-    if _bool_value(row.get("evidence_audit_structured_found")):
-        score += 0.35
-    if _safe_int(row.get("evidence_audit_critical_evidence_count")) > 0:
-        score += 0.20
-    if _safe_int(row.get("materiality_event_count")) > 0:
-        score += 0.20
-    if any(term in text for term in ("공시", "기사", "근거", "외부", "materiality", "evidence")):
-        score += 0.20
-    if str(row.get("top_evidence_titles") or "").strip():
-        score += 0.15
-    return min(score, 1.0)
-
-
-def _financial_specificity_score(text: str) -> float:
-    financial_terms = (
-        "부채",
-        "차입",
-        "현금",
-        "이자",
-        "매출",
-        "영업",
-        "손실",
-        "자본",
-        "현금흐름",
-        "ROA",
-        "coverage",
-        "ratio",
-        "percentile",
-    )
-    term_hits = sum(1 for term in financial_terms if term.lower() in text.lower())
-    numeric_hits = sum(char.isdigit() for char in text)
-    return min(1.0, 0.18 * term_hits + (0.25 if numeric_hits >= 3 else 0.0))
-
-
-def _actionability_score(row: pd.Series, text: str) -> float:
-    score = 0.0
-    if str(row.get("final_committee_label") or "").strip():
-        score += 0.25
-    if str(row.get("committee_decision_type") or "").strip():
-        score += 0.20
-    if str(row.get("risk_hold_reason_tags") or "").strip():
-        score += 0.20
-    if any(term in text for term in ("보류", "부적격", "적격", "검토", "확인", "모니터링")):
-        score += 0.25
-    if str(row.get("stage2_review_qa_recommended_action") or "").strip():
-        score += 0.10
-    return min(score, 1.0)
-
-
-def _disagreement_resolution_score(row: pd.Series, text: str) -> float:
-    disagreement = _safe_float(row.get("agent_disagreement_score"))
-    if disagreement <= 0:
-        return 0.8 if "conflict" not in text.lower() else 0.6
-    score = 0.0
-    if str(row.get("agent_disagreement_summary") or "").strip():
-        score += 0.35
-    if str(row.get("conflict_resolution") or "").strip():
-        score += 0.35
-    if any(term in text for term in ("상충", "충돌", "조정", "해소", "conflict")):
-        score += 0.20
-    return min(score, 1.0)
-
-
 def _assignment_from_model_label(model_label: str) -> dict[str, str]:
     output: dict[str, str] = {}
     for part in model_label.split(";"):
@@ -569,30 +439,6 @@ def _bool_value(value: object) -> bool:
 
 def _safe_div(numerator: float, denominator: float) -> float:
     return float(numerator / denominator) if denominator else 0.0
-
-
-def _safe_int(value: object) -> int:
-    try:
-        if pd.isna(value):
-            return 0
-    except (TypeError, ValueError):
-        pass
-    try:
-        return int(float(str(value).strip()))
-    except (TypeError, ValueError):
-        return 0
-
-
-def _safe_float(value: object) -> float:
-    try:
-        if pd.isna(value):
-            return 0.0
-    except (TypeError, ValueError):
-        pass
-    try:
-        return float(str(value).strip())
-    except (TypeError, ValueError):
-        return 0.0
 
 
 if __name__ == "__main__":
