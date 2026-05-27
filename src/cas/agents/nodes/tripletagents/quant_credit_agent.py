@@ -49,6 +49,7 @@ def run_quant_credit_agent(
     model_provider: str = "openai",
     max_tokens: int,
     runtime_config: Stage2RuntimeConfig | None = None,
+    usage: dict[str, object] | None = None,
 ) -> QuantCreditOutput:
     """Run the Agno QuantCreditAgent and map it to the CAS Stage 2 schema."""
     model_label = provider_label(model_provider)
@@ -69,6 +70,9 @@ def run_quant_credit_agent(
         query=_query(bundle),
         response_model=AgnoQuantCreditResponse,
         runtime_config=runtime_config,
+        model_provider=model_provider,
+        model_name=model_name,
+        usage=usage,
     )
     return QuantCreditOutput(
         quant_summary=(

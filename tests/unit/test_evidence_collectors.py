@@ -448,6 +448,37 @@ class _OpenDartSession:
         return _FakeResponse({"results": []})
 
 
+class _FutureOpenDartLeakSession(_OpenDartSession):
+    def get(
+        self,
+        url: str,
+        *,
+        params: Mapping[str, object] | None = None,
+        headers: Mapping[str, str] | None = None,
+        timeout: float | None = None,
+    ) -> _FakeResponse:
+        if "corpCode.xml" in url:
+            return _FakeResponse({}, content=_corp_code_zip())
+        if "opendart" in url:
+            assert params is not None
+            if str(params.get("pblntf_ty", "")) == "B":
+                return _FakeResponse(
+                    {
+                        "list": [
+                            {
+                                "report_nm": "횡령ㆍ배임혐의발생",
+                                "rcept_no": "202601010001",
+                                "rcept_dt": "20260101",
+                            }
+                        ]
+                    }
+                )
+            return _FakeResponse({"list": []})
+        if "naver.com" in url:
+            return _FakeResponse({"items": []})
+        return _FakeResponse({"list": []})
+
+
 class _RoutineOpenDartSession:
     def get(
         self,
@@ -724,15 +755,28 @@ def test_collect_external_evidence_merges_provider_items() -> None:
     assert snapshot["status"] == "ready"
     assert snapshot["has_critical_risk"] is True
     assert "횡령" in snapshot["critical_terms"]
+    assert snapshot["veto_candidate_count"] == 0
+    assert snapshot["high_confidence_critical_count"] == 0
     assert snapshot["items"]
     first_item = snapshot["items"][0]
     assert isinstance(first_item, dict)
+    assert str(first_item["event_id"]).startswith("evt_")
+    assert first_item["source_evidence_type"] == "news_search_snippet"
+    assert first_item["source_reliability"] == "medium_contextual_snippet"
+    assert first_item["company_disambiguation"] == "name_only_search_result"
+    assert first_item["temporal_status"] == "on_or_before_as_of_date"
+    assert first_item["as_of_date_violation"] is False
     assert first_item["company_match"] is True
     assert first_item["critical_context_confirmed"] is True
+    assert first_item["veto_candidate"] is False
     assert first_item["evidence_quality"] == "high"
     assert float(first_item["evidence_score"]) >= 0.75
     assert "횡령" in first_item["critical_terms"]
     assert snapshot["verified_item_count"] == 1
+    verification_summary = snapshot["verification_summary"]
+    assert isinstance(verification_summary, dict)
+    assert verification_summary["event_count"] == 1
+    assert verification_summary["company_disambiguation_counts"]["name_only_search_result"] == 1
 
 
 def test_collect_external_evidence_reuses_cached_snapshot(tmp_path: Path) -> None:
@@ -883,11 +927,15 @@ def test_collect_external_evidence_deduplicates_same_article_url() -> None:
     assert len(snapshot["items"]) == 1
     item = snapshot["items"][0]
     assert isinstance(item, dict)
+    assert str(item["event_id"]).startswith("evt_")
     assert item["duplicate_count"] == 2
+    assert item["duplicate_sources"] == ["naver_news", "tavily"]
     assert "duplicate_merged" in item["verification_flags"]
     verification_summary = snapshot["verification_summary"]
     assert isinstance(verification_summary, dict)
+    assert verification_summary["event_count"] == 1
     assert verification_summary["duplicate_merged_count"] == 1
+    assert verification_summary["source_evidence_type_counts"]["news_search_snippet"] == 1
 
 
 def test_collect_external_evidence_prioritizes_direct_news_and_limits_weak_web() -> None:
@@ -990,12 +1038,49 @@ def test_collect_external_evidence_resolves_corp_code_and_collects_opendart(
     assert provider["query_window"]["end_date"] == "2024-05-11"
     dart_items = [item for item in snapshot["items"] if item["source"] == "opendart"]
     assert len(dart_items) == 2
+    assert str(dart_items[0]["event_id"]).startswith("evt_")
+    assert dart_items[0]["source_evidence_type"] == "direct_disclosure"
+    assert dart_items[0]["source_reliability"] == "high_direct_disclosure"
+    assert dart_items[0]["company_disambiguation"] == "resolved_by_disclosure_corp_code"
+    assert dart_items[0]["temporal_status"] == "on_or_before_as_of_date"
     assert dart_items[0]["provider_relevance"] == "risk"
     assert dart_items[0]["disclosure_severity"] == "veto"
     assert dart_items[0]["veto_candidate"] is True
     assert dart_items[0]["disclosure_type"] == "B"
     assert dart_items[1]["disclosure_severity"] == "caution"
     assert dart_items[1]["disclosure_type"] == "F"
+
+
+def test_collect_external_evidence_marks_defensive_as_of_date_leaks(
+    tmp_path: Path,
+) -> None:
+    snapshot = collect_external_evidence(
+        company_name="테스트기업",
+        stock_code="000001",
+        as_of_date="2024-05-11",
+        env={
+            "CAS_ENABLE_EXTERNAL_EVIDENCE": "1",
+            "OPENDART_API_KEY": "dummy",
+            "CAS_OPENDART_CORP_CODE_CACHE_PATH": str(tmp_path / "corp_codes.csv"),
+        },
+        session=_FutureOpenDartLeakSession(),
+    )
+
+    assert snapshot["status"] == "ready"
+    assert snapshot["has_critical_risk"] is False
+    assert snapshot["veto_candidate_count"] == 0
+    assert snapshot["high_confidence_critical_count"] == 0
+    item = snapshot["items"][0]
+    assert item["source"] == "opendart"
+    assert item["temporal_status"] == "after_as_of_date"
+    assert item["as_of_date_violation"] is True
+    assert item["critical_context_confirmed"] is False
+    assert item["veto_candidate"] is False
+    assert float(item["evidence_score"]) <= 0.24
+    assert "as_of_date_violation" in item["verification_flags"]
+    verification_summary = snapshot["verification_summary"]
+    assert isinstance(verification_summary, dict)
+    assert verification_summary["as_of_date_violation_count"] == 1
 
 
 def test_collect_external_evidence_treats_routine_opendart_as_context(

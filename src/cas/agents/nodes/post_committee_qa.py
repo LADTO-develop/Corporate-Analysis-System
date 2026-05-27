@@ -56,7 +56,9 @@ from cas.agents.nodes.review_qa_policy import (
     _stage2_review_qa_fallback_on_error,
 )
 from cas.agents.nodes.risk_recall_policy import (
+    _apply_deterministic_risk_recall_guardrail,
     _apply_risk_recall_qa_advisory,
+    _deterministic_risk_recall_guardrail_apply_reason,
     _has_rating_boundary_context,
     _has_risk_recall_watch_evidence,
     _maybe_run_risk_recall_qa,
@@ -79,10 +81,12 @@ __all__ = [
     "_agent_disagreement_level_from_committee_view",
     "_agent_disagreement_reasons_from_committee_view",
     "_append_sentence",
+    "_apply_deterministic_risk_recall_guardrail",
     "_apply_review_qa_advisory",
     "_apply_review_qa_reject_advisory",
     "_apply_review_qa_risk_hold_advisory",
     "_apply_risk_recall_qa_advisory",
+    "_deterministic_risk_recall_guardrail_apply_reason",
     "_external_evidence_is_watch_context_only",
     "_has_rating_boundary_context",
     "_has_review_qa_extreme_financial_distress",

@@ -25,9 +25,11 @@ from cas.agents.committee_financial_guardrails import (
     has_blocking_flags,
     has_extreme_financial_distress_signal,
     has_severe_financial_watch_signal,
+    mitigation_hold_residual_risk_reason,
     model_only_overwarning_buffer_reason,
     prior_boundary_overwarning_buffer_reason,
     prior_rating_boundary_requires_hold,
+    prior_rating_has_hard_distress_context,
     prior_rating_is_exact_boundary,
     prior_rating_is_speculative,
     risk_hold_has_financial_stress,
@@ -76,6 +78,7 @@ def committee_decision_type(
     secondary_review_risk: SecondaryReviewRiskAssessment,
     overwarning_mitigation: OverwarningMitigationAssessment,
     reject_confirmation: RejectConfirmationAssessment,
+    mitigation_residual_risk_reason: str = "",
 ) -> CommitteeDecisionType:
     """Return the dashboard-facing subtype for a final committee label."""
     if committee_label == "적격":
@@ -84,6 +87,12 @@ def committee_decision_type(
         return "reject"
     if hidden_tail_risk.triggered:
         return "risk_hold" if hidden_tail_risk.risk_signal else "review_hold"
+    if (
+        overwarning_mitigation.triggered
+        and prediction_label == "부적격"
+        and mitigation_residual_risk_reason
+    ):
+        return "risk_hold"
     if overwarning_mitigation.triggered and prediction_label == "부적격":
         return "mitigation_hold"
     if reject_confirmation.triggered:
@@ -119,6 +128,7 @@ def committee_risk_signal(decision_type: CommitteeDecisionType) -> bool:
 
 _RISK_HOLD_REASON_LABELS: dict[RiskHoldReasonTag, str] = {
     "combined_watch_hold": "재무+외부 복합 관찰",
+    "prior_hard_distress_hold": "기준일 이전 severe 등급",
     "financial_stress_hold": "재무 스트레스",
     "external_materiality_hold": "외부 중요도 근거",
     "secondary_radar_hold": "2차 보조 레이더",
@@ -148,9 +158,12 @@ def risk_hold_reason_tags(
         bundle,
         hidden_tail_risk=hidden_tail_risk,
     )
+    prior_hard_distress = prior_rating_has_hard_distress_context(bundle.prior_rating_reference)
     tags: list[RiskHoldReasonTag] = []
     if financial_stress and external_materiality:
         tags.append("combined_watch_hold")
+    if prior_hard_distress:
+        tags.append("prior_hard_distress_hold")
     if financial_stress:
         tags.append("financial_stress_hold")
     if external_materiality:
@@ -205,6 +218,13 @@ def risk_hold_reason_summary(
             "위험 보류 이유 태그는 "
             f"{label_text}입니다. 재무 스트레스와 외부 중요도 근거가 함께 남아 있어, "
             "정상기업 과잉 보류 guardrail을 바로 적용하지 않고 위험 보류로 유지했습니다."
+        )
+    if "prior_hard_distress_hold" in tags:
+        return (
+            "위험 보류 이유 태그는 "
+            f"{label_text}입니다. 기준일 이전 공개등급이 CCC/C/D 등 심각한 신용위험 "
+            "영역에 있어, 현재 재무와 외부근거가 완전히 해소를 확인하기 전까지 "
+            "위험 보류로 유지했습니다."
         )
     if "financial_stress_hold" in tags:
         return (
@@ -687,6 +707,7 @@ def _unconfirmed_reject_review_risk_assessment(
     threshold = model_threshold(bundle)
     near_very_high_probability = probability >= max(0.88, threshold + 0.55)
     strong_probability = probability >= max(0.80, threshold + 0.35)
+    prior_hard_distress = prior_rating_has_hard_distress_context(bundle.prior_rating_reference)
     prior_speculative = prior_rating_is_speculative(bundle.prior_rating_reference)
 
     reasons: list[str] = []
@@ -695,7 +716,15 @@ def _unconfirmed_reject_review_risk_assessment(
             f"투기등급 확률이 {probability:.1%}로 높고, 전환사채·유상증자 등 "
             f"자금조달성 공시가 {repeated_financing_count}건 반복 확인되었습니다."
         )
-    if strong_probability and prior_speculative:
+    if strong_probability and prior_hard_distress:
+        prior = bundle.prior_rating_reference
+        rating = str(prior.get("prior_credit_rating") or "").strip()
+        rating_date = str(prior.get("prior_rating_date") or "").strip()
+        reasons.append(
+            f"투기등급 확률이 {probability:.1%}이고, 평가 기준일 이전 공개등급이 "
+            f"{rating}({rating_date})로 CCC/C/D 등 심각한 신용위험 영역에 있었습니다."
+        )
+    elif strong_probability and prior_speculative:
         prior = bundle.prior_rating_reference
         rating = str(prior.get("prior_credit_rating") or "").strip()
         rating_date = str(prior.get("prior_rating_date") or "").strip()
@@ -793,6 +822,7 @@ __all__ = [
     "committee_label_with_model_alignment",
     "committee_risk_signal",
     "hidden_tail_risk_assessment",
+    "mitigation_hold_residual_risk_reason",
     "model_threshold",
     "overwarning_mitigation_assessment",
     "prior_rating_boundary_hold_reason",

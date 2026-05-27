@@ -103,7 +103,12 @@ def collect_external_evidence(
             session=http,
         ),
     }
-    items = _combined_items(providers, company_name=company_name, stock_code=stock_code)
+    items = _combined_items(
+        providers,
+        company_name=company_name,
+        stock_code=stock_code,
+        as_of_date=as_of_date,
+    )
     critical_terms = _critical_terms(items)
     direct_match_count = sum(1 for item in items if item.get("company_match") is True)
     veto_candidate_count = sum(1 for item in items if item.get("veto_candidate") is True)
@@ -111,7 +116,7 @@ def collect_external_evidence(
         1 for item in items if _evidence_score_from_item(item) >= _DIRECT_EVIDENCE_SCORE_FLOOR
     )
     high_confidence_critical_count = sum(
-        1 for item in items if item.get("critical_context_confirmed") is True
+        1 for item in items if _high_confidence_critical_item(item)
     )
     provider_statuses = [str(provider.get("status", "unknown")) for provider in providers.values()]
     if items:
@@ -172,7 +177,7 @@ def _external_evidence_cache_key(
     return str(
         stable_cache_key(
             {
-                "cache_version": "external_evidence_v8",
+                "cache_version": "external_evidence_v9",
                 "company_name": company_name,
                 "stock_code": stock_code or "",
                 "corp_code": corp_code or "",
@@ -213,6 +218,20 @@ def _read_external_evidence_cache(
 def _cache_custom_session_enabled(env: Mapping[str, str]) -> bool:
     value = env.get("CAS_EXTERNAL_EVIDENCE_CACHE_SESSION", "")
     return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _high_confidence_critical_item(item: dict[str, object]) -> bool:
+    if item.get("critical_context_confirmed") is not True:
+        return False
+    if item.get("as_of_date_violation") is True:
+        return False
+    source = str(item.get("source") or "").lower()
+    if source == "opendart":
+        return True
+    return str(item.get("company_disambiguation") or "").lower() in {
+        "resolved_by_name_and_stock_code",
+        "resolved_by_disclosure_corp_code",
+    }
 
 
 __all__ = ["HttpClient", "HttpResponse", "collect_external_evidence", "external_evidence_enabled"]

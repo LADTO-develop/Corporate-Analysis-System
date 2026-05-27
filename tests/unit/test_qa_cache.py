@@ -19,9 +19,10 @@ def test_run_cached_optional_agent_reuses_cached_response(tmp_path: Path) -> Non
             "prompt": {"company_id": "KOSDAQ-000250-2023"},
         }
 
-    def agent_callable() -> ReviewQAOutput:
+    def agent_callable(usage: dict[str, object]) -> ReviewQAOutput:
         nonlocal calls
         calls += 1
+        usage.update({"input_tokens": 100, "output_tokens": 20, "total_tokens": 120})
         return _review_qa_output("fresh QA response")
 
     cache_env = {
@@ -58,6 +59,8 @@ def test_run_cached_optional_agent_reuses_cached_response(tmp_path: Path) -> Non
     assert second_diagnostics["review_qa_cache_hit"] is True
     assert first_diagnostics["review_qa_cache_key"] == second_diagnostics["review_qa_cache_key"]
     assert set(second_diagnostics["agent_elapsed_seconds"]) == {"review_qa"}
+    assert first_diagnostics["role_token_usage"]["review_qa"]["billable_total_tokens"] == 120
+    assert second_diagnostics["role_token_usage"]["review_qa"]["billable_total_tokens"] == 0
 
 
 def _review_qa_output(summary: str) -> ReviewQAOutput:

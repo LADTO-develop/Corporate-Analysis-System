@@ -46,6 +46,7 @@ def run_chair_report_agent(
     model_provider: str = "openai",
     max_tokens: int,
     runtime_config: Stage2RuntimeConfig | None = None,
+    usage: dict[str, object] | None = None,
 ) -> ChairReportOutput:
     """Run the Agno ChairReportAgent and map it to the CAS Stage 2 schema."""
     model_label = provider_label(model_provider)
@@ -72,6 +73,9 @@ def run_chair_report_agent(
         ),
         response_model=AgnoChairReportResponse,
         runtime_config=runtime_config,
+        model_provider=model_provider,
+        model_name=model_name,
+        usage=usage,
     )
     report_summary = _safe_committee_text(result.executive_summary)
     conflict_resolution = _safe_committee_text(result.conflict_resolution)

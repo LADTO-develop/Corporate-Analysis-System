@@ -7,6 +7,7 @@ from typing import Any
 
 from cas.agents.nodes.committee_diagnostics import _attach_agent_disagreement
 from cas.agents.nodes.post_committee_qa import (
+    _apply_deterministic_risk_recall_guardrail,
     _apply_review_qa_advisory,
     _apply_risk_recall_qa_advisory,
     _maybe_run_review_qa,
@@ -17,6 +18,8 @@ from cas.agents.stage2_outputs import (
     ChairReportOutput,
     EvidenceAuditOutput,
     QuantCreditOutput,
+    ReviewQAOutput,
+    RiskRecallQAOutput,
 )
 from cas.agents.stage2_specs import STAGE2_AGENT_ROLES
 from cas.agents.state import AgentOutput
@@ -66,6 +69,10 @@ def run_post_committee_pipeline(
             news_cache_snapshot=bundle.news_cache_snapshot,
             runtime_diagnostics=diagnostics,
         )
+        committee_view = _attach_qa_action_plan(
+            committee_view=committee_view,
+            qa_output=review_qa_output,
+        )
         committee_view = _attach_agent_disagreement(
             bundle=bundle,
             committee_view=committee_view,
@@ -88,6 +95,10 @@ def run_post_committee_pipeline(
             bundle=bundle,
             runtime_diagnostics=diagnostics,
         )
+        committee_view = _attach_qa_action_plan(
+            committee_view=committee_view,
+            qa_output=risk_recall_qa_output,
+        )
         committee_view = _attach_agent_disagreement(
             bundle=bundle,
             committee_view=committee_view,
@@ -95,6 +106,19 @@ def run_post_committee_pipeline(
             runtime_diagnostics=diagnostics,
         )
         agents.append(risk_recall_qa_output.to_agent_output())
+
+    committee_view = _apply_deterministic_risk_recall_guardrail(
+        committee_view=committee_view,
+        bundle=bundle,
+        runtime_diagnostics=diagnostics,
+    )
+    if diagnostics.get("risk_recall_guardrail_applied") is True:
+        committee_view = _attach_agent_disagreement(
+            bundle=bundle,
+            committee_view=committee_view,
+            structured_outputs=structured_outputs,
+            runtime_diagnostics=diagnostics,
+        )
 
     validate_agent_order(agents)
     return PostCommitteePipelineResult(
@@ -125,6 +149,41 @@ def validate_agent_order(agents: list[AgentOutput]) -> None:
             "Stage 2 agent order mismatch: "
             f"expected {expected} with optional QA agents at the end, got {actual}"
         )
+
+
+def _attach_qa_action_plan(
+    *,
+    committee_view: dict[str, Any],
+    qa_output: ReviewQAOutput | RiskRecallQAOutput,
+) -> dict[str, Any]:
+    updated = dict(committee_view)
+    for field in ("manual_review_tasks", "missing_evidence", "monitoring_triggers"):
+        updated[field] = _merge_text_items(
+            list(updated.get(field, []) or []),
+            list(getattr(qa_output, field, []) or []),
+        )
+    if qa_output.recommended_action == "request_manual_review":
+        updated["manual_review_tasks"] = _merge_text_items(
+            list(updated.get("manual_review_tasks", []) or []),
+            [
+                "QA 권고가 수동 검토를 요청했으므로 보류 사유, 근거 누락, 모니터링 조건을 담당자가 확정합니다."
+            ],
+        )
+    return updated
+
+
+def _merge_text_items(left: list[object], right: list[object], *, limit: int = 8) -> list[str]:
+    output: list[str] = []
+    seen: set[str] = set()
+    for item in [*left, *right]:
+        text = str(item).strip()
+        if not text or text in seen:
+            continue
+        output.append(text)
+        seen.add(text)
+        if len(output) >= limit:
+            break
+    return output
 
 
 __all__ = [

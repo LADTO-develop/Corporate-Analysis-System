@@ -129,6 +129,10 @@ def substantive_external_risk_item(
     """
     if item.get("company_match") is not True:
         return False
+    if item.get("as_of_date_violation") is True:
+        return False
+    if _is_uncorroborated_name_only_search_item(item):
+        return False
     if is_uncorroborated_material_financing_or_guarantee_item(
         item,
         source_feature_row=source_feature_row,
@@ -280,6 +284,10 @@ def confirmed_external_veto_item(item: dict[str, Any]) -> bool:
     """Return whether a veto marker is direct enough to drive critical review."""
     if item.get("company_match") is not True:
         return False
+    if item.get("as_of_date_violation") is True:
+        return False
+    if _is_uncorroborated_name_only_search_item(item):
+        return False
     if _is_contextual_or_routine_item(item):
         return False
     if _is_routine_audit_report_item(item):
@@ -302,6 +310,10 @@ def confirmed_external_veto_item(item: dict[str, Any]) -> bool:
 def confirmed_hard_distress_item(item: dict[str, Any]) -> bool:
     """Return whether hard distress keywords are confirmed enough for critical treatment."""
     if item.get("company_match") is not True:
+        return False
+    if item.get("as_of_date_violation") is True:
+        return False
+    if _is_uncorroborated_name_only_search_item(item):
         return False
     if not has_hard_distress_terms(item):
         return False
@@ -492,6 +504,18 @@ def _is_routine_audit_report_item(item: dict[str, Any]) -> bool:
     if any(marker in text for marker in _compact_terms(_AUDIT_REPORT_FAILURE_MARKERS)):
         return False
     return any(marker in text for marker in _compact_terms(_AUDIT_REPORT_ROUTINE_MARKERS))
+
+
+def _is_uncorroborated_name_only_search_item(item: dict[str, Any]) -> bool:
+    source = str(item.get("source", "")).lower()
+    if source not in {"naver_news", "tavily"}:
+        return False
+    if str(item.get("company_disambiguation", "")).lower() != "name_only_search_result":
+        return False
+    duplicate_sources = item.get("duplicate_sources", [])
+    if not isinstance(duplicate_sources, list | tuple):
+        return True
+    return len({str(source) for source in duplicate_sources if str(source).strip()}) < 2
 
 
 def _item_critical_terms(item: dict[str, Any]) -> list[str]:

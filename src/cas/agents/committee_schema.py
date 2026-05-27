@@ -17,6 +17,7 @@ CommitteeDecisionType = Literal[
 ]
 RiskHoldReasonTag = Literal[
     "combined_watch_hold",
+    "prior_hard_distress_hold",
     "financial_stress_hold",
     "external_materiality_hold",
     "secondary_radar_hold",
@@ -70,6 +71,9 @@ class CommitteeViewPayload(_StrictModel):
     mitigating_factors: list[str]
     evidence_summary: list[EvidenceSummaryItem]
     decision_trace: list[DecisionTraceItem] = Field(default_factory=list)
+    manual_review_tasks: list[str] = Field(default_factory=list)
+    missing_evidence: list[str] = Field(default_factory=list)
+    monitoring_triggers: list[str] = Field(default_factory=list)
     final_review_memo: str
 
 

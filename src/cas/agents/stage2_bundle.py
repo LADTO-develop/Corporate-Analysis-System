@@ -80,13 +80,21 @@ _PRIOR_RATING_PROMPT_KEYS = (
     "as_of_date",
 )
 _EVIDENCE_ITEM_PROMPT_KEYS = (
+    "event_id",
     "source",
+    "source_evidence_type",
+    "source_reliability",
     "title",
     "summary",
     "url",
     "published_at",
     "receipt_no",
+    "rcept_no",
     "company_match",
+    "company_match_type",
+    "company_disambiguation",
+    "temporal_status",
+    "as_of_date_violation",
     "evidence_quality",
     "evidence_score",
     "provider_relevance",
@@ -99,6 +107,9 @@ _EVIDENCE_ITEM_PROMPT_KEYS = (
     "critical_context_confirmed",
     "veto_candidate",
     "critical_terms",
+    "verification_flags",
+    "duplicate_count",
+    "duplicate_sources",
 )
 _CREDIT_POLICY_PROMPT_KEYS = (
     "policy_version",
@@ -107,6 +118,10 @@ _CREDIT_POLICY_PROMPT_KEYS = (
     "mitigating_signal_count",
     "critical_signal_count",
 )
+_SPECULATIVE_PRIOR_RATINGS = frozenset(
+    {"BB+", "BB", "BB-", "B+", "B", "B-", "CCC+", "CCC", "CCC-", "CC", "C", "D"}
+)
+_HARD_DISTRESS_PRIOR_RATINGS = frozenset({"CCC+", "CCC", "CCC-", "CC", "C", "D"})
 
 
 @dataclass(frozen=True)
@@ -516,32 +531,48 @@ def _boundary_context(prior_rating_reference: dict[str, Any]) -> dict[str, Any]:
     speculative_min_rank = policy.int(
         "committee_guardrails", "prior_rating", "speculative_min_rank"
     )
+    hard_distress_min_rank = policy.int(
+        "committee_guardrails", "prior_rating", "hard_distress_min_rank"
+    )
     stable_investment_max_rank = policy.int(
         "committee_guardrails",
         "prior_rating",
         "stable_investment_max_rank",
     )
+    has_prior_rating = _truthy(prior_rating_reference.get("has_prior_rating"))
     exact_boundary = group == "exact_bbb_minus_bb_plus_boundary" or rating in {"BBB-", "BB+"}
     has_boundary_context = "boundary" in group_normalized or exact_boundary
     speculative_prior = bool(
-        (rank is not None and rank >= speculative_min_rank)
-        or rating in {"BB+", "BB", "BB-", "B+", "B", "B-", "CCC+", "CCC", "CCC-", "CC", "C", "D"}
+        has_prior_rating
+        and (
+            (rank is not None and rank >= speculative_min_rank)
+            or rating in _SPECULATIVE_PRIOR_RATINGS
+        )
+    )
+    hard_distress_prior = bool(
+        has_prior_rating
+        and (
+            (rank is not None and rank >= hard_distress_min_rank)
+            or rating in _HARD_DISTRESS_PRIOR_RATINGS
+        )
     )
     stable_investment_non_boundary = bool(
-        group == "investment_grade_non_boundary"
+        has_prior_rating
+        and group == "investment_grade_non_boundary"
         and (
             (rank is not None and rank <= stable_investment_max_rank)
             or rating in {"AAA", "AA+", "AA", "AA-", "A+", "A", "A-", "BBB+"}
         )
     )
     return {
-        "has_prior_rating": _truthy(prior_rating_reference.get("has_prior_rating")),
+        "has_prior_rating": has_prior_rating,
         "prior_credit_rating": rating,
         "prior_credit_rating_rank": rank,
         "prior_rating_boundary_group": group,
         "has_rating_boundary_context": has_boundary_context,
         "is_exact_bbb_minus_bb_plus_boundary": exact_boundary,
         "is_speculative_prior_rating": speculative_prior,
+        "has_prior_hard_distress_context": hard_distress_prior,
         "is_stable_investment_non_boundary": stable_investment_non_boundary,
         "prior_rating_age_days": _optional_int(prior_rating_reference.get("prior_rating_age_days")),
         "prior_rating_agency": str(prior_rating_reference.get("prior_rating_agency") or ""),
@@ -704,6 +735,7 @@ def _compact_news_cache(
                 "veto_candidate_count",
                 "high_confidence_critical_count",
                 "critical_terms",
+                "verification_summary",
             ),
         ),
         "providers": _compact_providers(news_cache.get("providers")),

@@ -1268,6 +1268,41 @@ def test_risk_recall_qa_does_not_trigger_for_near_threshold_boundary_only() -> N
     assert reasons == []
 
 
+def test_risk_recall_qa_triggers_for_prior_hard_distress_with_weak_financials() -> None:
+    state: AgentState = {
+        "xgboost_result": {
+            "prediction_label": "투자적격",
+            "probability_speculative": 0.39,
+            "threshold": 0.45,
+        },
+        "source_feature_row": {
+            "current_ratio": 0.82,
+            "cash_ratio": 0.08,
+            "cashflow_coverage_ratio": 1.5,
+            "interest_coverage_ratio": 5.0,
+            "debt_ratio": 0.45,
+        },
+        "prior_rating_reference": {
+            "has_prior_rating": True,
+            "prior_credit_rating": "CCC",
+            "prior_credit_rating_rank": 18,
+            "prior_rating_date": "2022-11-30",
+        },
+        "news_cache_snapshot": {"status": "ready", "items": []},
+    }
+    committee_view = {
+        "final_committee_label": "적격",
+        "committee_decision_type": "eligible",
+    }
+
+    reasons = committee_node_module._risk_recall_qa_trigger_reasons(
+        bundle=build_stage2_input_bundle(state),
+        committee_view=committee_view,
+    )
+
+    assert "eligible_prior_hard_distress_context" in reasons
+
+
 def test_risk_recall_qa_triggers_for_substantive_evidence_without_near_threshold() -> None:
     state: AgentState = {
         "xgboost_result": {
@@ -1590,6 +1625,159 @@ def test_risk_recall_qa_advisory_blocks_low_quality_news_only_risk_escalation() 
     assert adjusted["final_committee_label"] == "적격"
     assert adjusted["committee_decision_type"] == "eligible"
     assert runtime["risk_recall_qa_advisory_applied"] is False
+
+
+def test_deterministic_risk_recall_guardrail_escalates_near_threshold_two_weak_axes() -> None:
+    committee_view = {
+        "final_committee_label": "적격",
+        "committee_decision_type": "eligible",
+        "committee_decision_type_label": "적격",
+        "committee_risk_signal": False,
+        "conflict_resolution": "정량 모델과 외부근거를 종합해 적격으로 정리했습니다.",
+        "final_review_memo": "최종 위원회 판단은 적격입니다.",
+        "key_risk_factors": [],
+        "decision_trace": [],
+    }
+    state: AgentState = {
+        "xgboost_result": {
+            "prediction_label": "투자적격",
+            "probability_speculative": 0.39,
+            "threshold": 0.45,
+        },
+        "source_feature_row": {
+            "current_ratio": 0.82,
+            "cash_ratio": 0.08,
+            "cashflow_coverage_ratio": 1.5,
+            "interest_coverage_ratio": 5.0,
+            "debt_ratio": 0.45,
+            "total_borrowings_ratio": 0.20,
+        },
+        "news_cache_snapshot": {"status": "disabled", "items": []},
+    }
+    runtime: dict[str, object] = {}
+
+    adjusted = committee_node_module._apply_deterministic_risk_recall_guardrail(
+        committee_view=committee_view,
+        bundle=build_stage2_input_bundle(state),
+        runtime_diagnostics=runtime,
+    )
+
+    assert adjusted["final_committee_label"] == "보류"
+    assert adjusted["committee_decision_type"] == "risk_hold"
+    assert adjusted["committee_decision_type_label"] == "위험 보류"
+    assert adjusted["committee_risk_signal"] is True
+    assert adjusted["risk_hold_reason_tags"] == ["financial_stress_hold"]
+    assert adjusted["decision_trace"][-2]["gate"] == "risk_recall_guardrail_escalation"
+    assert "RiskRecallQA" not in adjusted["risk_hold_reason_summary"]
+    assert runtime["risk_recall_guardrail_applied"] is True
+    assert runtime["risk_recall_guardrail_apply_reason"] == "risk_recall_severe_financial_weakness"
+    assert runtime["risk_recall_guardrail_weak_axes"] == [
+        "low_current_ratio",
+        "low_cash_ratio",
+    ]
+
+
+def test_deterministic_risk_recall_guardrail_keeps_far_threshold_three_axes_eligible() -> None:
+    committee_view = {
+        "final_committee_label": "적격",
+        "committee_decision_type": "eligible",
+        "committee_decision_type_label": "적격",
+        "committee_risk_signal": False,
+        "conflict_resolution": "정량 모델과 외부근거를 종합해 적격으로 정리했습니다.",
+        "final_review_memo": "최종 위원회 판단은 적격입니다.",
+        "key_risk_factors": [],
+        "decision_trace": [],
+    }
+    state: AgentState = {
+        "xgboost_result": {
+            "prediction_label": "투자적격",
+            "probability_speculative": 0.20,
+            "threshold": 0.45,
+        },
+        "source_feature_row": {
+            "current_ratio": 0.82,
+            "cash_ratio": 0.08,
+            "cashflow_coverage_ratio": -0.2,
+            "interest_coverage_ratio": 5.0,
+            "debt_ratio": 0.45,
+            "total_borrowings_ratio": 0.20,
+        },
+        "news_cache_snapshot": {"status": "disabled", "items": []},
+    }
+    runtime: dict[str, object] = {}
+
+    adjusted = committee_node_module._apply_deterministic_risk_recall_guardrail(
+        committee_view=committee_view,
+        bundle=build_stage2_input_bundle(state),
+        runtime_diagnostics=runtime,
+    )
+
+    assert adjusted["final_committee_label"] == "적격"
+    assert adjusted["committee_decision_type"] == "eligible"
+    assert runtime["risk_recall_guardrail_applied"] is False
+    assert runtime["risk_recall_guardrail_apply_reason"] == ""
+
+
+def test_risk_recall_qa_advisory_escalates_prior_hard_distress_to_risk_hold() -> None:
+    committee_view = {
+        "final_committee_label": "적격",
+        "committee_decision_type": "eligible",
+        "committee_decision_type_label": "적격",
+        "committee_risk_signal": False,
+        "veto_triggered": False,
+        "hidden_tail_risk_flag": False,
+        "conflict_resolution": "정량 모델과 외부근거를 종합해 적격으로 정리했습니다.",
+        "final_review_memo": "최종 위원회 판단은 적격입니다.",
+        "key_risk_factors": [],
+        "decision_trace": [],
+    }
+    output = RiskRecallQAOutput(
+        qa_summary="과거 CCC 등급과 현재 재무 약점이 함께 남아 있습니다.",
+        trigger_reasons=["eligible_prior_hard_distress_context"],
+        eligible_safety_assessment="material_missed_risk",
+        financial_resilience_check="유동성 방어축이 약합니다.",
+        evidence_recall_check="치명 외부근거는 제한적입니다.",
+        rating_boundary_check="기준일 이전 CCC 등급 컨텍스트가 있습니다.",
+        recommended_action="escalate_eligible_to_risk_hold",
+        confidence=0.78,
+    )
+    state: AgentState = {
+        "xgboost_result": {
+            "prediction_label": "투자적격",
+            "probability_speculative": 0.39,
+            "threshold": 0.45,
+        },
+        "source_feature_row": {
+            "current_ratio": 0.82,
+            "cash_ratio": 0.08,
+            "cashflow_coverage_ratio": 1.5,
+            "interest_coverage_ratio": 5.0,
+            "debt_ratio": 0.45,
+        },
+        "prior_rating_reference": {
+            "has_prior_rating": True,
+            "prior_credit_rating": "CCC",
+            "prior_credit_rating_rank": 18,
+            "prior_rating_date": "2022-11-30",
+        },
+        "news_cache_snapshot": {"status": "ready", "items": []},
+    }
+    runtime: dict[str, object] = {}
+
+    adjusted = committee_node_module._apply_risk_recall_qa_advisory(
+        committee_view=committee_view,
+        risk_recall_qa_output=output,
+        bundle=build_stage2_input_bundle(state),
+        runtime_diagnostics=runtime,
+    )
+
+    assert adjusted["final_committee_label"] == "보류"
+    assert adjusted["committee_decision_type"] == "risk_hold"
+    assert adjusted["risk_hold_reason_tags"] == ["prior_hard_distress_hold"]
+    assert runtime["risk_recall_qa_advisory_applied"] is True
+    assert (
+        runtime["risk_recall_qa_advisory_apply_reason"] == "risk_recall_prior_hard_distress_context"
+    )
 
 
 def test_risk_recall_qa_advisory_escalates_substantive_external_risk_to_risk_hold() -> None:

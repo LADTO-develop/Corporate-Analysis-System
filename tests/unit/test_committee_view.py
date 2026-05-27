@@ -53,10 +53,46 @@ def test_committee_view_maps_review_to_hold_label() -> None:
         "단기 유동성 추가 점검이 필요합니다.",
     ]
     assert committee_view["mitigating_factors"] == ["배당 이력이 있습니다."]
+    assert committee_view["manual_review_tasks"]
+    assert "외부근거 수집" in " ".join(committee_view["manual_review_tasks"])
+    assert "기준일 이전 직접 공시/뉴스" in " ".join(committee_view["missing_evidence"])
+    assert committee_view["monitoring_triggers"]
     trace = committee_view["decision_trace"]
     assert trace[0]["gate"] == "stage1_model_view"
     assert trace[-1]["gate"] == "final_committee_decision"
     assert trace[-1]["summary"] == "최종 위원회 판단은 보류이며, 세부 유형은 확인필요 보류입니다."
+
+
+def test_committee_view_exposes_prior_hard_distress_action_plan() -> None:
+    state: AgentState = {
+        "xgboost_result": {"prediction_label": "투자적격"},
+        "prior_rating_reference": {
+            "has_prior_rating": True,
+            "prior_credit_rating": "CCC",
+            "prior_credit_rating_rank": 18,
+            "prior_rating_date": "2022-11-30",
+            "prior_rating_agency": "KIS",
+        },
+        "news_cache_snapshot": {"status": "ready", "items": []},
+    }
+    agents = [
+        AgentOutput(role="quant_credit", summary="정량 검토", findings=[], confidence=0.8),
+        AgentOutput(role="evidence_audit", summary="근거 검토", findings=[], confidence=0.6),
+        AgentOutput(role="chair_report", summary="보류 의견", findings=[], confidence=0.7),
+    ]
+
+    committee_view = build_committee_view(
+        bundle=build_stage2_input_bundle(state),
+        recommendation="review",
+        agents=agents,
+    )
+
+    assert "CCC/C/D" in " ".join(committee_view["manual_review_tasks"])
+    assert "severe 공개등급" in " ".join(committee_view["missing_evidence"])
+    assert any(
+        item["gate"] == "prior_hard_distress_context" and item["triggered"]
+        for item in committee_view["decision_trace"]
+    )
 
 
 def test_committee_view_moves_debt_liquidity_support_to_mitigation() -> None:
@@ -1887,6 +1923,77 @@ def test_committee_view_marks_high_probability_financial_watch_as_risk_hold() ->
     assert "부적격 확정 게이트 부분 충족" in committee_view["key_risk_factors"][0]
 
 
+def test_committee_view_marks_overwarning_residual_risk_as_risk_hold() -> None:
+    state: AgentState = {
+        "company_id": "123456",
+        "company_name": "(주)제닉",
+        "source_feature_row": {
+            "stock_code": "123456",
+            "current_ratio": 1.08,
+            "cash_ratio": 0.24,
+            "equity_ratio": 0.53,
+            "debt_ratio": 0.90,
+            "total_borrowings_ratio": 0.0,
+            "capital_impairment_ratio": -3.55,
+            "interest_coverage_ratio": -6.65,
+            "cashflow_coverage_ratio": 0.39,
+            "ocf_to_total_liabilities": 0.013,
+            "ocf_to_sales": 0.006,
+            "net_margin": -0.106,
+            "is_2y_consecutive_operating_loss": 1,
+            "is_2y_consecutive_ocf_deficit": 0,
+            "icr_under_1": 1,
+        },
+        "prior_rating_reference": {
+            "has_prior_rating": True,
+            "prior_credit_rating": "BBB-",
+            "prior_credit_rating_rank": 10,
+            "prior_rating_boundary_group": "exact_bbb_minus_bb_plus_boundary",
+            "prior_rating_date": "2022-05-04",
+            "prior_rating_age_days": 241,
+            "prior_rating_agency": "한국평가데이터",
+        },
+        "model_view": {
+            "prediction_label": "부적격",
+            "probability_speculative": 0.923,
+            "threshold": 0.24,
+            "risk_band": "high_risk",
+        },
+        "xgboost_result": {
+            "prediction_label": "부적격",
+            "probability_speculative": 0.923,
+            "threshold": 0.24,
+            "risk_band": "high_risk",
+        },
+        "news_cache_snapshot": {"status": "ready", "items": []},
+    }
+    agents = [
+        AgentOutput(role="quant_credit", summary="정량 결과", findings=[], confidence=0.8),
+        AgentOutput(role="evidence_audit", summary="근거 검토", findings=[], confidence=0.6),
+        AgentOutput(role="chair_report", summary="종합", findings=[], confidence=0.7),
+    ]
+
+    committee_view = build_committee_view(
+        bundle=build_stage2_input_bundle(state),
+        recommendation="defer",
+        agents=agents,
+    )
+
+    assert committee_view["final_committee_label"] == "보류"
+    assert committee_view["committee_decision_type"] == "risk_hold"
+    assert committee_view["committee_decision_type_label"] == "위험 보류"
+    assert committee_view["committee_risk_signal"] is True
+    assert "financial_stress_hold" in committee_view["risk_hold_reason_tags"]
+    assert any(
+        "과민경고 완화 보류 잔여위험" in factor for factor in committee_view["key_risk_factors"]
+    )
+    assert "위험 보류로 유지합니다" in committee_view["conflict_resolution"]
+    assert any(
+        item["gate"] == "mitigation_residual_risk" and item["triggered"]
+        for item in committee_view["decision_trace"]
+    )
+
+
 def test_committee_view_softens_cash_rich_loss_stage_warning_to_mitigation_hold() -> None:
     state: AgentState = {
         "company_id": "389140",
@@ -2128,9 +2235,9 @@ def test_committee_view_softens_high_probability_prior_boundary_without_decisive
     )
 
     assert committee_view["final_committee_label"] == "보류"
-    assert committee_view["committee_decision_type"] == "mitigation_hold"
-    assert committee_view["committee_decision_type_label"] == "과민경고 완화 보류"
-    assert committee_view["committee_risk_signal"] is False
+    assert committee_view["committee_decision_type"] == "risk_hold"
+    assert committee_view["committee_decision_type_label"] == "위험 보류"
+    assert committee_view["committee_risk_signal"] is True
     assert "경계등급 과민경고 완화" in committee_view["mitigating_factors"][0]
 
 
@@ -2500,9 +2607,9 @@ def test_committee_view_softens_resolved_reverse_listing_halt_boundary_warning()
     )
 
     assert committee_view["final_committee_label"] == "보류"
-    assert committee_view["committee_decision_type"] == "mitigation_hold"
-    assert committee_view["committee_decision_type_label"] == "과민경고 완화 보류"
-    assert committee_view["committee_risk_signal"] is False
+    assert committee_view["committee_decision_type"] == "risk_hold"
+    assert committee_view["committee_decision_type_label"] == "위험 보류"
+    assert committee_view["committee_risk_signal"] is True
     assert "경계등급 과민경고 완화" in committee_view["mitigating_factors"][0]
 
 

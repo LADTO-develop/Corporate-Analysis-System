@@ -93,6 +93,7 @@ def run_evidence_audit_agent(
     model_provider: str = "openai",
     max_tokens: int,
     runtime_config: Stage2RuntimeConfig | None = None,
+    usage: dict[str, object] | None = None,
 ) -> EvidenceAuditOutput:
     """Run the Agno EvidenceAuditAgent and map it to the CAS Stage 2 schema."""
     if _external_evidence_unavailable(bundle.news_status):
@@ -116,6 +117,9 @@ def run_evidence_audit_agent(
         query=_query(bundle),
         response_model=AgnoEvidenceAuditResponse,
         runtime_config=runtime_config,
+        model_provider=model_provider,
+        model_name=model_name,
+        usage=usage,
     )
     prompt_context = bundle.to_compact_prompt_payload(role="evidence_audit")
     treatment = evaluate_evidence_treatment(

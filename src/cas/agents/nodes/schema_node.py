@@ -94,6 +94,9 @@ def _build_response_payload(state: AgentState) -> dict[str, Any]:
                 )
             ),
             "agents": _agent_payloads(agent_summary),
+            "runtime": _runtime_payload(
+                agent_summary.get("runtime") or state.get("stage2_runtime_diagnostics")
+            ),
         },
         "committee_view": _committee_view_payload(
             committee_view,
@@ -140,6 +143,29 @@ def _agent_payloads(agent_summary: dict[str, Any]) -> dict[str, dict[str, Any]]:
     }
 
 
+def _runtime_payload(raw_runtime: object) -> dict[str, Any]:
+    if not isinstance(raw_runtime, dict):
+        return {}
+    return _json_safe_dict(raw_runtime)
+
+
+def _json_safe_dict(value: dict[str, Any]) -> dict[str, Any]:
+    output: dict[str, Any] = {}
+    for key, raw_value in value.items():
+        output[str(key)] = _json_safe_value(raw_value)
+    return output
+
+
+def _json_safe_value(value: object) -> object:
+    if isinstance(value, dict):
+        return _json_safe_dict(value)
+    if isinstance(value, list | tuple | set):
+        return [_json_safe_value(item) for item in value]
+    if isinstance(value, str | int | float | bool) or value is None:
+        return value
+    return str(value)
+
+
 def _committee_view_payload(
     committee_view: dict[str, Any],
     *,
@@ -184,6 +210,15 @@ def _committee_view_payload(
                 str(item) for item in committee_view.get("mitigating_factors", []) or []
             ],
             "evidence_summary": _evidence_items(committee_view.get("evidence_summary", [])),
+            "manual_review_tasks": [
+                str(item) for item in committee_view.get("manual_review_tasks", []) or []
+            ],
+            "missing_evidence": [
+                str(item) for item in committee_view.get("missing_evidence", []) or []
+            ],
+            "monitoring_triggers": [
+                str(item) for item in committee_view.get("monitoring_triggers", []) or []
+            ],
             "final_review_memo": str(committee_view.get("final_review_memo", "")),
         }
     if insufficient:
@@ -215,6 +250,13 @@ def _committee_view_payload(
         "key_risk_factors": [],
         "mitigating_factors": [],
         "evidence_summary": [],
+        "manual_review_tasks": [
+            "필수 입력 또는 committee_view 생성 실패 원인을 확인한 뒤 Stage 2를 재실행합니다."
+        ]
+        if insufficient
+        else [],
+        "missing_evidence": [],
+        "monitoring_triggers": [],
         "final_review_memo": memo,
     }
 
@@ -300,6 +342,9 @@ def _build_schema_failure_response(
                     "confidence": 0.0,
                 }
             },
+            "runtime": _runtime_payload(
+                agent_summary.get("runtime") or state.get("stage2_runtime_diagnostics")
+            ),
         },
         "committee_view": {
             "final_committee_label": str(committee_view.get("final_committee_label") or "보류"),
@@ -331,6 +376,11 @@ def _build_schema_failure_response(
             ],
             "mitigating_factors": [],
             "evidence_summary": [],
+            "manual_review_tasks": [
+                "strict schema validation 실패 원인을 확인한 뒤 Stage 2 payload를 재생성합니다."
+            ],
+            "missing_evidence": [],
+            "monitoring_triggers": [],
             "final_review_memo": (
                 "The generated payload did not satisfy the strict dashboard schema, "
                 "so committee_view was reduced to a safe fallback."

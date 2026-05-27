@@ -38,6 +38,9 @@ def test_chair_report_spec_owns_committee_view_fields() -> None:
     assert "risk_hold_reason_summary" in spec.output_fields
     assert "conflict_resolution" in spec.output_fields
     assert "decision_trace" in spec.output_fields
+    assert "manual_review_tasks" in spec.output_fields
+    assert "missing_evidence" in spec.output_fields
+    assert "monitoring_triggers" in spec.output_fields
     assert "final_review_memo" in spec.output_fields
 
 
@@ -60,6 +63,9 @@ def test_review_qa_spec_is_optional_post_committee_agent() -> None:
     assert spec.display_name == "ReviewQAAgent"
     assert "committee_view" in spec.required_inputs
     assert "recommended_action" in spec.output_fields
+    assert "manual_review_tasks" in spec.output_fields
+    assert "missing_evidence" in spec.output_fields
+    assert "monitoring_triggers" in spec.output_fields
 
 
 def test_risk_recall_qa_spec_is_optional_post_committee_agent() -> None:
@@ -70,3 +76,6 @@ def test_risk_recall_qa_spec_is_optional_post_committee_agent() -> None:
     assert "source_feature_row" in spec.required_inputs
     assert "eligible_safety_assessment" in spec.output_fields
     assert "recommended_action" in spec.output_fields
+    assert "manual_review_tasks" in spec.output_fields
+    assert "missing_evidence" in spec.output_fields
+    assert "monitoring_triggers" in spec.output_fields

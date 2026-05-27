@@ -9,6 +9,7 @@ from cas.agents.nodes.deterministic_agents import (
     _quant_credit_agent,
 )
 from cas.agents.nodes.post_committee_qa import (
+    _apply_deterministic_risk_recall_guardrail,
     _apply_review_qa_advisory,
     _apply_risk_recall_qa_advisory,
     _review_qa_trigger_reasons,
@@ -32,6 +33,7 @@ from cas.agents.stage2_orchestrator import (
 from cas.agents.state import AgentState
 
 __all__ = [
+    "_apply_deterministic_risk_recall_guardrail",
     "_apply_review_qa_advisory",
     "_apply_risk_recall_qa_advisory",
     "_chair_summary",

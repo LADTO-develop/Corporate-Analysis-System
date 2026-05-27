@@ -40,6 +40,37 @@ EXTERNAL_EVIDENCE_RELIABILITY_LABELS = {
     "medium": "보통",
     "low": "낮음",
     "low_relevance": "관련성 낮음",
+    "high_direct_disclosure": "직접 공시",
+    "medium_disclosure_summary": "공시 요약",
+    "medium_contextual_snippet": "문맥 확인 스니펫",
+    "medium_search_snippet": "검색 스니펫",
+    "low_ticker_only_snippet": "종목코드만 확인",
+    "low_search_snippet": "약한 검색 스니펫",
+    "unknown": "미확인",
+}
+
+EXTERNAL_EVIDENCE_SOURCE_TYPE_LABELS = {
+    "direct_disclosure": "직접 공시",
+    "news_search_snippet": "뉴스 스니펫",
+    "web_search_snippet": "웹 스니펫",
+    "unknown": "미확인",
+}
+
+EXTERNAL_EVIDENCE_DISAMBIGUATION_LABELS = {
+    "resolved_by_disclosure_corp_code": "공시 회사코드 확인",
+    "resolved_by_name_and_stock_code": "회사명+종목코드 확인",
+    "name_only_search_result": "회사명만 확인",
+    "ticker_only": "종목코드만 확인",
+    "name_match": "회사명 확인",
+    "unmatched": "미확인",
+    "unknown": "미확인",
+}
+
+EXTERNAL_EVIDENCE_TEMPORAL_LABELS = {
+    "on_or_before_as_of_date": "기준일 이내",
+    "after_as_of_date": "기준일 이후",
+    "undated_historical": "과거평가 날짜 미확인",
+    "undated": "날짜 미확인",
     "unknown": "미확인",
 }
 
@@ -158,11 +189,15 @@ def render_external_evidence_items(
         )
         display_columns = [
             "순번",
+            "근거ID",
             "출처",
+            "근거 유형",
             "제목/공시명",
             "관련성",
             "검증 품질",
             "신뢰도",
+            "동명이인 확인",
+            "시점 검증",
             "위험 키워드",
             "강제 경고",
             "일자",
@@ -170,7 +205,8 @@ def render_external_evidence_items(
         ]
         materiality_columns = ["상세 중요도", "중요도 단계", "공시 성격"]
         if _frame_has_materiality_values(evidence_frame, materiality_columns):
-            display_columns[6:6] = materiality_columns
+            insert_at = display_columns.index("위험 키워드")
+            display_columns[insert_at:insert_at] = materiality_columns
         if include_summary:
             display_columns.insert(-1, "요약")
         stretch_dataframe(
@@ -590,11 +626,19 @@ def _external_evidence_items_frame(snapshot: dict[str, object] | None) -> pd.Dat
         rows.append(
             {
                 "순번": index,
+                "근거ID": _short_text(str(item.get("event_id") or "-"), limit=18),
                 "출처": _external_evidence_source_label(item.get("source")),
+                "근거 유형": _external_evidence_source_type_label(item.get("source_evidence_type")),
                 "제목/공시명": _short_text(str(item.get("title") or "제목 없음"), limit=110),
                 "관련성": _external_evidence_match_label(item),
                 "검증 품질": _external_evidence_quality_label(item.get("evidence_quality")),
-                "신뢰도": _external_evidence_reliability_label(item.get("reliability")),
+                "신뢰도": _external_evidence_reliability_label(
+                    item.get("source_reliability") or item.get("reliability")
+                ),
+                "동명이인 확인": _external_evidence_disambiguation_label(
+                    item.get("company_disambiguation")
+                ),
+                "시점 검증": _external_evidence_temporal_label(item.get("temporal_status")),
                 "상세 중요도": _external_evidence_materiality_basis(item),
                 "중요도 단계": _external_evidence_materiality_label(
                     item.get("disclosure_materiality")
@@ -756,6 +800,24 @@ def _external_evidence_reliability_label(value: object) -> str:
     """Return a Korean label for source reliability."""
     text = str(value or "unknown").lower()
     return EXTERNAL_EVIDENCE_RELIABILITY_LABELS.get(text, text)
+
+
+def _external_evidence_source_type_label(value: object) -> str:
+    """Return a Korean label for direct disclosure vs search snippets."""
+    text = str(value or "unknown").lower()
+    return EXTERNAL_EVIDENCE_SOURCE_TYPE_LABELS.get(text, text)
+
+
+def _external_evidence_disambiguation_label(value: object) -> str:
+    """Return a Korean label for company-name disambiguation status."""
+    text = str(value or "unknown").lower()
+    return EXTERNAL_EVIDENCE_DISAMBIGUATION_LABELS.get(text, text)
+
+
+def _external_evidence_temporal_label(value: object) -> str:
+    """Return a Korean label for as-of-date validation."""
+    text = str(value or "unknown").lower()
+    return EXTERNAL_EVIDENCE_TEMPORAL_LABELS.get(text, text)
 
 
 def _external_evidence_match_label(item: dict[str, object]) -> str:

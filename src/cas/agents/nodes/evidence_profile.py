@@ -132,7 +132,7 @@ def _external_evidence_profile(
     high_confidence_critical_count = _safe_int(news_cache.get("high_confidence_critical_count"))
     if high_confidence_critical_count == 0:
         high_confidence_critical_count = sum(
-            1 for item in items if item.get("critical_context_confirmed") is True
+            1 for item in items if _is_high_confidence_external_critical_item(item)
         )
     critical_terms = [str(term) for term in news_cache.get("critical_terms", []) or []]
     strength = _evidence_strength(
@@ -177,6 +177,20 @@ def _external_evidence_profile(
 def _is_verified_evidence_item(item: dict[str, Any]) -> bool:
     score = _safe_float(item.get("evidence_score"))
     return score is not None and score >= 0.55
+
+
+def _is_high_confidence_external_critical_item(item: dict[str, Any]) -> bool:
+    if item.get("critical_context_confirmed") is not True:
+        return False
+    if item.get("as_of_date_violation") is True:
+        return False
+    source = str(item.get("source") or "").lower()
+    if source == "opendart":
+        return True
+    return str(item.get("company_disambiguation") or "").lower() in {
+        "resolved_by_name_and_stock_code",
+        "resolved_by_disclosure_corp_code",
+    }
 
 
 def _is_adverse_evidence_item(

@@ -29,6 +29,11 @@ from cas.agents.signals.materiality_signals import material_financing_evidence_b
 from cas.agents.stage2_bundle import Stage2InputBundle
 from cas.agents.stage2_policy import load_stage2_policy
 
+_SPECULATIVE_PRIOR_RATINGS = frozenset(
+    {"BB+", "BB", "BB-", "B+", "B", "B-", "CCC+", "CCC", "CCC-", "CC", "C", "D"}
+)
+_HARD_DISTRESS_PRIOR_RATINGS = frozenset({"CCC+", "CCC", "CCC-", "CC", "C", "D"})
+
 
 def _committee_float(*path: str) -> float:
     """Return a committee guardrail policy value as float."""
@@ -497,6 +502,8 @@ def risk_hold_has_financial_stress(
     section = "risk_hold_financial_stress"
     if has_severe_financial_watch_signal(row):
         return True
+    if prior_rating_has_hard_distress_context(bundle.prior_rating_reference):
+        return True
     if has_secondary_overhold_guardrail_blocker(row):
         return True
     if reject_confirmation.signal_count >= _committee_int(
@@ -539,6 +546,24 @@ def risk_hold_has_financial_stress(
     if sum(1 for flag in financial_flags if flag) >= _committee_int(section, "min_financial_flags"):
         return True
     return bool(secondary_review_risk.triggered and secondary_review_risk.risk_signal)
+
+
+def mitigation_hold_residual_risk_reason(bundle: Stage2InputBundle) -> str:
+    """Return why a softened over-warning hold should still display as risk_hold."""
+    if bundle.prediction_label != "부적격":
+        return ""
+    probability = bundle.probability_speculative
+    if probability < _committee_float("mitigation_residual_risk", "probability_floor"):
+        return ""
+    if not has_severe_financial_watch_signal(bundle.source_feature_row):
+        return ""
+    threshold = _model_threshold(bundle)
+    return (
+        "과민경고 완화 보류 잔여위험: 부적격 확정은 유보하지만, 투기등급 확률이 "
+        f"{probability:.1%}로 기준선 {threshold:.1%}를 크게 웃돌고 이자보상, "
+        "현금흐름, 손익 또는 유동성 축에 severe 재무 스트레스가 남아 있어 "
+        "대시보드 위험 라벨에서는 위험 보류로 유지합니다."
+    )
 
 
 def secondary_review_risk_assessment(bundle: Stage2InputBundle) -> SecondaryReviewRiskAssessment:
@@ -659,7 +684,11 @@ def secondary_review_risk_signal_corroborated(
     ):
         return True
     prior = bundle.prior_rating_reference
-    return prior_rating_is_speculative(prior) or prior_rating_is_exact_boundary(prior)
+    return (
+        prior_rating_has_hard_distress_context(prior)
+        or prior_rating_is_speculative(prior)
+        or prior_rating_is_exact_boundary(prior)
+    )
 
 
 def prior_rating_is_exact_boundary(prior: dict[str, Any]) -> bool:
@@ -796,7 +825,18 @@ def prior_rating_is_speculative(prior: dict[str, Any]) -> bool:
     if rank is not None:
         return bool(rank >= _committee_int("prior_rating", "speculative_min_rank"))
     rating = str(prior.get("prior_credit_rating") or "").strip().upper()
-    return rating in {"BB+", "BB", "BB-", "B+", "B", "B-", "CCC+", "CCC", "CCC-", "CC", "C", "D"}
+    return rating in _SPECULATIVE_PRIOR_RATINGS
+
+
+def prior_rating_has_hard_distress_context(prior: dict[str, Any]) -> bool:
+    """Return whether prior public rating carries CCC/C/D distress context."""
+    if not prior or prior.get("has_prior_rating") is not True:
+        return False
+    rank = safe_int(prior.get("prior_credit_rating_rank"))
+    if rank is not None:
+        return bool(rank >= _committee_int("prior_rating", "hard_distress_min_rank"))
+    rating = str(prior.get("prior_credit_rating") or prior.get("credit_rating") or "")
+    return rating.strip().upper() in _HARD_DISTRESS_PRIOR_RATINGS
 
 
 def model_only_overwarning_buffer_reason(
@@ -1208,9 +1248,11 @@ __all__ = [
     "has_secondary_overhold_guardrail_blocker",
     "has_severe_financial_watch_signal",
     "has_stage2_secondary_trigger",
+    "mitigation_hold_residual_risk_reason",
     "model_only_overwarning_buffer_reason",
     "prior_boundary_overwarning_buffer_reason",
     "prior_rating_boundary_requires_hold",
+    "prior_rating_has_hard_distress_context",
     "prior_rating_is_exact_boundary",
     "prior_rating_is_speculative",
     "risk_hold_has_financial_stress",
