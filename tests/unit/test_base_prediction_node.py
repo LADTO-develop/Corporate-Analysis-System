@@ -61,7 +61,7 @@ def test_falls_back_when_model_artifact_is_missing(monkeypatch: pytest.MonkeyPat
     monkeypatch.setattr(
         base_prediction_node,
         "_MODEL_ARTIFACT_PATH",
-        Path("data/outputs/modeling/feature_43_xgboost/missing_model.json"),
+        Path("data/outputs/modeling/feature_46_xgboost/missing_model.json"),
     )
 
     state = {
@@ -105,11 +105,11 @@ def test_stage2_review_signals_are_attached_to_model_view(
                 "stage2_review_trigger": True,
                 "stage2_secondary_trigger": True,
                 "stage2_review_priority": "medium",
-                "trigger_reason_code": "secondary_45",
-                "trigger_reason": "43개 모델은 투자적격이나 45개 변수셋이 위험 기준선을 넘었습니다.",
-                "prob_speculative_45": 0.37,
-                "threshold_45": 0.315,
-                "threshold_45_it_services_review": 0.175,
+                "trigger_reason_code": "stage2_review_aux_only",
+                "trigger_reason": "공식 모델은 투자적격이나 45개 보조 레이더가 위험 기준선을 넘었습니다.",
+                "prob_speculative_stage2_review_aux": 0.37,
+                "threshold_stage2_review_aux": 0.315,
+                "threshold_stage2_review_aux_it_services_review": 0.175,
                 "stage2_overwarning_filter_candidate": False,
                 "overwarning_filter_reason_code": "none",
                 "overwarning_filter_reason": "과민 경고 보조필터 특이 신호 없음",
@@ -132,5 +132,8 @@ def test_stage2_review_signals_are_attached_to_model_view(
 
     assert payload["stage2_secondary_trigger"] is True
     assert payload["stage2_review_priority"] == "medium"
-    assert payload["probability_speculative_45"] == 0.37
-    assert "45개 변수셋" in payload["trigger_reason"]
+    assert payload["stage2_review_trigger_name"] == "full_review_trigger_73"
+    assert payload["stage2_review_aux_alias"] == "stage2_review_aux"
+    assert payload["probability_stage2_review_aux"] == 0.37
+    assert "45개" not in payload["trigger_reason"]
+    assert "full_review_trigger_73" in payload["trigger_reason"]

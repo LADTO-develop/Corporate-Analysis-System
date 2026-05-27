@@ -19,10 +19,10 @@ import numpy as np
 import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[1]
-PREDICTION_SCORES_PATH = ROOT / "data/outputs/dashboard/feature_43_mvp/prediction_scores.csv"
-FEATURE_MASTER_PATH = ROOT / "data/input/credit_43_features/feature_43_master.csv"
+PREDICTION_SCORES_PATH = ROOT / "data/outputs/dashboard/feature_46_mvp/prediction_scores.csv"
+FEATURE_MASTER_PATH = ROOT / "data/input/credit_46_features/feature_46_master.csv"
 TARGET_LABEL_REFERENCE_PATH = ROOT / "data/evaluation/target_label_reference.csv"
-OUTPUT_DIR = ROOT / "data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents"
+OUTPUT_DIR = ROOT / "data/outputs/modeling/feature_46_xgboost/diagnostics/stage2_agents"
 
 KEY_COLUMNS = ["market", "stock_code", "corp_name", "fiscal_year", "eval_year"]
 FEATURE_COLUMNS = [
@@ -546,10 +546,10 @@ def main() -> None:
         "stage1_tp_total": int((frame["stage1_risk"] & frame["actual_speculative"]).sum()),
         "best_policy_by_weighted_net": str(metrics.iloc[0]["policy"]) if not metrics.empty else "",
         "paths": {
-            "metrics": "data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents/stage2_overwarning_filter_candidate_experiments.csv",
-            "cases": "data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents/stage2_overwarning_filter_candidate_cases.csv",
-            "summary": "data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents/stage2_overwarning_filter_candidate_summary.json",
-            "report": "data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents/stage2_overwarning_filter_candidate_report.md",
+            "metrics": "data/outputs/modeling/feature_46_xgboost/diagnostics/stage2_agents/stage2_overwarning_filter_candidate_experiments.csv",
+            "cases": "data/outputs/modeling/feature_46_xgboost/diagnostics/stage2_agents/stage2_overwarning_filter_candidate_cases.csv",
+            "summary": "data/outputs/modeling/feature_46_xgboost/diagnostics/stage2_agents/stage2_overwarning_filter_candidate_summary.json",
+            "report": "data/outputs/modeling/feature_46_xgboost/diagnostics/stage2_agents/stage2_overwarning_filter_candidate_report.md",
         },
     }
 

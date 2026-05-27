@@ -2,13 +2,20 @@
 
 from __future__ import annotations
 
+from typing import cast
+
 from pydantic import BaseModel, ConfigDict, Field
 
 from cas.agents.stage2_bundle import Stage2InputBundle
 from cas.agents.stage2_outputs import ChairReportOutput, EvidenceAuditOutput, QuantCreditOutput
+from cas.agents.stage2_prompt_contracts import (
+    build_stage2_role_instructions,
+    build_stage2_role_query,
+)
+from cas.agents.stage2_runtime_config import Stage2RuntimeConfig
 from cas.agents.state import Recommendation
 
-from .runtime import build_agno_agent, clamp, json_payload, provider_label, run_structured_agent
+from .runtime import build_agno_agent, clamp, provider_label, run_structured_agent
 
 
 class AgnoChairReportResponse(BaseModel):
@@ -38,6 +45,7 @@ def run_chair_report_agent(
     model_name: str,
     model_provider: str = "openai",
     max_tokens: int,
+    runtime_config: Stage2RuntimeConfig | None = None,
 ) -> ChairReportOutput:
     """Run the Agno ChairReportAgent and map it to the CAS Stage 2 schema."""
     model_label = provider_label(model_provider)
@@ -47,20 +55,11 @@ def run_chair_report_agent(
         model_name=model_name,
         max_tokens=max_tokens,
         response_model=AgnoChairReportResponse,
-        instructions=[
-            f"You are the CAS ChairReportAgent speaking from the {model_label} perspective.",
-            "Synthesize QuantCreditAgent and EvidenceAuditAgent outputs into committee-ready language.",
-            "Treat the QuantCredit and EvidenceAudit outputs as the Claude/GPT committee discussion to summarize.",
-            "Preserve the Stage 1 model label and explain any committee qualification separately.",
-            "Write in Korean business-report language for a decision-support report.",
-            "Do not say the system confirms, approves, assigns, or finalizes an official credit rating.",
-            "Treat rule_engine_confidence as a rule-engine review confidence, not as model confidence.",
-            "Do not invent external news, DART filings, macro events, or industry events not present in the evidence input.",
-            "If external evidence is unavailable, clearly state that the external review is limited.",
-            "Return concise Korean review prose in the structured response fields only.",
-            "Use credit_policy_summary only to explain the already computed committee qualification.",
-            "Do not convert policy signals into a new official rating, probability, or label.",
-        ],
+        runtime_config=runtime_config,
+        instructions=build_stage2_role_instructions(
+            "chair_report",
+            provider_label=model_label,
+        ),
     )
     result = run_structured_agent(
         agent=agent,
@@ -72,6 +71,7 @@ def run_chair_report_agent(
             evidence_audit=evidence_audit,
         ),
         response_model=AgnoChairReportResponse,
+        runtime_config=runtime_config,
     )
     report_summary = _safe_committee_text(result.executive_summary)
     conflict_resolution = _safe_committee_text(result.conflict_resolution)
@@ -114,18 +114,11 @@ def _query(
     quant_credit: QuantCreditOutput,
     evidence_audit: EvidenceAuditOutput,
 ) -> str:
+    prompt_context = bundle.to_compact_prompt_payload(role="chair_report")
     prompt_payload = {
-        "company": {
-            "company_id": bundle.company_id,
-            "company_name": bundle.company_name,
-            "market": bundle.market,
-            "analysis_year": bundle.analysis_year,
-        },
-        "stage1_model": {
-            "prediction_label": bundle.prediction_label,
-            "probability_speculative": bundle.probability_speculative,
-        },
-        "prior_rating_reference": bundle.prior_rating_reference,
+        "company": prompt_context["company"],
+        "stage1_model": prompt_context["stage1_model"],
+        "prior_rating_reference": prompt_context["prior_rating_reference"],
         "rule_engine": {
             "recommendation": recommendation,
             "rule_engine_confidence": confidence,
@@ -136,14 +129,10 @@ def _query(
         },
         "quant_credit": quant_credit.model_dump(mode="json"),
         "evidence_audit": evidence_audit.model_dump(mode="json"),
+        "materiality_summary": prompt_context["materiality_summary"],
         "credit_policy_summary": _policy_summary(bundle),
     }
-    return (
-        "Run ChairReportAgent for CAS Stage 2. "
-        "Resolve model/evidence conflict and write the final committee synthesis. "
-        "Return only the AgnoChairReportResponse fields.\n\n"
-        f"{json_payload(prompt_payload)}"
-    )
+    return cast(str, build_stage2_role_query("chair_report", prompt_payload=prompt_payload))
 
 
 def _safe_committee_text(text: str) -> str:

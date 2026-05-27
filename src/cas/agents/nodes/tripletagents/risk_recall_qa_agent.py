@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -13,8 +13,13 @@ from cas.agents.stage2_outputs import (
     QuantCreditOutput,
     RiskRecallQAOutput,
 )
+from cas.agents.stage2_prompt_contracts import (
+    build_stage2_role_instructions,
+    build_stage2_role_query,
+)
+from cas.agents.stage2_runtime_config import Stage2RuntimeConfig
 
-from .runtime import build_agno_agent, clamp, json_payload, provider_label, run_structured_agent
+from .runtime import build_agno_agent, clamp, provider_label, run_structured_agent
 
 
 class AgnoRiskRecallQAResponse(BaseModel):
@@ -59,6 +64,7 @@ def run_risk_recall_qa_agent(
     model_name: str,
     model_provider: str = "openai",
     max_tokens: int,
+    runtime_config: Stage2RuntimeConfig | None = None,
 ) -> RiskRecallQAOutput:
     """Run the Agno RiskRecallQAAgent and map it to the CAS Stage 2 schema."""
     model_label = provider_label(model_provider)
@@ -68,16 +74,11 @@ def run_risk_recall_qa_agent(
         model_name=model_name,
         max_tokens=max_tokens,
         response_model=AgnoRiskRecallQAResponse,
-        instructions=[
-            f"You are the CAS RiskRecallQAAgent speaking from the {model_label} perspective.",
-            "Audit only already-eligible committee decisions for missed-risk recall safety.",
-            "Do not rewrite model_view. Treat committee_view as decision-support, not an official rating.",
-            "Do not invent external news, DART filings, macro events, or industry events not present in the input.",
-            "Escalate to risk_hold only when verified adverse evidence or severe financial stress is present.",
-            "Use boundary_hold or manual review for near-threshold uncertainty without confirmed adverse evidence.",
-            "If financial defenses and external evidence are adequate, keep committee_view unchanged.",
-            "Return concise Korean review prose in the structured response fields only.",
-        ],
+        runtime_config=runtime_config,
+        instructions=build_stage2_role_instructions(
+            "risk_recall_qa",
+            provider_label=model_label,
+        ),
     )
     result = run_structured_agent(
         agent=agent,
@@ -90,6 +91,7 @@ def run_risk_recall_qa_agent(
             trigger_reasons=trigger_reasons,
         ),
         response_model=AgnoRiskRecallQAResponse,
+        runtime_config=runtime_config,
     )
     return RiskRecallQAOutput(
         qa_summary=_safe_qa_text(result.qa_summary),
@@ -112,23 +114,14 @@ def _query(
     chair_report: ChairReportOutput,
     trigger_reasons: list[str],
 ) -> str:
+    prompt_context = bundle.to_compact_prompt_payload(role="risk_recall_qa")
     prompt_payload = {
-        "company": {
-            "company_id": bundle.company_id,
-            "company_name": bundle.company_name,
-            "market": bundle.market,
-            "analysis_year": bundle.analysis_year,
-        },
-        "stage1_model": {
-            "prediction_label": bundle.prediction_label,
-            "probability_speculative": bundle.probability_speculative,
-            "threshold": bundle.threshold,
-            "stage2_secondary_trigger": bundle.model_view.get("stage2_secondary_trigger"),
-            "stage2_review_priority": bundle.model_view.get("stage2_review_priority"),
-        },
-        "source_feature_row": bundle.source_feature_row,
-        "prior_rating_reference": bundle.prior_rating_reference,
-        "news_cache_snapshot": bundle.news_cache_snapshot,
+        "company": prompt_context["company"],
+        "stage1_model": prompt_context["stage1_model"],
+        "source_feature_row": prompt_context["financial_metrics"],
+        "prior_rating_reference": prompt_context["prior_rating_reference"],
+        "news_cache_snapshot": prompt_context["news_cache_snapshot"],
+        "materiality_summary": prompt_context["materiality_summary"],
         "committee_view": committee_view,
         "agent_outputs": {
             "quant_credit": quant_credit.model_dump(mode="json"),
@@ -136,20 +129,8 @@ def _query(
             "chair_report": chair_report.model_dump(mode="json"),
         },
         "qa_trigger_reasons": trigger_reasons,
-        "qa_checks": [
-            "final_committee_label must already be eligible",
-            "near-threshold eligible decisions need recall safety if financial defenses are weak",
-            "repeated financing, guarantee, audit, litigation, suspension, or contract-cancellation evidence needs materiality context",
-            "risk_hold requires verified adverse evidence or severe financial stress",
-            "boundary_hold is preferred for uncertainty without confirmed adverse evidence",
-        ],
     }
-    return (
-        "Run RiskRecallQAAgent for CAS Stage 2. "
-        "Audit the resolved eligible committee_view for missed-risk recall safety. "
-        "Return only the AgnoRiskRecallQAResponse fields.\n\n"
-        f"{json_payload(prompt_payload)}"
-    )
+    return cast(str, build_stage2_role_query("risk_recall_qa", prompt_payload=prompt_payload))
 
 
 def _safe_qa_text(text: str) -> str:

@@ -1,0 +1,130 @@
+{
+  "generated_at_utc": "2026-05-26T23:46:39.073285+00:00",
+  "rows": 75,
+  "success_rate": 0.8533333333333334,
+  "review_safe_success_rate": 0.9466666666666667,
+  "by_error_type": [
+    {
+      "model_error_type": "false_negative",
+      "committee_effect": "fn_escalated",
+      "rows": 11
+    },
+    {
+      "model_error_type": "false_negative",
+      "committee_effect": "fn_not_escalated",
+      "rows": 4
+    },
+    {
+      "model_error_type": "false_positive",
+      "committee_effect": "fp_mitigated",
+      "rows": 23
+    },
+    {
+      "model_error_type": "true_negative",
+      "committee_effect": "tn_escalated",
+      "rows": 7
+    },
+    {
+      "model_error_type": "true_negative",
+      "committee_effect": "tn_kept_eligible",
+      "rows": 8
+    },
+    {
+      "model_error_type": "true_positive",
+      "committee_effect": "tp_risk_supported",
+      "rows": 22
+    }
+  ],
+  "by_review_safe_effect": [
+    {
+      "model_error_type": "false_negative",
+      "committee_review_safe_effect": "review_safe_fn_escalated",
+      "rows": 11
+    },
+    {
+      "model_error_type": "false_negative",
+      "committee_review_safe_effect": "review_safe_fn_missed",
+      "rows": 4
+    },
+    {
+      "model_error_type": "false_positive",
+      "committee_review_safe_effect": "review_safe_fp_not_rejected",
+      "rows": 23
+    },
+    {
+      "model_error_type": "true_negative",
+      "committee_review_safe_effect": "review_safe_tn_not_rejected",
+      "rows": 15
+    },
+    {
+      "model_error_type": "true_positive",
+      "committee_review_safe_effect": "review_safe_tp_supported",
+      "rows": 22
+    }
+  ],
+  "by_final_label": [
+    {
+      "final_committee_label": "보류",
+      "rows": 57
+    },
+    {
+      "final_committee_label": "부적격",
+      "rows": 6
+    },
+    {
+      "final_committee_label": "적격",
+      "rows": 12
+    }
+  ],
+  "by_evidence_status": [
+    {
+      "evidence_status": "disabled",
+      "rows": 75
+    }
+  ],
+  "speed": {
+    "batch_wall_time_seconds": 710.7249,
+    "case_elapsed_seconds_sum": 1348.5928,
+    "case_elapsed_seconds_mean": 17.9812,
+    "case_elapsed_seconds_median": 16.5868,
+    "case_elapsed_seconds_max": 38.8826,
+    "throughput_cases_per_minute": 6.3316
+  },
+  "stage2_speed": {
+    "stage2_total_elapsed_seconds_sum": 1343.4507,
+    "stage2_total_elapsed_seconds_mean": 17.9127,
+    "stage2_total_elapsed_seconds_median": 16.5264,
+    "stage2_total_elapsed_seconds_max": 38.8178,
+    "stage2_llm_cache_hit_rows": 0
+  },
+  "materiality": {
+    "rows_with_materiality_events": 0,
+    "materiality_event_count_sum": 0,
+    "materiality_max_ratio": null
+  },
+  "retry": {
+    "attempts_run": 1,
+    "initial_failed_rows": 1,
+    "final_failed_rows": 0,
+    "total_recovered_rows": 1,
+    "attempts": [
+      {
+        "attempt": 1,
+        "failed_rows_before": 1,
+        "retried_rows": 1,
+        "recovered_rows": 1,
+        "remaining_failed_rows": 0,
+        "workers": 1,
+        "artifact_paths": {
+          "samples": "data/outputs/modeling/feature_46_xgboost/diagnostics/stage2_agents/feature46_full_review_trigger_73_harness/runs/openai_gpt_4_1_mini/retry_artifacts/retry_attempt_1_samples.csv",
+          "results": "data/outputs/modeling/feature_46_xgboost/diagnostics/stage2_agents/feature46_full_review_trigger_73_harness/runs/openai_gpt_4_1_mini/retry_artifacts/retry_attempt_1_results.csv"
+        }
+      }
+    ]
+  },
+  "paths": {
+    "details": "data/outputs/modeling/feature_46_xgboost/diagnostics/stage2_agents/feature46_full_review_trigger_73_harness/runs/openai_gpt_4_1_mini/committee_review_batch_results.csv",
+    "summary": "data/outputs/modeling/feature_46_xgboost/diagnostics/stage2_agents/feature46_full_review_trigger_73_harness/runs/openai_gpt_4_1_mini/committee_review_batch_summary.json",
+    "report": "data/outputs/modeling/feature_46_xgboost/diagnostics/stage2_agents/feature46_full_review_trigger_73_harness/runs/openai_gpt_4_1_mini/committee_review_batch_report.md"
+  }
+}

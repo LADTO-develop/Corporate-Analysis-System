@@ -14,7 +14,6 @@
       "reason_kr": "이자보상배율이 1.0 미만으로 이자비용 충당능력에 대한 강한 관찰 신호입니다.",
       "basis": [
         "accounting_ratio_distress_literature",
-        "internal_validation_required",
         "Altman_financial_distress_ratio_family",
         "interest_coverage_policy",
         "internal_validation_required"

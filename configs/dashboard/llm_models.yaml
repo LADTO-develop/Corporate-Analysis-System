@@ -1,0 +1,75 @@
+agent_defaults:
+  quant: openai:gpt-4o
+  research: anthropic:claude-sonnet-4-6
+  manager: gemini:gemini-2.5-flash
+
+stage2_defaults:
+  agno_mode: single
+  single:
+    provider: openai
+    model: gpt-4.1-mini
+  multi_llm_committee:
+    quant_credit:
+      provider: google
+      model: gemini-2.5-flash
+    evidence_audit:
+      provider: anthropic
+      model: claude-sonnet-4-6
+    chair_report:
+      provider: openai
+      model: gpt-4.1-mini
+
+providers:
+  openai:
+    label: OpenAI
+    package_name: openai
+    runtime_provider: openai
+    aliases:
+      - gpt
+    api_key_env_vars:
+      - OPENAI_API_KEY
+    agent_enabled: true
+    required_imports:
+      - openai
+    agent_models:
+      - id: openai:gpt-4.1-mini
+        label: OpenAI · gpt-4.1-mini
+      - id: openai:gpt-4o
+        label: OpenAI · gpt-4o
+      - id: openai:gpt-4o-mini
+        label: OpenAI · gpt-4o-mini
+
+  claude:
+    label: Claude
+    package_name: anthropic
+    runtime_provider: anthropic
+    aliases:
+      - anthropic
+    api_key_env_vars:
+      - ANTHROPIC_API_KEY
+    agent_enabled: true
+    required_imports:
+      - anthropic
+    agent_models:
+      - id: anthropic:claude-sonnet-4-6
+        label: Claude · claude-sonnet-4-6
+      - id: anthropic:claude-haiku-4-5-20251001
+        label: Claude · claude-haiku-4-5-20251001
+
+  google:
+    label: Gemini
+    package_name: google-genai
+    runtime_provider: google
+    aliases:
+      - gemini
+    api_key_env_vars:
+      - GOOGLE_API_KEY
+      - GEMINI_API_KEY
+    agent_enabled: true
+    required_imports:
+      - google.genai
+    agent_models:
+      - id: gemini:gemini-2.5-flash
+        label: Gemini · gemini-2.5-flash
+      - id: gemini:gemini-2.0-flash
+        label: Gemini · gemini-2.0-flash

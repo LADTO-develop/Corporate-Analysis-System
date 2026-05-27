@@ -56,7 +56,7 @@ jobs:
           pip install -e ".[dev,viz,agent,dashboard]"
 
       - name: Run unit tests (fast)
-        run: pytest tests/unit -v --cov=cas --cov-report=xml -m "not slow and not requires_llm and not requires_gpu"
+        run: pytest tests/unit -v --cov=cas --cov-report=xml --cov-fail-under=60 -m "not slow and not requires_llm and not requires_gpu"
 
       - name: Run integration tests (graph smoke)
         run: pytest tests/integration -v -m "not requires_llm and not requires_gpu"

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -23,21 +24,43 @@ from export_committee_review_evaluation_plan import (
     read_labels,
     success_question,
 )
-from export_feature_43_candidate_feature_pack_experiments import (
-    INPUT_DIR,
-    JOIN_KEYS,
-    RECALL_FLOOR,
-    apply_platt_calibration,
-    choose_threshold,
-    fit_platt_calibration,
-    train_xgboost,
+from export_feature_46_stage2_trigger_feature_experiments import (
+    CANDIDATES,
+    RAW_TS2000_PATH,
+    CandidateSpec,
+    build_feature_frame,
+    candidate_feature_columns,
+    score_model_split,
 )
 
 ROOT = Path(__file__).resolve().parents[1]
-MASTER_PATH = INPUT_DIR / "feature_43_master.csv"
+SRC_DIR = ROOT / "src"
+if str(SRC_DIR) not in sys.path:
+    sys.path.insert(0, str(SRC_DIR))
+
+from cas.modeling.fn_rescue import (  # noqa: E402
+    FN_RESCUE_DEFAULT_MIN_GROUPS,
+    FN_RESCUE_DEFAULT_PROB_CEILING,
+    FN_RESCUE_DEFAULT_SCORE_THRESHOLD,
+    FN_RESCUE_POLICY_NAME,
+    FN_RESCUE_SCORE_COLUMNS,
+    build_manufacturing_fn_rescue_gate,
+)
+from cas.modeling.stage1_xgboost import (  # noqa: E402
+    DEFAULT_ROLLING_EVAL_YEARS,
+    DEFAULT_STAGE1_RANDOM_STATE,
+    read_stage1_feature_columns,
+    read_stage1_master,
+)
+
+INPUT_DIR = ROOT / "data" / "input" / "credit_46_features"
+MASTER_PATH = INPUT_DIR / "feature_46_master.csv"
+FEATURE_LIST_PATH = INPUT_DIR / "feature_46_list.json"
 TARGET_LABEL_REFERENCE_PATH = ROOT / "data/evaluation/target_label_reference.csv"
-OUTPUT_DIR = ROOT / "data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents"
-ROLLING_EVAL_YEARS = [2019, 2020, 2021, 2022]
+OUTPUT_DIR = ROOT / "data/outputs/modeling/feature_46_xgboost/diagnostics/stage2_agents"
+ROLLING_EVAL_YEARS = DEFAULT_ROLLING_EVAL_YEARS
+STAGE2_TRIGGER_CANDIDATE_ID = "full_review_trigger_73"
+MERGE_KEYS = ["market", "stock_code", "fiscal_year"]
 ID_COLUMNS = [
     "market",
     "stock_code",
@@ -48,8 +71,7 @@ ID_COLUMNS = [
     "industry_macro_category",
 ]
 POLICY_COLUMNS = {
-    "rolling_stage1_or_near_threshold_0_10": "rolling_committee_review_trigger",
-    "rolling_recall_first_mid_mfg_prob_0_10": "rolling_recall_first_review_trigger",
+    "feature46_full_review_trigger_73": "stage2_review_trigger",
 }
 SAMPLE_COLUMNS = [
     "evaluation_mode",
@@ -75,6 +97,23 @@ SAMPLE_COLUMNS = [
     "prob_speculative",
     "threshold",
     "stage1_probability_margin",
+    "stage2_review_trigger",
+    "stage2_secondary_trigger",
+    "stage2_review_priority",
+    "prob_speculative_stage2_review_aux",
+    "prob_speculative_stage2_review_aux_raw",
+    "threshold_stage2_review_aux",
+    "threshold_stage2_review_aux_it_services_review",
+    "pred_label_stage2_review_aux_tuned",
+    "stage2_review_aux_trigger",
+    "stage2_review_aux_secondary_trigger",
+    "stage2_fn_rescue_trigger",
+    "fn_rescue_score",
+    "fn_rescue_group_count",
+    "fn_rescue_probability_ceiling",
+    "fn_rescue_score_threshold",
+    "fn_rescue_min_group_count",
+    "fn_rescue_policy",
     "trigger_reason_code",
     "trigger_reason",
     "evidence_cutoff_rule",
@@ -86,34 +125,27 @@ SAMPLE_COLUMNS = [
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--master-path", type=Path, default=MASTER_PATH)
+    parser.add_argument("--feature-list-path", type=Path, default=FEATURE_LIST_PATH)
+    parser.add_argument("--raw-ts2000-path", type=Path, default=RAW_TS2000_PATH)
     parser.add_argument("--target-label-reference", type=Path, default=TARGET_LABEL_REFERENCE_PATH)
     parser.add_argument("--output-dir", type=Path, default=OUTPUT_DIR)
     parser.add_argument("--eval-years", type=int, nargs="+", default=ROLLING_EVAL_YEARS)
+    parser.add_argument("--seed", type=int, default=DEFAULT_STAGE1_RANDOM_STATE)
+    parser.add_argument("--stage2-trigger-candidate", default=STAGE2_TRIGGER_CANDIDATE_ID)
     parser.add_argument("--per-category", type=int, default=15)
     return parser.parse_args()
 
 
 def read_master(path: Path) -> pd.DataFrame:
-    master = pd.read_csv(path, encoding="utf-8-sig", dtype={"stock_code": str})
-    master = master.copy()
+    master = read_stage1_master(path, duplicate_keys=MERGE_KEYS)
     master["stock_code"] = normalize_stock_code(master["stock_code"])
-    duplicates = int(master.duplicated(JOIN_KEYS).sum())
-    if duplicates:
-        raise ValueError(f"feature_43_master has duplicate rows: {duplicates}")
-    for column in ["fiscal_year", "eval_year", "is_speculative"]:
-        master[column] = pd.to_numeric(master[column], errors="coerce")
     return master
-
-
-def feature_columns(master: pd.DataFrame) -> list[str]:
-    excluded = {*ID_COLUMNS, "label_eval_year", "is_speculative"}
-    return [column for column in master.columns if column not in excluded]
 
 
 def attach_rating_reference(master: pd.DataFrame, labels_path: Path) -> pd.DataFrame:
     labels = read_labels(labels_path)
     label_columns = [
-        *JOIN_KEYS,
+        *MERGE_KEYS,
         "credit_rating",
         "credit_rating_rank",
         "rating_agency_group",
@@ -121,44 +153,51 @@ def attach_rating_reference(master: pd.DataFrame, labels_path: Path) -> pd.DataF
         "rating_date",
     ]
     labels = labels.loc[:, [column for column in label_columns if column in labels.columns]]
-    labels = labels.drop_duplicates(JOIN_KEYS)
-    merged = master.merge(labels, on=JOIN_KEYS, how="left", validate="many_to_one")
+    labels = labels.drop_duplicates(MERGE_KEYS)
+    merged = master.merge(labels, on=MERGE_KEYS, how="left", validate="many_to_one")
     return add_rating_segments(merged)
 
 
 def rolling_scores(
-    master: pd.DataFrame, eval_years: list[int]
+    frame: pd.DataFrame,
+    *,
+    base_columns: list[str],
+    stage2_trigger_candidate_id: str,
+    eval_years: list[int],
+    seed: int,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
-    features = feature_columns(master)
+    stage2_spec = _stage2_trigger_spec(stage2_trigger_candidate_id)
+    aux_columns = candidate_feature_columns(base_columns, stage2_spec)
     score_frames: list[pd.DataFrame] = []
     fold_rows: list[dict[str, Any]] = []
     for eval_year in eval_years:
         policy_year = eval_year - 1
-        train_frame = master.loc[master["fiscal_year"] < policy_year].copy()
-        policy_frame = master.loc[master["fiscal_year"] == policy_year].copy()
-        eval_frame = master.loc[master["fiscal_year"] == eval_year].copy()
+        train_frame = frame.loc[frame["fiscal_year"] < policy_year].copy()
+        policy_frame = frame.loc[frame["fiscal_year"] == policy_year].copy()
+        eval_frame = frame.loc[frame["fiscal_year"] == eval_year].copy()
         if train_frame.empty or policy_frame.empty or eval_frame.empty:
             raise ValueError(
                 f"Empty rolling split for eval_year={eval_year}: "
                 f"train={len(train_frame)}, policy={len(policy_frame)}, eval={len(eval_frame)}"
             )
 
-        model = train_xgboost(
-            train_frame.loc[:, features],
-            train_frame["is_speculative"].astype(int),
-            policy_frame.loc[:, features],
-            policy_frame["is_speculative"].astype(int),
+        stage1_metrics, _, stage1_prob = score_model_split(
+            train=train_frame,
+            policy=policy_frame,
+            evaluation=eval_frame,
+            columns=base_columns,
+            seed=seed,
         )
-        policy_raw = model.predict_proba(policy_frame.loc[:, features])[:, 1]
-        eval_raw = model.predict_proba(eval_frame.loc[:, features])[:, 1]
-        coef, intercept = fit_platt_calibration(policy_frame["is_speculative"], policy_raw)
-        policy_prob = apply_platt_calibration(policy_raw, coef, intercept)
-        eval_prob = apply_platt_calibration(eval_raw, coef, intercept)
-        threshold, threshold_metrics = choose_threshold(
-            policy_frame["is_speculative"].astype(int),
-            policy_prob,
-            recall_floor=RECALL_FLOOR,
+        aux_metrics, _, aux_prob = score_model_split(
+            train=train_frame,
+            policy=policy_frame,
+            evaluation=eval_frame,
+            columns=aux_columns,
+            seed=seed,
         )
+        stage1_threshold = float(stage1_metrics["threshold"])
+        aux_threshold = float(aux_metrics["threshold"])
+        aux_it_services_threshold = float(aux_metrics["it_services_threshold"])
 
         fold_rows.append(
             {
@@ -169,28 +208,98 @@ def rolling_scores(
                 "train_rows": len(train_frame),
                 "policy_rows": len(policy_frame),
                 "eval_rows": len(eval_frame),
-                "threshold": threshold,
-                "policy_precision": threshold_metrics["precision"],
-                "policy_recall": threshold_metrics["recall"],
-                "policy_f1": threshold_metrics["f1"],
-                "best_iteration": getattr(model, "best_iteration", None),
+                "stage1_threshold": stage1_threshold,
+                "stage2_trigger_candidate": stage2_spec.candidate_id,
+                "stage2_trigger_feature_count": len(aux_columns),
+                "stage2_aux_threshold": aux_threshold,
+                "stage2_aux_it_services_threshold": aux_it_services_threshold,
+                "stage1_policy_precision": stage1_metrics.get("policy_precision"),
+                "stage1_policy_recall": stage1_metrics.get("policy_recall"),
+                "stage1_policy_f1": stage1_metrics.get("policy_f1"),
+                "stage2_aux_pr_auc": aux_metrics.get("eval_pr_auc"),
             }
         )
         score_columns = [
             column
-            for column in [*ID_COLUMNS, "label_eval_year", "is_speculative"]
+            for column in [
+                *ID_COLUMNS,
+                "label_eval_year",
+                "is_speculative",
+                *FN_RESCUE_SCORE_COLUMNS,
+            ]
             if column in eval_frame.columns
         ]
         scored = eval_frame.loc[:, score_columns].copy()
         scored["split"] = "rolling_validation"
         scored["rolling_eval_year"] = eval_year
         scored["policy_year"] = policy_year
-        scored["prob_speculative_raw"] = eval_raw
-        scored["prob_speculative"] = eval_prob
-        scored["threshold"] = threshold
-        scored["pred_label_tuned"] = (eval_prob >= threshold).astype(int)
+        scored["stage2_trigger_candidate"] = stage2_spec.candidate_id
+        scored["prob_speculative"] = stage1_prob
+        scored["threshold"] = stage1_threshold
+        scored["pred_label_tuned"] = (stage1_prob >= stage1_threshold).astype(int)
+        scored["prob_speculative_stage2_review_aux"] = aux_prob
+        scored["prob_speculative_stage2_review_aux_raw"] = aux_prob
+        scored["threshold_stage2_review_aux"] = aux_threshold
+        scored["threshold_stage2_review_aux_it_services_review"] = aux_it_services_threshold
+        scored["pred_label_stage2_review_aux_tuned"] = (aux_prob >= aux_threshold).astype(int)
         score_frames.append(scored)
-    return pd.concat(score_frames, ignore_index=True), pd.DataFrame(fold_rows)
+    scores = pd.concat(score_frames, ignore_index=True)
+    scores = add_full_review_trigger_signals(scores)
+    return scores, pd.DataFrame(fold_rows)
+
+
+def _stage2_trigger_spec(candidate_id: str) -> CandidateSpec:
+    for candidate in CANDIDATES:
+        if candidate.candidate_id == candidate_id:
+            return candidate
+    candidates = ", ".join(candidate.candidate_id for candidate in CANDIDATES)
+    raise ValueError(
+        f"Unknown stage2 trigger candidate {candidate_id!r}. Choose one of: {candidates}"
+    )
+
+
+def add_full_review_trigger_signals(scores: pd.DataFrame) -> pd.DataFrame:
+    output = scores.copy()
+    stage1_risk = output["pred_label_tuned"].astype(int).eq(1)
+    aux_risk = output["pred_label_stage2_review_aux_tuned"].astype(int).eq(1)
+    it_services_review = output["industry_macro_category"].astype(str).eq(
+        "it_services"
+    ) & pd.to_numeric(
+        output["prob_speculative_stage2_review_aux"],
+        errors="coerce",
+    ).ge(pd.to_numeric(output["threshold_stage2_review_aux_it_services_review"], errors="coerce"))
+    output["stage2_review_aux_trigger"] = aux_risk | it_services_review
+    output["stage2_review_aux_secondary_trigger"] = (~stage1_risk) & output[
+        "stage2_review_aux_trigger"
+    ].astype(bool)
+    output["stage2_fn_rescue_trigger"] = build_manufacturing_fn_rescue_gate(
+        output,
+        probability_column="prob_speculative",
+        prediction_column="pred_label_tuned",
+    ).astype(bool)
+    output["stage2_secondary_trigger"] = output["stage2_review_aux_secondary_trigger"].astype(
+        bool
+    ) | output["stage2_fn_rescue_trigger"].astype(bool)
+    output["stage2_review_trigger"] = stage1_risk | output["stage2_secondary_trigger"].astype(bool)
+    output["stage2_review_priority"] = np.select(
+        [
+            stage1_risk
+            & pd.to_numeric(output["prob_speculative"], errors="coerce").ge(
+                pd.to_numeric(output["threshold"], errors="coerce") + 0.10
+            ),
+            output["stage2_secondary_trigger"].astype(bool),
+            stage1_risk,
+        ],
+        ["high", "high", "medium"],
+        default="none",
+    )
+    output["fn_rescue_probability_ceiling"] = FN_RESCUE_DEFAULT_PROB_CEILING
+    output["fn_rescue_score_threshold"] = FN_RESCUE_DEFAULT_SCORE_THRESHOLD
+    output["fn_rescue_min_group_count"] = FN_RESCUE_DEFAULT_MIN_GROUPS
+    output["fn_rescue_policy"] = FN_RESCUE_POLICY_NAME
+    output["rolling_committee_review_trigger"] = output["stage2_review_trigger"]
+    output["rolling_recall_first_review_trigger"] = output["stage2_review_trigger"]
+    return output
 
 
 def add_sample_policy_flags(scores: pd.DataFrame) -> pd.DataFrame:
@@ -198,13 +307,17 @@ def add_sample_policy_flags(scores: pd.DataFrame) -> pd.DataFrame:
     base = output["pred_label_tuned"].astype(int).eq(1)
     actual = output["is_speculative"].astype(int).eq(1)
     near_threshold = output["prob_speculative"].sub(output["threshold"]).abs().le(0.10)
-    mid_mfg = output["industry_macro_category"].astype(str).eq("manufacturing") & output[
-        "firm_size_group"
-    ].astype(str).eq("mid_sized")
-    output["rolling_committee_review_trigger"] = base | near_threshold
-    output["rolling_recall_first_review_trigger"] = (
-        base | near_threshold | ((~base) & mid_mfg & output["prob_speculative"].ge(0.10))
-    )
+    if "stage2_review_trigger" in output.columns:
+        output["rolling_committee_review_trigger"] = output["stage2_review_trigger"].astype(bool)
+        output["rolling_recall_first_review_trigger"] = output["stage2_review_trigger"].astype(bool)
+    else:
+        mid_mfg = output["industry_macro_category"].astype(str).eq("manufacturing") & output[
+            "firm_size_group"
+        ].astype(str).eq("mid_sized")
+        output["rolling_committee_review_trigger"] = base | near_threshold
+        output["rolling_recall_first_review_trigger"] = (
+            base | near_threshold | ((~base) & mid_mfg & output["prob_speculative"].ge(0.10))
+        )
     output["stage1_probability_margin"] = output["prob_speculative"] - output["threshold"]
     output["actual_label_name"] = np.where(actual, "투기등급", "투자적격")
     output["model_predicted_label_name"] = np.where(base, "투기등급", "투자적격")
@@ -262,16 +375,8 @@ def build_samples(scores: pd.DataFrame, per_category: int) -> pd.DataFrame:
             subset["evaluation_mode"] = "rolling_validation_tuning"
             subset["committee_policy"] = policy_name
             subset["sample_category"] = category
-            subset["trigger_reason_code"] = np.where(
-                subset["pred_label_tuned"].astype(int).eq(1),
-                "rolling_stage1_risk",
-                "rolling_near_threshold_or_segment_review",
-            )
-            subset["trigger_reason"] = np.where(
-                subset["pred_label_tuned"].astype(int).eq(1),
-                "rolling OOT 43개 모델이 위험 기준선을 넘어 위원회 검토 대상으로 올렸습니다.",
-                "rolling OOT 43개 모델은 투자적격이지만 기준선 근처 또는 취약 세그먼트여서 추가 검토 대상으로 올렸습니다.",
-            )
+            subset["trigger_reason_code"] = subset.apply(_trigger_reason_code, axis=1)
+            subset["trigger_reason"] = subset.apply(_trigger_reason, axis=1)
             sample_frames.append(subset)
     if not sample_frames:
         return pd.DataFrame(columns=SAMPLE_COLUMNS)
@@ -287,6 +392,33 @@ def build_samples(scores: pd.DataFrame, per_category: int) -> pd.DataFrame:
     samples["committee_success_question"] = samples.apply(success_question, axis=1)
     samples["company_selection_json"] = samples.apply(company_selection_payload, axis=1)
     return samples.loc[:, [column for column in SAMPLE_COLUMNS if column in samples.columns]]
+
+
+def _trigger_reason_code(row: pd.Series) -> str:
+    if int(row.get("pred_label_tuned", 0) or 0) == 1:
+        return "rolling_stage1_risk"
+    if bool(row.get("stage2_fn_rescue_trigger", False)):
+        return "manufacturing_fn_rescue_gate"
+    if bool(row.get("stage2_review_aux_secondary_trigger", False)):
+        return "full_review_trigger_73_aux"
+    return "stage2_review_trigger"
+
+
+def _trigger_reason(row: pd.Series) -> str:
+    code = _trigger_reason_code(row)
+    if code == "rolling_stage1_risk":
+        return "rolling OOT feature_46 모델이 위험 기준선을 넘어 위원회 검토 대상으로 올렸습니다."
+    if code == "manufacturing_fn_rescue_gate":
+        return (
+            "rolling OOT feature_46 모델은 투자적격이지만 KOSDAQ 제조업 FN rescue gate가 "
+            "재무 스트레스 조합을 감지해 위원회 검토 대상으로 올렸습니다."
+        )
+    if code == "full_review_trigger_73_aux":
+        return (
+            "rolling OOT feature_46 모델은 투자적격이지만 full_review_trigger_73 보조 모델이 "
+            "추가 위험 검토 기준선을 넘어 위원회 검토 대상으로 올렸습니다."
+        )
+    return "full_review_trigger_73 정책에 따라 Stage2 위원회 검토 대상으로 올렸습니다."
 
 
 def summarize(scores: pd.DataFrame, samples: pd.DataFrame, folds: pd.DataFrame) -> dict[str, Any]:
@@ -305,6 +437,8 @@ def summarize(scores: pd.DataFrame, samples: pd.DataFrame, folds: pd.DataFrame) 
     return {
         "generated_at_utc": datetime.now(UTC).isoformat(),
         "evaluation_mode": "rolling_validation_tuning",
+        "model_version": "feature_46_xgboost",
+        "stage2_trigger_policy": STAGE2_TRIGGER_CANDIDATE_ID,
         "eval_years": [int(year) for year in sorted(scores["rolling_eval_year"].unique())],
         "score_rows": len(scores),
         "sample_rows": len(samples),
@@ -353,6 +487,7 @@ def build_report(scores: pd.DataFrame, samples: pd.DataFrame, summary: dict[str,
             "## 원칙",
             "",
             "- 각 rolling_eval_year는 그 이전 데이터만 사용한 모델로 예측합니다.",
+            "- Stage 2 trigger는 feature_46 공식 모델과 `full_review_trigger_73` 보조 트리거를 함께 사용합니다.",
             "- 이 파일은 에이전트 규칙/프롬프트 개선용 validation pool입니다.",
             "- test holdout과 2026 외부검증 라벨은 튜닝에 사용하지 않습니다.",
             "",
@@ -411,7 +546,15 @@ def write_outputs(
 def main() -> None:
     args = parse_args()
     master = read_master(args.master_path)
-    scores, folds = rolling_scores(master, args.eval_years)
+    frame = build_feature_frame(master, args.raw_ts2000_path)
+    base_columns = read_stage1_feature_columns(args.feature_list_path, frame)
+    scores, folds = rolling_scores(
+        frame,
+        base_columns=base_columns,
+        stage2_trigger_candidate_id=args.stage2_trigger_candidate,
+        eval_years=args.eval_years,
+        seed=args.seed,
+    )
     scores = attach_rating_reference(scores, args.target_label_reference)
     scores = add_sample_policy_flags(scores)
     samples = build_samples(scores, args.per_category)

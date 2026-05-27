@@ -101,6 +101,148 @@ def test_stage2_input_bundle_includes_credit_policy_snapshot() -> None:
     assert payload["credit_policy_snapshot"]["critical_signal_count"] == 0
 
 
+def test_stage2_input_bundle_exports_compact_prompt_payload_with_materiality() -> None:
+    state: AgentState = {
+        "company_id": "KOSDAQ-317120-2023",
+        "company_name": "(주)라닉스",
+        "market": "KOSDAQ",
+        "model_view": {
+            "prediction_label": "부적격",
+            "probability_speculative": 0.946,
+            "threshold": 0.25,
+            "unused_large_field": "x" * 1000,
+        },
+        "xgboost_result": {
+            "top_drivers": [
+                {"feature": "interest_coverage_ratio", "shap_value": 0.12},
+            ],
+        },
+        "source_feature_row": {
+            "stock_code": "317120",
+            "current_ratio": 1.9,
+            "interest_coverage_ratio": -1.92,
+            "debt_ratio": 1.75,
+            "unused_raw_column": "drop-me",
+        },
+        "news_cache_snapshot": {
+            "status": "ready",
+            "as_of_date": "2022-12-31",
+            "items": [
+                {
+                    "source": "opendart",
+                    "title": "주요사항보고서(전환사채권발행결정)",
+                    "summary": "라닉스 직접 관련 자금조달 공시입니다.",
+                    "company_match": True,
+                    "evidence_score": 0.72,
+                    "provider_relevance": "caution",
+                    "disclosure_severity": "caution",
+                    "disclosure_event_class": "material_financing",
+                    "disclosure_materiality": "substantive_adverse",
+                    "materiality_ratio": 0.1361,
+                    "materiality_basis": "희석률: 13.61%",
+                    "unused_item_field": "drop-me",
+                }
+            ],
+        },
+    }
+
+    payload = build_stage2_input_bundle(state).to_compact_prompt_payload(role="evidence_audit")
+
+    assert payload["stage1_model"]["prediction_label"] == "부적격"
+    assert "unused_large_field" not in payload["stage1_model"]
+    assert payload["financial_metrics"]["interest_coverage_ratio"] == -1.92
+    assert "unused_raw_column" not in payload["financial_metrics"]
+    assert payload["materiality_summary"]["max_materiality_ratio"] == 0.1361
+    assert payload["materiality_summary"]["financing_evidence_count"] == 1
+    assert payload["news_cache_snapshot"]["items"][0]["materiality_basis"] == "희석률: 13.61%"
+    assert "unused_item_field" not in payload["news_cache_snapshot"]["items"][0]
+
+
+def test_stage2_input_bundle_adds_normalized_signal_summary() -> None:
+    state: AgentState = {
+        "company_id": "KOSDAQ-317120-2023",
+        "company_name": "(주)라닉스",
+        "market": "KOSDAQ",
+        "model_view": {
+            "prediction_label": "투자적격",
+            "probability_speculative": 0.24,
+            "threshold": 0.30,
+            "stage2_review_trigger": True,
+            "stage2_secondary_trigger": True,
+            "stage2_review_priority": "high",
+            "trigger_reason_code": "manufacturing_fn_rescue",
+        },
+        "source_feature_row": {
+            "current_ratio": 0.8,
+            "cash_ratio": 0.05,
+            "cashflow_coverage_ratio": -0.2,
+            "interest_coverage_ratio": 0.5,
+            "debt_ratio": 2.5,
+            "short_term_borrowings_share": 0.95,
+        },
+        "prior_rating_reference": {
+            "has_prior_rating": True,
+            "prior_credit_rating": "BBB-",
+            "prior_credit_rating_rank": 10,
+            "prior_rating_boundary_group": "exact_bbb_minus_bb_plus_boundary",
+        },
+        "news_cache_snapshot": {
+            "status": "ready",
+            "items": [
+                {
+                    "source": "opendart",
+                    "title": "주요사항보고서(전환사채권발행결정)",
+                    "summary": "직접 관련 자금조달 공시입니다.",
+                    "company_match": True,
+                    "evidence_score": 0.72,
+                    "provider_relevance": "caution",
+                    "disclosure_severity": "caution",
+                    "disclosure_event_class": "material_financing",
+                    "disclosure_materiality": "substantive_adverse",
+                    "materiality_ratio": 0.1361,
+                    "materiality_basis": "희석률: 13.61%",
+                }
+            ],
+        },
+    }
+
+    payload = build_stage2_input_bundle(state).to_compact_prompt_payload(role="risk_recall_qa")
+    summary = payload["normalized_signal_summary"]
+
+    assert payload["prompt_context_version"] == "stage2_compact_prompt_context_v2"
+    assert "weak_cashflow" in summary["weak_financial_axes"]
+    assert "weak_interest_coverage" in summary["weak_financial_axes"]
+    assert summary["weak_financial_axis_count"] >= 4
+    assert summary["materiality_profile"]["max_materiality_ratio"] == 0.1361
+    assert summary["evidence_treatment"]["recommended_evidence_treatment"] in {
+        "watch_context",
+        "substantive_review",
+        "critical_veto_review",
+    }
+    assert summary["boundary_context"]["has_rating_boundary_context"] is True
+    assert summary["secondary_trigger_profile"]["stage2_secondary_trigger"] is True
+    assert summary["secondary_trigger_profile"]["eligible_near_threshold"] is True
+
+
+def test_stage2_compact_prompt_payload_is_role_scoped() -> None:
+    state: AgentState = {
+        "company_id": "KOSDAQ-000250-2023",
+        "source_feature_row": {"company_name": "삼천당제약(주)", "market": "KOSDAQ"},
+        "news_cache_snapshot": {"status": "ready", "items": []},
+        "peer_comparison_rows": [{"feature": "current_ratio", "industry_median": 1.5}],
+    }
+
+    quant_payload = build_stage2_input_bundle(state).to_compact_prompt_payload(role="quant_credit")
+    evidence_payload = build_stage2_input_bundle(state).to_compact_prompt_payload(
+        role="evidence_audit"
+    )
+
+    assert "peer_comparison_rows" in quant_payload
+    assert "news_cache_snapshot" not in quant_payload
+    assert "news_cache_snapshot" in evidence_payload
+    assert "peer_comparison_rows" not in evidence_payload
+
+
 def test_stage2_input_bundle_preserves_prior_rating_reference_fallbacks() -> None:
     profile_state: AgentState = {
         "company_id": "KOSPI-000000-2024",

@@ -374,7 +374,7 @@ def test_committee_view_holds_investment_model_with_secondary_review_trigger() -
             "threshold": 0.315,
             "stage2_secondary_trigger": True,
             "stage2_review_priority": "medium",
-            "trigger_reason": "43개 모델은 투자적격이나 45개 변수셋이 위험 기준선을 넘었습니다.",
+            "trigger_reason": "공식 모델은 투자적격이나 보조 변수셋이 위험 기준선을 넘었습니다.",
         },
         "xgboost_result": {
             "prediction_label": "투자적격",
@@ -456,7 +456,7 @@ def test_committee_view_keeps_defensive_secondary_radar_case_eligible() -> None:
             "threshold": 0.31,
             "stage2_secondary_trigger": True,
             "stage2_review_priority": "high",
-            "trigger_reason": "45개 보조 레이더가 기준선 근처로 추가 검토를 요구했습니다.",
+            "trigger_reason": "full_review_trigger_73 보조 트리거가 기준선 근처로 추가 검토를 요구했습니다.",
         },
         "xgboost_result": {
             "prediction_label": "투자적격",
@@ -545,7 +545,7 @@ def test_committee_view_keeps_isolated_icr_flag_with_cashflow_buffer_eligible() 
             "threshold": 0.325,
             "stage2_secondary_trigger": True,
             "stage2_review_priority": "high",
-            "trigger_reason": "45개 보조 레이더가 기준선 근처로 추가 검토를 요구했습니다.",
+            "trigger_reason": "full_review_trigger_73 보조 트리거가 기준선 근처로 추가 검토를 요구했습니다.",
         },
         "xgboost_result": {
             "prediction_label": "투자적격",
@@ -621,7 +621,7 @@ def test_committee_view_holds_secondary_radar_case_with_negative_cashflow() -> N
             "threshold": 0.325,
             "stage2_secondary_trigger": True,
             "stage2_review_priority": "high",
-            "trigger_reason": "45개 보조 레이더가 기준선 근처로 추가 검토를 요구했습니다.",
+            "trigger_reason": "full_review_trigger_73 보조 트리거가 기준선 근처로 추가 검토를 요구했습니다.",
         },
         "xgboost_result": {
             "prediction_label": "투자적격",
@@ -676,7 +676,7 @@ def test_committee_view_keeps_cashflow_backed_current_ratio_watch_eligible() -> 
             "threshold": 0.325,
             "stage2_secondary_trigger": True,
             "stage2_review_priority": "high",
-            "trigger_reason": "45개 보조 레이더가 기준선 근처로 추가 검토를 요구했습니다.",
+            "trigger_reason": "full_review_trigger_73 보조 트리거가 기준선 근처로 추가 검토를 요구했습니다.",
         },
         "xgboost_result": {
             "prediction_label": "투자적격",
@@ -737,7 +737,7 @@ def test_committee_view_allows_single_medium_financing_when_defensive_tn() -> No
             "threshold": 0.325,
             "stage2_secondary_trigger": True,
             "stage2_review_priority": "high",
-            "trigger_reason": "45개 보조 레이더가 기준선 근처로 추가 검토를 요구했습니다.",
+            "trigger_reason": "full_review_trigger_73 보조 트리거가 기준선 근처로 추가 검토를 요구했습니다.",
         },
         "xgboost_result": {
             "prediction_label": "투자적격",
@@ -1246,7 +1246,7 @@ def test_committee_view_blocks_overhold_guardrail_for_repeated_financing(
             "threshold": 0.325,
             "stage2_secondary_trigger": True,
             "stage2_review_priority": "high",
-            "trigger_reason": "45개 보조 레이더가 기준선 근처로 추가 검토를 요구했습니다.",
+            "trigger_reason": "full_review_trigger_73 보조 트리거가 기준선 근처로 추가 검토를 요구했습니다.",
         },
         "xgboost_result": {
             "prediction_label": "투자적격",
@@ -1336,7 +1336,7 @@ def test_committee_view_holds_secondary_radar_case_with_profitability_stress() -
             "threshold": 0.325,
             "stage2_secondary_trigger": True,
             "stage2_review_priority": "high",
-            "trigger_reason": "45개 보조 레이더가 기준선 근처로 추가 검토를 요구했습니다.",
+            "trigger_reason": "full_review_trigger_73 보조 트리거가 기준선 근처로 추가 검토를 요구했습니다.",
         },
         "xgboost_result": {
             "prediction_label": "투자적격",
@@ -1373,7 +1373,7 @@ def test_committee_view_appends_informative_chair_report_memo() -> None:
             "threshold": 0.315,
             "stage2_secondary_trigger": True,
             "stage2_review_priority": "medium",
-            "trigger_reason": "45개 보조 변수셋이 추가 검토 대상으로 올렸습니다.",
+            "trigger_reason": "full_review_trigger_73 보조 트리거가 추가 검토 대상으로 올렸습니다.",
         },
         "xgboost_result": {
             "prediction_label": "투자적격",
@@ -1407,6 +1407,64 @@ def test_committee_view_appends_informative_chair_report_memo() -> None:
     assert chair_memo in committee_view["final_review_memo"]
 
 
+def test_committee_view_softens_overcritical_chair_memo_without_veto_evidence() -> None:
+    state: AgentState = {
+        "company_id": "119500",
+        "company_name": "(주)포메탈",
+        "source_feature_row": {"stock_code": "119500"},
+        "xgboost_result": {
+            "prediction_label": "투자적격",
+            "probability_speculative": 0.30,
+            "threshold": 0.325,
+        },
+        "news_cache_snapshot": {
+            "status": "ready",
+            "items": [
+                {
+                    "source": "opendart",
+                    "title": "감사보고서제출",
+                    "summary": "정기 감사보고서 제출 공시입니다.",
+                    "company_match": True,
+                    "provider_relevance": "routine",
+                    "disclosure_severity": "routine",
+                    "disclosure_event_class": "routine_context",
+                    "disclosure_materiality": "routine_context",
+                    "critical_terms": [],
+                    "critical_context_confirmed": False,
+                    "veto_candidate": False,
+                    "evidence_quality": "medium",
+                    "evidence_score": 0.76,
+                }
+            ],
+        },
+    }
+    overcritical_chair_memo = (
+        "외부 근거에서 과거 횡령 및 배임 의혹 관련 치명적 위험 신호가 발견되어 "
+        "보수적 관점에서 위원장 단계 추가 검토가 필요하다고 판단했습니다."
+    )
+    agents = [
+        AgentOutput(role="quant_credit", summary="정량 결과", findings=[], confidence=0.8),
+        AgentOutput(role="evidence_audit", summary="근거 검토", findings=[], confidence=0.6),
+        AgentOutput(
+            role="chair_report",
+            summary="종합",
+            findings=["모델 보존", "위원회 범위", overcritical_chair_memo],
+            confidence=0.7,
+        ),
+    ]
+
+    committee_view = build_committee_view(
+        bundle=build_stage2_input_bundle(state),
+        recommendation="priority",
+        agents=agents,
+    )
+
+    assert committee_view["final_committee_label"] == "적격"
+    assert "치명적 위험 신호" not in committee_view["final_review_memo"]
+    assert "추가 확인이 필요한 외부 위험 단서" in committee_view["final_review_memo"]
+    assert "사후 모니터링 관점에서 추가 확인이 필요" in committee_view["final_review_memo"]
+
+
 def test_committee_view_keeps_low_probability_secondary_liquidity_watch_eligible() -> None:
     state: AgentState = {
         "company_id": "086670",
@@ -1426,7 +1484,7 @@ def test_committee_view_keeps_low_probability_secondary_liquidity_watch_eligible
             "threshold": 0.315,
             "stage2_secondary_trigger": True,
             "stage2_review_priority": "medium",
-            "trigger_reason": "45개 보조 변수셋이 기준선 근처로 재점검을 요구했습니다.",
+            "trigger_reason": "full_review_trigger_73 보조 트리거가 기준선 근처로 재점검을 요구했습니다.",
         },
         "xgboost_result": {
             "prediction_label": "투자적격",
@@ -1774,7 +1832,7 @@ def test_committee_view_softens_near_threshold_overwarning_to_hold() -> None:
     assert "과민 경고" in committee_view["mitigating_factors"][0]
 
 
-def test_committee_view_keeps_high_probability_risk_as_reject() -> None:
+def test_committee_view_marks_high_probability_financial_watch_as_risk_hold() -> None:
     state: AgentState = {
         "company_id": "000250",
         "company_name": "삼천당제약(주)",
@@ -1816,7 +1874,17 @@ def test_committee_view_keeps_high_probability_risk_as_reject() -> None:
         agents=agents,
     )
 
-    assert committee_view["final_committee_label"] == "부적격"
+    assert committee_view["final_committee_label"] == "보류"
+    assert committee_view["committee_decision_type"] == "risk_hold"
+    assert committee_view["committee_risk_signal"] is True
+    assert "financial_stress_hold" in committee_view["risk_hold_reason_tags"]
+    assert "재무 스트레스" in committee_view["risk_hold_reason_labels"]
+    assert "위험 보류 이유 태그" in committee_view["risk_hold_reason_summary"]
+    assert any(
+        item["gate"] == "risk_hold_reason_tagging" and item["triggered"]
+        for item in committee_view["decision_trace"]
+    )
+    assert "부적격 확정 게이트 부분 충족" in committee_view["key_risk_factors"][0]
 
 
 def test_committee_view_softens_cash_rich_loss_stage_warning_to_mitigation_hold() -> None:
@@ -2462,7 +2530,7 @@ def test_committee_view_treats_resolved_spac_merger_halt_as_procedural_context()
             "threshold": 0.325,
             "stage2_secondary_trigger": True,
             "stage2_review_priority": "high",
-            "trigger_reason": "45개 보조 레이더가 기준선 근처로 추가 검토를 요구했습니다.",
+            "trigger_reason": "full_review_trigger_73 보조 트리거가 기준선 근처로 추가 검토를 요구했습니다.",
         },
         "xgboost_result": {
             "prediction_label": "투자적격",
@@ -2726,7 +2794,7 @@ def test_committee_view_softens_high_probability_risk_with_financial_resilience(
     assert "고확률 과민 경고 방어 신호" in committee_view["mitigating_factors"][0]
 
 
-def test_committee_view_keeps_high_probability_risk_when_blockers_exist() -> None:
+def test_committee_view_marks_high_probability_weak_financials_as_risk_hold() -> None:
     state: AgentState = {
         "company_id": "317120",
         "company_name": "(주)라닉스",
@@ -2777,10 +2845,13 @@ def test_committee_view_keeps_high_probability_risk_when_blockers_exist() -> Non
         agents=agents,
     )
 
-    assert committee_view["final_committee_label"] == "부적격"
+    assert committee_view["final_committee_label"] == "보류"
+    assert committee_view["committee_decision_type"] == "risk_hold"
+    assert committee_view["committee_risk_signal"] is True
+    assert "부적격 확정 게이트 부분 충족" in committee_view["key_risk_factors"][0]
 
 
-def test_committee_view_keeps_high_probability_risk_with_noncritical_evidence_only() -> None:
+def test_committee_view_marks_noncritical_evidence_only_as_risk_hold() -> None:
     state: AgentState = {
         "company_id": "317120",
         "company_name": "(주)라닉스",
@@ -2863,13 +2934,14 @@ def test_committee_view_keeps_high_probability_risk_with_noncritical_evidence_on
         agents=agents,
     )
 
-    assert committee_view["final_committee_label"] == "부적격"
-    assert committee_view["committee_decision_type"] == "reject"
+    assert committee_view["final_committee_label"] == "보류"
+    assert committee_view["committee_decision_type"] == "risk_hold"
     assert committee_view["committee_risk_signal"] is True
+    assert "부적격 확정 게이트 부분 충족" in committee_view["key_risk_factors"][0]
     assert "과민 경고" not in committee_view["conflict_resolution"]
 
 
-def test_committee_view_keeps_reject_when_external_evidence_is_adverse() -> None:
+def test_committee_view_keeps_reject_when_external_evidence_is_critical() -> None:
     state: AgentState = {
         "company_id": "123456",
         "company_name": "테스트기업",
@@ -2898,7 +2970,7 @@ def test_committee_view_keeps_reject_when_external_evidence_is_adverse() -> None
                     "provider_relevance": "risk",
                     "disclosure_severity": "adverse",
                     "critical_terms": [],
-                    "critical_context_confirmed": False,
+                    "critical_context_confirmed": True,
                     "veto_candidate": False,
                     "evidence_quality": "high",
                     "evidence_score": 0.82,

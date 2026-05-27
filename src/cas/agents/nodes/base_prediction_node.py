@@ -9,19 +9,30 @@ from typing import TYPE_CHECKING, Any, cast
 
 import pandas as pd
 
+from cas.agents.stage2_review_signals import (
+    LEGACY_STAGE2_REVIEW_AUX_IT_THRESHOLD_COLUMN,
+    LEGACY_STAGE2_REVIEW_AUX_PROB_COLUMN,
+    LEGACY_STAGE2_REVIEW_AUX_THRESHOLD_COLUMN,
+    STAGE2_REVIEW_AUX_ALIAS,
+    STAGE2_REVIEW_AUX_IT_THRESHOLD_COLUMN,
+    STAGE2_REVIEW_AUX_PROB_COLUMN,
+    STAGE2_REVIEW_AUX_THRESHOLD_COLUMN,
+    STAGE2_REVIEW_TRIGGER_DISPLAY_NAME,
+    normalize_stage2_review_trigger_reason,
+)
 from cas.agents.state import AgentState, AuditEntry, BaseAssessment, ModelResult, RiskBand
 from cas.utils.io import read_json, read_yaml
 
 if TYPE_CHECKING:
     from xgboost import Booster
 
-_MODEL_ARTIFACT_DIR = Path("data/outputs/modeling/feature_43_xgboost")
+_MODEL_ARTIFACT_DIR = Path("data/outputs/modeling/feature_46_xgboost")
 _MODEL_ARTIFACT_PATH = _MODEL_ARTIFACT_DIR / "xgboost_model.json"
 _MODEL_METADATA_PATH = _MODEL_ARTIFACT_DIR / "model_artifact_metadata.json"
-_FEATURE_LIST_PATH = Path("data/input/credit_43_features/feature_43_list.json")
+_FEATURE_LIST_PATH = Path("data/input/credit_46_features/feature_46_list.json")
 _STAGE2_REVIEW_SIGNALS_PATHS = [
-    Path("data/outputs/dashboard/feature_43_inference_2026/stage2_review_signals.csv"),
-    Path("data/outputs/dashboard/feature_43_mvp/stage2_review_signals.csv"),
+    Path("data/outputs/dashboard/feature_46_inference_2026/stage2_review_signals.csv"),
+    Path("data/outputs/dashboard/feature_46_mvp/stage2_review_signals.csv"),
 ]
 _DEFAULT_MISSING_VALUE_STRATEGY = "xgboost_native_missing"
 
@@ -95,8 +106,8 @@ def run(state: AgentState) -> dict[str, Any]:
     top_drivers = _top_risk_drivers(model, frame)
 
     xgboost_result = ModelResult(
-        model_name=str(bundle.get("dataset_name", "feature_43_xgboost")),
-        model_version=str(model_registry.get("model_version", "feature_43_xgboost")),
+        model_name=str(bundle.get("dataset_name", "feature_46_xgboost")),
+        model_version=str(model_registry.get("model_version", "feature_46_xgboost")),
         probability_speculative=probability_speculative,
         prediction_label=prediction_label,
         risk_band=risk_band,
@@ -191,7 +202,7 @@ def _run_fallback_prediction(
     # artifact가 없거나 최소 기능만 필요한 환경에서도 파이프라인 전체는 끝까지 돌도록 둔다.
     top_drivers = _top_risk_drivers_from_scores(normalized_features)
     fallback_model_name = (
-        "credit_43_features"
+        "credit_46_features"
         if state.get("source_feature_row")
         else str(model_registry.get("active_model", "xgboost_realtime"))
     )
@@ -300,7 +311,7 @@ def _load_model_bundle() -> dict[str, Any]:
     # json artifact와 metadata를 한 번에 묶어 두면
     # 추론 시 feature column, 결측치 대치값, threshold를 같은 버전 기준으로 재사용할 수 있다.
     return {
-        "dataset_name": metadata.get("dataset_name", "credit_43_features"),
+        "dataset_name": metadata.get("dataset_name", "credit_46_features"),
         "model_type": metadata.get("model_type", "xgboost_booster_json"),
         "feature_columns": list(metadata.get("feature_columns", [])),
         "source_features": list(metadata.get("source_features", [])),
@@ -327,7 +338,7 @@ def _load_stage2_review_signals() -> pd.DataFrame | None:
 
 
 def _stage2_review_signal_payload(state: AgentState) -> dict[str, Any]:
-    """Attach precomputed 45-feature Stage 2 radar signals to realtime model_view."""
+    """Attach precomputed Stage 2 auxiliary review signals to realtime model_view."""
     source_row = dict(state.get("source_feature_row") or {})
     stock_code = _normalize_stock_code(source_row.get("stock_code"))
     fiscal_year = _to_int(source_row.get("fiscal_year"))
@@ -348,15 +359,33 @@ def _stage2_review_signal_payload(state: AgentState) -> dict[str, Any]:
     signal_source = str(signals.attrs.get("stage2_review_signals_path", ""))
     payload: dict[str, Any] = {
         "stage2_signal_source": signal_source,
+        "stage2_review_trigger_name": STAGE2_REVIEW_TRIGGER_DISPLAY_NAME,
+        "stage2_review_aux_alias": STAGE2_REVIEW_AUX_ALIAS,
         "stage2_review_trigger": _to_bool(row.get("stage2_review_trigger")),
         "stage2_secondary_trigger": _to_bool(row.get("stage2_secondary_trigger")),
         "stage2_review_priority": _clean_scalar(row.get("stage2_review_priority")),
         "trigger_reason_code": _clean_scalar(row.get("trigger_reason_code")),
-        "trigger_reason": _clean_scalar(row.get("trigger_reason")),
-        "probability_speculative_45": _to_optional_float(row.get("prob_speculative_45")),
-        "threshold_45": _to_optional_float(row.get("threshold_45")),
-        "threshold_45_it_services_review": _to_optional_float(
-            row.get("threshold_45_it_services_review")
+        "trigger_reason": normalize_stage2_review_trigger_reason(row.get("trigger_reason")),
+        "probability_stage2_review_aux": _to_optional_float(
+            _first_present(
+                row,
+                STAGE2_REVIEW_AUX_PROB_COLUMN,
+                LEGACY_STAGE2_REVIEW_AUX_PROB_COLUMN,
+            )
+        ),
+        "threshold_stage2_review_aux": _to_optional_float(
+            _first_present(
+                row,
+                STAGE2_REVIEW_AUX_THRESHOLD_COLUMN,
+                LEGACY_STAGE2_REVIEW_AUX_THRESHOLD_COLUMN,
+            )
+        ),
+        "threshold_stage2_review_aux_it_services_review": _to_optional_float(
+            _first_present(
+                row,
+                STAGE2_REVIEW_AUX_IT_THRESHOLD_COLUMN,
+                LEGACY_STAGE2_REVIEW_AUX_IT_THRESHOLD_COLUMN,
+            )
         ),
         "stage2_overwarning_filter_candidate": _to_bool(
             row.get("stage2_overwarning_filter_candidate")
@@ -520,6 +549,15 @@ def _to_optional_float(value: object) -> float | None:
         return numeric
     except (TypeError, ValueError):
         return None
+
+
+def _first_present(row: pd.Series, *columns: str) -> object:
+    for column in columns:
+        if column in row.index:
+            value = row.get(column)
+            if _clean_scalar(value) is not None:
+                return value
+    return None
 
 
 def _to_bool(value: object) -> bool:

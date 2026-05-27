@@ -35,6 +35,7 @@ def test_sample_model_replay_skips_pre_replay_stage2(
         sample: dict[str, Any],
     ) -> dict[str, Any]:
         calls["replay"] += 1
+        assert batch_module.committee_node._stage2_runtime_config().model == "batch-snapshot-model"
         assert sample["corp_name"] == "테스트기업"
         updated = dict(state)
         updated["xgboost_result"] = {
@@ -43,6 +44,13 @@ def test_sample_model_replay_skips_pre_replay_stage2(
         }
         updated["committee_view"] = {
             "final_committee_label": "보류",
+            "agent_disagreement_score": 0.65,
+            "agent_disagreement_level": "high",
+            "agent_disagreement_reasons": [
+                "quant_risk_evidence_watch_context",
+                "chair_risk_without_critical_evidence",
+            ],
+            "agent_disagreement_summary": "역할 agent 간 판단 충돌 점수는 0.65입니다.",
             "veto_triggered": False,
             "hidden_tail_risk_flag": False,
             "conflict_resolution": "샘플 모델값 기준으로 재검토했습니다.",
@@ -59,6 +67,20 @@ def test_sample_model_replay_skips_pre_replay_stage2(
                 "chair_report": 2.4,
             },
             "parallel_independent_agents": True,
+        }
+        updated["agent_summary"] = {
+            "agents": {
+                "evidence_audit": {
+                    "findings": [
+                        (
+                            "구조화 근거 판정: critical_evidence_count=1; "
+                            "watch_context_count=2; hard_distress_detected=True; "
+                            "recommended_evidence_treatment=critical_veto_review; "
+                            "top_materiality_basis=채무보증금액/자기자본: 12.80%"
+                        )
+                    ]
+                }
+            }
         }
         return updated
 
@@ -78,6 +100,10 @@ def test_sample_model_replay_skips_pre_replay_stage2(
         _sample_batch_frame(),
         use_sample_model_view=True,
         workers=1,
+        runtime_config=batch_module.Stage2RuntimeConfig(
+            runner="agno",
+            model="batch-snapshot-model",
+        ),
     )
 
     assert calls == {"pre_stage": 1, "replay": 1}
@@ -87,6 +113,19 @@ def test_sample_model_replay_skips_pre_replay_stage2(
     assert results.loc[0, "stage2_total_elapsed_seconds"] == 12.3
     assert results.loc[0, "stage2_evidence_audit_elapsed_seconds"] == 5.2
     assert bool(results.loc[0, "stage2_parallel_independent_agents"]) is True
+    assert results.loc[0, "agent_disagreement_score"] == 0.65
+    assert results.loc[0, "agent_disagreement_level"] == "high"
+    assert (
+        results.loc[0, "agent_disagreement_reasons"]
+        == "quant_risk_evidence_watch_context / chair_risk_without_critical_evidence"
+    )
+    assert "판단 충돌 점수" in results.loc[0, "agent_disagreement_summary"]
+    assert bool(results.loc[0, "evidence_audit_structured_found"]) is True
+    assert results.loc[0, "evidence_audit_critical_evidence_count"] == 1
+    assert results.loc[0, "evidence_audit_watch_context_count"] == 2
+    assert bool(results.loc[0, "evidence_audit_hard_distress_detected"]) is True
+    assert results.loc[0, "evidence_audit_recommended_evidence_treatment"] == "critical_veto_review"
+    assert results.loc[0, "evidence_audit_top_materiality_basis"] == "채무보증금액/자기자본: 12.80%"
     assert results.loc[0, "prior_credit_rating"] == "BB+"
     assert results.loc[0, "prior_rating_agency"] == "한국신용평가"
 
@@ -98,9 +137,11 @@ def test_parallel_batch_preserves_input_order(monkeypatch: pytest.MonkeyPatch) -
         total: int,
         row: dict[str, Any],
         use_sample_model_view: bool,
+        runtime_config: Any | None = None,
     ) -> dict[str, Any]:
         assert total == 3
         assert use_sample_model_view is False
+        assert runtime_config is None
         if index == 0:
             time.sleep(0.02)
         return {"index": index, "corp_name": row["corp_name"]}
@@ -204,10 +245,12 @@ def test_retry_failed_cases_replaces_failed_rows_and_writes_artifacts(
         *,
         use_sample_model_view: bool,
         workers: int,
+        runtime_config: Any | None = None,
     ) -> pd.DataFrame:
         retry_calls.append(retry_batch.copy())
         assert use_sample_model_view is True
         assert workers == 1
+        assert runtime_config is None
         return pd.DataFrame(
             [
                 {
@@ -259,14 +302,16 @@ def test_retry_failed_cases_replaces_failed_rows_and_writes_artifacts(
     assert (tmp_path / "retry_artifacts/retry_attempt_1_results.csv").exists()
 
 
-def test_configure_runtime_sets_single_claude_agno_mode(
+def test_configure_runtime_returns_single_claude_agno_config_without_stage2_env_mutation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.delenv("CAS_STAGE2_RUNNER", raising=False)
     monkeypatch.delenv("CAS_STAGE2_AGNO_MODE", raising=False)
     monkeypatch.delenv("CAS_STAGE2_MODEL_PROVIDER", raising=False)
     monkeypatch.delenv("CAS_STAGE2_MODEL", raising=False)
+    monkeypatch.delenv("CAS_STAGE2_LLM_CACHE_ENABLED", raising=False)
 
-    batch_module.configure_runtime(
+    config = batch_module.configure_runtime(
         live_external_evidence=False,
         stage2_runner="agno",
         stage2_agno_mode="single",
@@ -274,11 +319,16 @@ def test_configure_runtime_sets_single_claude_agno_mode(
         stage2_model="claude-sonnet-4-5-20250929",
     )
 
-    assert batch_module.os.environ["CAS_STAGE2_RUNNER"] == "agno"
-    assert batch_module.os.environ["CAS_STAGE2_AGNO_MODE"] == "single"
-    assert batch_module.os.environ["CAS_STAGE2_MODEL_PROVIDER"] == "anthropic"
-    assert batch_module.os.environ["CAS_STAGE2_MODEL"] == "claude-sonnet-4-5-20250929"
-    assert batch_module.os.environ["CAS_STAGE2_LLM_CACHE_ENABLED"] == "1"
+    assert config.runner == "agno"
+    assert config.agno_mode == "single"
+    assert config.model_provider == "anthropic"
+    assert config.model == "claude-sonnet-4-5-20250929"
+    assert config.llm_cache_enabled is True
+    assert "CAS_STAGE2_RUNNER" not in batch_module.os.environ
+    assert "CAS_STAGE2_AGNO_MODE" not in batch_module.os.environ
+    assert "CAS_STAGE2_MODEL_PROVIDER" not in batch_module.os.environ
+    assert "CAS_STAGE2_MODEL" not in batch_module.os.environ
+    assert "CAS_STAGE2_LLM_CACHE_ENABLED" not in batch_module.os.environ
     assert "CAS_ENABLE_EXTERNAL_EVIDENCE" not in batch_module.os.environ
 
 
@@ -287,7 +337,7 @@ def test_configure_runtime_can_disable_stage2_llm_cache(
 ) -> None:
     monkeypatch.delenv("CAS_STAGE2_LLM_CACHE_ENABLED", raising=False)
 
-    batch_module.configure_runtime(
+    config = batch_module.configure_runtime(
         live_external_evidence=False,
         stage2_runner="agno",
         stage2_agno_mode="single",
@@ -296,8 +346,44 @@ def test_configure_runtime_can_disable_stage2_llm_cache(
         stage2_llm_cache=False,
     )
 
-    assert batch_module.os.environ["CAS_STAGE2_AGNO_MODE"] == "single"
-    assert batch_module.os.environ["CAS_STAGE2_LLM_CACHE_ENABLED"] == "0"
+    assert config.agno_mode == "single"
+    assert config.llm_cache_enabled is False
+    assert "CAS_STAGE2_LLM_CACHE_ENABLED" not in batch_module.os.environ
+
+
+def test_sample_stage2_signals_replay_full_review_trigger_73_columns() -> None:
+    signals = batch_module._sample_stage2_signals(
+        {
+            "committee_policy": "feature46_full_review_trigger_73",
+            "model_predicted_label_name": "투자적격",
+            "stage2_review_trigger": True,
+            "stage2_secondary_trigger": True,
+            "stage2_review_priority": "high",
+            "stage2_review_aux_secondary_trigger": True,
+            "stage2_fn_rescue_trigger": False,
+            "prob_speculative_stage2_review_aux": "0.41",
+            "threshold_stage2_review_aux": "0.33",
+            "threshold_stage2_review_aux_it_services_review": "0.21",
+            "fn_rescue_score": "0.72",
+            "fn_rescue_group_count": "2",
+            "trigger_reason_code": "full_review_trigger_73_aux",
+            "trigger_reason": "full trigger replay",
+        },
+        probability=0.18,
+        threshold=0.30,
+    )
+
+    assert signals["stage2_review_trigger"] is True
+    assert signals["stage2_secondary_trigger"] is True
+    assert signals["stage2_review_priority"] == "high"
+    assert signals["stage2_review_aux_secondary_trigger"] is True
+    assert signals["stage2_fn_rescue_trigger"] is False
+    assert signals["probability_stage2_review_aux"] == 0.41
+    assert signals["threshold_stage2_review_aux"] == 0.33
+    assert signals["threshold_stage2_review_aux_it_services_review"] == 0.21
+    assert signals["fn_rescue_score"] == 0.72
+    assert signals["fn_rescue_group_count"] == 2.0
+    assert signals["trigger_reason_code"] == "full_review_trigger_73_aux"
 
 
 def test_materiality_summary_reports_direct_ratio_fields() -> None:

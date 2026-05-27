@@ -22,8 +22,8 @@ from sklearn.metrics import (
 from xgboost import XGBClassifier
 
 ROOT = Path(__file__).resolve().parents[1]
-INPUT_DIR = ROOT / "data" / "input" / "credit_43_features"
-OUTPUT_DIR = ROOT / "data" / "outputs" / "modeling" / "feature_43_xgboost" / "diagnostics"
+INPUT_DIR = ROOT / "data" / "input" / "credit_46_features"
+OUTPUT_DIR = ROOT / "data" / "outputs" / "modeling" / "feature_46_xgboost" / "diagnostics"
 
 RANDOM_STATE = 42
 PROBABILITY_CLIP_EPSILON = 1e-6
@@ -60,7 +60,7 @@ SEARCH_GRID = {
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Run OOT-validation XGBoost hyperparameter experiments for the 43-feature credit model."
+            "Run OOT-validation XGBoost hyperparameter experiments for the 46-feature credit model."
         )
     )
     parser.add_argument("--input-dir", type=Path, default=INPUT_DIR)
@@ -462,7 +462,7 @@ def build_report(metrics: pd.DataFrame, segments: pd.DataFrame, max_candidates: 
         [
             "# XGBoost Hyperparameter Tuning Experiments",
             "",
-            "43-feature XGBoost 모델의 하이퍼파라미터를 OOT validation 기준으로 탐색한 실험입니다.",
+            "46-feature XGBoost 모델의 하이퍼파라미터를 OOT validation 기준으로 탐색한 실험입니다.",
             "모든 후보는 XGBoost native missing, Platt scaling, validation 기준 "
             f"`recall >= {RECALL_FLOOR:.2f}` 조건에서 precision 최대 threshold를 사용했습니다.",
             f"검색 후보는 baseline 1개와 deterministic random sample `{max_candidates}`개입니다.",

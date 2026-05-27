@@ -10,12 +10,21 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from cas.agents.stage2_review_signals import (
+    LEGACY_STAGE2_REVIEW_AUX_IT_THRESHOLD_COLUMN,
+    LEGACY_STAGE2_REVIEW_AUX_PROB_COLUMN,
+    LEGACY_STAGE2_REVIEW_AUX_THRESHOLD_COLUMN,
+    STAGE2_REVIEW_AUX_IT_THRESHOLD_COLUMN,
+    STAGE2_REVIEW_AUX_PROB_COLUMN,
+    STAGE2_REVIEW_AUX_THRESHOLD_COLUMN,
+)
+
 ROOT = Path(__file__).resolve().parents[1]
-PREDICTION_SCORES_PATH = ROOT / "data/outputs/dashboard/feature_43_mvp/prediction_scores.csv"
+PREDICTION_SCORES_PATH = ROOT / "data/outputs/dashboard/feature_46_mvp/prediction_scores.csv"
 TARGET_LABEL_REFERENCE_PATH = ROOT / "data/evaluation/target_label_reference.csv"
 LABELS_2026_PATH = ROOT / "data/evaluation/credit_rating_labels_2026.csv"
-INFERENCE_2026_PATH = ROOT / "data/input/credit_43_features/feature_43_inference_2026.csv"
-OUTPUT_DIR = ROOT / "data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents"
+INFERENCE_2026_PATH = ROOT / "data/input/credit_46_features/feature_46_inference_2026.csv"
+OUTPUT_DIR = ROOT / "data/outputs/modeling/feature_46_xgboost/diagnostics/stage2_agents"
 
 KEY_COLUMNS = ["market", "stock_code", "corp_name", "fiscal_year", "eval_year"]
 
@@ -75,9 +84,12 @@ def read_scores(path: Path) -> pd.DataFrame:
         "is_speculative",
         "prob_speculative",
         "threshold",
-        "prob_speculative_45",
-        "threshold_45",
-        "threshold_45_it_services_review",
+        STAGE2_REVIEW_AUX_PROB_COLUMN,
+        STAGE2_REVIEW_AUX_THRESHOLD_COLUMN,
+        STAGE2_REVIEW_AUX_IT_THRESHOLD_COLUMN,
+        LEGACY_STAGE2_REVIEW_AUX_PROB_COLUMN,
+        LEGACY_STAGE2_REVIEW_AUX_THRESHOLD_COLUMN,
+        LEGACY_STAGE2_REVIEW_AUX_IT_THRESHOLD_COLUMN,
     ]:
         if column in scores.columns:
             scores[column] = pd.to_numeric(scores[column], errors="coerce")
@@ -160,30 +172,57 @@ def stage1_risk(frame: pd.DataFrame) -> pd.Series:
     return frame["prob_speculative"].ge(frame["threshold"])
 
 
-def secondary_45_risk(frame: pd.DataFrame, base_risk: pd.Series) -> pd.Series:
+def numeric_first_column(frame: pd.DataFrame, *columns: str) -> pd.Series:
+    for column in columns:
+        if column in frame.columns:
+            return pd.to_numeric(frame[column], errors="coerce")
+    return pd.Series(np.nan, index=frame.index, dtype="float64")
+
+
+def secondary_review_aux_risk(frame: pd.DataFrame, base_risk: pd.Series) -> pd.Series:
     if "stage2_secondary_trigger" in frame.columns:
         return frame["stage2_secondary_trigger"].astype(str).str.lower().isin({"true", "1"})
-    if not {"prob_speculative_45", "threshold_45"}.issubset(frame.columns):
+    has_new = {STAGE2_REVIEW_AUX_PROB_COLUMN, STAGE2_REVIEW_AUX_THRESHOLD_COLUMN}.issubset(
+        frame.columns
+    )
+    has_legacy = {
+        LEGACY_STAGE2_REVIEW_AUX_PROB_COLUMN,
+        LEGACY_STAGE2_REVIEW_AUX_THRESHOLD_COLUMN,
+    }.issubset(frame.columns)
+    if not (has_new or has_legacy):
         return pd.Series(False, index=frame.index)
-    feature45_risk = frame["prob_speculative_45"].ge(frame["threshold_45"])
-    it_services_review = pd.Series(False, index=frame.index)
-    if "threshold_45_it_services_review" in frame.columns:
-        it_services_review = frame["industry_macro_category"].astype(str).eq("it_services") & frame[
-            "prob_speculative_45"
-        ].ge(frame["threshold_45_it_services_review"])
-    return (~base_risk) & (feature45_risk | it_services_review)
+    aux_probability = numeric_first_column(
+        frame,
+        STAGE2_REVIEW_AUX_PROB_COLUMN,
+        LEGACY_STAGE2_REVIEW_AUX_PROB_COLUMN,
+    )
+    aux_threshold = numeric_first_column(
+        frame,
+        STAGE2_REVIEW_AUX_THRESHOLD_COLUMN,
+        LEGACY_STAGE2_REVIEW_AUX_THRESHOLD_COLUMN,
+    )
+    aux_it_threshold = numeric_first_column(
+        frame,
+        STAGE2_REVIEW_AUX_IT_THRESHOLD_COLUMN,
+        LEGACY_STAGE2_REVIEW_AUX_IT_THRESHOLD_COLUMN,
+    )
+    aux_risk = aux_probability.ge(aux_threshold)
+    it_services_review = frame["industry_macro_category"].astype(str).eq("it_services") & (
+        aux_probability.ge(aux_it_threshold)
+    )
+    return (~base_risk) & (aux_risk | it_services_review)
 
 
 def add_policy_flags(frame: pd.DataFrame) -> pd.DataFrame:
     output = frame.copy()
     base = stage1_risk(output)
-    secondary = secondary_45_risk(output, base)
+    secondary = secondary_review_aux_risk(output, base)
     near_threshold = output["prob_speculative"].sub(output["threshold"]).abs().le(0.10)
     mid_mfg = output["industry_macro_category"].astype(str).eq("manufacturing") & output[
         "firm_size_group"
     ].astype(str).eq("mid_sized")
     output["stage1_review_trigger"] = base
-    output["current_45_secondary_radar_trigger"] = base | secondary
+    output["stage2_review_aux_secondary_radar_trigger"] = base | secondary
     output["balanced_committee_review_trigger"] = base | secondary | ((~base) & near_threshold)
     output["recall_first_committee_review_trigger"] = (
         base | secondary | ((~base) & mid_mfg & output["prob_speculative"].ge(0.10))
@@ -257,8 +296,8 @@ def build_historical_samples(
     split_frame["as_of_date"] = historical_as_of_date(split_frame)
     sample_frames: list[pd.DataFrame] = []
     policy_columns = {
-        "balanced_current_45_or_near_threshold_0_10": "balanced_committee_review_trigger",
-        "recall_first_current_45_or_fn_mid_mfg_prob_0_10": "recall_first_committee_review_trigger",
+        "feature46_full_review_trigger_73": "balanced_committee_review_trigger",
+        "recall_first_feature46_full_review_trigger_73": ("recall_first_committee_review_trigger"),
     }
     for policy_name, trigger_column in policy_columns.items():
         triggered = split_frame[trigger_column].astype(bool)
@@ -332,8 +371,8 @@ def build_historical_samples(
         "prob_speculative",
         "threshold",
         "stage1_probability_margin",
-        "prob_speculative_45",
-        "threshold_45",
+        "prob_speculative_stage2_review_aux",
+        "threshold_stage2_review_aux",
         "trigger_reason_code",
         "trigger_reason",
         "evidence_cutoff_rule",

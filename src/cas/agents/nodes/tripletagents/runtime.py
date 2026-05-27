@@ -10,6 +10,9 @@ from typing import Protocol, cast
 
 from pydantic import BaseModel
 
+from cas.agents.stage2_runtime_config import Stage2RuntimeConfig
+from cas.llm.model_catalog import load_model_catalog, normalize_stage2_provider
+
 
 class AgnoAgentLike(Protocol):
     """Minimal Agno Agent protocol used by the adapters."""
@@ -26,6 +29,7 @@ def build_agno_agent[ModelT: BaseModel](
     max_tokens: int,
     response_model: type[ModelT],
     instructions: list[str],
+    runtime_config: Stage2RuntimeConfig | None = None,
 ) -> AgnoAgentLike:
     """Create an Agno Agent lazily so importing CAS does not require Agno."""
     try:
@@ -41,6 +45,7 @@ def build_agno_agent[ModelT: BaseModel](
         provider=model_provider,
         model_name=model_name,
         max_tokens=max_tokens,
+        runtime_config=runtime_config,
     )
 
     return cast(
@@ -59,41 +64,26 @@ def build_agno_agent[ModelT: BaseModel](
 
 def normalize_model_provider(provider: str) -> str:
     """Normalize supported provider aliases used by Stage 2 model routing."""
-    normalized = provider.strip().lower().replace("-", "_")
-    aliases = {
-        "anthropic": "anthropic",
-        "claude": "anthropic",
-        "openai": "openai",
-        "gpt": "openai",
-        "google": "google",
-        "gemini": "google",
-    }
-    if normalized not in aliases:
-        raise ValueError(
-            "Unsupported CAS Stage 2 model provider. "
-            "Use one of: anthropic/claude, openai/gpt, google/gemini."
-        )
-    return aliases[normalized]
+    return cast(str, normalize_stage2_provider(provider))
 
 
 def provider_label(provider: str) -> str:
     """Return a human-readable provider label for prompts and diagnostics."""
-    labels = {
-        "anthropic": "Claude",
-        "openai": "GPT",
-        "google": "Gemini",
-    }
-    return labels[normalize_model_provider(provider)]
+    catalog = load_model_catalog()
+    config = catalog.provider(provider)
+    if config is not None:
+        return cast(str, config.label)
+    return normalize_model_provider(provider)
 
 
 def provider_env_var_names(provider: str) -> tuple[str, ...]:
     """Return accepted API key environment variables for a provider."""
-    normalized = normalize_model_provider(provider)
-    if normalized == "anthropic":
-        return ("ANTHROPIC_API_KEY",)
-    if normalized == "openai":
-        return ("OPENAI_API_KEY",)
-    return ("GOOGLE_API_KEY", "GEMINI_API_KEY")
+    catalog = load_model_catalog()
+    config = catalog.provider(provider)
+    if config is None:
+        normalize_model_provider(provider)
+        return ()
+    return cast(tuple[str, ...], config.api_key_env_vars)
 
 
 def _build_agno_model(
@@ -101,6 +91,7 @@ def _build_agno_model(
     provider: str,
     model_name: str,
     max_tokens: int,
+    runtime_config: Stage2RuntimeConfig | None = None,
 ) -> object:
     normalized_provider = normalize_model_provider(provider)
     api_key = _provider_api_key(normalized_provider)
@@ -119,7 +110,7 @@ def _build_agno_model(
             max_tokens=max_tokens,
             temperature=0,
             api_key=api_key,
-            timeout=_stage2_agent_timeout_seconds(),
+            timeout=_stage2_agent_timeout_seconds(runtime_config),
         )
 
     if normalized_provider == "openai":
@@ -136,8 +127,8 @@ def _build_agno_model(
             max_output_tokens=max_tokens,
             temperature=0,
             api_key=api_key,
-            timeout=_stage2_agent_timeout_seconds(),
-            max_retries=_stage2_provider_max_retries(),
+            timeout=_stage2_agent_timeout_seconds(runtime_config),
+            max_retries=_stage2_provider_max_retries(runtime_config),
         )
 
     try:
@@ -153,6 +144,9 @@ def _build_agno_model(
         max_output_tokens=max_tokens,
         temperature=0,
         api_key=api_key,
+        timeout=_stage2_agent_timeout_seconds(runtime_config),
+        retries=_stage2_provider_max_retries(runtime_config),
+        delay_between_retries=_stage2_provider_retry_delay_seconds(runtime_config),
     )
 
 
@@ -173,9 +167,10 @@ def run_structured_agent[ModelT: BaseModel](
     agent: AgnoAgentLike,
     query: str,
     response_model: type[ModelT],
+    runtime_config: Stage2RuntimeConfig | None = None,
 ) -> ModelT:
     """Run an Agno agent and coerce the response into a Pydantic model."""
-    attempts = _stage2_agent_retry_attempts()
+    attempts = _stage2_agent_retry_attempts(runtime_config)
     for attempt in range(1, attempts + 1):
         try:
             response = agent.run(query)
@@ -184,7 +179,7 @@ def run_structured_agent[ModelT: BaseModel](
         except Exception:
             if attempt >= attempts:
                 raise
-            time.sleep(_stage2_agent_retry_delay_seconds() * attempt)
+            time.sleep(_stage2_agent_retry_delay_seconds(runtime_config) * attempt)
     raise RuntimeError("Agno agent retry loop exited unexpectedly.")
 
 
@@ -228,39 +223,30 @@ def _strip_json_fence(value: str) -> str:
     return "\n".join(lines).strip()
 
 
-def _stage2_agent_retry_attempts() -> int:
-    raw_value = os.environ.get("CAS_STAGE2_AGENT_RETRIES", "2").strip()
-    try:
-        attempts = int(raw_value)
-    except ValueError:
-        attempts = 2
-    return min(max(attempts, 1), 5)
+def _stage2_agent_retry_attempts(runtime_config: Stage2RuntimeConfig | None = None) -> int:
+    return int(_resolved_runtime_config(runtime_config).agent_retries)
 
 
-def _stage2_agent_retry_delay_seconds() -> float:
-    raw_value = os.environ.get("CAS_STAGE2_AGENT_RETRY_DELAY_SECONDS", "1.5").strip()
-    try:
-        delay = float(raw_value)
-    except ValueError:
-        delay = 1.5
-    return min(max(delay, 0.0), 10.0)
+def _stage2_agent_retry_delay_seconds(runtime_config: Stage2RuntimeConfig | None = None) -> float:
+    return float(_resolved_runtime_config(runtime_config).agent_retry_delay_seconds)
 
 
-def _stage2_agent_timeout_seconds() -> float | None:
-    raw_value = os.environ.get("CAS_STAGE2_AGENT_TIMEOUT_SECONDS", "").strip().lower()
-    if raw_value in {"", "0", "false", "no", "none", "off"}:
-        return None
-    try:
-        timeout = float(raw_value)
-    except ValueError:
-        return None
-    return min(max(timeout, 1.0), 600.0)
+def _stage2_agent_timeout_seconds(
+    runtime_config: Stage2RuntimeConfig | None = None,
+) -> float | None:
+    return cast(float | None, _resolved_runtime_config(runtime_config).agent_timeout_seconds)
 
 
-def _stage2_provider_max_retries() -> int:
-    raw_value = os.environ.get("CAS_STAGE2_PROVIDER_MAX_RETRIES", "0").strip()
-    try:
-        retries = int(raw_value)
-    except ValueError:
-        retries = 0
-    return min(max(retries, 0), 5)
+def _stage2_provider_max_retries(runtime_config: Stage2RuntimeConfig | None = None) -> int:
+    return int(_resolved_runtime_config(runtime_config).provider_max_retries)
+
+
+def _stage2_provider_retry_delay_seconds(runtime_config: Stage2RuntimeConfig | None = None) -> int:
+    delay = float(_resolved_runtime_config(runtime_config).agent_retry_delay_seconds)
+    return max(1, round(delay))
+
+
+def _resolved_runtime_config(
+    runtime_config: Stage2RuntimeConfig | None,
+) -> Stage2RuntimeConfig:
+    return runtime_config or Stage2RuntimeConfig.from_env(os.environ)

@@ -89,6 +89,214 @@ COMMITTEE_HOLD_SUBTYPE_GUIDE = [
     },
 ]
 
+AGENT_DISAGREEMENT_LEVEL_GUIDE = {
+    "low": {
+        "label": "낮음",
+        "tone": "low",
+        "body": "AI 위원회 내부 판단이 대체로 같은 방향입니다.",
+    },
+    "medium": {
+        "label": "중간",
+        "tone": "medium",
+        "body": "일부 판단이 엇갈려 위험 근거와 완화 근거를 함께 확인하면 좋습니다.",
+    },
+    "high": {
+        "label": "높음",
+        "tone": "high",
+        "body": "AI 위원회 내부 판단 차이가 커서 추가 QA 검토가 필요한 상태입니다.",
+    },
+}
+
+AGENT_DISAGREEMENT_REASON_LABELS = {
+    "quant_risk_evidence_watch_context": (
+        "정량 모델은 위험을 보지만 외부근거는 치명급이 아니에요."
+    ),
+    "quant_investment_evidence_substantive": (
+        "정량 모델은 적격인데 외부근거는 실질 검토가 필요해요."
+    ),
+    "chair_risk_without_critical_evidence": ("위험 보류지만 치명 외부근거는 제한적이에요."),
+    "chair_reject_without_critical_evidence": ("부적격 판단이지만 치명 외부근거는 제한적이에요."),
+    "chair_eligible_with_substantive_evidence": ("적격 판단인데 실질 외부근거가 있어요."),
+    "chair_escalates_against_investment_model": (
+        "1차 모델보다 위원회가 위험을 더 보수적으로 봤어요."
+    ),
+    "chair_softens_reject_model": "1차 모델 경고를 위원회가 완화해서 봤어요.",
+    "committee_label_memo_conflict": "최종 라벨과 메모 문구가 엇갈릴 수 있어요.",
+    "agent_confidence_gap": "역할별 AI 판단 확신도가 크게 달랐어요.",
+}
+
+REVIEW_QA_TRIGGER_REASON_LABELS = {
+    "investment_model_hold": "1차 모델은 적격이라 보류 판단이 과한지 다시 확인했어요.",
+    "ambiguous_external_evidence": "외부근거가 애매해 위험으로 볼지 다시 확인했어요.",
+    "risk_hold_without_critical_evidence": (
+        "위험 보류인데 치명 외부근거가 충분한지 다시 확인했어요."
+    ),
+    "risk_hold_watch_context_without_critical_evidence": (
+        "위험 보류인데 외부근거가 치명급인지 다시 확인했어요."
+    ),
+    "risk_hold_has_boundary_financial_defense": (
+        "재무 방어축이 있어 위험 보류가 과한지 다시 확인했어요."
+    ),
+    "risk_hold_memo_conflict_possible": "라벨과 메모가 충돌할 수 있어 다시 확인했어요.",
+    "agent_disagreement_high_without_critical_evidence": (
+        "내부 의견 차이가 큰데 치명 외부근거는 제한적이라 다시 확인했어요."
+    ),
+    "label_memo_conflict_candidate": "라벨과 메모가 충돌할 수 있어 다시 확인했어요.",
+    "reject_without_critical_evidence": (
+        "부적격 판단인데 치명 외부근거가 충분한지 다시 확인했어요."
+    ),
+    "reject_watch_context_without_critical_evidence": (
+        "부적격 판단인데 외부근거가 치명급인지 다시 확인했어요."
+    ),
+    "reject_has_boundary_financial_defense": (
+        "부적격 판단에도 재무 방어축이 있어 다시 확인했어요."
+    ),
+}
+
+
+def _agent_disagreement_score_value(score: object) -> float | None:
+    if not isinstance(score, str | int | float):
+        return None
+    try:
+        value = float(score)
+    except ValueError:
+        return None
+    if value != value:
+        return None
+    return max(0.0, min(1.0, value))
+
+
+def agent_disagreement_level_info(level: object, score: object = None) -> dict[str, str]:
+    """Return user-facing copy for an agent disagreement level."""
+    level_key = str(level or "").strip().lower()
+    if level_key not in AGENT_DISAGREEMENT_LEVEL_GUIDE:
+        value = _agent_disagreement_score_value(score)
+        if value is None:
+            level_key = "low"
+        elif value >= 0.55:
+            level_key = "high"
+        elif value >= 0.25:
+            level_key = "medium"
+        else:
+            level_key = "low"
+    return dict(AGENT_DISAGREEMENT_LEVEL_GUIDE[level_key])
+
+
+def agent_disagreement_reason_label(reason: object) -> str:
+    """Return short Korean copy for an agent disagreement reason code."""
+    reason_key = str(reason or "").strip()
+    if not reason_key:
+        return ""
+    return AGENT_DISAGREEMENT_REASON_LABELS.get(reason_key, reason_key.replace("_", " "))
+
+
+def review_qa_trigger_reason_label(reason: object) -> str:
+    """Return short Korean copy for a ReviewQA trigger reason code."""
+    reason_key = str(reason or "").strip()
+    if not reason_key:
+        return ""
+    return REVIEW_QA_TRIGGER_REASON_LABELS.get(reason_key, reason_key.replace("_", " "))
+
+
+def _agent_disagreement_score_label(score: object) -> str:
+    value = _agent_disagreement_score_value(score)
+    if value is None:
+        return "점수 확인 전"
+    return f"점수 {value:.2f}"
+
+
+def _review_qa_status_copy(
+    *,
+    review_qa_triggered: bool,
+    review_qa_executed: bool,
+    review_qa_reasons: list[str],
+    disagreement_level: str,
+) -> str:
+    if review_qa_executed and (
+        disagreement_level == "high"
+        or "agent_disagreement_high_without_critical_evidence" in review_qa_reasons
+    ):
+        return "내부 의견 차이가 커서 추가 QA 검토를 실행했어요."
+    if review_qa_executed:
+        return "근거와 메모를 한 번 더 확인하기 위해 추가 QA 검토를 실행했어요."
+    if review_qa_triggered:
+        return "추가 QA 검토 조건에 걸렸지만, 현재 화면에는 실행 전 결과가 표시돼요."
+    if disagreement_level == "high":
+        return "의견 차이는 높지만 현재 설정에서는 추가 QA 검토가 실행되지 않았어요."
+    if disagreement_level == "medium":
+        return "내부 의견 차이가 중간 수준이라 위원회 결론과 근거를 함께 표시합니다."
+    return "내부 의견 차이가 낮아 추가 QA 없이 위원회 결론을 표시합니다."
+
+
+def render_agent_disagreement_card(
+    *,
+    score: object,
+    level: object,
+    reasons: list[str],
+    summary: str,
+    review_qa_triggered: bool,
+    review_qa_executed: bool,
+    review_qa_reasons: list[str],
+) -> None:
+    """Render why the committee agents agreed or why ReviewQA was needed."""
+    clean_reasons = [
+        label for label in (agent_disagreement_reason_label(reason) for reason in reasons) if label
+    ]
+    normalized_summary = _normalize_committee_text(summary)
+    has_disagreement_payload = any(
+        [
+            str(level or "").strip(),
+            _agent_disagreement_score_value(score) is not None,
+            clean_reasons,
+            normalized_summary,
+        ]
+    )
+    if not has_disagreement_payload and not review_qa_triggered and not review_qa_executed:
+        return
+
+    level_info = agent_disagreement_level_info(level, score)
+    level_tone = level_info["tone"]
+    reason_items = clean_reasons[:3] or [level_info["body"]]
+    reason_html = "".join(f"<li>{escape(reason)}</li>" for reason in reason_items)
+    trigger_labels = [
+        label
+        for label in (review_qa_trigger_reason_label(reason) for reason in review_qa_reasons)
+        if label
+    ]
+    trigger_suffix = ""
+    if trigger_labels:
+        trigger_suffix = f"<span>{escape(trigger_labels[0])}</span>"
+    qa_copy = _review_qa_status_copy(
+        review_qa_triggered=review_qa_triggered,
+        review_qa_executed=review_qa_executed,
+        review_qa_reasons=review_qa_reasons,
+        disagreement_level=level_tone,
+    )
+    qa_state = "qa-on" if review_qa_executed else "qa-off"
+
+    st.markdown(
+        (
+            f"<div class='agent-disagreement-card {escape(level_tone)}'>"
+            "<div class='agent-disagreement-head'>"
+            "<div>"
+            "<div class='agent-disagreement-eyebrow'>위원회 내부 의견 차이</div>"
+            "<div class='agent-disagreement-title-row'>"
+            f"<span class='agent-disagreement-level {escape(level_tone)}'>"
+            f"{escape(level_info['label'])}</span>"
+            f"<span class='agent-disagreement-score'>{escape(_agent_disagreement_score_label(score))}</span>"
+            "</div>"
+            "</div>"
+            f"<div class='agent-disagreement-summary'>{escape(normalized_summary or level_info['body'])}</div>"
+            "</div>"
+            f"<ul class='agent-disagreement-reasons'>{reason_html}</ul>"
+            f"<div class='agent-disagreement-qa {qa_state}'>"
+            f"{escape(qa_copy)}{trigger_suffix}"
+            "</div>"
+            "</div>"
+        ),
+        unsafe_allow_html=True,
+    )
+
 
 def render_committee_signal_guide(
     *,

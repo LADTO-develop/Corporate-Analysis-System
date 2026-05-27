@@ -15,7 +15,7 @@ from apply_opendart_financial_supplements import (
 
 ROOT = Path(__file__).resolve().parents[1]
 MODEL_V1_PATH = ROOT / "data" / "raw" / "ts2000" / "TS2000_Credit_Model_Dataset_Model_V1.csv"
-INFERENCE_PATH = ROOT / "data" / "input" / "credit_43_features" / "feature_43_inference_2026.csv"
+INFERENCE_PATH = ROOT / "data" / "input" / "credit_46_features" / "feature_46_inference_2026.csv"
 DEFAULT_RAW_SUPPLEMENT_PATH = (
     ROOT
     / "data"

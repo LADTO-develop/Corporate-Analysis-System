@@ -17,11 +17,19 @@ import numpy as np
 import pandas as pd
 
 from cas.agents.nodes import committee_node, rule_engine_node
+from cas.agents.stage2_review_signals import (
+    LEGACY_STAGE2_REVIEW_AUX_IT_THRESHOLD_COLUMN,
+    LEGACY_STAGE2_REVIEW_AUX_PROB_COLUMN,
+    LEGACY_STAGE2_REVIEW_AUX_THRESHOLD_COLUMN,
+    STAGE2_REVIEW_AUX_IT_THRESHOLD_COLUMN,
+    STAGE2_REVIEW_AUX_PROB_COLUMN,
+    STAGE2_REVIEW_AUX_THRESHOLD_COLUMN,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
-PREDICTION_SCORES_PATH = ROOT / "data/outputs/dashboard/feature_43_mvp/prediction_scores.csv"
-FEATURE_MASTER_PATH = ROOT / "data/input/credit_43_features/feature_43_master.csv"
-OUTPUT_DIR = ROOT / "data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents"
+PREDICTION_SCORES_PATH = ROOT / "data/outputs/dashboard/feature_46_mvp/prediction_scores.csv"
+FEATURE_MASTER_PATH = ROOT / "data/input/credit_46_features/feature_46_master.csv"
+OUTPUT_DIR = ROOT / "data/outputs/modeling/feature_46_xgboost/diagnostics/stage2_agents"
 
 KEY_COLUMNS = ["market", "stock_code", "corp_name", "fiscal_year", "eval_year"]
 EVALUATION_SPLITS = ("valid", "test")
@@ -148,26 +156,48 @@ def normalize_stock_code(value: object) -> str:
 def add_policy_flags(frame: pd.DataFrame) -> pd.DataFrame:
     output = frame.copy()
     stage1 = output["pred_label_tuned"].astype(int).eq(1)
-    feature45 = output["prob_speculative_45"].astype(float).ge(output["threshold_45"].astype(float))
+    aux_probability = numeric_first_column(
+        output,
+        STAGE2_REVIEW_AUX_PROB_COLUMN,
+        LEGACY_STAGE2_REVIEW_AUX_PROB_COLUMN,
+    )
+    aux_threshold = numeric_first_column(
+        output,
+        STAGE2_REVIEW_AUX_THRESHOLD_COLUMN,
+        LEGACY_STAGE2_REVIEW_AUX_THRESHOLD_COLUMN,
+    )
+    aux_it_threshold = numeric_first_column(
+        output,
+        STAGE2_REVIEW_AUX_IT_THRESHOLD_COLUMN,
+        LEGACY_STAGE2_REVIEW_AUX_IT_THRESHOLD_COLUMN,
+    )
+    aux_risk = aux_probability.ge(aux_threshold)
     it_services = output["industry_macro_category"].astype(str).eq("it_services")
-    it_low_threshold = it_services & output["prob_speculative_45"].astype(float).ge(
-        output["threshold_45_it_services_review"].astype(float)
-    )
-    high_margin_45 = feature45 & output["prob_speculative_45"].astype(float).ge(
-        output["threshold_45"].astype(float) + 0.05
-    )
+    it_low_threshold = it_services & aux_probability.ge(aux_it_threshold)
+    high_margin_aux = aux_risk & aux_probability.ge(aux_threshold + 0.05)
     overwarning_candidate = bool_series(output["stage2_overwarning_filter_candidate"])
 
     output["policy_stage1_model"] = stage1
-    output["policy_stage1_or_45"] = stage1 | ((~stage1) & feature45)
+    output["policy_stage1_or_stage2_review_aux"] = stage1 | ((~stage1) & aux_risk)
     output["policy_stage1_or_it_low_threshold"] = stage1 | ((~stage1) & it_low_threshold)
-    output["policy_stage1_or_45_or_it_low_threshold"] = output["stage2_review_trigger"].astype(bool)
-    output["policy_stage1_or_45_no_it_low_threshold"] = stage1 | (
-        (~stage1) & feature45 & (~it_low_threshold)
+    output["policy_stage1_or_stage2_review_aux_or_it_low_threshold"] = output[
+        "stage2_review_trigger"
+    ].astype(bool)
+    output["policy_stage1_or_stage2_review_aux_no_it_low_threshold"] = stage1 | (
+        (~stage1) & aux_risk & (~it_low_threshold)
     )
-    output["policy_stage1_or_45_high_margin"] = stage1 | ((~stage1) & high_margin_45)
+    output["policy_stage1_or_stage2_review_aux_high_margin"] = stage1 | (
+        (~stage1) & high_margin_aux
+    )
     output["policy_stage1_minus_overwarning_candidate"] = stage1 & (~overwarning_candidate)
     return output
+
+
+def numeric_first_column(frame: pd.DataFrame, *columns: str) -> pd.Series:
+    for column in columns:
+        if column in frame.columns:
+            return pd.to_numeric(frame[column], errors="coerce")
+    return pd.Series(np.nan, index=frame.index, dtype="float64")
 
 
 def bool_series(series: pd.Series) -> pd.Series:
@@ -232,8 +262,8 @@ def build_committee_state(row: pd.Series) -> dict[str, Any]:
         if not str(key).endswith("_feature")
     }
     model_view = {
-        "model_name": "credit_43_features",
-        "model_version": "feature_43_xgboost",
+        "model_name": "credit_46_features",
+        "model_version": "feature_46_xgboost",
         "probability_speculative": float(row["prob_speculative"]),
         "prediction_label": "부적격" if int(row["pred_label_tuned"]) == 1 else "투자적격",
         "risk_band": str(row["risk_band"]),
@@ -370,7 +400,7 @@ def select_validation_policies(metrics: pd.DataFrame) -> dict[str, dict[str, Any
     selected["official_stage1_baseline"] = select_specific_policy(valid, "stage1_model")
     selected["current_aux_review_trigger"] = select_specific_policy(
         valid,
-        "stage1_or_45_or_it_low_threshold",
+        "stage1_or_stage2_review_aux_or_it_low_threshold",
     )
     return selected
 

@@ -8,6 +8,11 @@ import pandas as pd
 
 from cas.dashboard.chart_data import finite_chart_frame, finite_float_or_none
 from cas.dashboard.committee_copy import committee_decision_type_info
+from cas.dashboard.committee_panel import (
+    agent_disagreement_level_info,
+    agent_disagreement_reason_label,
+    review_qa_trigger_reason_label,
+)
 from cas.dashboard.evidence_panel import (
     _external_evidence_items_frame,
     _external_evidence_materiality_basis,
@@ -52,6 +57,28 @@ def test_committee_decision_copy_is_user_friendly() -> None:
     assert "BBB-/BB+" in boundary["detail"]
     assert "바로 부적격으로 단정하긴 이릅니다" in mitigation["body"]
     assert "SHAP" in mitigation["action"]
+
+
+def test_agent_disagreement_copy_is_user_friendly() -> None:
+    high = agent_disagreement_level_info("high", score=0.65)
+    inferred_medium = agent_disagreement_level_info("", score=0.30)
+
+    assert high["label"] == "높음"
+    assert high["tone"] == "high"
+    assert "추가 QA 검토" in high["body"]
+    assert inferred_medium["label"] == "중간"
+    assert (
+        agent_disagreement_reason_label("quant_risk_evidence_watch_context")
+        == "정량 모델은 위험을 보지만 외부근거는 치명급이 아니에요."
+    )
+    assert (
+        review_qa_trigger_reason_label("agent_disagreement_high_without_critical_evidence")
+        == "내부 의견 차이가 큰데 치명 외부근거는 제한적이라 다시 확인했어요."
+    )
+    assert (
+        review_qa_trigger_reason_label("ambiguous_external_evidence")
+        == "외부근거가 애매해 위험으로 볼지 다시 확인했어요."
+    )
 
 
 def test_dashboard_label_helpers_match_user_facing_copy() -> None:

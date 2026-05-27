@@ -89,7 +89,7 @@ flowchart LR
     "source": "web_listing",
     "request_id": "req_20260511_000001"
   },
-  "processed_company_list_ref": "data/outputs/dashboard/feature_43_mvp/company_latest.csv"
+  "processed_company_list_ref": "data/outputs/dashboard/feature_46_mvp/company_latest.csv"
 }
 ```
 
@@ -115,7 +115,7 @@ flowchart LR
 
 1. 기업 스냅샷을 feature store 조회 키로 변환
 2. TS2000 재무 원천값이 비어 있으면 OpenDART 사업보고서 CFS 우선, OFS fallback 기준으로 보강
-3. 보강 후 재무비율, 증감률, 플래그, 산업 내 백분위를 재계산하고 43개 모델 입력 변수에 매핑
+3. 보강 후 재무비율, 증감률, 플래그, 산업 내 백분위를 재계산하고 46개 모델 입력 변수에 매핑
 4. DART/뉴스/거시 캐시의 `as_of_date` 기준 조회
 5. XGBoost 추론과 SHAP 로컬 설명 생성
 6. 룰 엔진, 다중 에이전트 해석, strict JSON 검증

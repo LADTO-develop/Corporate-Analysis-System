@@ -21,9 +21,9 @@ from sklearn.metrics import (
 from xgboost import XGBClassifier
 
 ROOT = Path(__file__).resolve().parents[1]
-INPUT_DIR = ROOT / "data" / "input" / "credit_43_features"
+INPUT_DIR = ROOT / "data" / "input" / "credit_46_features"
 RAW_PATH = ROOT / "data" / "raw" / "ts2000" / "TS2000_Credit_Model_Dataset_Model_V1.csv"
-OUTPUT_DIR = ROOT / "data" / "outputs" / "modeling" / "feature_43_xgboost" / "diagnostics"
+OUTPUT_DIR = ROOT / "data" / "outputs" / "modeling" / "feature_46_xgboost" / "diagnostics"
 
 RANDOM_STATE = 42
 PROBABILITY_CLIP_EPSILON = 1e-6
@@ -163,9 +163,9 @@ FEATURE_PACKS: dict[str, dict[str, Any]] = {
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Run candidate feature-pack experiments for the 43-feature XGBoost credit model. "
+            "Run candidate feature-pack experiments for the 46-feature XGBoost credit model. "
             "Candidate variables are joined from the Model V1 raw dataset and compared with "
-            "the current 43-feature baseline under the same OOT validation policy."
+            "the current 46-feature baseline under the same OOT validation policy."
         )
     )
     parser.add_argument("--input-dir", type=Path, default=INPUT_DIR)
@@ -489,7 +489,7 @@ def run_experiments(
     variants = ["baseline_43_native", *FEATURE_PACKS.keys()]
     for variant in variants:
         if variant == "baseline_43_native":
-            note = "현재 43개 변수, XGBoost native missing 기준"
+            note = "현재 46개 변수, XGBoost native missing 기준"
             frames = base_frames
             added_columns: list[str] = []
         else:

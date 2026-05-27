@@ -12,9 +12,9 @@ from cas.dashboard.data_loader import DEFAULT_ARTIFACT_DIR
 
 ROOT = Path(__file__).resolve().parents[3]
 APP_PATH = ROOT / "src" / "cas" / "dashboard" / "credit_app.py"
-EXPORT_SCRIPT_PATH = ROOT / "scripts" / "export_feature_43_dashboard_artifacts.py"
+EXPORT_SCRIPT_PATH = ROOT / "scripts" / "export_feature_46_dashboard_artifacts.py"
 INFERENCE_2026_EXPORT_SCRIPT_PATH = (
-    ROOT / "scripts" / "export_feature_43_inference_2026_dashboard_artifacts.py"
+    ROOT / "scripts" / "export_feature_46_inference_2026_dashboard_artifacts.py"
 )
 
 REQUIRED_DASHBOARD_ARTIFACTS = (
@@ -24,7 +24,6 @@ REQUIRED_DASHBOARD_ARTIFACTS = (
     "feature_dictionary.csv",
     "global_shap_reference.csv",
     "scenario_presets.json",
-    "llm_payload_template.json",
     "model_summary.json",
     "dashboard_export_manifest.json",
     "prediction_scores.csv",
@@ -162,7 +161,7 @@ def export_dashboard_artifacts(artifact_dir: Path) -> None:
     """Generate dashboard artifacts through the existing export script."""
     export_script = (
         INFERENCE_2026_EXPORT_SCRIPT_PATH
-        if artifact_dir.name == "feature_43_inference_2026"
+        if artifact_dir.name == "feature_46_inference_2026"
         else EXPORT_SCRIPT_PATH
     )
     command = [

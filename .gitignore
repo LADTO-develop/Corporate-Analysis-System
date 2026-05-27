@@ -46,7 +46,8 @@ notebooks/**/*.html
 notebooks/**/*_files/
 
 # --- Data ------------------------------------------------------------------
-# All raw/interim/processed data is tracked via DVC or LFS, not git.
+# Large raw/interim/processed data is local or regenerated unless explicitly
+# whitelisted below. This repository does not currently use DVC or Git LFS.
 data/raw/**/
 data/interim/**/
 data/processed/**/
@@ -54,6 +55,10 @@ data/processed/**/
 !data/raw/ts2000/
 !data/raw/ts2000/README.md
 !data/raw/ts2000/TS2000_Credit_Model_Dataset_Model_V1.csv
+!data/raw/ts2000/feature_46_inference_2026_aux.csv
+!data/raw/macro/
+!data/raw/macro/README.md
+!data/raw/macro/ECOS_Macro_Processed.csv
 # External mapping tables ARE tracked (small, versioned reference data).
 !data/external/**
 data/external/opendart/**
@@ -74,25 +79,38 @@ wandb/
 !data/outputs/
 data/outputs/**
 !data/outputs/README.md
+
+# Output policy:
+# - Keep the runtime baseline artifact needed by the dashboard/CLI.
+# - Keep curated, small diagnostics that teams use to review baseline results.
+# - Treat dashboards, reports, large row-level scores, repeated live batches,
+#   and nested experiment directories as regenerated files or release artifacts.
 !data/outputs/modeling/
-!data/outputs/modeling/feature_43_xgboost/
-!data/outputs/modeling/feature_43_xgboost/README.md
-!data/outputs/modeling/feature_43_xgboost/model_artifact_metadata.json
-!data/outputs/modeling/feature_43_xgboost/xgboost_model.json
-!data/outputs/modeling/feature_43_xgboost/diagnostics/
-!data/outputs/modeling/feature_43_xgboost/diagnostics/*.csv
-!data/outputs/modeling/feature_43_xgboost/diagnostics/*.json
-!data/outputs/modeling/feature_43_xgboost/diagnostics/*.md
-!data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents/
-!data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents/**
-!data/outputs/modeling/feature_44_xgboost/
-!data/outputs/modeling/feature_44_xgboost/README.md
-!data/outputs/modeling/feature_44_xgboost/model_artifact_metadata.json
-!data/outputs/modeling/feature_44_xgboost/xgboost_model.json
-!data/outputs/modeling/feature_44_xgboost/diagnostics/
-!data/outputs/modeling/feature_44_xgboost/diagnostics/*.csv
-!data/outputs/modeling/feature_44_xgboost/diagnostics/*.json
-!data/outputs/modeling/feature_44_xgboost/diagnostics/*.md
+!data/outputs/modeling/feature_46_xgboost/
+!data/outputs/modeling/feature_46_xgboost/README.md
+!data/outputs/modeling/feature_46_xgboost/model_artifact_metadata.json
+!data/outputs/modeling/feature_46_xgboost/xgboost_model.json
+!data/outputs/modeling/feature_46_xgboost/diagnostics/
+data/outputs/modeling/feature_46_xgboost/diagnostics/**
+!data/outputs/modeling/feature_46_xgboost/diagnostics/README.md
+!data/outputs/modeling/feature_46_xgboost/diagnostics/*.csv
+!data/outputs/modeling/feature_46_xgboost/diagnostics/*.json
+!data/outputs/modeling/feature_46_xgboost/diagnostics/*.md
+!data/outputs/modeling/feature_46_xgboost/diagnostics/stage2_agents/
+!data/outputs/modeling/feature_46_xgboost/diagnostics/stage2_agents/feature46_full_review_trigger_73_harness/
+!data/outputs/modeling/feature_46_xgboost/diagnostics/stage2_agents/feature46_full_review_trigger_73_harness/**
+!data/outputs/modeling/feature_45_robust_candidate/
+data/outputs/modeling/feature_45_robust_candidate/**
+!data/outputs/modeling/feature_45_robust_candidate/README.md
+!data/outputs/modeling/feature_45_robust_candidate/model_artifact_metadata.json
+!data/outputs/modeling/feature_45_robust_candidate/xgboost_model.json
+!data/outputs/modeling/feature_45_robust_candidate/diagnostics/
+data/outputs/modeling/feature_45_robust_candidate/diagnostics/**
+!data/outputs/modeling/feature_45_robust_candidate/diagnostics/feature_45_robust_candidate_2026_feature_readiness.csv
+!data/outputs/modeling/feature_45_robust_candidate/diagnostics/feature_45_robust_candidate_evaluation_report.md
+!data/outputs/modeling/feature_45_robust_candidate/diagnostics/feature_45_robust_candidate_evaluation_summary.json
+!data/outputs/modeling/feature_45_robust_candidate/diagnostics/feature_45_robust_candidate_segment_comparison.csv
+!data/outputs/modeling/feature_45_robust_candidate/diagnostics/feature_45_robust_candidate_segment_metrics.csv
 multirun/
 .hydra/
 logs/

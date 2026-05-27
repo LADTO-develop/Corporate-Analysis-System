@@ -2,16 +2,22 @@
 
 from __future__ import annotations
 
+from typing import cast
+
 from pydantic import BaseModel, ConfigDict, Field
 
 from cas.agents.stage2_bundle import Stage2InputBundle
 from cas.agents.stage2_outputs import QuantCreditOutput
+from cas.agents.stage2_prompt_contracts import (
+    build_stage2_role_instructions,
+    build_stage2_role_query,
+)
+from cas.agents.stage2_runtime_config import Stage2RuntimeConfig
 
 from .runtime import (
     build_agno_agent,
     clamp,
     compact_items,
-    json_payload,
     provider_label,
     run_structured_agent,
 )
@@ -42,6 +48,7 @@ def run_quant_credit_agent(
     model_name: str,
     model_provider: str = "openai",
     max_tokens: int,
+    runtime_config: Stage2RuntimeConfig | None = None,
 ) -> QuantCreditOutput:
     """Run the Agno QuantCreditAgent and map it to the CAS Stage 2 schema."""
     model_label = provider_label(model_provider)
@@ -51,28 +58,17 @@ def run_quant_credit_agent(
         model_name=model_name,
         max_tokens=max_tokens,
         response_model=AgnoQuantCreditResponse,
-        instructions=[
-            f"You are the CAS QuantCreditAgent, a cold, numbers-driven Financial Risk Analyst (Model: {model_label}).",
-            "Your SOLE purpose is to evaluate the mathematical deterioration of the company's financial statements and validate the Stage 1 XGBoost model's decision.",
-            "Do not review external news, market rumors, litigation, audit events, or macro sentiment narratives. Those belong to the EvidenceAuditAgent.",
-            "Focus entirely on: XGBoost probability, SHAP top drivers, capital impairment, interest coverage, cash-flow coverage, leverage, liquidity buffers, peer comparison, and credit_policy_snapshot.",
-            "Use credit_policy_snapshot as the deterministic financial-policy guideline layer. Treat it as structured internal credit guidance derived from classic financial distress research themes such as cash-flow-to-debt, interest coverage, leverage, liquidity, accrual quality, and earnings manipulation risk.",
-            "Do not invent new thresholds, hidden weights, or private scoring rules. If a threshold or signal is not present in credit_policy_snapshot, describe it as an observation rather than a policy trigger.",
-            "When credit_policy_snapshot contains basis labels such as Beaver, Altman, Beneish, accounting_ratio_distress_literature, or internal_validation_required, use them only to explain the rationale of the policy signal. Do not claim that the paper directly proves this company's default risk.",
-            "Preserve Stage 1 prediction_label and probability_speculative. You may challenge, qualify, or contextualize the Stage 1 decision, but you must not overwrite it.",
-            "If SHAP drivers, peer comparison, and credit_policy_snapshot point in the same direction, present this as a convergent quantitative signal.",
-            "If SHAP drivers and credit_policy_snapshot conflict, explicitly explain the conflict. For example, distinguish between model-driven risk, accounting-policy risk, and financial buffer evidence.",
-            "1. For 'quantitative_interpretation': Translate raw SHAP contributions and Stage 1 probability into a logical financial narrative. Explain exactly why the machine learning model flagged or defended this company based on the numbers.",
-            "2. For 'fundamental_defense_capacity': Analyze core financial buffers such as operating cash flow, cash equivalents, current ratio, low leverage, equity ratio, and debt-service capacity. If these are stable despite a high-risk ML flag, emphasize this as a potential False Positive or 과민경고 candidate.",
-            "3. For 'key_risk_and_mitigation': List the exact financial metrics causing the risk and any numeric buffers defending against it. Use percentages, ratios, SHAP direction, peer percentile, and policy signal severity whenever available.",
-            "4. For 'internal_risk_level': Classify strictly as 'High', 'Medium', or 'Low' based solely on financial health, model evidence, peer comparison, and credit_policy_snapshot.",
-            "Write the analysis in highly professional Korean accounting and credit-risk terminology. Be precise with percentages, ratios, SHAP values, and policy signal names.",
-        ],
+        runtime_config=runtime_config,
+        instructions=build_stage2_role_instructions(
+            "quant_credit",
+            provider_label=model_label,
+        ),
     )
     result = run_structured_agent(
         agent=agent,
         query=_query(bundle),
         response_model=AgnoQuantCreditResponse,
+        runtime_config=runtime_config,
     )
     return QuantCreditOutput(
         quant_summary=(
@@ -91,23 +87,15 @@ def run_quant_credit_agent(
 
 
 def _query(bundle: Stage2InputBundle) -> str:
+    prompt_context = bundle.to_compact_prompt_payload(role="quant_credit")
     prompt_payload = {
-        "company": {
-            "company_id": bundle.company_id,
-            "company_name": bundle.company_name,
-            "market": bundle.market,
-            "analysis_year": bundle.analysis_year,
-        },
-        "stage1_model": {
-            "prediction_label": bundle.prediction_label,
-            "probability_speculative": bundle.probability_speculative,
-            "xgboost_result": bundle.xgboost_result,
-            "model_view": bundle.model_view,
-        },
-        "prior_rating_reference": bundle.prior_rating_reference,
-        "source_feature_row": bundle.source_feature_row,
-        "peer_comparison_rows": list(bundle.peer_comparison_rows),
-        "credit_policy_snapshot": bundle.credit_policy_snapshot,
+        "company": prompt_context["company"],
+        "stage1_model": prompt_context["stage1_model"],
+        "prior_rating_reference": prompt_context["prior_rating_reference"],
+        "source_feature_row": prompt_context["financial_metrics"],
+        "peer_comparison_rows": prompt_context.get("peer_comparison_rows", []),
+        "credit_policy_snapshot": prompt_context.get("credit_policy_snapshot", {}),
+        "materiality_summary": prompt_context["materiality_summary"],
         "policy_guardrail": {
             "label_override_allowed": False,
             "rule_kr": (
@@ -116,12 +104,7 @@ def _query(bundle: Stage2InputBundle) -> str:
             ),
         },
     }
-    return (
-        "Run QuantCreditAgent for CAS Stage 2. "
-        "Focus on model rationale, SHAP/financial drivers, peer context, and internal risk level. "
-        "Return only the AgnoQuantCreditResponse fields.\n\n"
-        f"{json_payload(prompt_payload)}"
-    )
+    return cast(str, build_stage2_role_query("quant_credit", prompt_payload=prompt_payload))
 
 
 def _confidence_from_risk_level(risk_level: str) -> float:

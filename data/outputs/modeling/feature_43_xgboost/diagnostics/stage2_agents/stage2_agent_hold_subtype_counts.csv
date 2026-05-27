@@ -1,7 +1,0 @@
-﻿set,위험 보류,부적격,과민경고 완화 보류,적격
-rolling pilot 5,2.0,2,1,0.0
-historical test 12,3.0,4,5,0.0
-holdout guardrail 8,2.0,4,2,0.0
-Agno round2 10,3.0,1,5,1.0
-Agno round3 10,3.0,1,5,1.0
-random rolling 10,0.0,1,1,8.0

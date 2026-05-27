@@ -18,6 +18,7 @@ from cas.agents.stage2_runner import (
     DeterministicStage2AgentRunner,
     Stage2LLMResponse,
 )
+from cas.agents.stage2_runtime_config import Stage2RuntimeConfig
 from cas.agents.state import AgentState
 
 
@@ -277,6 +278,23 @@ def test_agno_stage2_runner_reuses_cached_triplet_response(
     assert runner.last_run_diagnostics["agent_elapsed_seconds"] == {}
 
 
+def test_stage2_cache_payload_includes_policy_version() -> None:
+    runner = AgnoStage2AgentRunner(deterministic_runner=_deterministic_runner())
+    payload = stage2_runner_module._stage2_cache_payload(
+        runner=runner,
+        bundle=build_stage2_input_bundle(_minimal_state()),
+        recommendation="review",
+        confidence=0.7,
+    )
+
+    assert payload["stage2_policy_version"] == "stage2_policy_v1"
+    assert payload["prompt_contract_versions"] == {
+        "quant_credit": "stage2_role_prompt_contract_v2:quant_credit",
+        "evidence_audit": "stage2_role_prompt_contract_v2:evidence_audit",
+        "chair_report": "stage2_role_prompt_contract_v2:chair_report",
+    }
+
+
 def test_agno_stage2_runner_routes_multi_llm_committee(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -287,29 +305,29 @@ def test_agno_stage2_runner_routes_multi_llm_committee(
         captured.update(kwargs)
         return Stage2LLMResponse(
             quant_credit=QuantCreditOutput(
-                quant_summary="Claude quant summary",
-                model_rationale="Claude model rationale",
-                key_risk_factors=["Claude risk"],
-                mitigating_factors=["Claude mitigation"],
+                quant_summary="Gemini quant summary",
+                model_rationale="Gemini model rationale",
+                key_risk_factors=["Gemini risk"],
+                mitigating_factors=["Gemini mitigation"],
                 confidence=0.77,
             ),
             evidence_audit=EvidenceAuditOutput(
-                evidence_summary="GPT evidence summary",
+                evidence_summary="Claude evidence summary",
                 evidence_status="ready",
-                evidence_reliability="GPT reliability",
+                evidence_reliability="Claude reliability",
                 evidence_strength="moderate",
-                model_challenge="GPT challenge",
-                audit_conclusion="GPT conclusion",
-                debt_liquidity_cross_check=["GPT debt check"],
-                macro_industry_sensitivity=["GPT macro check"],
-                external_evidence_findings=["GPT evidence"],
+                model_challenge="Claude challenge",
+                audit_conclusion="Claude conclusion",
+                debt_liquidity_cross_check=["Claude debt check"],
+                macro_industry_sensitivity=["Claude macro check"],
+                external_evidence_findings=["Claude evidence"],
                 confidence=0.72,
             ),
             chair_report=ChairReportOutput(
-                report_summary="Gemini chair summary",
-                model_preservation_note="Gemini model preservation",
-                committee_scope_note="Gemini scope",
-                final_review_memo_seed="Gemini memo",
+                report_summary="OpenAI chair summary",
+                model_preservation_note="OpenAI model preservation",
+                committee_scope_note="OpenAI scope",
+                final_review_memo_seed="OpenAI memo",
                 confidence=0.74,
             ),
         )
@@ -322,7 +340,6 @@ def test_agno_stage2_runner_routes_multi_llm_committee(
     runner = AgnoStage2AgentRunner(
         deterministic_runner=_deterministic_runner(),
         routing_mode="multi_llm_committee",
-        model_name="claude-sonnet",
     )
 
     outputs = runner.run(
@@ -331,13 +348,13 @@ def test_agno_stage2_runner_routes_multi_llm_committee(
         confidence=0.7,
     )
 
-    assert captured["quant_model_provider"] == "anthropic"
-    assert captured["quant_model_name"] == "claude-sonnet"
-    assert captured["evidence_model_provider"] == "openai"
-    assert captured["evidence_model_name"] == "gpt-5.4-mini"
-    assert captured["chair_model_provider"] == "google"
-    assert captured["chair_model_name"] == "gemini-flash-latest"
-    assert outputs[2].report_summary == "Gemini chair summary"
+    assert captured["quant_model_provider"] == "google"
+    assert captured["quant_model_name"] == "gemini-2.5-flash"
+    assert captured["evidence_model_provider"] == "anthropic"
+    assert captured["evidence_model_name"] == "claude-sonnet-4-6"
+    assert captured["chair_model_provider"] == "openai"
+    assert captured["chair_model_name"] == "gpt-4.1-mini"
+    assert outputs[2].report_summary == "OpenAI chair summary"
 
 
 def test_agno_stage2_runner_falls_back_when_triplet_agents_fail(
@@ -408,7 +425,6 @@ def test_triplet_agents_write_per_run_runtime_diagnostics(
 ) -> None:
     from cas.agents.nodes import tripletagents
 
-    monkeypatch.setenv("CAS_STAGE2_PARALLEL_INDEPENDENT_AGENTS", "0")
     monkeypatch.setattr(
         tripletagents,
         "run_quant_credit_agent",
@@ -456,6 +472,7 @@ def test_triplet_agents_write_per_run_runtime_diagnostics(
         model_provider="openai",
         model_name="test-model",
         max_tokens=100,
+        runtime_config=Stage2RuntimeConfig(parallel_independent_agents=False),
         diagnostics=diagnostics,
     )
 
@@ -506,6 +523,84 @@ def test_agno_runtime_passes_openai_timeout_and_provider_retries(
     assert captured["timeout"] == 30.0
     assert captured["max_retries"] == 1
     assert captured["api_key"] == "test-key"
+
+
+def test_agno_runtime_uses_explicit_runtime_config_without_stage2_env(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from cas.agents.nodes.tripletagents import runtime
+
+    captured: dict[str, Any] = {}
+
+    class FakeOpenAIResponses:
+        def __init__(self, **kwargs: Any) -> None:
+            captured.update(kwargs)
+
+    class FakeOpenAIModule:
+        OpenAIResponses = FakeOpenAIResponses
+
+    def fake_import_module(name: str) -> object:
+        if name == "agno.models.openai":
+            return FakeOpenAIModule()
+        raise AssertionError(f"unexpected import {name}")
+
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.delenv("CAS_STAGE2_AGENT_TIMEOUT_SECONDS", raising=False)
+    monkeypatch.delenv("CAS_STAGE2_PROVIDER_MAX_RETRIES", raising=False)
+    monkeypatch.setattr(runtime, "import_module", fake_import_module)
+
+    runtime._build_agno_model(
+        provider="openai",
+        model_name="gpt-test",
+        max_tokens=200,
+        runtime_config=Stage2RuntimeConfig(
+            agent_timeout_seconds=45.0,
+            provider_max_retries=2,
+        ),
+    )
+
+    assert captured["timeout"] == 45.0
+    assert captured["max_retries"] == 2
+
+
+def test_agno_runtime_passes_gemini_timeout_and_provider_retries(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from cas.agents.nodes.tripletagents import runtime
+
+    captured: dict[str, Any] = {}
+
+    class FakeGemini:
+        def __init__(self, **kwargs: Any) -> None:
+            captured.update(kwargs)
+
+    class FakeGoogleModule:
+        Gemini = FakeGemini
+
+    def fake_import_module(name: str) -> object:
+        if name == "agno.models.google":
+            return FakeGoogleModule()
+        raise AssertionError(f"unexpected import {name}")
+
+    monkeypatch.setenv("GOOGLE_API_KEY", "test-google-key")
+    monkeypatch.setattr(runtime, "import_module", fake_import_module)
+
+    runtime._build_agno_model(
+        provider="google",
+        model_name="gemini-test",
+        max_tokens=200,
+        runtime_config=Stage2RuntimeConfig(
+            agent_timeout_seconds=40.0,
+            agent_retry_delay_seconds=2.4,
+            provider_max_retries=3,
+        ),
+    )
+
+    assert captured["id"] == "gemini-test"
+    assert captured["timeout"] == 40.0
+    assert captured["retries"] == 3
+    assert captured["delay_between_retries"] == 2
+    assert captured["api_key"] == "test-google-key"
 
 
 def test_agno_runtime_timeout_can_be_disabled(

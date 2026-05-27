@@ -10,11 +10,11 @@ import numpy as np
 import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[1]
-DASHBOARD_DIR = ROOT / "data" / "outputs" / "dashboard" / "feature_43_mvp"
+DASHBOARD_DIR = ROOT / "data" / "outputs" / "dashboard" / "feature_46_mvp"
 PREDICTION_SCORES_PATH = DASHBOARD_DIR / "prediction_scores.csv"
 LOCAL_SHAP_PATH = DASHBOARD_DIR / "local_shap.csv"
 FEATURE_DICTIONARY_PATH = DASHBOARD_DIR / "feature_dictionary.csv"
-OUTPUT_DIR = ROOT / "data" / "outputs" / "modeling" / "feature_43_xgboost" / "diagnostics"
+OUTPUT_DIR = ROOT / "data" / "outputs" / "modeling" / "feature_46_xgboost" / "diagnostics"
 
 CASE_KEYS = ["market", "stock_code_norm", "corp_name", "fiscal_year", "eval_year"]
 TOP_CASES_PER_ERROR = 10

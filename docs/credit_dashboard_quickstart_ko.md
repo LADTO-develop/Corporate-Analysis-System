@@ -1,7 +1,7 @@
 # 신용위험 대시보드 실행 안내
 
 ## 개요
-이 대시보드는 `credit_43_features` 데이터셋과 XGBoost 결과, 2차 에이전트 위원회 검토를 바탕으로 기업별 신용도를 설명형으로 보여주는 Streamlit 앱입니다.
+이 대시보드는 `credit_46_features` 데이터셋과 XGBoost 결과, 2차 에이전트 위원회 검토를 바탕으로 기업별 신용도를 설명형으로 보여주는 Streamlit 앱입니다.
 현재 2026 추론 입력은 TS2000 원천에 OpenDART 사업보고서 CFS/OFS 보강을 반영한 기준입니다.
 
 현재 포함된 주요 기능은 다음과 같습니다.
@@ -32,19 +32,19 @@ cd Corporate-Analysis-System
 /opt/anaconda3/envs/aura/bin/python scripts/run_credit_dashboard.py
 ```
 
-위 명령은 `data/outputs/dashboard/feature_43_mvp` 아래의 대시보드 입력 파일이
+위 명령은 `data/outputs/dashboard/feature_46_mvp` 아래의 대시보드 입력 파일이
 없으면 먼저 생성한 뒤 Streamlit을 실행합니다. 2026 추론 입력까지 최신 OpenDART
 보강 기준으로 다시 만들고 싶으면 아래 순서로 갱신한 뒤 실행합니다.
 
 ```bash
-/opt/anaconda3/envs/aura/bin/python scripts/import_feature_43_inference_2026_aux.py
-/opt/anaconda3/envs/aura/bin/python scripts/build_feature_43_inference_2026.py
+/opt/anaconda3/envs/aura/bin/python scripts/import_feature_46_inference_2026_aux.py
+/opt/anaconda3/envs/aura/bin/python scripts/build_feature_46_inference_2026.py
 /opt/anaconda3/envs/aura/bin/python scripts/collect_opendart_financial_statements.py --source-kind inference --target-fiscal-year 2025 --fallback-ofs
 /opt/anaconda3/envs/aura/bin/python scripts/export_inference_2026_missing_2024_lag_targets.py
 /opt/anaconda3/envs/aura/bin/python scripts/collect_opendart_financial_statements.py --source data/raw/opendart/inference_2026_missing_2024_lag_targets.csv --source-kind inference --target-fiscal-year 2025 --opendart-bsns-year 2024 --fallback-ofs --output-dir data/raw/opendart/lag_2024_tmp
 /opt/anaconda3/envs/aura/bin/python scripts/apply_opendart_inference_financial_supplements.py --lag-raw-supplement data/raw/opendart/lag_2024_tmp/financial_statements_inference_2024_cfs_with_ofs_fallback_raw.csv
-/opt/anaconda3/envs/aura/bin/python scripts/build_feature_43_inference_2026.py --check-only
-/opt/anaconda3/envs/aura/bin/python scripts/export_feature_43_inference_2026_dashboard_artifacts.py
+/opt/anaconda3/envs/aura/bin/python scripts/build_feature_46_inference_2026.py --check-only
+/opt/anaconda3/envs/aura/bin/python scripts/export_feature_46_inference_2026_dashboard_artifacts.py
 ```
 
 대시보드 산출물을 강제로 다시 만들고 싶으면 다음처럼 실행합니다.
@@ -85,7 +85,7 @@ cas-dashboard
 ## 주요 파일 위치
 
 ### 실행 스크립트
-- `scripts/export_feature_43_dashboard_artifacts.py`
+- `scripts/export_feature_46_dashboard_artifacts.py`
 - `scripts/run_credit_dashboard.py`
 
 ### 대시보드 코드
@@ -94,10 +94,10 @@ cas-dashboard
 - `src/cas/dashboard/credit_app.py`
 
 ### 입력 데이터
-- `data/input/credit_43_features`
+- `data/input/credit_46_features`
 
 ### 대시보드 산출물
-- `data/outputs/dashboard/feature_43_mvp`
+- `data/outputs/dashboard/feature_46_mvp`
 
 ## 대시보드 구성
 - `위원회 검토`

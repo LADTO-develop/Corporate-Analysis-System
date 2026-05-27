@@ -5,15 +5,17 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import time
-from collections.abc import Iterable
+from collections.abc import Iterable, Iterator
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 import pandas as pd
-from dotenv import load_dotenv
+from dotenv import dotenv_values, load_dotenv
 
 from cas.agents.contracts import build_agent_state_seed
 from cas.agents.graph import run_once
@@ -25,19 +27,25 @@ from cas.agents.nodes import (
     news_overlay_node,
     rule_engine_node,
 )
+from cas.agents.stage2_runtime_config import Stage2RuntimeConfig
+from cas.llm.model_catalog import (
+    DEFAULT_STAGE2_AGNO_MODE,
+    DEFAULT_STAGE2_RUNNER,
+    stage2_single_model_default,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_SAMPLES_PATH = (
     ROOT
-    / "data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents/"
+    / "data/outputs/modeling/feature_46_xgboost/diagnostics/stage2_agents/"
     / "committee_review_rolling_validation_tuning_samples.csv"
 )
 DEFAULT_OUTPUT_DIR = (
     ROOT
-    / "data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents/"
+    / "data/outputs/modeling/feature_46_xgboost/diagnostics/stage2_agents/"
     / "committee_review_rolling_validation_batch"
 )
-DEFAULT_POLICY = "rolling_stage1_or_near_threshold_0_10"
+DEFAULT_POLICY = "feature46_full_review_trigger_73"
 CATEGORY_ORDER = [
     "fn_caught_by_stage2_review",
     "fp_needing_committee_mitigation",
@@ -52,10 +60,12 @@ TRACE_GATES = (
     "boundary_rating_review",
     "overwarning_mitigation",
     "reject_confirmation",
+    "risk_hold_reason_tagging",
 )
 
 
 def parse_args() -> argparse.Namespace:
+    stage2_default = stage2_single_model_default()
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--samples", type=Path, default=DEFAULT_SAMPLES_PATH)
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
@@ -75,7 +85,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--stage2-runner",
         choices=["deterministic", "agno"],
-        default="deterministic",
+        default=DEFAULT_STAGE2_RUNNER,
         help="Use deterministic runner for fast, reproducible pilots; agno calls LLMs.",
     )
     parser.add_argument(
@@ -86,7 +96,7 @@ def parse_args() -> argparse.Namespace:
             "multi_llm",
             "multi_llm_committee",
         ],
-        default=os.environ.get("CAS_STAGE2_AGNO_MODE", "single"),
+        default=os.environ.get("CAS_STAGE2_AGNO_MODE", DEFAULT_STAGE2_AGNO_MODE),
         help=(
             "Agno routing mode for --stage2-runner agno. Default single uses one "
             "provider across the three role agents. OpenAI-only API runs do not require "
@@ -95,12 +105,12 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--stage2-model-provider",
-        default=os.environ.get("CAS_STAGE2_MODEL_PROVIDER", "openai"),
+        default=os.environ.get("CAS_STAGE2_MODEL_PROVIDER", stage2_default.provider),
         help="Provider for single-model Agno mode: anthropic/claude, openai/gpt, or google/gemini.",
     )
     parser.add_argument(
         "--stage2-model",
-        default=os.environ.get("CAS_STAGE2_MODEL", "gpt-4.1-mini"),
+        default=os.environ.get("CAS_STAGE2_MODEL", stage2_default.model),
         help="Model id for single-model Agno mode.",
     )
     parser.add_argument(
@@ -189,19 +199,21 @@ def configure_runtime(
     *,
     live_external_evidence: bool,
     stage2_runner: str,
-    stage2_agno_mode: str = "single",
-    stage2_model_provider: str = "openai",
-    stage2_model: str = "gpt-4.1-mini",
+    stage2_agno_mode: str = DEFAULT_STAGE2_AGNO_MODE,
+    stage2_model_provider: str | None = None,
+    stage2_model: str | None = None,
     stage2_llm_cache: bool = True,
-) -> None:
-    load_dotenv(ROOT / ".env")
-    os.environ["CAS_STAGE2_RUNNER"] = stage2_runner
+) -> Stage2RuntimeConfig:
+    dotenv_env = _load_dotenv_preserving_stage2_env()
+    stage2_default = stage2_single_model_default()
+    runtime_env = {**dotenv_env, **dict(os.environ)}
+    runtime_env["CAS_STAGE2_RUNNER"] = stage2_runner
     if stage2_runner == "agno":
-        os.environ["CAS_STAGE2_AGNO_MODE"] = stage2_agno_mode
-        os.environ["CAS_STAGE2_MODEL_PROVIDER"] = stage2_model_provider
-        os.environ["CAS_STAGE2_MODEL"] = stage2_model
-        os.environ["CAS_STAGE2_LLM_CACHE_ENABLED"] = "1" if stage2_llm_cache else "0"
-    os.environ.setdefault("CAS_STAGE2_FALLBACK_ON_ERROR", "1")
+        runtime_env["CAS_STAGE2_AGNO_MODE"] = stage2_agno_mode
+        runtime_env["CAS_STAGE2_MODEL_PROVIDER"] = stage2_model_provider or stage2_default.provider
+        runtime_env["CAS_STAGE2_MODEL"] = stage2_model or stage2_default.model
+        runtime_env["CAS_STAGE2_LLM_CACHE_ENABLED"] = "1" if stage2_llm_cache else "0"
+    runtime_env.setdefault("CAS_STAGE2_FALLBACK_ON_ERROR", "1")
     os.environ.setdefault(
         "CAS_OPENDART_CORP_CODE_CACHE_PATH", "/private/tmp/cas_opendart_corp_codes.csv"
     )
@@ -209,6 +221,29 @@ def configure_runtime(
         os.environ["CAS_ENABLE_EXTERNAL_EVIDENCE"] = "1"
     else:
         os.environ.pop("CAS_ENABLE_EXTERNAL_EVIDENCE", None)
+    return Stage2RuntimeConfig.from_env(runtime_env)
+
+
+def _load_dotenv_preserving_stage2_env() -> dict[str, str]:
+    """Load .env for provider credentials without mutating Stage 2 runtime knobs."""
+    env_path = ROOT / ".env"
+    dotenv_env = {
+        str(key): str(value) for key, value in dotenv_values(env_path).items() if value is not None
+    }
+    stage2_keys = {
+        key
+        for key in (*os.environ.keys(), *dotenv_env.keys())
+        if str(key).startswith("CAS_STAGE2_")
+    }
+    snapshot = {key: os.environ.get(key) for key in stage2_keys}
+    load_dotenv(env_path)
+    for key in stage2_keys:
+        original = snapshot.get(key)
+        if original is None:
+            os.environ.pop(key, None)
+        else:
+            os.environ[key] = original
+    return dotenv_env
 
 
 def run_batch(
@@ -216,6 +251,7 @@ def run_batch(
     *,
     use_sample_model_view: bool,
     workers: int = 1,
+    runtime_config: Stage2RuntimeConfig | None = None,
 ) -> pd.DataFrame:
     records = batch.to_dict(orient="records")
     if not records:
@@ -231,6 +267,7 @@ def run_batch(
                     total=len(records),
                     row=row,
                     use_sample_model_view=use_sample_model_view,
+                    runtime_config=runtime_config,
                 )
                 for index, row in enumerate(records)
             ]
@@ -247,6 +284,7 @@ def run_batch(
                 total=len(records),
                 row=row,
                 use_sample_model_view=use_sample_model_view,
+                runtime_config=runtime_config,
             ): index
             for index, row in enumerate(records)
         }
@@ -267,6 +305,7 @@ def retry_failed_cases(
     delay_seconds: float = 0.0,
     output_dir: Path | None = None,
     write_artifacts: bool = True,
+    runtime_config: Stage2RuntimeConfig | None = None,
 ) -> tuple[pd.DataFrame, list[dict[str, Any]]]:
     """Retry operationally failed rows and merge successful retry outputs by row position."""
     retry_attempts = max(int(attempts), 0)
@@ -294,6 +333,7 @@ def retry_failed_cases(
             retry_batch,
             use_sample_model_view=use_sample_model_view,
             workers=workers,
+            runtime_config=runtime_config,
         ).reset_index(drop=True)
         artifacts = _write_retry_artifacts(
             output_dir=output_dir,
@@ -386,6 +426,7 @@ def _run_batch_case(
     total: int,
     row: dict[str, Any],
     use_sample_model_view: bool,
+    runtime_config: Stage2RuntimeConfig | None = None,
 ) -> dict[str, Any]:
     case_started_at = time.perf_counter()
     print(
@@ -397,17 +438,27 @@ def _run_batch_case(
         flush=True,
     )
     try:
-        selection = json.loads(str(row["company_selection_json"]))
-        if use_sample_model_view:
-            state = _run_graph_until_rule_engine(company_selection=selection)
-            state = _rerun_committee_with_sample_model_view(state, row)
-        else:
-            state = run_once(company_selection=selection)
+        with _stage2_runtime_context(runtime_config):
+            selection = json.loads(str(row["company_selection_json"]))
+            if use_sample_model_view:
+                state = _run_graph_until_rule_engine(company_selection=selection)
+                state = _rerun_committee_with_sample_model_view(state, row)
+            else:
+                state = run_once(company_selection=selection)
         result = _result_row(row, state=state, error_message="")
     except Exception as error:  # pragma: no cover - operational guard
         result = _result_row(row, state={}, error_message=str(error))
     result["case_elapsed_seconds"] = round(time.perf_counter() - case_started_at, 4)
     return result
+
+
+@contextmanager
+def _stage2_runtime_context(runtime_config: Stage2RuntimeConfig | None) -> Iterator[None]:
+    if runtime_config is None:
+        yield
+        return
+    with committee_node.stage2_runtime_config_override(runtime_config):
+        yield
 
 
 def _run_graph_until_rule_engine(*, company_selection: dict[str, Any]) -> dict[str, Any]:
@@ -456,7 +507,7 @@ def _sample_model_view_updates(state: dict[str, Any], sample: dict[str, Any]) ->
         **stage2_signals,
     }
     xgboost_result = {
-        "model_name": "feature_43_xgboost_rolling_validation_replay",
+        "model_name": "feature_46_xgboost_rolling_validation_replay",
         "model_version": "rolling_validation_replay",
         "probability_speculative": probability,
         "prediction_label": prediction_label,
@@ -470,7 +521,7 @@ def _sample_model_view_updates(state: dict[str, Any], sample: dict[str, Any]) ->
         "xgboost_result": xgboost_result,
         "model_registry_ref": {
             "registry_name": "rolling_validation_replay",
-            "active_model": "feature_43_xgboost_rolling_validation_replay",
+            "active_model": "feature_46_xgboost_rolling_validation_replay",
             "model_version": "rolling_validation_replay",
             "threshold": threshold,
             "artifact_path": str(sample.get("evaluation_mode") or ""),
@@ -487,17 +538,33 @@ def _sample_stage2_signals(
     near_threshold = abs(margin) <= 0.10
     eligible_near_threshold = prediction_label == "투자적격" and near_threshold
     risky_near_threshold = prediction_label == "부적격" and near_threshold
-    priority = "none"
-    if prediction_label == "부적격":
-        priority = "high" if probability >= threshold + 0.10 else "medium"
-    elif eligible_near_threshold:
-        priority = "high" if probability >= threshold - 0.05 else "medium"
-    if "recall_first" in committee_policy and prediction_label == "투자적격":
-        priority = "high" if priority == "medium" else priority
+    sample_trigger = _optional_bool(sample.get("stage2_review_trigger"))
+    sample_secondary_trigger = _optional_bool(sample.get("stage2_secondary_trigger"))
+    sample_aux_secondary_trigger = _optional_bool(sample.get("stage2_review_aux_secondary_trigger"))
+    sample_fn_rescue_trigger = _optional_bool(sample.get("stage2_fn_rescue_trigger"))
+    stage2_review_trigger = (
+        sample_trigger
+        if sample_trigger is not None
+        else prediction_label == "부적격" or near_threshold
+    )
+    stage2_secondary_trigger = (
+        sample_secondary_trigger
+        if sample_secondary_trigger is not None
+        else eligible_near_threshold
+    )
+    priority = str(sample.get("stage2_review_priority") or "").strip().lower()
+    if priority not in {"none", "low", "medium", "high"}:
+        priority = "none"
+        if prediction_label == "부적격":
+            priority = "high" if probability >= threshold + 0.10 else "medium"
+        elif eligible_near_threshold or stage2_secondary_trigger:
+            priority = "high" if probability >= threshold - 0.05 else "medium"
+        if "recall_first" in committee_policy and prediction_label == "투자적격":
+            priority = "high" if priority == "medium" else priority
     trigger_reason = str(sample.get("trigger_reason") or "").strip()
-    return {
-        "stage2_review_trigger": prediction_label == "부적격" or near_threshold,
-        "stage2_secondary_trigger": eligible_near_threshold,
+    signals = {
+        "stage2_review_trigger": stage2_review_trigger,
+        "stage2_secondary_trigger": stage2_secondary_trigger,
         "stage2_review_priority": priority,
         "trigger_reason_code": str(sample.get("trigger_reason_code") or ""),
         "trigger_reason": trigger_reason,
@@ -510,6 +577,59 @@ def _sample_stage2_signals(
         ),
         "stage2_probability_margin": margin,
     }
+    if sample_aux_secondary_trigger is not None:
+        signals["stage2_review_aux_secondary_trigger"] = sample_aux_secondary_trigger
+    if sample_fn_rescue_trigger is not None:
+        signals["stage2_fn_rescue_trigger"] = sample_fn_rescue_trigger
+    for sample_column, signal_column in {
+        "prob_speculative_stage2_review_aux": "probability_stage2_review_aux",
+        "threshold_stage2_review_aux": "threshold_stage2_review_aux",
+        "threshold_stage2_review_aux_it_services_review": (
+            "threshold_stage2_review_aux_it_services_review"
+        ),
+        "fn_rescue_score": "fn_rescue_score",
+        "fn_rescue_group_count": "fn_rescue_group_count",
+    }.items():
+        value = _optional_float(sample.get(sample_column))
+        if value is not None:
+            signals[signal_column] = value
+    return signals
+
+
+def _optional_bool(value: object) -> bool | None:
+    if value is None:
+        return None
+    try:
+        if pd.isna(value):
+            return None
+    except (TypeError, ValueError):
+        pass
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int | float):
+        return bool(value)
+    cleaned = str(value).strip().lower()
+    if cleaned in {"", "nan", "none", "null"}:
+        return None
+    if cleaned in {"1", "true", "yes", "y", "on"}:
+        return True
+    if cleaned in {"0", "false", "no", "n", "off"}:
+        return False
+    return None
+
+
+def _optional_float(value: object) -> float | None:
+    if value is None:
+        return None
+    try:
+        if pd.isna(value):
+            return None
+    except (TypeError, ValueError):
+        pass
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def _risk_band_from_probability(probability: float, *, threshold: float) -> str:
@@ -561,6 +681,7 @@ def _result_row(
     materiality_summary = _materiality_summary(evidence.get("items", []))
     decision_trace = _decision_trace_items(committee_view)
     trace_by_gate = _decision_trace_by_gate(decision_trace)
+    evidence_audit_structured = _evidence_audit_structured_fields(state)
     result = {
         "run_timestamp_utc": datetime.now(UTC).isoformat(),
         "evaluation_mode": sample.get("evaluation_mode"),
@@ -592,6 +713,19 @@ def _result_row(
         "committee_decision_type": committee_view.get("committee_decision_type"),
         "committee_decision_type_label": committee_view.get("committee_decision_type_label"),
         "committee_risk_signal": bool(committee_view.get("committee_risk_signal", False)),
+        "risk_hold_reason_tags": " / ".join(
+            str(item) for item in committee_view.get("risk_hold_reason_tags", []) or []
+        ),
+        "risk_hold_reason_labels": " / ".join(
+            str(item) for item in committee_view.get("risk_hold_reason_labels", []) or []
+        ),
+        "risk_hold_reason_summary": committee_view.get("risk_hold_reason_summary", ""),
+        "agent_disagreement_score": committee_view.get("agent_disagreement_score"),
+        "agent_disagreement_level": committee_view.get("agent_disagreement_level", ""),
+        "agent_disagreement_reasons": " / ".join(
+            str(item) for item in committee_view.get("agent_disagreement_reasons", []) or []
+        ),
+        "agent_disagreement_summary": committee_view.get("agent_disagreement_summary", ""),
         "decision_trace": json.dumps(decision_trace, ensure_ascii=False, sort_keys=True),
         "committee_success": success,
         "committee_effect": effect,
@@ -609,6 +743,7 @@ def _result_row(
         "stage2_parallel_independent_agents": bool(
             stage2_runtime.get("parallel_independent_agents", False)
         ),
+        **evidence_audit_structured,
         "stage2_review_qa_triggered": bool(stage2_runtime.get("review_qa_triggered", False)),
         "stage2_review_qa_cache_hit": bool(stage2_runtime.get("review_qa_cache_hit", False)),
         "stage2_review_qa_trigger_reasons": " / ".join(
@@ -690,6 +825,82 @@ def _decision_trace_by_gate(trace: list[dict[str, Any]]) -> dict[str, dict[str, 
         if gate:
             output[gate] = item
     return output
+
+
+def _evidence_audit_structured_fields(state: dict[str, Any]) -> dict[str, object]:
+    findings = _agent_findings(state, "evidence_audit")
+    structured_line = next(
+        (
+            finding
+            for finding in findings
+            if "recommended_evidence_treatment=" in finding
+            or "Structured evidence treatment:" in finding
+        ),
+        "",
+    )
+    return {
+        "evidence_audit_structured_found": bool(structured_line),
+        "evidence_audit_critical_evidence_count": _extract_int_marker(
+            structured_line,
+            ("critical_evidence_count", "critical"),
+        ),
+        "evidence_audit_watch_context_count": _extract_int_marker(
+            structured_line,
+            ("watch_context_count", "watch"),
+        ),
+        "evidence_audit_hard_distress_detected": _extract_bool_marker(
+            structured_line,
+            "hard_distress_detected",
+        ),
+        "evidence_audit_recommended_evidence_treatment": _extract_text_marker(
+            structured_line,
+            "recommended_evidence_treatment",
+        ),
+        "evidence_audit_top_materiality_basis": _extract_text_marker(
+            structured_line,
+            "top_materiality_basis",
+        ),
+    }
+
+
+def _agent_findings(state: dict[str, Any], role: str) -> list[str]:
+    agent_summary = _dict_value(state.get("agent_summary"))
+    agents = _dict_value(agent_summary.get("agents"))
+    agent = _dict_value(agents.get(role))
+    raw_findings = agent.get("findings", [])
+    if isinstance(raw_findings, list):
+        return [str(item) for item in raw_findings if str(item).strip()]
+    raw_agent_outputs = state.get("agent_outputs")
+    if not isinstance(raw_agent_outputs, list):
+        return []
+    for output in raw_agent_outputs:
+        output_dict = _model_or_dict_value(output)
+        if str(output_dict.get("role") or "") != role:
+            continue
+        raw_output_findings = output_dict.get("findings", [])
+        if isinstance(raw_output_findings, list):
+            return [str(item) for item in raw_output_findings if str(item).strip()]
+    return []
+
+
+def _extract_int_marker(text: str, marker_names: tuple[str, ...]) -> int:
+    for marker_name in marker_names:
+        match = re.search(rf"{re.escape(marker_name)}=(\d+)", text)
+        if match:
+            return int(match.group(1))
+    return 0
+
+
+def _extract_bool_marker(text: str, marker_name: str) -> bool:
+    match = re.search(rf"{re.escape(marker_name)}=(true|false)", text, flags=re.IGNORECASE)
+    return bool(match and match.group(1).lower() == "true")
+
+
+def _extract_text_marker(text: str, marker_name: str) -> str:
+    match = re.search(rf"{re.escape(marker_name)}=([^;]+)", text)
+    if not match:
+        return ""
+    return match.group(1).strip()
 
 
 def _committee_success(*, model_error_type: str, final_label: str) -> tuple[bool, str]:
@@ -814,6 +1025,17 @@ def _bounded_worker_count(workers: int, row_count: int) -> int:
 
 def _dict_value(value: object) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
+
+
+def _model_or_dict_value(value: object) -> dict[str, Any]:
+    if isinstance(value, dict):
+        return value
+    model_dump = getattr(value, "model_dump", None)
+    if callable(model_dump):
+        dumped = model_dump(mode="json")
+        if isinstance(dumped, dict):
+            return dumped
+    return {}
 
 
 def _non_empty(value: object) -> bool:
@@ -1112,9 +1334,8 @@ def _retry_report_line(summary: dict[str, Any]) -> str:
 
 
 def main() -> None:
-    load_dotenv(ROOT / ".env")
     args = parse_args()
-    configure_runtime(
+    runtime_config = configure_runtime(
         live_external_evidence=args.live_external_evidence,
         stage2_runner=args.stage2_runner,
         stage2_agno_mode=args.stage2_agno_mode,
@@ -1133,6 +1354,7 @@ def main() -> None:
         batch,
         use_sample_model_view=args.use_sample_model_view,
         workers=args.workers,
+        runtime_config=runtime_config,
     )
     results, retry_reports = retry_failed_cases(
         batch,
@@ -1143,6 +1365,7 @@ def main() -> None:
         delay_seconds=args.retry_failed_delay_seconds,
         output_dir=args.output_dir,
         write_artifacts=args.retry_failed_artifacts,
+        runtime_config=runtime_config,
     )
     write_outputs(results, output_dir=args.output_dir, retry_reports=retry_reports)
 

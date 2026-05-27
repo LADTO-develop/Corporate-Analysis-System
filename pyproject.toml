@@ -39,6 +39,7 @@ dev = [
     "pytest-cov>=5.0.0,<7.0.0",
     "pre-commit>=3.7.0,<5.0.0",
     "ipykernel>=6.29.0,<7.0.0",
+    "packaging>=24.0,<26.0",
     "types-PyYAML>=6.0.12,<7.0.0",
 ]
 viz = [
@@ -46,8 +47,8 @@ viz = [
     "plotly>=5.22.0,<6.0.0",
 ]
 dashboard = [
-    "altair>=5.4.0,<6.0.0",
-    "shap>=0.46.0,<0.50.0",
+    "altair>=5.4.0,<7.0.0",
+    "shap>=0.46.0,<0.52.0",
     "streamlit>=1.40.0,<2.0.0",
 ]
 ml = [
@@ -117,6 +118,8 @@ addopts = "-ra --strict-markers --strict-config"
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "integration: marks tests that exercise the end-to-end pipeline",
+    "requires_llm: marks tests that call live LLM providers or require LLM credentials",
+    "requires_gpu: marks tests that require GPU hardware or GPU-only dependencies",
 ]
 
 [tool.coverage.run]
@@ -124,6 +127,7 @@ source = ["src/cas"]
 branch = true
 
 [tool.coverage.report]
+fail_under = 60
 exclude_lines = [
     "pragma: no cover",
     "raise NotImplementedError",

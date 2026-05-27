@@ -34,8 +34,8 @@ CAS는 다음의 2단 구조로 동작합니다.
 | 관측 단위 | 기업-회계연도 |
 | 기준 원본 | `data/raw/ts2000/TS2000_Credit_Model_Dataset_Model_V1.csv` |
 | 라벨 데이터 | 5,451개 기업-연도 |
-| 학습 입력 | `data/input/credit_43_features/` |
-| 2026 예측 입력 | `feature_43_inference_2026.csv`, 2,427개 기업-연도 |
+| 학습 입력 | `data/input/credit_46_features/` |
+| 2026 예측 입력 | `feature_46_inference_2026.csv`, 2,427개 기업-연도 |
 | 타겟 | `is_speculative` |
 | 라벨 정의 | `0 = 투자적격(AAA~BBB-)`, `1 = 투기등급(BB+ 이하)` |
 | 시점 정렬 | `fiscal_year=t` 재무/거시 정보로 `eval_year=t+1` 신용위험 예측 |
@@ -80,7 +80,7 @@ Model V1 전체 5,451개 행은 전체 라벨 데이터입니다. 모델 학습�
 
 ## 4. 모델 입력과 성능
 
-현재 대시보드의 기본 모델은 `credit_43_features` 기반 XGBoost입니다.
+현재 대시보드의 기본 모델은 `credit_46_features` 기반 XGBoost입니다.
 대시보드에 표시되는 투기등급 확률은 XGBoost raw 확률에 검증셋 기준
 Platt scaling을 적용한 보정 확률입니다. Raw 확률은 산출물에
 `prob_speculative_raw`로 함께 보존해 비교할 수 있습니다.
@@ -88,27 +88,31 @@ Platt scaling을 적용한 보정 확률입니다. Raw 확률은 산출물에
 
 | 구분 | 개수 | 설명 |
 |---|---:|---|
-| 선택 원천 변수 | 34개 | 재무비율, 원천 재무값, 시장/규모/산업 맥락 변수, 거시 변수 |
+| 선택 원천/파생 변수 | 37개 | 재무비율, 원천 재무값, 시장/규모/산업 맥락 변수, 거시 변수, 산업-연도 금액 백분위 |
 | 원-핫 대상 | 3개 | `market`, `firm_size_group`, `industry_macro_category` |
-| 최종 모델 입력 | 43개 | XGBoost 학습 및 추론 입력 |
+| 최종 모델 입력 | 46개 | XGBoost 학습 및 추론 입력 |
 
 2025년 신용평가 공시 라벨을 Model V1에 통합하고, CFS 누락 기업을 OpenDART
-OFS fallback으로 보강한 뒤 재학습한 현재 43-feature XGBoost artifact 기준 test
+OFS fallback으로 보강한 뒤 재학습한 현재 46-feature XGBoost artifact 기준 test
 성능은 다음과 같습니다.
 
 | 모델 | PR-AUC | ROC-AUC | Precision | Recall | F1 |
 |---|---:|---:|---:|---:|---:|
-| 43-feature XGBoost, threshold 0.5 | 0.8329 | 0.9415 | 0.7737 | 0.7241 | 0.7481 |
-| 43-feature XGBoost, tuned threshold 0.32 | 0.8329 | 0.9415 | 0.7004 | 0.8522 | 0.7689 |
+| 46-feature XGBoost, threshold 0.5 | 0.8321 | 0.9415 | 0.7656 | 0.7241 | 0.7443 |
+| 46-feature XGBoost, tuned threshold 0.30 | 0.8321 | 0.9415 | 0.6941 | 0.8719 | 0.7729 |
 
-보강 전 tuned 기준 test 성능은 `PR-AUC 0.7930`, `ROC-AUC 0.9286`,
-`Precision 0.6603`, `Recall 0.8522`, `F1 0.7441`이었습니다. 새 기준에서는
-Recall을 유지하면서 Precision과 F1이 개선되었습니다.
+43-feature baseline tuned 기준 test 성능은 `PR-AUC 0.8329`, `ROC-AUC 0.9415`,
+`Precision 0.7004`, `Recall 0.8522`, `F1 0.7689`였습니다. 46-feature 기준에서는
+Precision은 소폭 낮아졌지만 Recall이 `0.8719`로 오르고 FN이 `30 -> 26`으로 줄었습니다.
 
 `industry_current_ratio_percentile`을 추가한 44개 후보 변수셋은 성능 비교 결과
-43개 공식 변수셋보다 낮아 artifact를 제거했습니다. 비교 기록은
-`data/outputs/modeling/feature_43_xgboost/diagnostics/feature_43_vs_44_performance_comparison.md`
-에 남겨두고, 해당 칼럼은 Model V1의 후보 칼럼으로만 보존합니다.
+당시 공식 변수셋보다 낮아 artifact를 제거했습니다. 43-feature 기준 중간
+diagnostics는 46-feature 공식 승격 후 삭제했고, 해당 칼럼은 Model V1의 후보
+칼럼으로만 보존합니다.
+
+43개에서 46개 입력으로 승격한 결정 기록은
+[docs/stage1_46_feature_promotion_ko.md](docs/stage1_46_feature_promotion_ko.md)에
+남겼습니다.
 
 ## 5. Stage 2 상태와 파일럿 성능
 
@@ -142,25 +146,22 @@ guardrail, 선택형 Agno runner, 외부근거 수집 노드가 연결되어 있
 
 핵심 파일럿 결과는 1차 모델 F1 `0.4243`에서 2차 위험신호 F1 `0.6666`으로
 개선되었고, `보류+부적격`을 추가 검토 대상으로 보면 Recall `1.0000`을
-달성했다는 점입니다. 자세한 증빙은
-`data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents/stage2_agent_improvement_summary.md`와
-`data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents/stage2_evaluation_report.md`에
-정리되어 있습니다.
+달성했다는 점입니다. 46-feature 공식 artifact 트리에서는 중간 Stage 2
+diagnostics를 제거했고, PR 리뷰용 핵심 요약은
+[docs/stage2_agent_experiment_results_ko.md](docs/stage2_agent_experiment_results_ko.md)에
+따로 정리되어 있습니다.
 
 정상기업 과잉 보류를 줄이기 위해 `투자적격 + 기준선 아래 + 외부 치명근거 없음 +
 현금흐름을 포함한 유동성/현금흐름/자본 중 2개 이상 방어적` 조건의 TN guardrail도 추가했습니다.
-관련 로컬 회귀 결과는
-`data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents/stage2_agent_performance_evidence.md`에
-기록되어 있습니다.
-PR 리뷰용 핵심 요약은
+관련 로컬 회귀 결과도
 [docs/stage2_agent_experiment_results_ko.md](docs/stage2_agent_experiment_results_ko.md)에
-따로 정리되어 있습니다.
+요약되어 있습니다.
 
 ## 6. 시스템 흐름
 
 ```mermaid
 flowchart TD
-    A["CAS 내부 Model V1 원본"] --> B["43-feature 입력셋 생성"]
+    A["CAS 내부 Model V1 원본"] --> B["46-feature 입력셋 생성"]
     A1["OpenDART CFS/OFS 보강"] --> A
     B --> C["Train / Valid / Test 시간순 분할"]
     C --> D["Stage 1 XGBoost 학습"]
@@ -203,8 +204,8 @@ Agno 기반 로컬 데모에서는 optional dependency를 설치한 뒤 `CAS_STA
 `OPENAI_API_KEY`만 있으면 세 역할 agent를 모두 OpenAI로 실행할 수 있게 맞췄습니다.
 live 지연시간을 재려면 `CAS_STAGE2_LLM_CACHE_ENABLED=0` 또는 batch CLI의
 `--no-stage2-llm-cache`를 같이 사용합니다. 여러 모델 관점을 비교하고 싶을 때만
-`CAS_STAGE2_AGNO_MODE=multi_llm_committee`를 선택해 Claude가 정량 관점,
-GPT가 외부근거/반론 관점, Gemini가 최종 종합을 맡도록 확장합니다. 이 멀티 모드에는
+`CAS_STAGE2_AGNO_MODE=multi_llm_committee`를 선택해 Gemini가 정량 관점,
+Claude가 외부근거/반론 관점, GPT가 최종 종합을 맡도록 확장합니다. 이 멀티 모드에는
 `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GOOGLE_API_KEY` 또는 `GEMINI_API_KEY`가 필요합니다.
 
 외부 근거 수집은 기본적으로 꺼져 있습니다. 로컬 데모에서만 `.env`에
@@ -224,7 +225,7 @@ GPT가 외부근거/반론 관점, Gemini가 최종 종합을 맡도록 확장�
 │   │   ├── ts2000/              # CAS 기준 Model V1 원본
 │   │   └── opendart/            # CFS/OFS 보강 원천 및 audit
 │   ├── input/
-│   │   └── credit_43_features/  # 현재 공식 43개 모델 입력셋, split, 2026 추론 입력
+│   │   └── credit_46_features/  # 현재 공식 46개 모델 입력셋, split, 2026 추론 입력
 │   └── outputs/
 │       ├── dashboard/           # 대시보드용 예측/SHAP/요약 산출물
 │       ├── modeling/            # Stage 1 모델 artifact와 성능 진단 산출물
@@ -234,14 +235,14 @@ GPT가 외부근거/반론 관점, Gemini가 최종 종합을 맡도록 확장�
 │   ├── three_agent_credit_review_design_ko.md
 │   └── pipeline/
 ├── scripts/
-│   ├── rebuild_feature_43_dataset.py
+│   ├── rebuild_feature_46_dataset.py
 │   ├── collect_opendart_financial_statements.py
 │   ├── apply_opendart_financial_supplements.py
 │   ├── apply_opendart_inference_financial_supplements.py
-│   ├── build_feature_43_inference_2026.py
-│   ├── export_feature_43_dashboard_artifacts.py
-│   ├── export_feature_43_model_diagnostics.py
-│   ├── export_feature_43_threshold_policy_experiments.py
+│   ├── build_feature_46_inference_2026.py
+│   ├── export_feature_46_dashboard_artifacts.py
+│   ├── export_feature_46_model_diagnostics.py
+│   ├── export_feature_46_threshold_policy_experiments.py
 │   └── run_credit_dashboard.py
 ├── src/cas/
 │   ├── agents/                  # LangGraph 상태, 노드, 입력 계약
@@ -284,55 +285,61 @@ python scripts/check_dev_environment.py
 `python scripts/check_dev_environment.py --live-agno` 또는
 `python scripts/check_agno_stage2.py`를 실행합니다.
 
-43개 입력셋 재생성:
+46개 입력셋 재생성:
 
 ```bash
 python scripts/collect_opendart_financial_statements.py --source-kind model-v1 --all-years --fallback-ofs
 python scripts/apply_opendart_financial_supplements.py
-python scripts/rebuild_feature_43_dataset.py
+python scripts/rebuild_feature_46_dataset.py
 ```
 
 2026 추론 입력 보정/검증:
 
 ```bash
-python scripts/import_feature_43_inference_2026_aux.py
-python scripts/build_feature_43_inference_2026.py
+python scripts/import_feature_46_inference_2026_aux.py
+python scripts/build_feature_46_inference_2026.py
 python scripts/collect_opendart_financial_statements.py --source-kind inference --target-fiscal-year 2025 --fallback-ofs
 python scripts/apply_opendart_inference_financial_supplements.py
-python scripts/build_feature_43_inference_2026.py --check-only
+python scripts/build_feature_46_inference_2026.py --check-only
 ```
 
-`import_feature_43_inference_2026_aux.py`는 2026 추론 입력의 기업규모와
+`import_feature_46_inference_2026_aux.py`는 2026 추론 입력의 기업규모와
 `market_to_book` 보정을 위한 최소 보조 원천을 CAS 내부 `data/raw/ts2000/`에
 저장합니다.
 
 대시보드/모델 artifact 재생성:
 
 ```bash
-python scripts/export_feature_43_dashboard_artifacts.py
+python scripts/export_feature_46_dashboard_artifacts.py
 ```
 
 이 스크립트는 Stage 1 런타임과 팀 공유가 함께 사용하는 모델 artifact를
-`data/outputs/modeling/feature_43_xgboost/`에 저장합니다.
+`data/outputs/modeling/feature_46_xgboost/`에 저장합니다.
 
 모델 성능 진단 리포트 재생성:
 
 ```bash
-python scripts/export_feature_43_model_diagnostics.py
+python scripts/export_feature_46_model_diagnostics.py
 ```
 
 이 스크립트는 기존 예측 결과를 다시 학습하지 않고 연도/시장/산업별 성능,
 threshold trade-off, 확률 보정, 대표 오류 사례를
-`data/outputs/modeling/feature_43_xgboost/diagnostics/`에 저장합니다.
+`data/outputs/modeling/feature_46_xgboost/diagnostics/`에 저장합니다.
 
 Threshold 정책 실험 재생성:
 
 ```bash
-python scripts/export_feature_43_threshold_policy_experiments.py
+python scripts/export_feature_46_threshold_policy_experiments.py
 ```
 
 이 스크립트는 validation 기준으로 선택한 threshold 정책을 test에서 사후 확인하고,
 시장/산업별 trade-off를 정리합니다.
+
+Stage 1 46-feature 승격 기록:
+
+[docs/stage1_46_feature_promotion_ko.md](docs/stage1_46_feature_promotion_ko.md)
+문서에 43-feature baseline과 46-feature promoted 모델의 rolling validation,
+final test 전후 성능을 보존합니다.
 
 대시보드 실행:
 
@@ -374,11 +381,11 @@ python -m pytest tests/integration -v -m "not requires_llm and not requires_gpu"
 ## 12. 운영 원칙
 
 - CAS 기준 데이터와 실행 파일은 저장소 내부 경로만 참조합니다.
-- Model V1은 CAS의 기준 원본이며, 공식 43-feature 입력셋은 이 파일에서 재생성합니다.
+- Model V1은 CAS의 기준 원본이며, 공식 46-feature 입력셋은 이 파일에서 재생성합니다.
 - CFS 재무제표가 비어 있는 기업-연도는 OpenDART 사업보고서 기준으로 CFS 우선,
   CFS 부재 시 OFS fallback을 적용합니다.
 - `industry_current_ratio_percentile`은 공식 입력에서 제외하고 Model V1의 후보 칼럼으로만 보존합니다.
-- 43-feature 입력셋과 artifact는 현재 공식 Stage 1 기준으로 유지합니다.
+- 46-feature 입력셋과 artifact는 현재 공식 Stage 1 기준으로 유지합니다.
 - `model_view`와 `committee_view`는 분리합니다.
 - 모델 예측은 LLM이나 Agent가 직접 수정하지 않습니다.
 - Stage 2 파일럿 수치는 hard sample 보완 성능이며, 전체 모집단 정확도로

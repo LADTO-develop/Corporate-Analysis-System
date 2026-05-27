@@ -10,8 +10,8 @@ import numpy as np
 import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[1]
-DASHBOARD_DIR = ROOT / "data" / "outputs" / "dashboard" / "feature_43_mvp"
-DIAGNOSTICS_DIR = ROOT / "data" / "outputs" / "modeling" / "feature_43_xgboost" / "diagnostics"
+DASHBOARD_DIR = ROOT / "data" / "outputs" / "dashboard" / "feature_46_mvp"
+DIAGNOSTICS_DIR = ROOT / "data" / "outputs" / "modeling" / "feature_46_xgboost" / "diagnostics"
 ERROR_SHAP_DETAILS_PATH = DIAGNOSTICS_DIR / "error_shap_case_details.csv"
 PEER_PERCENTILES_PATH = DASHBOARD_DIR / "peer_percentiles.csv"
 OUTPUT_DIR = DIAGNOSTICS_DIR
