@@ -12,7 +12,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import pandas as pd
 from dotenv import dotenv_values, load_dotenv
@@ -61,6 +61,7 @@ TRACE_GATES = (
     "prior_hard_distress_context",
     "overwarning_mitigation",
     "mitigation_residual_risk",
+    "risk_label_recall_adjustment",
     "reject_confirmation",
     "risk_hold_reason_tagging",
 )
@@ -629,7 +630,7 @@ def _optional_float(value: object) -> float | None:
     except (TypeError, ValueError):
         pass
     try:
-        return float(value)
+        return float(cast(Any, value))
     except (TypeError, ValueError):
         return None
 
@@ -1213,7 +1214,7 @@ def _materiality_summary(items: object) -> dict[str, object]:
         if ratio >= 0:
             ratios.append((ratio, str(item.get("materiality_basis") or "").strip()))
 
-    max_ratio = ""
+    max_ratio: float | str = ""
     top_basis = ""
     if ratios:
         ratio, basis = max(ratios, key=lambda pair: pair[0])
@@ -1347,7 +1348,10 @@ def _summary(results: pd.DataFrame) -> dict[str, Any]:
 def _group_counts(frame: pd.DataFrame, columns: list[str]) -> list[dict[str, Any]]:
     if frame.empty:
         return []
-    return frame.groupby(columns, dropna=False).size().reset_index(name="rows").to_dict("records")
+    return cast(
+        list[dict[str, Any]],
+        frame.groupby(columns, dropna=False).size().reset_index(name="rows").to_dict("records"),
+    )
 
 
 def _report(results: pd.DataFrame, summary: dict[str, Any]) -> str:

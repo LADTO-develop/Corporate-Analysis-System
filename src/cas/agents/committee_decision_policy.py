@@ -25,13 +25,16 @@ from cas.agents.committee_financial_guardrails import (
     has_blocking_flags,
     has_extreme_financial_distress_signal,
     has_severe_financial_watch_signal,
+    mitigation_hold_model_risk_label_reason,
     mitigation_hold_residual_risk_reason,
     model_only_overwarning_buffer_reason,
     prior_boundary_overwarning_buffer_reason,
+    prior_hard_distress_risk_label_reason,
     prior_rating_boundary_requires_hold,
     prior_rating_has_hard_distress_context,
     prior_rating_is_exact_boundary,
     prior_rating_is_speculative,
+    review_hold_model_risk_label_reason,
     risk_hold_has_financial_stress,
     secondary_overhold_guardrail_reason,
     secondary_review_requires_hold,
@@ -79,6 +82,9 @@ def committee_decision_type(
     overwarning_mitigation: OverwarningMitigationAssessment,
     reject_confirmation: RejectConfirmationAssessment,
     mitigation_residual_risk_reason: str = "",
+    prior_hard_distress_risk_label_reason: str = "",
+    mitigation_model_risk_label_reason: str = "",
+    review_model_risk_label_reason: str = "",
 ) -> CommitteeDecisionType:
     """Return the dashboard-facing subtype for a final committee label."""
     if committee_label == "적격":
@@ -87,16 +93,22 @@ def committee_decision_type(
         return "reject"
     if hidden_tail_risk.triggered:
         return "risk_hold" if hidden_tail_risk.risk_signal else "review_hold"
+    if prior_hard_distress_risk_label_reason:
+        return "risk_hold"
     if (
         overwarning_mitigation.triggered
         and prediction_label == "부적격"
-        and mitigation_residual_risk_reason
+        and (mitigation_residual_risk_reason or mitigation_model_risk_label_reason)
     ):
         return "risk_hold"
     if overwarning_mitigation.triggered and prediction_label == "부적격":
         return "mitigation_hold"
     if reject_confirmation.triggered:
-        return "risk_hold" if reject_confirmation.review_risk_signal else "review_hold"
+        return (
+            "risk_hold"
+            if reject_confirmation.review_risk_signal or review_model_risk_label_reason
+            else "review_hold"
+        )
     if boundary_review.triggered:
         return "boundary_hold"
     if secondary_review_risk.triggered:
@@ -822,12 +834,15 @@ __all__ = [
     "committee_label_with_model_alignment",
     "committee_risk_signal",
     "hidden_tail_risk_assessment",
+    "mitigation_hold_model_risk_label_reason",
     "mitigation_hold_residual_risk_reason",
     "model_threshold",
     "overwarning_mitigation_assessment",
+    "prior_hard_distress_risk_label_reason",
     "prior_rating_boundary_hold_reason",
     "prior_rating_boundary_requires_hold",
     "reject_confirmation_assessment",
+    "review_hold_model_risk_label_reason",
     "risk_hold_reason_labels",
     "risk_hold_reason_summary",
     "risk_hold_reason_tags",

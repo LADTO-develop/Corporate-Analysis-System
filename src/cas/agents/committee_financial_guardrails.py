@@ -566,6 +566,64 @@ def mitigation_hold_residual_risk_reason(bundle: Stage2InputBundle) -> str:
     )
 
 
+def prior_hard_distress_risk_label_reason(bundle: Stage2InputBundle) -> str:
+    """Return why a hold should keep a risk label due to prior severe public rating."""
+    if not prior_rating_has_hard_distress_context(bundle.prior_rating_reference):
+        return ""
+    prior = bundle.prior_rating_reference
+    rating = str(prior.get("prior_credit_rating") or prior.get("credit_rating") or "").strip()
+    rating_date = str(prior.get("prior_rating_date") or "").strip()
+    agency = str(prior.get("prior_rating_agency") or "").strip()
+    source_text = f"{agency} " if agency else ""
+    date_text = f"({rating_date})" if rating_date else ""
+    return (
+        "위험 라벨 리콜 보정: 기준일 이전 "
+        f"{source_text}공개등급이 {rating}{date_text}로 CCC/C/D 등 severe 영역에 "
+        "있었습니다. 최종 결론은 보류로 낮추더라도 대시보드 위험 라벨에서는 "
+        "위험 보류로 표시해 해소 근거 확인을 우선합니다."
+    )
+
+
+def mitigation_hold_model_risk_label_reason(bundle: Stage2InputBundle) -> str:
+    """Return why a mitigated model reject hold should still count as risk-labeled."""
+    if bundle.prediction_label != "부적격":
+        return ""
+    probability = bundle.probability_speculative
+    probability_floor = _committee_float(
+        "risk_label_recall",
+        "mitigation_probability_floor",
+    )
+    if probability < probability_floor:
+        return ""
+    threshold = _model_threshold(bundle)
+    return (
+        "위험 라벨 리콜 보정: 과민경고 완화로 최종 결론은 보류지만, 1차 모델 "
+        f"투기등급 확률이 {probability:.1%}로 기준선 {threshold:.1%}와 "
+        f"위험 라벨 보정선 {probability_floor:.1%}를 웃돕니다. 운영 화면에서는 "
+        "일반 확인필요보다 강한 위험 보류로 표시합니다."
+    )
+
+
+def review_hold_model_risk_label_reason(bundle: Stage2InputBundle) -> str:
+    """Return why an unconfirmed model reject hold should remain risk-labeled."""
+    if bundle.prediction_label != "부적격":
+        return ""
+    probability = bundle.probability_speculative
+    probability_floor = _committee_float(
+        "risk_label_recall",
+        "review_hold_probability_floor",
+    )
+    if probability < probability_floor:
+        return ""
+    threshold = _model_threshold(bundle)
+    return (
+        "위험 라벨 리콜 보정: 부적격 확정 근거는 부족하지만, 1차 모델 "
+        f"투기등급 확률이 {probability:.1%}로 기준선 {threshold:.1%}와 "
+        f"확인필요 보류 보정선 {probability_floor:.1%}를 웃돕니다. "
+        "확정 부적격은 아니어도 위험 라벨에서는 위험 보류로 표시합니다."
+    )
+
+
 def secondary_review_risk_assessment(bundle: Stage2InputBundle) -> SecondaryReviewRiskAssessment:
     """Flag likely FN cases surfaced by the Stage 2 auxiliary review radar."""
     if bundle.prediction_label != "투자적격" or not has_stage2_secondary_trigger(bundle):
@@ -1248,13 +1306,16 @@ __all__ = [
     "has_secondary_overhold_guardrail_blocker",
     "has_severe_financial_watch_signal",
     "has_stage2_secondary_trigger",
+    "mitigation_hold_model_risk_label_reason",
     "mitigation_hold_residual_risk_reason",
     "model_only_overwarning_buffer_reason",
     "prior_boundary_overwarning_buffer_reason",
+    "prior_hard_distress_risk_label_reason",
     "prior_rating_boundary_requires_hold",
     "prior_rating_has_hard_distress_context",
     "prior_rating_is_exact_boundary",
     "prior_rating_is_speculative",
+    "review_hold_model_risk_label_reason",
     "risk_hold_has_financial_stress",
     "secondary_overhold_guardrail_reason",
     "secondary_review_requires_hold",
