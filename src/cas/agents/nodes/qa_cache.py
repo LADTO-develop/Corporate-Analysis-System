@@ -23,6 +23,7 @@ from cas.agents.stage2_outputs import (
 from cas.agents.stage2_policy import stage2_policy_version
 from cas.agents.stage2_prompt_contracts import stage2_prompt_contract_version
 from cas.agents.stage2_runtime_config import Stage2RuntimeConfig
+from cas.llm.usage import aggregate_role_usage, normalize_usage_record, usage_for_cache_hit
 from cas.utils.live_cache import read_json_cache, stable_cache_key, write_json_cache
 
 _REVIEW_QA_CACHE_VERSION = "stage2_review_qa_v4"
@@ -78,7 +79,7 @@ def _run_review_qa_agent_with_cache(
             model_provider=provider,
             model_name=name,
         ),
-        agent_callable=lambda: _call_review_qa_agent(
+        agent_callable=lambda usage: _call_review_qa_agent(
             bundle=bundle,
             committee_view=committee_view,
             quant_credit=quant_credit,
@@ -89,6 +90,7 @@ def _run_review_qa_agent_with_cache(
             model_name=model_name,
             max_tokens=int(runtime_config.review_qa_max_tokens),
             runtime_config=runtime_config,
+            usage=usage,
         ),
         schema=ReviewQAOutput,
         model_provider=model_provider,
@@ -148,6 +150,7 @@ def _call_review_qa_agent(
     model_name: str,
     max_tokens: int,
     runtime_config: Stage2RuntimeConfig,
+    usage: dict[str, object],
 ) -> ReviewQAOutput:
     review_module = import_module("cas.agents.nodes.tripletagents.review_qa_agent")
     return cast(
@@ -163,6 +166,7 @@ def _call_review_qa_agent(
             model_name=model_name,
             max_tokens=max_tokens,
             runtime_config=runtime_config,
+            usage=usage,
         ),
     )
 
@@ -194,7 +198,7 @@ def _run_risk_recall_qa_agent_with_cache(
             model_provider=provider,
             model_name=name,
         ),
-        agent_callable=lambda: _call_risk_recall_qa_agent(
+        agent_callable=lambda usage: _call_risk_recall_qa_agent(
             bundle=bundle,
             committee_view=committee_view,
             quant_credit=quant_credit,
@@ -205,6 +209,7 @@ def _run_risk_recall_qa_agent_with_cache(
             model_name=model_name,
             max_tokens=int(runtime_config.risk_recall_qa_max_tokens),
             runtime_config=runtime_config,
+            usage=usage,
         ),
         schema=RiskRecallQAOutput,
         model_provider=model_provider,
@@ -264,6 +269,7 @@ def _call_risk_recall_qa_agent(
     model_name: str,
     max_tokens: int,
     runtime_config: Stage2RuntimeConfig,
+    usage: dict[str, object],
 ) -> RiskRecallQAOutput:
     recall_module = import_module("cas.agents.nodes.tripletagents.risk_recall_qa_agent")
     return cast(
@@ -279,6 +285,7 @@ def _call_risk_recall_qa_agent(
             model_name=model_name,
             max_tokens=max_tokens,
             runtime_config=runtime_config,
+            usage=usage,
         ),
     )
 
@@ -290,7 +297,7 @@ def run_cached_optional_agent(
     cache_version: str,
     cache_env: Mapping[str, str],
     payload_builder: Callable[[str, str], dict[str, Any]],
-    agent_callable: Callable[[], _QAOutputT],
+    agent_callable: Callable[[dict[str, object]], _QAOutputT],
     schema: type[_QAOutputT],
     model_provider: str,
     model_name: str,
@@ -308,20 +315,38 @@ def run_cached_optional_agent(
     )
     if cached_payload is not None:
         response_payload = cached_payload.get("response", cached_payload)
+        cached_usage = cached_payload.get("usage")
+        normalized_cached_usage = usage_for_cache_hit(
+            cached_usage if isinstance(cached_usage, Mapping) else None,
+            provider=model_provider,
+            model_name=model_name,
+            role=role,
+        )
         return schema.model_validate(response_payload), _qa_cache_diagnostics(
             role=role,
             cache_key=cache_key,
             cache_hit=True,
             started_at=started_at,
+            usage=normalized_cached_usage,
         )
 
-    output = agent_callable()
+    usage: dict[str, object] = {}
+    output = agent_callable(usage)
+    normalized_usage = normalize_usage_record(
+        usage,
+        provider=model_provider,
+        model_name=model_name,
+        role=role,
+        cache_hit=False,
+        billable=bool(usage),
+    )
     write_json_cache(
         cache_namespace,
         cache_key,
         {
             "cache_version": cache_version,
             "response": output.model_dump(mode="json"),
+            "usage": normalized_usage,
         },
         env_var="CAS_STAGE2_LLM_CACHE_ENABLED",
         default=True,
@@ -332,6 +357,7 @@ def run_cached_optional_agent(
         cache_key=cache_key,
         cache_hit=False,
         started_at=started_at,
+        usage=normalized_usage,
     )
 
 
@@ -341,11 +367,15 @@ def _qa_cache_diagnostics(
     cache_key: str,
     cache_hit: bool,
     started_at: float,
+    usage: Mapping[str, object],
 ) -> dict[str, Any]:
+    role_usage = {role: dict(usage)}
     return {
         f"{role}_cache_hit": cache_hit,
         f"{role}_cache_key": cache_key,
         "agent_elapsed_seconds": {role: round(time.perf_counter() - started_at, 4)},
+        "role_token_usage": role_usage,
+        "token_usage_totals": aggregate_role_usage(role_usage),
     }
 
 

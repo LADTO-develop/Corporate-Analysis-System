@@ -19,6 +19,7 @@ if str(SRC_DIR) not in sys.path:
 
 import export_stage2_feature46_full_review_trigger_harness as harness  # noqa: E402
 import export_stage2_rolling_validation_samples as sample_export  # noqa: E402
+from cas.llm.usage import MODEL_PRICING_USD_PER_1M, ROLE_TOKEN_ESTIMATES  # noqa: E402
 
 OUTPUT_DIR = (
     ROOT / "data/outputs/modeling/feature_46_xgboost/diagnostics/stage2_agents/"
@@ -28,18 +29,6 @@ PROVIDER_MODELS = {
     "anthropic": "claude-sonnet-4-6",
     "openai": "gpt-4.1-mini",
     "google": "gemini-2.5-flash",
-}
-MODEL_PRICING_USD_PER_1M = {
-    "anthropic:claude-sonnet-4-6": {"input": 3.00, "output": 15.00},
-    "openai:gpt-4.1-mini": {"input": 0.40, "output": 1.60},
-    "google:gemini-2.5-flash": {"input": 0.30, "output": 2.50},
-}
-ROLE_TOKEN_ESTIMATES = {
-    "quant_credit": {"input": 2600, "output": 550},
-    "evidence_audit": {"input": 3200, "output": 700},
-    "chair_report": {"input": 2800, "output": 550},
-    "review_qa": {"input": 2600, "output": 450},
-    "risk_recall_qa": {"input": 2600, "output": 450},
 }
 SELECTED_ROLE_ASSIGNMENT_ID = "gemini_quant_claude_evidence_openai_chair"
 ASSIGNMENTS = [
@@ -311,6 +300,7 @@ def _assignment_cost_estimate(
     results: pd.DataFrame,
     assignment: dict[str, str],
 ) -> dict[str, Any]:
+    actual_usage = _actual_usage_metrics(results)
     rows = len(results)
     review_qa_rows = int(_bool_column(results, "stage2_review_qa_triggered").sum())
     risk_recall_qa_rows = int(_bool_column(results, "stage2_risk_recall_qa_triggered").sum())
@@ -332,13 +322,56 @@ def _assignment_cost_estimate(
             counts["input"] * pricing["input"] / 1_000_000
             + counts["output"] * pricing["output"] / 1_000_000
         )
-    return {
+    output = {
         "estimated_input_tokens": total_input_tokens,
         "estimated_output_tokens": total_output_tokens,
         "estimated_cost_usd": round(total_cost, 6),
         "cost_estimate_method": (
             "role_call_token_estimate_no_cache; excludes failed provider attempts before retry"
         ),
+    }
+    if actual_usage["actual_usage_available"]:
+        output["cost_estimate_method"] = (
+            "actual_stage2_runtime_billable_usage; estimated_* columns retained for "
+            "missing-provider fallback comparison"
+        )
+    output.update(actual_usage)
+    return output
+
+
+def _actual_usage_metrics(results: pd.DataFrame) -> dict[str, Any]:
+    billable_input = _numeric_column_sum(results, "stage2_billable_input_tokens")
+    billable_output = _numeric_column_sum(results, "stage2_billable_output_tokens")
+    billable_total = _numeric_column_sum(results, "stage2_billable_total_tokens")
+    billable_cost = _numeric_column_sum(results, "stage2_billable_cost_usd")
+    total_input = _numeric_column_sum(results, "stage2_input_tokens")
+    total_output = _numeric_column_sum(results, "stage2_output_tokens")
+    total_tokens = _numeric_column_sum(results, "stage2_total_tokens")
+    total_cost = _numeric_column_sum(results, "stage2_cost_usd")
+    usage_available = any(
+        value > 0
+        for value in (
+            billable_input,
+            billable_output,
+            billable_total,
+            billable_cost,
+            total_input,
+            total_output,
+            total_tokens,
+            total_cost,
+        )
+    )
+    return {
+        "actual_usage_available": usage_available,
+        "actual_input_tokens": int(total_input),
+        "actual_output_tokens": int(total_output),
+        "actual_total_tokens": int(total_tokens),
+        "actual_cost_usd": round(float(total_cost), 6),
+        "actual_billable_input_tokens": int(billable_input),
+        "actual_billable_output_tokens": int(billable_output),
+        "actual_billable_total_tokens": int(billable_total),
+        "actual_billable_cost_usd": round(float(billable_cost), 6),
+        "actual_usage_rows": _usage_row_count(results),
     }
 
 
@@ -504,6 +537,26 @@ def _bool_column(frame: pd.DataFrame, column: str) -> pd.Series:
     if column not in frame.columns:
         return pd.Series(False, index=frame.index)
     return frame[column].map(_bool_value).fillna(False).astype(bool)
+
+
+def _numeric_column_sum(frame: pd.DataFrame, column: str) -> float:
+    if column not in frame.columns:
+        return 0.0
+    return float(pd.to_numeric(frame[column], errors="coerce").fillna(0.0).sum())
+
+
+def _usage_row_count(frame: pd.DataFrame) -> int:
+    if "stage2_total_tokens" not in frame.columns and "stage2_billable_total_tokens" not in frame:
+        return 0
+    total_tokens = pd.to_numeric(
+        frame.get("stage2_total_tokens", pd.Series(0, index=frame.index)),
+        errors="coerce",
+    ).fillna(0)
+    billable_tokens = pd.to_numeric(
+        frame.get("stage2_billable_total_tokens", pd.Series(0, index=frame.index)),
+        errors="coerce",
+    ).fillna(0)
+    return int(((total_tokens > 0) | (billable_tokens > 0)).sum())
 
 
 def _bool_value(value: object) -> bool:

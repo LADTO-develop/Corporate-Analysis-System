@@ -62,6 +62,7 @@ def run_review_qa_agent(
     model_provider: str = "openai",
     max_tokens: int,
     runtime_config: Stage2RuntimeConfig | None = None,
+    usage: dict[str, object] | None = None,
 ) -> ReviewQAOutput:
     """Run the Agno ReviewQAAgent and map it to the CAS Stage 2 schema."""
     model_label = provider_label(model_provider)
@@ -89,6 +90,9 @@ def run_review_qa_agent(
         ),
         response_model=AgnoReviewQAResponse,
         runtime_config=runtime_config,
+        model_provider=model_provider,
+        model_name=model_name,
+        usage=usage,
     )
     return ReviewQAOutput(
         qa_summary=_safe_qa_text(result.qa_summary),

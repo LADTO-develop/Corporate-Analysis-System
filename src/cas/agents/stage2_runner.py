@@ -39,13 +39,14 @@ from cas.llm.model_catalog import (
     is_multi_llm_committee_mode,
     stage2_role_model_default,
 )
+from cas.llm.usage import aggregate_role_usage, llm_usage_from_response, usage_for_cache_hit
 from cas.utils.live_cache import read_json_cache, stable_cache_key, write_json_cache
 
 QuantCreditFn = Callable[[Stage2InputBundle], QuantCreditOutput]
 EvidenceAuditFn = Callable[[Stage2InputBundle], EvidenceAuditOutput]
 ChairReportFn = Callable[[Stage2InputBundle, Recommendation, float], ChairReportOutput]
 Stage2RunnerOutputs = tuple[QuantCreditOutput, EvidenceAuditOutput, ChairReportOutput]
-STAGE2_LLM_CACHE_VERSION = "stage2_llm_response_v2"
+STAGE2_LLM_CACHE_VERSION = "stage2_llm_response_v3"
 STAGE2_TRIPLET_AGENT_ROLES: tuple[Stage2AgentRole, ...] = (
     "quant_credit",
     "evidence_audit",
@@ -196,7 +197,7 @@ class AgnoStage2AgentRunner:
             )
             cached_response = _read_stage2_cached_response(cache_key, env=cache_env)
             if cached_response is not None:
-                response, cached_backend_name = cached_response
+                response, cached_backend_name, cached_diagnostics = cached_response
                 self.last_run_backend_name = cached_backend_name
                 self.last_error_message = ""
                 self.last_run_diagnostics = _stage2_run_diagnostics(
@@ -204,7 +205,10 @@ class AgnoStage2AgentRunner:
                     cache_hit=True,
                     cache_key=cache_key,
                     started_at=run_started_at,
-                    extra={"prompt_contract_versions": _prompt_contract_versions(self)},
+                    extra={
+                        **_cached_response_diagnostics(cached_diagnostics),
+                        "prompt_contract_versions": _prompt_contract_versions(self),
+                    },
                 )
                 return response.as_outputs()
 
@@ -220,11 +224,18 @@ class AgnoStage2AgentRunner:
                     prompt_payload=prompt_payload,
                     output_schema=Stage2LLMResponse,
                 )
+                client_usage = llm_usage_from_response(
+                    raw_response,
+                    provider=self.model_provider,
+                    model_name=self.model_name,
+                )
                 successful_backend_name = self.backend_name
                 agent_timings = {"llm_client": round(time.perf_counter() - client_started_at, 4)}
                 runner_diagnostics: dict[str, Any] = {
                     "agent_elapsed_seconds": agent_timings,
                     "prompt_contract_versions": _prompt_contract_versions(self),
+                    "role_token_usage": {"llm_client": client_usage},
+                    "token_usage_totals": aggregate_role_usage({"llm_client": client_usage}),
                 }
             else:
                 runner_diagnostics = {
@@ -252,6 +263,7 @@ class AgnoStage2AgentRunner:
                 cache_key=cache_key,
                 backend_name=successful_backend_name,
                 response=response,
+                diagnostics=runner_diagnostics,
                 env=cache_env,
             )
             outputs = response.as_outputs()
@@ -413,7 +425,7 @@ def _read_stage2_cached_response(
     cache_key: str,
     *,
     env: Mapping[str, str] | None = None,
-) -> tuple[Stage2LLMResponse, str] | None:
+) -> tuple[Stage2LLMResponse, str, dict[str, Any]] | None:
     cached_payload = read_json_cache(
         "llm_stage2",
         cache_key,
@@ -431,7 +443,8 @@ def _read_stage2_cached_response(
     backend_name = str(cached_payload.get("backend_name") or "agno")
     if not backend_name.endswith("_cache"):
         backend_name = f"{backend_name}_cache"
-    return response, backend_name
+    diagnostics = cached_payload.get("diagnostics")
+    return response, backend_name, dict(diagnostics) if isinstance(diagnostics, dict) else {}
 
 
 def _write_stage2_cached_response(
@@ -439,6 +452,7 @@ def _write_stage2_cached_response(
     cache_key: str,
     backend_name: str,
     response: Stage2LLMResponse,
+    diagnostics: Mapping[str, Any] | None = None,
     env: Mapping[str, str] | None = None,
 ) -> None:
     write_json_cache(
@@ -448,6 +462,7 @@ def _write_stage2_cached_response(
             "cache_version": STAGE2_LLM_CACHE_VERSION,
             "backend_name": backend_name,
             "response": response.model_dump(mode="json"),
+            "diagnostics": dict(diagnostics or {}),
         },
         env_var="CAS_STAGE2_LLM_CACHE_ENABLED",
         default=True,
@@ -465,18 +480,32 @@ def _stage2_run_diagnostics(
     extra: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     timings = agent_timings or {}
+    role_cache_hits = _coerce_role_cache_hits((extra or {}).get("role_cache_hits"))
+    role_cache_hit_count = sum(1 for value in role_cache_hits.values() if value is True)
+    role_cache_any_hit = bool(role_cache_hit_count)
+    role_cache_all_hit = all(
+        role_cache_hits.get(role) is True for role in STAGE2_TRIPLET_AGENT_ROLES
+    ) if role_cache_hits else False
     diagnostics = {
         "backend_name": backend_name,
-        "cache_hit": cache_hit,
+        "cache_hit": cache_hit or role_cache_any_hit,
+        "response_cache_hit": cache_hit,
         "cache_key": cache_key,
         "stage2_total_elapsed_seconds": round(time.perf_counter() - started_at, 4),
         "agent_elapsed_seconds": timings,
         "agent_elapsed_seconds_sum": round(sum(timings.values()), 4),
+        "role_cache_hit_count": role_cache_hit_count,
+        "role_cache_any_hit": role_cache_any_hit,
+        "role_cache_all_hit": role_cache_all_hit,
     }
     if extra:
         for key, value in extra.items():
             if key != "agent_elapsed_seconds":
                 diagnostics[key] = value
+    if "role_token_usage" in diagnostics and "token_usage_totals" not in diagnostics:
+        role_usage = diagnostics.get("role_token_usage")
+        if isinstance(role_usage, Mapping):
+            diagnostics["token_usage_totals"] = aggregate_role_usage(role_usage)
     return diagnostics
 
 
@@ -490,6 +519,53 @@ def _coerce_agent_timings(value: object) -> dict[str, float]:
         except (TypeError, ValueError):
             continue
     return timings
+
+
+def _cached_response_diagnostics(cached_diagnostics: Mapping[str, Any]) -> dict[str, Any]:
+    diagnostics = {
+        str(key): value
+        for key, value in cached_diagnostics.items()
+        if str(key)
+        not in {
+            "agent_elapsed_seconds",
+            "agent_elapsed_seconds_sum",
+            "backend_name",
+            "cache_hit",
+            "cache_key",
+            "response_cache_hit",
+            "stage2_total_elapsed_seconds",
+        }
+    }
+    role_cache_hits = {
+        role: True for role in STAGE2_TRIPLET_AGENT_ROLES
+    }
+    diagnostics["role_cache_hits"] = role_cache_hits
+    diagnostics["role_cache_hit_count"] = len(STAGE2_TRIPLET_AGENT_ROLES)
+    diagnostics["role_cache_all_hit"] = True
+    diagnostics["role_cache_any_hit"] = True
+    raw_role_usage = diagnostics.get("role_token_usage")
+    if isinstance(raw_role_usage, Mapping):
+        role_usage: dict[str, dict[str, Any]] = {}
+        for role, raw_usage in raw_role_usage.items():
+            if not isinstance(raw_usage, Mapping):
+                continue
+            provider = str(raw_usage.get("provider") or "")
+            model_name = str(raw_usage.get("model") or raw_usage.get("model_name") or "")
+            role_usage[str(role)] = usage_for_cache_hit(
+                raw_usage,
+                provider=provider,
+                model_name=model_name,
+                role=str(role),
+            )
+        diagnostics["role_token_usage"] = role_usage
+        diagnostics["token_usage_totals"] = aggregate_role_usage(role_usage)
+    return diagnostics
+
+
+def _coerce_role_cache_hits(value: object) -> dict[str, bool]:
+    if not isinstance(value, Mapping):
+        return {}
+    return {str(role): bool(hit) for role, hit in value.items()}
 
 
 def _run_triplet_agents_with_agno(

@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from cas.agents.nodes.evidence_profile import _safe_float
+from cas.llm.usage import aggregate_role_usage
 
 
 def _append_sentence(base: str, sentence: str) -> str:
@@ -67,6 +68,21 @@ def _merge_post_committee_qa_diagnostics(
     runtime_diagnostics[f"{role}_cache_hit"] = bool(qa_diagnostics.get(f"{role}_cache_hit", False))
     if qa_diagnostics.get(f"{role}_cache_key"):
         runtime_diagnostics[f"{role}_cache_key"] = qa_diagnostics[f"{role}_cache_key"]
+    _merge_role_token_usage(runtime_diagnostics, qa_diagnostics)
+
+
+def _merge_role_token_usage(
+    runtime_diagnostics: dict[str, Any],
+    qa_diagnostics: dict[str, Any],
+) -> None:
+    existing_usage = runtime_diagnostics.get("role_token_usage")
+    if not isinstance(existing_usage, dict):
+        existing_usage = {}
+    qa_usage = qa_diagnostics.get("role_token_usage")
+    if isinstance(qa_usage, dict):
+        existing_usage.update(qa_usage)
+    runtime_diagnostics["role_token_usage"] = existing_usage
+    runtime_diagnostics["token_usage_totals"] = aggregate_role_usage(existing_usage)
 
 
 __all__ = [

@@ -660,6 +660,14 @@ def _result_row(
     committee_view = _dict_value(state.get("committee_view"))
     stage2_runtime = _dict_value(state.get("stage2_runtime_diagnostics"))
     stage2_agent_timings = _dict_value(stage2_runtime.get("agent_elapsed_seconds"))
+    stage2_role_cache_hits = _dict_value(stage2_runtime.get("role_cache_hits"))
+    stage2_role_usage = _dict_value(stage2_runtime.get("role_token_usage"))
+    stage2_token_totals = _dict_value(stage2_runtime.get("token_usage_totals"))
+    quant_usage = _role_usage(stage2_role_usage, "quant_credit")
+    evidence_usage = _role_usage(stage2_role_usage, "evidence_audit")
+    chair_usage = _role_usage(stage2_role_usage, "chair_report")
+    review_qa_usage = _role_usage(stage2_role_usage, "review_qa")
+    risk_recall_qa_usage = _role_usage(stage2_role_usage, "risk_recall_qa")
     evidence = _dict_value(state.get("news_cache_snapshot"))
     xgboost_result = _dict_value(state.get("xgboost_result"))
     final_label = str(committee_view.get("final_committee_label") or "")
@@ -733,6 +741,19 @@ def _result_row(
         "committee_review_safe_effect": review_safe_effect,
         "stage2_backend_name": stage2_runtime.get("backend_name"),
         "stage2_llm_cache_hit": bool(stage2_runtime.get("cache_hit", False)),
+        "stage2_response_cache_hit": bool(stage2_runtime.get("response_cache_hit", False)),
+        "stage2_role_cache_hit_count": stage2_runtime.get("role_cache_hit_count"),
+        "stage2_role_cache_any_hit": bool(stage2_runtime.get("role_cache_any_hit", False)),
+        "stage2_role_cache_all_hit": bool(stage2_runtime.get("role_cache_all_hit", False)),
+        "stage2_quant_credit_cache_hit": bool(
+            stage2_role_cache_hits.get("quant_credit", False)
+        ),
+        "stage2_evidence_audit_cache_hit": bool(
+            stage2_role_cache_hits.get("evidence_audit", False)
+        ),
+        "stage2_chair_report_cache_hit": bool(
+            stage2_role_cache_hits.get("chair_report", False)
+        ),
         "stage2_total_elapsed_seconds": stage2_runtime.get("stage2_total_elapsed_seconds"),
         "stage2_agent_elapsed_seconds_sum": stage2_runtime.get("agent_elapsed_seconds_sum"),
         "stage2_quant_credit_elapsed_seconds": stage2_agent_timings.get("quant_credit"),
@@ -743,6 +764,19 @@ def _result_row(
         "stage2_parallel_independent_agents": bool(
             stage2_runtime.get("parallel_independent_agents", False)
         ),
+        "stage2_input_tokens": stage2_token_totals.get("input_tokens"),
+        "stage2_output_tokens": stage2_token_totals.get("output_tokens"),
+        "stage2_total_tokens": stage2_token_totals.get("total_tokens"),
+        "stage2_billable_input_tokens": stage2_token_totals.get("billable_input_tokens"),
+        "stage2_billable_output_tokens": stage2_token_totals.get("billable_output_tokens"),
+        "stage2_billable_total_tokens": stage2_token_totals.get("billable_total_tokens"),
+        "stage2_cost_usd": stage2_token_totals.get("cost_usd"),
+        "stage2_billable_cost_usd": stage2_token_totals.get("billable_cost_usd"),
+        **_role_usage_columns("stage2_quant_credit", quant_usage),
+        **_role_usage_columns("stage2_evidence_audit", evidence_usage),
+        **_role_usage_columns("stage2_chair_report", chair_usage),
+        **_role_usage_columns("stage2_review_qa", review_qa_usage),
+        **_role_usage_columns("stage2_risk_recall_qa", risk_recall_qa_usage),
         **evidence_audit_structured,
         "stage2_review_qa_triggered": bool(stage2_runtime.get("review_qa_triggered", False)),
         "stage2_review_qa_cache_hit": bool(stage2_runtime.get("review_qa_cache_hit", False)),
@@ -1025,6 +1059,29 @@ def _bounded_worker_count(workers: int, row_count: int) -> int:
 
 def _dict_value(value: object) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
+
+
+def _role_usage(role_usage: dict[str, Any], role: str) -> dict[str, Any]:
+    return _dict_value(role_usage.get(role))
+
+
+def _role_usage_columns(prefix: str, usage: dict[str, Any]) -> dict[str, Any]:
+    return {
+        f"{prefix}_provider": usage.get("provider"),
+        f"{prefix}_model": usage.get("model"),
+        f"{prefix}_pricing_model_id": usage.get("pricing_model_id"),
+        f"{prefix}_usage_cache_hit": bool(usage.get("cache_hit", False)),
+        f"{prefix}_usage_billable": bool(usage.get("billable", False)),
+        f"{prefix}_input_tokens": usage.get("input_tokens"),
+        f"{prefix}_output_tokens": usage.get("output_tokens"),
+        f"{prefix}_total_tokens": usage.get("total_tokens"),
+        f"{prefix}_billable_input_tokens": usage.get("billable_input_tokens"),
+        f"{prefix}_billable_output_tokens": usage.get("billable_output_tokens"),
+        f"{prefix}_billable_total_tokens": usage.get("billable_total_tokens"),
+        f"{prefix}_cost_usd": usage.get("cost_usd"),
+        f"{prefix}_billable_cost_usd": usage.get("billable_cost_usd"),
+        f"{prefix}_cost_source": usage.get("cost_source"),
+    }
 
 
 def _model_or_dict_value(value: object) -> dict[str, Any]:

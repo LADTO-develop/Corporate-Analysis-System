@@ -12,6 +12,7 @@ from pydantic import BaseModel
 
 from cas.agents.stage2_runtime_config import Stage2RuntimeConfig
 from cas.llm.model_catalog import load_model_catalog, normalize_stage2_provider
+from cas.llm.usage import llm_usage_from_response
 
 
 class AgnoAgentLike(Protocol):
@@ -168,12 +169,23 @@ def run_structured_agent[ModelT: BaseModel](
     query: str,
     response_model: type[ModelT],
     runtime_config: Stage2RuntimeConfig | None = None,
+    model_provider: str = "",
+    model_name: str = "",
+    usage: dict[str, object] | None = None,
 ) -> ModelT:
     """Run an Agno agent and coerce the response into a Pydantic model."""
     attempts = _stage2_agent_retry_attempts(runtime_config)
     for attempt in range(1, attempts + 1):
         try:
             response = agent.run(query)
+            if usage is not None:
+                usage.update(
+                    llm_usage_from_response(
+                        response,
+                        provider=model_provider,
+                        model_name=model_name,
+                    )
+                )
             content = getattr(response, "content", response)
             return coerce_model_response(content, response_model)
         except Exception:

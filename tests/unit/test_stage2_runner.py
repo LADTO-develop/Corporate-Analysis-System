@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -487,6 +488,141 @@ def test_triplet_agents_write_per_run_runtime_diagnostics(
         "evidence_audit",
         "chair_report",
     }
+    assert diagnostics["role_cache_hit_count"] == 0
+    assert diagnostics["token_usage_totals"]["usage_role_count"] == 3
+
+
+def test_triplet_agents_reuse_independent_role_caches(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Any,
+) -> None:
+    from cas.agents.nodes import tripletagents
+
+    calls = {"quant_credit": 0, "evidence_audit": 0, "chair_report": 0}
+    _patch_usage_counted_triplet_agents(monkeypatch, tripletagents, calls)
+    runtime_config = Stage2RuntimeConfig(
+        llm_cache_enabled=True,
+        cache_dir=str(tmp_path),
+        parallel_independent_agents=False,
+    )
+
+    first_diagnostics: dict[str, object] = {}
+    second_diagnostics: dict[str, object] = {}
+    first_outputs = tripletagents.run_triplet_agents(
+        bundle=build_stage2_input_bundle(_minimal_state()),
+        recommendation="review",
+        confidence=0.7,
+        model_provider="openai",
+        model_name="gpt-4.1-mini",
+        max_tokens=100,
+        runtime_config=runtime_config,
+        diagnostics=first_diagnostics,
+    )
+    second_outputs = tripletagents.run_triplet_agents(
+        bundle=build_stage2_input_bundle(_minimal_state()),
+        recommendation="review",
+        confidence=0.7,
+        model_provider="openai",
+        model_name="gpt-4.1-mini",
+        max_tokens=100,
+        runtime_config=runtime_config,
+        diagnostics=second_diagnostics,
+    )
+
+    assert calls == {"quant_credit": 1, "evidence_audit": 1, "chair_report": 1}
+    assert first_outputs[0].quant_summary == second_outputs[0].quant_summary
+    assert first_diagnostics["role_cache_hits"] == {
+        "quant_credit": False,
+        "evidence_audit": False,
+        "chair_report": False,
+    }
+    assert second_diagnostics["role_cache_hits"] == {
+        "quant_credit": True,
+        "evidence_audit": True,
+        "chair_report": True,
+    }
+    assert second_diagnostics["role_cache_all_hit"] is True
+    assert second_diagnostics["token_usage_totals"]["billable_total_tokens"] == 0
+
+
+def test_triplet_role_cache_reuses_front_roles_when_chair_model_changes(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Any,
+) -> None:
+    from cas.agents.nodes import tripletagents
+
+    calls = {"quant_credit": 0, "evidence_audit": 0, "chair_report": 0}
+    _patch_usage_counted_triplet_agents(monkeypatch, tripletagents, calls)
+    runtime_config = Stage2RuntimeConfig(
+        llm_cache_enabled=True,
+        cache_dir=str(tmp_path),
+        parallel_independent_agents=False,
+    )
+
+    first_diagnostics: dict[str, object] = {}
+    second_diagnostics: dict[str, object] = {}
+    tripletagents.run_triplet_agents(
+        bundle=build_stage2_input_bundle(_minimal_state()),
+        recommendation="review",
+        confidence=0.7,
+        model_provider="openai",
+        model_name="gpt-4.1-mini",
+        chair_model_name="chair-a",
+        max_tokens=100,
+        runtime_config=runtime_config,
+        diagnostics=first_diagnostics,
+    )
+    tripletagents.run_triplet_agents(
+        bundle=build_stage2_input_bundle(_minimal_state()),
+        recommendation="review",
+        confidence=0.7,
+        model_provider="openai",
+        model_name="gpt-4.1-mini",
+        chair_model_name="chair-b",
+        max_tokens=100,
+        runtime_config=runtime_config,
+        diagnostics=second_diagnostics,
+    )
+
+    assert calls == {"quant_credit": 1, "evidence_audit": 1, "chair_report": 2}
+    assert second_diagnostics["role_cache_hits"]["quant_credit"] is True
+    assert second_diagnostics["role_cache_hits"]["evidence_audit"] is True
+    assert second_diagnostics["role_cache_hits"]["chair_report"] is False
+    assert second_diagnostics["role_cache_hit_count"] == 2
+
+
+def test_run_structured_agent_records_usage_from_agno_response() -> None:
+    from cas.agents.nodes.tripletagents import runtime
+    from cas.agents.nodes.tripletagents.quant_credit_agent import AgnoQuantCreditResponse
+
+    class FakeAgent:
+        def run(self, query: str) -> object:
+            assert query == "unit query"
+            return SimpleNamespace(
+                content=AgnoQuantCreditResponse(
+                    quantitative_interpretation="정량 해석",
+                    fundamental_defense_capacity="방어력",
+                    key_risk_and_mitigation="위험과 완화",
+                    internal_risk_level="medium",
+                ),
+                usage={"input_tokens": 100, "output_tokens": 20, "total_tokens": 120},
+            )
+
+    usage: dict[str, object] = {}
+    result = runtime.run_structured_agent(
+        agent=FakeAgent(),
+        query="unit query",
+        response_model=AgnoQuantCreditResponse,
+        model_provider="openai",
+        model_name="gpt-4.1-mini",
+        usage=usage,
+    )
+
+    assert result.internal_risk_level == "medium"
+    assert usage["input_tokens"] == 100
+    assert usage["output_tokens"] == 20
+    assert usage["billable_total_tokens"] == 120
+    assert usage["cost_source"] == "pricing_estimate_from_actual_tokens"
 
 
 def test_agno_runtime_passes_openai_timeout_and_provider_retries(
@@ -611,6 +747,65 @@ def test_agno_runtime_timeout_can_be_disabled(
     monkeypatch.setenv("CAS_STAGE2_AGENT_TIMEOUT_SECONDS", "off")
 
     assert runtime._stage2_agent_timeout_seconds() is None
+
+
+def _patch_usage_counted_triplet_agents(
+    monkeypatch: pytest.MonkeyPatch,
+    tripletagents: object,
+    calls: dict[str, int],
+) -> None:
+    def quant(**kwargs: Any) -> QuantCreditOutput:
+        calls["quant_credit"] += 1
+        _record_usage(kwargs.get("usage"), input_tokens=100, output_tokens=20)
+        return QuantCreditOutput(
+            quant_summary=f"정량 요약 {calls['quant_credit']}",
+            model_rationale="모델 판단 근거",
+            key_risk_factors=["위험"],
+            mitigating_factors=["완화"],
+            confidence=0.8,
+        )
+
+    def evidence(**kwargs: Any) -> EvidenceAuditOutput:
+        calls["evidence_audit"] += 1
+        _record_usage(kwargs.get("usage"), input_tokens=120, output_tokens=30)
+        return EvidenceAuditOutput(
+            evidence_summary=f"근거 검토 {calls['evidence_audit']}",
+            evidence_status="ready",
+            evidence_reliability="신뢰도 점검",
+            evidence_strength="moderate",
+            model_challenge="중대한 충돌은 제한적입니다.",
+            audit_conclusion="모델 원판단을 설명하는 보완 의견입니다.",
+            debt_liquidity_cross_check=["부채 점검"],
+            macro_industry_sensitivity=["거시 점검"],
+            external_evidence_findings=["외부 근거"],
+            confidence=0.6,
+        )
+
+    def chair(**kwargs: Any) -> ChairReportOutput:
+        calls["chair_report"] += 1
+        _record_usage(kwargs.get("usage"), input_tokens=90, output_tokens=25)
+        return ChairReportOutput(
+            report_summary=f"종합 보고 {calls['chair_report']}",
+            model_preservation_note="model_view 보존",
+            committee_scope_note="committee_view 보완",
+            final_review_memo_seed="메모 초안",
+            confidence=0.7,
+        )
+
+    monkeypatch.setattr(tripletagents, "run_quant_credit_agent", quant)
+    monkeypatch.setattr(tripletagents, "run_evidence_audit_agent", evidence)
+    monkeypatch.setattr(tripletagents, "run_chair_report_agent", chair)
+
+
+def _record_usage(value: object, *, input_tokens: int, output_tokens: int) -> None:
+    if isinstance(value, dict):
+        value.update(
+            {
+                "input_tokens": input_tokens,
+                "output_tokens": output_tokens,
+                "total_tokens": input_tokens + output_tokens,
+            }
+        )
 
 
 def _deterministic_runner() -> DeterministicStage2AgentRunner:
