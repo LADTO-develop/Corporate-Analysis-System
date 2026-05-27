@@ -15,8 +15,8 @@ COMMITTEE_DECISION_TYPE_GUIDE = {
         "action": "먼저 손실 지속, 이자보상, 차입 부담, 직접 관련 공시·뉴스를 확인하세요.",
     },
     "경계등급 보류": {
-        "signal": "위험신호 아님",
-        "tone": "neutral",
+        "signal": "위험신호 있음",
+        "tone": "risk",
         "title": "관찰",
         "body": "좋다/나쁘다를 딱 잘라 말하기 어려운 경계선 위의 기업입니다.",
         "detail": (
@@ -99,10 +99,12 @@ def committee_user_stage_label(
         return "부적격"
     if committee_label == "적격":
         return "적격"
-    if decision_type_label in {"과민경고 완화 보류", "경계등급 보류"}:
+    if decision_type_label == "과민경고 완화 보류":
         return "관찰"
     if decision_type_label == "위험 보류" or risk_signal:
         return "위험 주의"
+    if decision_type_label == "경계등급 보류":
+        return "관찰"
     if decision_type_label == "확인필요 보류" or committee_label == "보류":
         return "관찰"
     return committee_label or "관찰"

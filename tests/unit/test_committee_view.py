@@ -455,7 +455,7 @@ def test_committee_view_holds_investment_model_with_secondary_review_trigger() -
     assert committee_view["final_committee_label"] == "보류"
     assert committee_view["committee_decision_type"] == "boundary_hold"
     assert committee_view["committee_decision_type_label"] == "경계등급 보류"
-    assert committee_view["committee_risk_signal"] is False
+    assert committee_view["committee_risk_signal"] is True
     assert committee_view["hidden_tail_risk_flag"] is False
     assert "경계등급 보류 플래그" in committee_view["key_risk_factors"][0]
     assert "2차 보조 레이더 플래그" in committee_view["key_risk_factors"][1]
@@ -2703,7 +2703,7 @@ def test_committee_view_treats_resolved_spac_merger_halt_as_procedural_context()
     assert committee_view["final_committee_label"] == "보류"
     assert committee_view["committee_decision_type"] == "boundary_hold"
     assert committee_view["committee_decision_type_label"] == "경계등급 보류"
-    assert committee_view["committee_risk_signal"] is False
+    assert committee_view["committee_risk_signal"] is True
     assert committee_view["hidden_tail_risk_flag"] is False
 
 
@@ -2795,7 +2795,7 @@ def test_committee_view_treats_bonus_issue_trading_halt_as_procedural_context() 
 
     assert committee_view["final_committee_label"] == "보류"
     assert committee_view["committee_decision_type"] == "boundary_hold"
-    assert committee_view["committee_risk_signal"] is False
+    assert committee_view["committee_risk_signal"] is True
     assert committee_view["veto_triggered"] is False
     assert "경계등급 보류" in committee_view["conflict_resolution"]
 
