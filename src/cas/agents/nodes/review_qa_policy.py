@@ -123,7 +123,7 @@ def _apply_review_qa_risk_hold_advisory(
     adjusted = dict(committee_view)
     adjusted["committee_decision_type"] = "boundary_hold"
     adjusted["committee_decision_type_label"] = "경계등급 보류"
-    adjusted["committee_risk_signal"] = False
+    adjusted["committee_risk_signal"] = True
     adjusted["risk_hold_reason_tags"] = []
     adjusted["risk_hold_reason_labels"] = []
     adjusted["risk_hold_reason_summary"] = ""
@@ -186,7 +186,7 @@ def _apply_review_qa_reject_advisory(
     adjusted["final_committee_label"] = "보류"
     adjusted["committee_decision_type"] = "boundary_hold"
     adjusted["committee_decision_type_label"] = "경계등급 보류"
-    adjusted["committee_risk_signal"] = False
+    adjusted["committee_risk_signal"] = True
     adjusted["risk_hold_reason_tags"] = []
     adjusted["risk_hold_reason_labels"] = []
     adjusted["risk_hold_reason_summary"] = ""

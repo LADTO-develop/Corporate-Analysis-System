@@ -682,7 +682,7 @@ def test_review_qa_advisory_downgrades_risk_hold_subtype_only() -> None:
     assert adjusted["final_committee_label"] == "보류"
     assert adjusted["committee_decision_type"] == "boundary_hold"
     assert adjusted["committee_decision_type_label"] == "경계등급 보류"
-    assert adjusted["committee_risk_signal"] is False
+    assert adjusted["committee_risk_signal"] is True
     assert "ReviewQA" in adjusted["conflict_resolution"]
     assert adjusted["decision_trace"][-1]["gate"] == "review_qa_subtype_adjustment"
     assert runtime["review_qa_advisory_applied"] is True
@@ -780,7 +780,7 @@ def test_review_qa_advisory_downgrades_watch_context_only_risk_hold() -> None:
     )
 
     assert adjusted["committee_decision_type"] == "boundary_hold"
-    assert adjusted["committee_risk_signal"] is False
+    assert adjusted["committee_risk_signal"] is True
     assert runtime["review_qa_advisory_applied"] is True
     assert runtime["review_qa_advisory_apply_reason"] == "watch_context_only_risk_hold_override"
 
@@ -989,7 +989,7 @@ def test_review_qa_advisory_downgrades_reject_with_watch_context_only_evidence(
 
     assert adjusted["final_committee_label"] == "보류"
     assert adjusted["committee_decision_type"] == "boundary_hold"
-    assert adjusted["committee_risk_signal"] is False
+    assert adjusted["committee_risk_signal"] is True
     assert adjusted["decision_trace"][-1]["gate"] == "review_qa_reject_adjustment"
     assert runtime["review_qa_advisory_applied"] is True
     assert runtime["review_qa_advisory_apply_reason"] in {
@@ -1484,7 +1484,7 @@ def test_risk_recall_qa_advisory_escalates_eligible_to_boundary_hold() -> None:
 
     assert adjusted["final_committee_label"] == "보류"
     assert adjusted["committee_decision_type"] == "boundary_hold"
-    assert adjusted["committee_risk_signal"] is False
+    assert adjusted["committee_risk_signal"] is True
     assert adjusted["decision_trace"][-1]["gate"] == "risk_recall_qa_escalation"
     assert "최종 위원회 판단은 적격입니다" not in adjusted["final_review_memo"]
     assert "초기 위원회 판단은 적격이었습니다" in adjusted["final_review_memo"]

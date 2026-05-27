@@ -184,7 +184,7 @@ def _apply_risk_recall_escalation(
     adjusted["committee_decision_type_label"] = (
         "위험 보류" if target_type == "risk_hold" else "경계등급 보류"
     )
-    adjusted["committee_risk_signal"] = target_type == "risk_hold"
+    adjusted["committee_risk_signal"] = target_type in {"risk_hold", "boundary_hold"}
     if target_type == "risk_hold":
         reason_tags, reason_labels, reason_summary = _risk_recall_hold_reason_fields(
             apply_reason,

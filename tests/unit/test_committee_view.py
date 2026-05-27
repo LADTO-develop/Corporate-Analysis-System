@@ -89,8 +89,14 @@ def test_committee_view_exposes_prior_hard_distress_action_plan() -> None:
 
     assert "CCC/C/D" in " ".join(committee_view["manual_review_tasks"])
     assert "severe 공개등급" in " ".join(committee_view["missing_evidence"])
+    assert committee_view["committee_decision_type"] == "risk_hold"
+    assert committee_view["committee_risk_signal"] is True
     assert any(
         item["gate"] == "prior_hard_distress_context" and item["triggered"]
+        for item in committee_view["decision_trace"]
+    )
+    assert any(
+        item["gate"] == "risk_label_recall_adjustment" and item["triggered"]
         for item in committee_view["decision_trace"]
     )
 
@@ -449,7 +455,7 @@ def test_committee_view_holds_investment_model_with_secondary_review_trigger() -
     assert committee_view["final_committee_label"] == "보류"
     assert committee_view["committee_decision_type"] == "boundary_hold"
     assert committee_view["committee_decision_type_label"] == "경계등급 보류"
-    assert committee_view["committee_risk_signal"] is False
+    assert committee_view["committee_risk_signal"] is True
     assert committee_view["hidden_tail_risk_flag"] is False
     assert "경계등급 보류 플래그" in committee_view["key_risk_factors"][0]
     assert "2차 보조 레이더 플래그" in committee_view["key_risk_factors"][1]
@@ -1994,7 +2000,7 @@ def test_committee_view_marks_overwarning_residual_risk_as_risk_hold() -> None:
     )
 
 
-def test_committee_view_softens_cash_rich_loss_stage_warning_to_mitigation_hold() -> None:
+def test_committee_view_marks_cash_rich_loss_stage_warning_as_risk_hold_label() -> None:
     state: AgentState = {
         "company_id": "389140",
         "company_name": "(주)포바이포",
@@ -2055,10 +2061,14 @@ def test_committee_view_softens_cash_rich_loss_stage_warning_to_mitigation_hold(
     )
 
     assert committee_view["final_committee_label"] == "보류"
-    assert committee_view["committee_decision_type"] == "mitigation_hold"
-    assert committee_view["committee_decision_type_label"] == "과민경고 완화 보류"
-    assert committee_view["committee_risk_signal"] is False
+    assert committee_view["committee_decision_type"] == "risk_hold"
+    assert committee_view["committee_decision_type_label"] == "위험 보류"
+    assert committee_view["committee_risk_signal"] is True
     assert "현금·자본 버퍼" in committee_view["mitigating_factors"][0]
+    assert any(
+        item["gate"] == "risk_label_recall_adjustment" and item["triggered"]
+        for item in committee_view["decision_trace"]
+    )
 
 
 def test_committee_view_uses_prior_rating_boundary_reference_for_hold() -> None:
@@ -2305,7 +2315,7 @@ def test_committee_view_keeps_prior_boundary_reject_with_extreme_distress() -> N
     assert committee_view["committee_decision_type"] == "reject"
 
 
-def test_committee_view_marks_unconfirmed_reject_as_review_hold() -> None:
+def test_committee_view_marks_high_probability_unconfirmed_reject_as_risk_hold() -> None:
     state: AgentState = {
         "company_id": "900001",
         "company_name": "테스트기업(주)",
@@ -2346,11 +2356,15 @@ def test_committee_view_marks_unconfirmed_reject_as_review_hold() -> None:
     )
 
     assert committee_view["final_committee_label"] == "보류"
-    assert committee_view["committee_decision_type"] == "review_hold"
-    assert committee_view["committee_decision_type_label"] == "확인필요 보류"
-    assert committee_view["committee_risk_signal"] is False
+    assert committee_view["committee_decision_type"] == "risk_hold"
+    assert committee_view["committee_decision_type_label"] == "위험 보류"
+    assert committee_view["committee_risk_signal"] is True
     assert "부적격 확정 게이트 미충족" in committee_view["key_risk_factors"][0]
-    assert "확인필요 보류" in committee_view["conflict_resolution"]
+    assert "위험 라벨 리콜 보정" in committee_view["conflict_resolution"]
+    assert any(
+        item["gate"] == "risk_label_recall_adjustment" and item["triggered"]
+        for item in committee_view["decision_trace"]
+    )
 
 
 def test_committee_view_marks_unconfirmed_reject_with_repeated_financing_as_risk_hold() -> None:
@@ -2689,7 +2703,7 @@ def test_committee_view_treats_resolved_spac_merger_halt_as_procedural_context()
     assert committee_view["final_committee_label"] == "보류"
     assert committee_view["committee_decision_type"] == "boundary_hold"
     assert committee_view["committee_decision_type_label"] == "경계등급 보류"
-    assert committee_view["committee_risk_signal"] is False
+    assert committee_view["committee_risk_signal"] is True
     assert committee_view["hidden_tail_risk_flag"] is False
 
 
@@ -2781,12 +2795,12 @@ def test_committee_view_treats_bonus_issue_trading_halt_as_procedural_context() 
 
     assert committee_view["final_committee_label"] == "보류"
     assert committee_view["committee_decision_type"] == "boundary_hold"
-    assert committee_view["committee_risk_signal"] is False
+    assert committee_view["committee_risk_signal"] is True
     assert committee_view["veto_triggered"] is False
     assert "경계등급 보류" in committee_view["conflict_resolution"]
 
 
-def test_committee_view_softens_model_only_high_probability_warning_to_hold() -> None:
+def test_committee_view_marks_model_only_high_probability_warning_as_risk_hold_label() -> None:
     state: AgentState = {
         "company_id": "033540",
         "company_name": "(주)파라텍",
@@ -2844,11 +2858,15 @@ def test_committee_view_softens_model_only_high_probability_warning_to_hold() ->
     )
 
     assert committee_view["final_committee_label"] == "보류"
-    assert committee_view["committee_decision_type"] == "mitigation_hold"
-    assert committee_view["committee_decision_type_label"] == "과민경고 완화 보류"
-    assert committee_view["committee_risk_signal"] is False
+    assert committee_view["committee_decision_type"] == "risk_hold"
+    assert committee_view["committee_decision_type_label"] == "위험 보류"
+    assert committee_view["committee_risk_signal"] is True
     assert "고확률 모델 단독 경고 완화" in committee_view["mitigating_factors"][0]
     assert "OCF와 자본/부채 구조" in committee_view["mitigating_factors"][0]
+    assert any(
+        item["gate"] == "risk_label_recall_adjustment" and item["triggered"]
+        for item in committee_view["decision_trace"]
+    )
 
 
 def test_committee_view_softens_high_probability_risk_with_financial_resilience() -> None:
