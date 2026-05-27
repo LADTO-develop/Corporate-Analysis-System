@@ -21,8 +21,8 @@ from sklearn.metrics import (
 from xgboost import XGBClassifier
 
 ROOT = Path(__file__).resolve().parents[1]
-INPUT_DIR = ROOT / "data" / "input" / "credit_43_features"
-OUTPUT_DIR = ROOT / "data" / "outputs" / "modeling" / "feature_43_xgboost" / "diagnostics"
+INPUT_DIR = ROOT / "data" / "input" / "credit_46_features"
+OUTPUT_DIR = ROOT / "data" / "outputs" / "modeling" / "feature_46_xgboost" / "diagnostics"
 
 RANDOM_STATE = 42
 PROBABILITY_CLIP_EPSILON = 1e-6

@@ -85,7 +85,7 @@ External validation labels for the 2026 prediction task.
   - 한국신용평가: 2026-01-01 to 2026-05-19
   - NICE신용평가: 2026-01-01 to 2026-05-19
 - Source rating targets currently included: 회사채, 기업신용평가
-- Input universe: `data/input/credit_43_features/feature_43_inference_2026.csv`
+- Input universe: `data/input/credit_46_features/feature_46_inference_2026.csv`
 - Unit: one representative row per company and evaluation year
 - Schema: Model_V1 key columns plus representative credit-rating fields only
 

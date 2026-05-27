@@ -1,0 +1,16 @@
+﻿run_id,sample_category,rows,strict_success_rate,review_safe_success_rate
+deterministic,bbb_minus_bb_plus_boundary,15,1.0,1.0
+deterministic,fn_caught_by_stage2_review,15,0.6667,0.6667
+deterministic,fp_needing_committee_mitigation,15,1.0,1.0
+deterministic,true_negative_overescalation_guardrail,15,0.6,1.0
+deterministic,true_positive_risk_explanation,15,1.0,1.0
+openai_gpt_4_1_mini,bbb_minus_bb_plus_boundary,15,1.0,1.0
+openai_gpt_4_1_mini,fn_caught_by_stage2_review,15,0.7333,0.7333
+openai_gpt_4_1_mini,fp_needing_committee_mitigation,15,1.0,1.0
+openai_gpt_4_1_mini,true_negative_overescalation_guardrail,15,0.5333,1.0
+openai_gpt_4_1_mini,true_positive_risk_explanation,15,1.0,1.0
+gemini_gemini_2_5_flash,bbb_minus_bb_plus_boundary,15,1.0,1.0
+gemini_gemini_2_5_flash,fn_caught_by_stage2_review,15,0.7333,0.7333
+gemini_gemini_2_5_flash,fp_needing_committee_mitigation,15,1.0,1.0
+gemini_gemini_2_5_flash,true_negative_overescalation_guardrail,15,0.5333,1.0
+gemini_gemini_2_5_flash,true_positive_risk_explanation,15,1.0,1.0

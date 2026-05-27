@@ -7,8 +7,9 @@ outputs without changing committee_node orchestration.
 
 from __future__ import annotations
 
+import os
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from importlib import import_module
 from typing import Any, Protocol, cast
@@ -21,7 +22,23 @@ from cas.agents.stage2_outputs import (
     EvidenceAuditOutput,
     QuantCreditOutput,
 )
+from cas.agents.stage2_policy import stage2_policy_version
+from cas.agents.stage2_prompt_contracts import (
+    build_stage2_llm_client_prompt_payload,
+    stage2_llm_client_prompt_contract_version,
+    stage2_llm_client_prompt_contract_versions,
+    stage2_prompt_contract_versions,
+)
+from cas.agents.stage2_runtime_config import Stage2RuntimeConfig
+from cas.agents.stage2_specs import Stage2AgentRole
 from cas.agents.state import Recommendation
+from cas.llm.model_catalog import (
+    DEFAULT_STAGE2_AGNO_MODE,
+    DEFAULT_STAGE2_SINGLE_MODEL,
+    DEFAULT_STAGE2_SINGLE_PROVIDER,
+    is_multi_llm_committee_mode,
+    stage2_role_model_default,
+)
 from cas.utils.live_cache import read_json_cache, stable_cache_key, write_json_cache
 
 QuantCreditFn = Callable[[Stage2InputBundle], QuantCreditOutput]
@@ -29,8 +46,11 @@ EvidenceAuditFn = Callable[[Stage2InputBundle], EvidenceAuditOutput]
 ChairReportFn = Callable[[Stage2InputBundle, Recommendation, float], ChairReportOutput]
 Stage2RunnerOutputs = tuple[QuantCreditOutput, EvidenceAuditOutput, ChairReportOutput]
 STAGE2_LLM_CACHE_VERSION = "stage2_llm_response_v2"
-STAGE2_LLM_CLIENT_PROMPT_VERSION = "stage2_llm_client_prompt_v3"
-STAGE2_TRIPLET_PROMPT_VERSION = "stage2_triplet_prompt_v3"
+STAGE2_TRIPLET_AGENT_ROLES: tuple[Stage2AgentRole, ...] = (
+    "quant_credit",
+    "evidence_audit",
+    "chair_report",
+)
 
 
 class Stage2LLMResponse(BaseModel):
@@ -92,6 +112,7 @@ class _TripletAgentModule(Protocol):
         chair_model_provider: str | None,
         chair_model_name: str | None,
         max_tokens: int,
+        runtime_config: Stage2RuntimeConfig | None,
         diagnostics: dict[str, Any] | None = None,
     ) -> Stage2RunnerOutputs:
         """Run the Agno Stage 2 triplet agents."""
@@ -136,9 +157,9 @@ class AgnoStage2AgentRunner:
 
     deterministic_runner: DeterministicStage2AgentRunner | None = None
     llm_client: Stage2LLMClient | None = None
-    routing_mode: str = "single"
-    model_provider: str = "openai"
-    model_name: str = "gpt-4.1-mini"
+    routing_mode: str = DEFAULT_STAGE2_AGNO_MODE
+    model_provider: str = DEFAULT_STAGE2_SINGLE_PROVIDER
+    model_name: str = DEFAULT_STAGE2_SINGLE_MODEL
     quant_model_provider: str | None = None
     quant_model_name: str | None = None
     evidence_model_provider: str | None = None
@@ -148,6 +169,7 @@ class AgnoStage2AgentRunner:
     max_tokens: int = 6000
     backend_name: str = "agno"
     fallback_on_error: bool = True
+    runtime_config: Stage2RuntimeConfig | None = None
     last_run_backend_name: str = "agno"
     last_error_message: str = ""
     last_run_diagnostics: dict[str, Any] = field(default_factory=dict)
@@ -161,6 +183,8 @@ class AgnoStage2AgentRunner:
     ) -> Stage2RunnerOutputs:
         """Run Stage 2 through the Agno triplet agents or an injected LLM client."""
         run_started_at = time.perf_counter()
+        runtime_config = self._resolved_runtime_config()
+        cache_env = runtime_config.cache_env()
         try:
             cache_key = stable_cache_key(
                 _stage2_cache_payload(
@@ -170,7 +194,7 @@ class AgnoStage2AgentRunner:
                     confidence=confidence,
                 )
             )
-            cached_response = _read_stage2_cached_response(cache_key)
+            cached_response = _read_stage2_cached_response(cache_key, env=cache_env)
             if cached_response is not None:
                 response, cached_backend_name = cached_response
                 self.last_run_backend_name = cached_backend_name
@@ -180,6 +204,7 @@ class AgnoStage2AgentRunner:
                     cache_hit=True,
                     cache_key=cache_key,
                     started_at=run_started_at,
+                    extra={"prompt_contract_versions": _prompt_contract_versions(self)},
                 )
                 return response.as_outputs()
 
@@ -197,9 +222,14 @@ class AgnoStage2AgentRunner:
                 )
                 successful_backend_name = self.backend_name
                 agent_timings = {"llm_client": round(time.perf_counter() - client_started_at, 4)}
-                runner_diagnostics: dict[str, Any] = {"agent_elapsed_seconds": agent_timings}
+                runner_diagnostics: dict[str, Any] = {
+                    "agent_elapsed_seconds": agent_timings,
+                    "prompt_contract_versions": _prompt_contract_versions(self),
+                }
             else:
-                runner_diagnostics = {}
+                runner_diagnostics = {
+                    "prompt_contract_versions": _prompt_contract_versions(self),
+                }
                 raw_response = _run_triplet_agents_with_agno(
                     bundle=bundle,
                     recommendation=recommendation,
@@ -213,6 +243,7 @@ class AgnoStage2AgentRunner:
                     chair_model_provider=self._role_provider("chair_report"),
                     chair_model_name=self._role_model_name("chair_report"),
                     max_tokens=self.max_tokens,
+                    runtime_config=runtime_config,
                     diagnostics=runner_diagnostics,
                 )
                 successful_backend_name = self.backend_name
@@ -221,6 +252,7 @@ class AgnoStage2AgentRunner:
                 cache_key=cache_key,
                 backend_name=successful_backend_name,
                 response=response,
+                env=cache_env,
             )
             outputs = response.as_outputs()
             self.last_run_backend_name = successful_backend_name
@@ -251,7 +283,10 @@ class AgnoStage2AgentRunner:
                 cache_hit=False,
                 cache_key=cache_key if "cache_key" in locals() else "",
                 started_at=run_started_at,
-                extra={"error_message": str(error)},
+                extra={
+                    "error_message": str(error),
+                    "prompt_contract_versions": _prompt_contract_versions(self),
+                },
             )
             return outputs
 
@@ -283,11 +318,7 @@ class AgnoStage2AgentRunner:
         if explicit:
             return explicit
         if self._uses_multi_llm_committee():
-            return {
-                "quant_credit": "anthropic",
-                "evidence_audit": "openai",
-                "chair_report": "google",
-            }[role]
+            return cast(str, stage2_role_model_default(role).provider)
         return None
 
     def _role_model_name(self, role: str) -> str | None:
@@ -299,15 +330,14 @@ class AgnoStage2AgentRunner:
         if explicit:
             return explicit
         if self._uses_multi_llm_committee():
-            return {
-                "quant_credit": self.model_name,
-                "evidence_audit": "gpt-5.4-mini",
-                "chair_report": "gemini-flash-latest",
-            }[role]
+            return cast(str, stage2_role_model_default(role).model)
         return None
 
     def _uses_multi_llm_committee(self) -> bool:
-        return self.routing_mode.strip().lower() in {"multi", "multi_llm", "multi_llm_committee"}
+        return bool(is_multi_llm_committee_mode(self.routing_mode))
+
+    def _resolved_runtime_config(self) -> Stage2RuntimeConfig:
+        return self.runtime_config or Stage2RuntimeConfig.from_env(os.environ)
 
 
 def _build_prompt_payload(
@@ -317,38 +347,12 @@ def _build_prompt_payload(
     confidence: float,
     draft_outputs: dict[str, Any],
 ) -> dict[str, Any]:
-    return {
-        "task": (
-            "Review Stage 1 credit-risk output without overwriting model_view. "
-            "Return only the structured Stage2LLMResponse payload."
-        ),
-        "guardrails": [
-            "Preserve the Stage 1 prediction_label as the model's original decision.",
-            "Use committee_view logic only to explain, qualify, or escalate the decision.",
-            "Do not invent external evidence. If news_cache_snapshot has no items, say evidence is pending.",
-            "If external evidence status is disabled or missing, do not infer specific news, DART, macro, or industry events.",
-            "For historical replay, respect news_cache_snapshot.as_of_date and do not reason from filtered future/undated evidence.",
-            "Treat external items with company_match=false as weak/indirect evidence.",
-            "Use evidence_quality, evidence_score, and verification_flags when judging news strength.",
-            "Do not describe critical_terms as confirmed events unless veto_candidate=true or veto_triggered=true.",
-            "Use hidden_tail_risk_flag when direct, verified external adverse evidence challenges an eligible model decision.",
-            "Do not escalate an eligible near-threshold model call to hold from proximity alone when absolute risk is low and severe financial stress is absent.",
-            "EvidenceAuditAgent must separate evidence_limitations from confirmed risks.",
-            "EvidenceAuditAgent must include structured evidence treatment counts and recommendation.",
-            "Do not say the system confirms, approves, assigns, or finalizes an official credit rating.",
-            "Treat rule_engine_confidence as a rule-engine review confidence, not model confidence.",
-            "If direct_match_count is positive, do not claim all external evidence lacks company relevance.",
-            "EvidenceAuditAgent must state evidence_strength, model_challenge, and audit_conclusion.",
-            "EvidenceAuditAgent must not treat watch_context evidence as confirmed distress.",
-            "Keep all confidence values between 0 and 1.",
-            "Keep each list to at most 3 items and each Korean sentence concise.",
-            "Return compact JSON only; do not include markdown or commentary outside the schema.",
-        ],
-        "recommendation": recommendation,
-        "rule_engine_confidence": confidence,
-        "stage2_input_bundle": bundle.to_compact_prompt_payload(role="stage2"),
-        "deterministic_draft_outputs": draft_outputs,
-    }
+    return build_stage2_llm_client_prompt_payload(
+        recommendation=recommendation,
+        confidence=confidence,
+        stage2_input_bundle=bundle.to_compact_prompt_payload(role="stage2"),
+        deterministic_draft_outputs=draft_outputs,
+    )
 
 
 def _stage2_cache_payload(
@@ -361,6 +365,8 @@ def _stage2_cache_payload(
     return {
         "cache_version": STAGE2_LLM_CACHE_VERSION,
         "prompt_contract": _prompt_contract_version(runner),
+        "prompt_contract_versions": _prompt_contract_versions(runner),
+        "stage2_policy_version": stage2_policy_version(),
         "runner": {
             "backend_name": runner.backend_name,
             "routing_mode": runner.routing_mode,
@@ -390,16 +396,27 @@ def _stage2_cache_payload(
 
 def _prompt_contract_version(runner: AgnoStage2AgentRunner) -> str:
     if runner.llm_client is not None:
-        return STAGE2_LLM_CLIENT_PROMPT_VERSION
-    return STAGE2_TRIPLET_PROMPT_VERSION
+        return stage2_llm_client_prompt_contract_version()
+    return "stage2_triplet_prompt_contract_v1"
 
 
-def _read_stage2_cached_response(cache_key: str) -> tuple[Stage2LLMResponse, str] | None:
+def _prompt_contract_versions(runner: AgnoStage2AgentRunner) -> dict[str, str]:
+    if runner.llm_client is not None:
+        return stage2_llm_client_prompt_contract_versions()
+    return stage2_prompt_contract_versions(STAGE2_TRIPLET_AGENT_ROLES)
+
+
+def _read_stage2_cached_response(
+    cache_key: str,
+    *,
+    env: Mapping[str, str] | None = None,
+) -> tuple[Stage2LLMResponse, str] | None:
     cached_payload = read_json_cache(
         "llm_stage2",
         cache_key,
         env_var="CAS_STAGE2_LLM_CACHE_ENABLED",
         default=True,
+        env=env,
     )
     if cached_payload is None:
         return None
@@ -419,6 +436,7 @@ def _write_stage2_cached_response(
     cache_key: str,
     backend_name: str,
     response: Stage2LLMResponse,
+    env: Mapping[str, str] | None = None,
 ) -> None:
     write_json_cache(
         "llm_stage2",
@@ -430,6 +448,7 @@ def _write_stage2_cached_response(
         },
         env_var="CAS_STAGE2_LLM_CACHE_ENABLED",
         default=True,
+        env=env,
     )
 
 
@@ -484,6 +503,7 @@ def _run_triplet_agents_with_agno(
     chair_model_provider: str | None,
     chair_model_name: str | None,
     max_tokens: int,
+    runtime_config: Stage2RuntimeConfig | None,
     diagnostics: dict[str, Any] | None = None,
 ) -> Stage2LLMResponse:
     try:
@@ -509,6 +529,7 @@ def _run_triplet_agents_with_agno(
         chair_model_provider=chair_model_provider,
         chair_model_name=chair_model_name,
         max_tokens=max_tokens,
+        runtime_config=runtime_config,
         diagnostics=diagnostics,
     )
     if not isinstance(raw_outputs, tuple) or len(raw_outputs) != 3:

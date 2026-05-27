@@ -57,7 +57,7 @@
     "CCC": 1,
     "D": 1
   },
-  "input_universe": "data/input/credit_43_features/feature_43_inference_2026.csv",
+  "input_universe": "data/input/credit_46_features/feature_46_inference_2026.csv",
   "selection_rule": "CAS 2026 inference universe exact company-name match; cancelled disclosures removed; one representative row per company-year using worst credit_rating_rank, then latest rating_date.",
   "final_columns": [
     "market",

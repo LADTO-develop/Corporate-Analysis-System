@@ -20,6 +20,7 @@ FN, FP, BBB-/BB+ 경계, TP, TN 과잉 보류 후보처럼 Stage 2 검토가 필
 | 초기 rolling pilot + Agno/Claude round 2 | 15 | 엄격 기준 12/15 = 80.0%, review-safe 14/15 = 93.3% | FN 보완과 FP 완화가 작동하기 시작한 기준선 |
 | 30건 stress sample | 30 | 1차 모델 F1 0.4243 -> 2차 위험신호 F1 0.6666, 검토대상 Recall 1.0000 | 위험기업을 검토망에 올리는 조기경보 역할 확인 |
 | OpenAI single 3-agent no-cache live | 8 | 엄격 기준 7/8 = 87.5%, review-safe 8/8 = 100.0%, cache hit 0 | 캐시 재평가가 아닌 실제 OpenAI Agno 3-agent 실행 증거 |
+| Feature46/full_review_trigger_73 harness | 8 | OpenAI no-cache live 엄격 기준 8/8 = 100.0%, review-safe 8/8 = 100.0%, FN rescue 2/2, cache hit 0, 평균 20.51초 | 공식 `feature_46_xgboost`와 `full_review_trigger_73` 기준 rolling validation 샘플/배치/리포트를 같은 harness로 재정비 |
 | TN ReviewQA/RiskRecallQA 20건 계열 | 20 | review-safe 20/20 = 100.0%, RiskRecallQA 호출 11건 -> 2건으로 축소 | 정상기업 과잉 QA 호출을 줄이면서 최종 분포 유지 |
 | Mixed hard 40 combined | 40 | 엄격 기준 39/40 = 97.5%, review-safe 40/40 = 100.0%, run failure 0 | FN 8/8 보완, FP 12/12 완화, TP 12/12 위험 유지, TN 7/8 적격 유지 |
 | Compact prompt smoke live | 8 | 엄격 기준 8/8 = 100.0%, review-safe 8/8 = 100.0%, cache hit 0 | role별 compact payload 적용 후 OpenAI Agno 3-agent 성능 유지 및 평균 14.90초 확인 |
@@ -31,8 +32,23 @@ FN, FP, BBB-/BB+ 경계, TP, TN 과잉 보류 후보처럼 Stage 2 검토가 필
 | EvidenceAudit criticality gate TN smoke | 10 | 엄격 기준 7/10 = 70.0%, review-safe 10/10 = 100.0%, cache hit 0 | TN overhold 후보 10건 중 7건 적격 유지, 3건은 경계 보류, 부적격 과잉 경고 0건 |
 | Evidence treatment refined TN smoke | 10 | 엄격 기준 7/10 = 70.0%, review-safe 10/10 = 100.0%, cache hit 0 | 최종 라벨은 유지하면서 `critical_veto_review` 4건 -> 0건, `hard_distress_detected` 4건 -> 0건으로 과민 치명 판정 완화 |
 
-상세 누적 로그는 `data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents/stage2_agent_performance_evidence.md`에 남겨 두었다.
-이 문서는 그중 PR에서 확인해야 할 핵심 숫자와 최신 materiality guardrail 검증만 요약한다.
+대용량 과거 파일럿의 원시 로그는 문서 요약 중심으로 보존한다. 새 기준인
+`feature_46_xgboost` + `full_review_trigger_73` 평가는 아래 harness 경로에 rolling
+sample, provider별 batch result, summary/report를 함께 남긴다.
+
+- `data/outputs/modeling/feature_46_xgboost/diagnostics/stage2_agents/feature46_full_review_trigger_73_harness/`
+
+## Feature46/full_review_trigger_73 Harness
+
+2026-05-27 기준 새 harness는 rolling validation score 2,526행에서 hard sample 75건을
+구성하고, 그중 8건을 deterministic과 OpenAI single provider(`gpt-4.1-mini`) no-cache로
+동일 replay했다. 현재 환경에는 Google/Gemini API key가 없어 Gemini live run은 harness
+옵션으로만 준비되어 있다.
+
+| Run | 건수 | Strict success | Review-safe | FN rescue | FP over-hold | Stage2 평균/최대 | Cache hit | 실패 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| deterministic | 8 | 100.0% | 100.0% | 2/2 | 4 | - | 0 | 0 |
+| OpenAI `gpt-4.1-mini` no-cache | 8 | 100.0% | 100.0% | 2/2 | 4 | 20.51초 / 27.73초 | 0 | 0 |
 
 ## 최신 Materiality Guardrail 실험
 
@@ -274,10 +290,7 @@ OpenAI single 3-agent no-cache live 8건의 Stage 2 평균은 16.4786초였고, 
 | 보존 항목 | 경로 |
 | --- | --- |
 | PR/발표용 최신 요약 | `docs/stage2_agent_experiment_results_ko.md` |
-| 누적 성능 증거 | `data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents/stage2_agent_performance_evidence.md` |
-| Stage 2 고도화 한눈 요약 | `data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents/stage2_agent_improvement_summary.md` |
-| 전체 실험 로그 CSV | `data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents/stage2_agent_performance_experiment_log.csv` |
-| 속도 실험 로그 CSV | `data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents/stage2_agent_speed_experiment_log.csv` |
+| 로컬 live 재실행 runbook | `docs/live_agno_external_api_runbook_ko.md` |
 
 삭제한 raw output:
 
@@ -374,6 +387,25 @@ OpenAI Agno live no-cache 재검증에서 최종 라벨 분포는 그대로 `적
 `recommended_evidence_treatment`는 `substantive_review` 4건, `watch_context` 6건으로 남아,
 정상기업을 부적격으로 악화시키지 않으면서 EvidenceAudit 설명의 치명도 과잉 표현을 낮추는
 방향이 확인됐다.
+
+## full_review_trigger_73 multi-role 역할 배정 선택
+
+feature_46 + `full_review_trigger_73` 기준 20건 역할 배정 실험과 OpenAI memo judge 결과를
+반영해 운영 기본 후보를 `gemini_quant_claude_evidence_openai_chair`로 정했다. 이 조합은
+QuantCredit=Gemini 2.5 Flash, EvidenceAudit=Claude Sonnet, ChairReport=OpenAI gpt-4.1-mini
+구성이다.
+
+20건 실험에서는 6개 역할 배정 모두 `review_or_reject` 기준 Recall 1.0000, F1 0.6400으로
+동일했다. 따라서 최종 선택은 분류 성능보다 운영 지연시간과 memo 품질의 trade-off로 봤다.
+선택 조합은 p95 latency 29.6155초로 비교군 중 가장 빨랐고, OpenAI judge에서는
+`claude_quant_gemini_evidence_openai_chair`가 평균 memo 품질 4.3/5로 조금 앞섰지만 20건 중
+14건이 동률이었다. 운영 대기시간을 낮추는 이점이 더 크다고 판단해 A 조합을 catalog 기본값으로
+승격했다.
+
+관련 산출물:
+
+- `data/outputs/modeling/feature_46_xgboost/diagnostics/stage2_agents/feature46_full_review_trigger_73_role_assignment_20/stage2_provider_summary.csv`
+- `data/outputs/modeling/feature_46_xgboost/diagnostics/stage2_agents/feature46_full_review_trigger_73_role_assignment_20/openai_memo_judge_top2/openai_memo_judge_report.md`
 
 ## 다음 확인 후보
 

@@ -374,7 +374,7 @@ def test_committee_view_holds_investment_model_with_secondary_review_trigger() -
             "threshold": 0.315,
             "stage2_secondary_trigger": True,
             "stage2_review_priority": "medium",
-            "trigger_reason": "43개 모델은 투자적격이나 45개 변수셋이 위험 기준선을 넘었습니다.",
+            "trigger_reason": "공식 모델은 투자적격이나 보조 변수셋이 위험 기준선을 넘었습니다.",
         },
         "xgboost_result": {
             "prediction_label": "투자적격",
@@ -456,7 +456,7 @@ def test_committee_view_keeps_defensive_secondary_radar_case_eligible() -> None:
             "threshold": 0.31,
             "stage2_secondary_trigger": True,
             "stage2_review_priority": "high",
-            "trigger_reason": "45개 보조 레이더가 기준선 근처로 추가 검토를 요구했습니다.",
+            "trigger_reason": "full_review_trigger_73 보조 트리거가 기준선 근처로 추가 검토를 요구했습니다.",
         },
         "xgboost_result": {
             "prediction_label": "투자적격",
@@ -545,7 +545,7 @@ def test_committee_view_keeps_isolated_icr_flag_with_cashflow_buffer_eligible() 
             "threshold": 0.325,
             "stage2_secondary_trigger": True,
             "stage2_review_priority": "high",
-            "trigger_reason": "45개 보조 레이더가 기준선 근처로 추가 검토를 요구했습니다.",
+            "trigger_reason": "full_review_trigger_73 보조 트리거가 기준선 근처로 추가 검토를 요구했습니다.",
         },
         "xgboost_result": {
             "prediction_label": "투자적격",
@@ -621,7 +621,7 @@ def test_committee_view_holds_secondary_radar_case_with_negative_cashflow() -> N
             "threshold": 0.325,
             "stage2_secondary_trigger": True,
             "stage2_review_priority": "high",
-            "trigger_reason": "45개 보조 레이더가 기준선 근처로 추가 검토를 요구했습니다.",
+            "trigger_reason": "full_review_trigger_73 보조 트리거가 기준선 근처로 추가 검토를 요구했습니다.",
         },
         "xgboost_result": {
             "prediction_label": "투자적격",
@@ -676,7 +676,7 @@ def test_committee_view_keeps_cashflow_backed_current_ratio_watch_eligible() -> 
             "threshold": 0.325,
             "stage2_secondary_trigger": True,
             "stage2_review_priority": "high",
-            "trigger_reason": "45개 보조 레이더가 기준선 근처로 추가 검토를 요구했습니다.",
+            "trigger_reason": "full_review_trigger_73 보조 트리거가 기준선 근처로 추가 검토를 요구했습니다.",
         },
         "xgboost_result": {
             "prediction_label": "투자적격",
@@ -737,7 +737,7 @@ def test_committee_view_allows_single_medium_financing_when_defensive_tn() -> No
             "threshold": 0.325,
             "stage2_secondary_trigger": True,
             "stage2_review_priority": "high",
-            "trigger_reason": "45개 보조 레이더가 기준선 근처로 추가 검토를 요구했습니다.",
+            "trigger_reason": "full_review_trigger_73 보조 트리거가 기준선 근처로 추가 검토를 요구했습니다.",
         },
         "xgboost_result": {
             "prediction_label": "투자적격",
@@ -1246,7 +1246,7 @@ def test_committee_view_blocks_overhold_guardrail_for_repeated_financing(
             "threshold": 0.325,
             "stage2_secondary_trigger": True,
             "stage2_review_priority": "high",
-            "trigger_reason": "45개 보조 레이더가 기준선 근처로 추가 검토를 요구했습니다.",
+            "trigger_reason": "full_review_trigger_73 보조 트리거가 기준선 근처로 추가 검토를 요구했습니다.",
         },
         "xgboost_result": {
             "prediction_label": "투자적격",
@@ -1336,7 +1336,7 @@ def test_committee_view_holds_secondary_radar_case_with_profitability_stress() -
             "threshold": 0.325,
             "stage2_secondary_trigger": True,
             "stage2_review_priority": "high",
-            "trigger_reason": "45개 보조 레이더가 기준선 근처로 추가 검토를 요구했습니다.",
+            "trigger_reason": "full_review_trigger_73 보조 트리거가 기준선 근처로 추가 검토를 요구했습니다.",
         },
         "xgboost_result": {
             "prediction_label": "투자적격",
@@ -1373,7 +1373,7 @@ def test_committee_view_appends_informative_chair_report_memo() -> None:
             "threshold": 0.315,
             "stage2_secondary_trigger": True,
             "stage2_review_priority": "medium",
-            "trigger_reason": "45개 보조 변수셋이 추가 검토 대상으로 올렸습니다.",
+            "trigger_reason": "full_review_trigger_73 보조 트리거가 추가 검토 대상으로 올렸습니다.",
         },
         "xgboost_result": {
             "prediction_label": "투자적격",
@@ -1484,7 +1484,7 @@ def test_committee_view_keeps_low_probability_secondary_liquidity_watch_eligible
             "threshold": 0.315,
             "stage2_secondary_trigger": True,
             "stage2_review_priority": "medium",
-            "trigger_reason": "45개 보조 변수셋이 기준선 근처로 재점검을 요구했습니다.",
+            "trigger_reason": "full_review_trigger_73 보조 트리거가 기준선 근처로 재점검을 요구했습니다.",
         },
         "xgboost_result": {
             "prediction_label": "투자적격",
@@ -2530,7 +2530,7 @@ def test_committee_view_treats_resolved_spac_merger_halt_as_procedural_context()
             "threshold": 0.325,
             "stage2_secondary_trigger": True,
             "stage2_review_priority": "high",
-            "trigger_reason": "45개 보조 레이더가 기준선 근처로 추가 검토를 요구했습니다.",
+            "trigger_reason": "full_review_trigger_73 보조 트리거가 기준선 근처로 추가 검토를 요구했습니다.",
         },
         "xgboost_result": {
             "prediction_label": "투자적격",

@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Literal, cast
 
+from cas.agents.stage2_policy import load_stage2_policy
 from cas.agents.state import AgentState
 
 PromptPayloadRole = Literal[
@@ -168,6 +169,20 @@ class Stage2InputBundle:
             if isinstance(row.get("feature"), str)
         }
 
+    @property
+    def normalized_signal_summary(self) -> dict[str, Any]:
+        """Return precomputed Stage 2 signals so LLMs do not reinterpret raw values."""
+        return _normalized_signal_summary(
+            model_view=self.model_view,
+            xgboost_result=self.xgboost_result,
+            source_feature_row=self.source_feature_row,
+            news_cache_snapshot=self.news_cache_snapshot,
+            prior_rating_reference=self.prior_rating_reference,
+            probability_speculative=self.probability_speculative,
+            threshold=self.threshold,
+            prediction_label=self.prediction_label,
+        )
+
     def to_prompt_payload(self) -> dict[str, Any]:
         """Return the full prompt/debug payload preserved for cache compatibility."""
         return {
@@ -186,12 +201,14 @@ class Stage2InputBundle:
             "news_cache_snapshot": self.news_cache_snapshot,
             "prior_rating_reference": self.prior_rating_reference,
             "credit_policy_snapshot": self.credit_policy_snapshot,
+            "normalized_signal_summary": self.normalized_signal_summary,
         }
 
     def to_compact_prompt_payload(self, *, role: PromptPayloadRole = "stage2") -> dict[str, Any]:
         """Return a role-scoped prompt payload for live Agno calls."""
+        normalized_signal_summary = self.normalized_signal_summary
         payload: dict[str, Any] = {
-            "prompt_context_version": "stage2_compact_prompt_context_v1",
+            "prompt_context_version": "stage2_compact_prompt_context_v2",
             "role": role,
             "company": {
                 "company_id": self.company_id,
@@ -223,10 +240,8 @@ class Stage2InputBundle:
                 self.source_feature_row,
                 keys=_FINANCIAL_PROMPT_KEYS,
             ),
-            "materiality_summary": _materiality_prompt_summary(
-                self.news_cache_snapshot,
-                source_feature_row=self.source_feature_row,
-            ),
+            "materiality_summary": normalized_signal_summary["materiality_profile"],
+            "normalized_signal_summary": normalized_signal_summary,
         }
         if role in {"stage2", "quant_credit"}:
             payload["peer_comparison_rows"] = _compact_peer_rows(self.peer_comparison_rows)
@@ -301,6 +316,16 @@ def _as_dict_tuple(value: object) -> tuple[dict[str, Any], ...]:
     return tuple(dict(item) for item in value if isinstance(item, dict))
 
 
+def _truthy(value: object) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int | float):
+        return value != 0
+    if isinstance(value, str):
+        return value.strip().lower() in {"true", "1", "yes", "y", "t", "on", "참", "예"}
+    return False
+
+
 def _optional_int(value: object) -> int | None:
     try:
         if value is None:
@@ -334,6 +359,32 @@ def _safe_optional_float(value: object) -> float | None:
         return None
 
 
+def _first_present(
+    *sources: dict[str, Any],
+    key: str,
+    default: object = None,
+) -> object:
+    for source in sources:
+        value = source.get(key)
+        if value is not None and value != "":
+            return value
+    return default
+
+
+def _metric_value(row: dict[str, Any], key: str) -> float | None:
+    return _safe_optional_float(row.get(key))
+
+
+def _metric_below_value(row: dict[str, Any], key: str, threshold: float) -> bool:
+    value = _metric_value(row, key)
+    return value is not None and value < threshold
+
+
+def _metric_above_value(row: dict[str, Any], key: str, threshold: float) -> bool:
+    value = _metric_value(row, key)
+    return value is not None and value > threshold
+
+
 def _compact_mapping(
     value: dict[str, Any],
     *,
@@ -346,6 +397,213 @@ def _compact_mapping(
             continue
         output[key] = raw_value
     return output
+
+
+def _normalized_signal_summary(
+    *,
+    model_view: dict[str, Any],
+    xgboost_result: dict[str, Any],
+    source_feature_row: dict[str, Any],
+    news_cache_snapshot: dict[str, Any],
+    prior_rating_reference: dict[str, Any],
+    probability_speculative: float,
+    threshold: float,
+    prediction_label: str,
+) -> dict[str, Any]:
+    materiality_profile = _materiality_prompt_summary(
+        news_cache_snapshot,
+        source_feature_row=source_feature_row,
+    )
+    evidence_treatment = _evidence_treatment_summary(
+        news_cache_snapshot,
+        source_feature_row=source_feature_row,
+        materiality_profile=materiality_profile,
+    )
+    weak_axes = _weak_financial_axes(source_feature_row)
+    return {
+        "summary_version": "stage2_normalized_signals_v1",
+        "weak_financial_axes": weak_axes,
+        "weak_financial_axis_count": len(weak_axes),
+        "materiality_profile": materiality_profile,
+        "evidence_treatment": evidence_treatment,
+        "boundary_context": _boundary_context(prior_rating_reference),
+        "secondary_trigger_profile": _secondary_trigger_profile(
+            model_view=model_view,
+            xgboost_result=xgboost_result,
+            probability_speculative=probability_speculative,
+            threshold=threshold,
+            prediction_label=prediction_label,
+        ),
+    }
+
+
+def _weak_financial_axes(row: dict[str, Any]) -> list[str]:
+    policy = load_stage2_policy()
+    section = ("risk_recall_qa", "trigger")
+    axes: list[str] = []
+    if _metric_below_value(row, "current_ratio", policy.float(*section, "current_ratio_floor")):
+        axes.append("low_current_ratio")
+    if _metric_below_value(row, "cash_ratio", policy.float(*section, "cash_ratio_floor")):
+        axes.append("low_cash_ratio")
+    if (
+        _metric_below_value(
+            row,
+            "cashflow_coverage_ratio",
+            policy.float(*section, "cashflow_coverage_ratio_floor"),
+        )
+        or _metric_below_value(
+            row,
+            "ocf_to_total_liabilities",
+            policy.float(*section, "ocf_to_total_liabilities_floor"),
+        )
+        or _metric_below_value(row, "ocf_to_sales", policy.float(*section, "ocf_to_sales_floor"))
+        or _truthy(row.get("is_2y_consecutive_ocf_deficit"))
+    ):
+        axes.append("weak_cashflow")
+    if _metric_below_value(
+        row,
+        "interest_coverage_ratio",
+        policy.float(*section, "interest_coverage_ratio_floor"),
+    ) or _truthy(row.get("icr_under_1")):
+        axes.append("weak_interest_coverage")
+    if _metric_above_value(row, "debt_ratio", policy.float(*section, "debt_ratio_floor")):
+        axes.append("high_debt_ratio")
+    if _metric_above_value(
+        row,
+        "total_borrowings_ratio",
+        policy.float(*section, "total_borrowings_ratio_floor"),
+    ) or _metric_above_value(
+        row,
+        "short_term_borrowings_share",
+        policy.float(*section, "short_term_borrowings_share_floor"),
+    ):
+        axes.append("high_borrowing_pressure")
+    return axes
+
+
+def _evidence_treatment_summary(
+    news_cache: dict[str, Any],
+    *,
+    source_feature_row: dict[str, Any],
+    materiality_profile: dict[str, Any],
+) -> dict[str, Any]:
+    from cas.agents.signals.evidence_treatment_signals import evaluate_evidence_treatment
+
+    return evaluate_evidence_treatment(
+        news_cache,
+        source_feature_row=source_feature_row,
+        materiality_summary=materiality_profile,
+    ).as_payload()
+
+
+def _boundary_context(prior_rating_reference: dict[str, Any]) -> dict[str, Any]:
+    policy = load_stage2_policy()
+    rating = str(
+        prior_rating_reference.get("prior_credit_rating")
+        or prior_rating_reference.get("credit_rating")
+        or ""
+    ).strip().upper()
+    group = str(prior_rating_reference.get("prior_rating_boundary_group") or "").strip()
+    group_normalized = group.lower()
+    rank = _optional_int(prior_rating_reference.get("prior_credit_rating_rank"))
+    speculative_min_rank = policy.int("committee_guardrails", "prior_rating", "speculative_min_rank")
+    stable_investment_max_rank = policy.int(
+        "committee_guardrails",
+        "prior_rating",
+        "stable_investment_max_rank",
+    )
+    exact_boundary = group == "exact_bbb_minus_bb_plus_boundary" or rating in {"BBB-", "BB+"}
+    has_boundary_context = "boundary" in group_normalized or exact_boundary
+    speculative_prior = bool(
+        (rank is not None and rank >= speculative_min_rank)
+        or rating in {"BB+", "BB", "BB-", "B+", "B", "B-", "CCC+", "CCC", "CCC-", "CC", "C", "D"}
+    )
+    stable_investment_non_boundary = bool(
+        group == "investment_grade_non_boundary"
+        and (
+            (rank is not None and rank <= stable_investment_max_rank)
+            or rating in {"AAA", "AA+", "AA", "AA-", "A+", "A", "A-", "BBB+"}
+        )
+    )
+    return {
+        "has_prior_rating": _truthy(prior_rating_reference.get("has_prior_rating")),
+        "prior_credit_rating": rating,
+        "prior_credit_rating_rank": rank,
+        "prior_rating_boundary_group": group,
+        "has_rating_boundary_context": has_boundary_context,
+        "is_exact_bbb_minus_bb_plus_boundary": exact_boundary,
+        "is_speculative_prior_rating": speculative_prior,
+        "is_stable_investment_non_boundary": stable_investment_non_boundary,
+        "prior_rating_age_days": _optional_int(prior_rating_reference.get("prior_rating_age_days")),
+        "prior_rating_agency": str(prior_rating_reference.get("prior_rating_agency") or ""),
+        "prior_rating_date": str(prior_rating_reference.get("prior_rating_date") or ""),
+    }
+
+
+def _secondary_trigger_profile(
+    *,
+    model_view: dict[str, Any],
+    xgboost_result: dict[str, Any],
+    probability_speculative: float,
+    threshold: float,
+    prediction_label: str,
+) -> dict[str, Any]:
+    policy = load_stage2_policy()
+    near_threshold_margin = policy.float("risk_recall_qa", "trigger", "near_threshold_margin")
+    margin_to_threshold = round(threshold - probability_speculative, 6)
+    absolute_margin = round(abs(margin_to_threshold), 6)
+    review_trigger = _truthy(
+        _first_present(xgboost_result, model_view, key="stage2_review_trigger", default=False)
+    )
+    secondary_trigger = _truthy(
+        _first_present(xgboost_result, model_view, key="stage2_secondary_trigger", default=False)
+    )
+    return {
+        "stage1_risk_trigger": prediction_label == "부적격",
+        "stage2_review_trigger": review_trigger,
+        "stage2_secondary_trigger": secondary_trigger,
+        "stage2_review_priority": str(
+            _first_present(xgboost_result, model_view, key="stage2_review_priority", default="none")
+            or "none"
+        ),
+        "trigger_reason_code": str(
+            _first_present(xgboost_result, model_view, key="trigger_reason_code", default="")
+            or ""
+        ),
+        "trigger_reason": str(
+            _first_present(xgboost_result, model_view, key="trigger_reason", default="")
+            or ""
+        ),
+        "risk_band": str(
+            _first_present(xgboost_result, model_view, key="risk_band", default="")
+            or ""
+        ),
+        "stage2_overwarning_filter_candidate": _truthy(
+            _first_present(
+                xgboost_result,
+                model_view,
+                key="stage2_overwarning_filter_candidate",
+                default=False,
+            )
+        ),
+        "overwarning_filter_reason": str(
+            _first_present(xgboost_result, model_view, key="overwarning_filter_reason", default="")
+            or ""
+        ),
+        "probability_speculative": round(probability_speculative, 6),
+        "threshold": round(threshold, 6),
+        "margin_to_threshold": margin_to_threshold,
+        "absolute_margin_to_threshold": absolute_margin,
+        "near_threshold_margin_policy": near_threshold_margin,
+        "eligible_near_threshold": bool(
+            prediction_label == "투자적격"
+            and threshold > 0
+            and 0.0 <= margin_to_threshold <= near_threshold_margin
+        ),
+        "absolute_near_threshold": bool(
+            threshold > 0 and absolute_margin <= near_threshold_margin
+        ),
+    }
 
 
 def _compact_top_drivers(value: object, *, limit: int = 8) -> list[dict[str, Any] | str]:

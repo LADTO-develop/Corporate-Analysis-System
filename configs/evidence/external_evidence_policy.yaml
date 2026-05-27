@@ -1,0 +1,132 @@
+provider_limits:
+  default_timeout_seconds: 8.0
+  default_max_items: 3
+  web_search_max_items: 5
+  naver_results_per_query: 3
+  max_combined_items: 12
+  max_weak_web_items: 3
+  direct_evidence_score_floor: 0.55
+naver:
+  risk_keywords:
+  - 소송
+  - 횡령
+  - 배임
+  - 감사의견
+  - 상장폐지
+  - 유동성
+  - 차입금
+  - 회사채
+opendart:
+  default_corp_code_cache: data/external/opendart/corp_codes.csv
+  lookback_days: 730
+  page_count: 10
+  max_items: 6
+  materiality_low_ratio: 0.03
+  materiality_high_ratio: 0.1
+  disclosure_types:
+    B: 주요사항보고
+    F: 외부감사관련
+    I: 거래소공시
+    A: 정기공시
+  risk_terms:
+  - 횡령
+  - 배임
+  - 감사의견
+  - 상장폐지
+  - 거래정지
+  - 회생
+  - 부도
+  - 소송
+  - 관리종목
+  - 불성실공시
+  - 자본잠식
+  veto_terms:
+  - 횡령
+  - 배임
+  - 감사의견거절
+  - 감사의견 거절
+  - 상장폐지
+  - 부도
+  - 회생절차
+  - 파산
+  adverse_terms:
+  - 거래정지
+  - 관리종목
+  - 불성실공시
+  - 자본잠식
+  - 영업정지
+  - 채권은행등의관리절차개시
+  - 소송등의제기
+  - 소송등의판결
+  - 단일판매ㆍ공급계약해지
+  - 단일판매·공급계약해지
+  caution_terms:
+  - 타인에대한채무보증
+  - 유상증자결정
+  - 전환사채권발행
+  - 신주인수권부사채
+  - 만기전사채취득
+  - 최대주주변경
+  - 감사보고서제출
+  - 감사보고서 제출
+  routine_terms:
+  - 사업보고서
+  - 분기보고서
+  - 반기보고서
+  - 주주명부폐쇄기간
+  - 기준일설정
+  - 주주총회소집결의
+  - 임시주주총회결과
+  - 정기주주총회결과
+  - 증권발행결과
+  - 자기주식취득신탁계약해지
+  benign_trading_halt_terms:
+  - 무상증자
+  - 주식분할
+  - 액면분할
+  - 주식병합
+  - 액면병합
+  hard_distress_terms:
+  - 횡령
+  - 배임
+  - 감사의견
+  - 상장폐지
+  - 관리종목
+  - 불성실공시
+  - 자본잠식
+  - 영업정지
+  - 회생
+  - 파산
+  - 부도
+  litigation_disclosure_terms:
+  - 소송등의제기
+  - 소송등의판결
+  - 소송등의결정
+  - 소송등의 판결
+  - 소송 등의 제기
+  - 소송 등의 판결
+  low_materiality_disclosure_markers:
+  - 자율공시
+  - 일정금액미만
+  - 일정금액 미만
+  supply_contract_cancellation_terms:
+  - 단일판매ㆍ공급계약해지
+  - 단일판매·공급계약해지
+  - 단일판매공급계약해지
+  financing_disclosure_terms:
+  - 유상증자결정
+  - 전환사채권발행
+  - 신주인수권부사채
+  - 교환사채권발행
+  - 사채권발행
+  debt_guarantee_disclosure_terms:
+  - 타인에대한채무보증
+  - 채무보증결정
+  - 채무보증
+  procedural_merger_halt_markers:
+  - spac
+  - 스팩
+  - 기업인수목적
+  - 상장예비심사
+  - 예비심사청구대상
+  - 합병예비심사

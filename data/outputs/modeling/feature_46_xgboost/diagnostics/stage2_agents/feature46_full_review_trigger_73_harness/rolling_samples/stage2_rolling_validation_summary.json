@@ -1,0 +1,204 @@
+{
+  "generated_at_utc": "2026-05-27T01:44:54.413835+00:00",
+  "evaluation_mode": "rolling_validation_tuning",
+  "model_version": "feature_46_xgboost",
+  "stage2_trigger_policy": "full_review_trigger_73",
+  "eval_years": [
+    2019,
+    2020,
+    2021,
+    2022
+  ],
+  "score_rows": 2526,
+  "sample_rows": 75,
+  "folds": [
+    {
+      "rolling_eval_year": 2019,
+      "policy_year": 2018,
+      "train_year_min": 2014,
+      "train_year_max": 2017,
+      "train_rows": 1490,
+      "policy_rows": 511,
+      "eval_rows": 574,
+      "stage1_threshold": 0.26,
+      "stage2_trigger_candidate": "full_review_trigger_73",
+      "stage2_trigger_feature_count": 73,
+      "stage2_aux_threshold": 0.26,
+      "stage2_aux_it_services_threshold": 0.05,
+      "stage1_policy_precision": null,
+      "stage1_policy_recall": null,
+      "stage1_policy_f1": null,
+      "stage2_aux_pr_auc": 0.833564604153781
+    },
+    {
+      "rolling_eval_year": 2020,
+      "policy_year": 2019,
+      "train_year_min": 2014,
+      "train_year_max": 2018,
+      "train_rows": 2001,
+      "policy_rows": 574,
+      "eval_rows": 603,
+      "stage1_threshold": 0.355,
+      "stage2_trigger_candidate": "full_review_trigger_73",
+      "stage2_trigger_feature_count": 73,
+      "stage2_aux_threshold": 0.37,
+      "stage2_aux_it_services_threshold": 0.325,
+      "stage1_policy_precision": null,
+      "stage1_policy_recall": null,
+      "stage1_policy_f1": null,
+      "stage2_aux_pr_auc": 0.8354160705551165
+    },
+    {
+      "rolling_eval_year": 2021,
+      "policy_year": 2020,
+      "train_year_min": 2014,
+      "train_year_max": 2019,
+      "train_rows": 2575,
+      "policy_rows": 603,
+      "eval_rows": 673,
+      "stage1_threshold": 0.305,
+      "stage2_trigger_candidate": "full_review_trigger_73",
+      "stage2_trigger_feature_count": 73,
+      "stage2_aux_threshold": 0.285,
+      "stage2_aux_it_services_threshold": 0.115,
+      "stage1_policy_precision": null,
+      "stage1_policy_recall": null,
+      "stage1_policy_f1": null,
+      "stage2_aux_pr_auc": 0.8117134176163583
+    },
+    {
+      "rolling_eval_year": 2022,
+      "policy_year": 2021,
+      "train_year_min": 2014,
+      "train_year_max": 2020,
+      "train_rows": 3178,
+      "policy_rows": 673,
+      "eval_rows": 676,
+      "stage1_threshold": 0.24,
+      "stage2_trigger_candidate": "full_review_trigger_73",
+      "stage2_trigger_feature_count": 73,
+      "stage2_aux_threshold": 0.215,
+      "stage2_aux_it_services_threshold": 0.17,
+      "stage1_policy_precision": null,
+      "stage1_policy_recall": null,
+      "stage1_policy_f1": null,
+      "stage2_aux_pr_auc": 0.831640025663161
+    }
+  ],
+  "case_counts": [
+    {
+      "rolling_eval_year": 2019,
+      "model_error_type": "false_negative",
+      "rows": 16
+    },
+    {
+      "rolling_eval_year": 2019,
+      "model_error_type": "false_positive",
+      "rows": 59
+    },
+    {
+      "rolling_eval_year": 2019,
+      "model_error_type": "true_negative",
+      "rows": 375
+    },
+    {
+      "rolling_eval_year": 2019,
+      "model_error_type": "true_positive",
+      "rows": 124
+    },
+    {
+      "rolling_eval_year": 2020,
+      "model_error_type": "false_negative",
+      "rows": 31
+    },
+    {
+      "rolling_eval_year": 2020,
+      "model_error_type": "false_positive",
+      "rows": 42
+    },
+    {
+      "rolling_eval_year": 2020,
+      "model_error_type": "true_negative",
+      "rows": 410
+    },
+    {
+      "rolling_eval_year": 2020,
+      "model_error_type": "true_positive",
+      "rows": 120
+    },
+    {
+      "rolling_eval_year": 2021,
+      "model_error_type": "false_negative",
+      "rows": 32
+    },
+    {
+      "rolling_eval_year": 2021,
+      "model_error_type": "false_positive",
+      "rows": 73
+    },
+    {
+      "rolling_eval_year": 2021,
+      "model_error_type": "true_negative",
+      "rows": 435
+    },
+    {
+      "rolling_eval_year": 2021,
+      "model_error_type": "true_positive",
+      "rows": 133
+    },
+    {
+      "rolling_eval_year": 2022,
+      "model_error_type": "false_negative",
+      "rows": 20
+    },
+    {
+      "rolling_eval_year": 2022,
+      "model_error_type": "false_positive",
+      "rows": 66
+    },
+    {
+      "rolling_eval_year": 2022,
+      "model_error_type": "true_negative",
+      "rows": 434
+    },
+    {
+      "rolling_eval_year": 2022,
+      "model_error_type": "true_positive",
+      "rows": 156
+    }
+  ],
+  "sample_counts": [
+    {
+      "committee_policy": "feature46_full_review_trigger_73",
+      "sample_category": "bbb_minus_bb_plus_boundary",
+      "rows": 15
+    },
+    {
+      "committee_policy": "feature46_full_review_trigger_73",
+      "sample_category": "fn_caught_by_stage2_review",
+      "rows": 15
+    },
+    {
+      "committee_policy": "feature46_full_review_trigger_73",
+      "sample_category": "fp_needing_committee_mitigation",
+      "rows": 15
+    },
+    {
+      "committee_policy": "feature46_full_review_trigger_73",
+      "sample_category": "true_negative_overescalation_guardrail",
+      "rows": 15
+    },
+    {
+      "committee_policy": "feature46_full_review_trigger_73",
+      "sample_category": "true_positive_risk_explanation",
+      "rows": 15
+    }
+  ],
+  "split_usage_policy": "Use rolling validation for Stage 2 tuning; keep fixed test holdout and 2026 external labels for final confirmation only.",
+  "paths": {
+    "scores": "data/outputs/modeling/feature_46_xgboost/diagnostics/stage2_agents/feature46_full_review_trigger_73_harness/rolling_samples/stage2_rolling_validation_scores.csv",
+    "samples": "data/outputs/modeling/feature_46_xgboost/diagnostics/stage2_agents/feature46_full_review_trigger_73_harness/rolling_samples/committee_review_rolling_validation_tuning_samples.csv",
+    "summary": "data/outputs/modeling/feature_46_xgboost/diagnostics/stage2_agents/feature46_full_review_trigger_73_harness/rolling_samples/stage2_rolling_validation_summary.json",
+    "report": "data/outputs/modeling/feature_46_xgboost/diagnostics/stage2_agents/feature46_full_review_trigger_73_harness/rolling_samples/stage2_rolling_validation_report.md"
+  }
+}

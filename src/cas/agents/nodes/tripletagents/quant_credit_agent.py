@@ -6,12 +6,16 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from cas.agents.stage2_bundle import Stage2InputBundle
 from cas.agents.stage2_outputs import QuantCreditOutput
+from cas.agents.stage2_prompt_contracts import (
+    build_stage2_role_instructions,
+    build_stage2_role_query,
+)
+from cas.agents.stage2_runtime_config import Stage2RuntimeConfig
 
 from .runtime import (
     build_agno_agent,
     clamp,
     compact_items,
-    json_payload,
     provider_label,
     run_structured_agent,
 )
@@ -42,6 +46,7 @@ def run_quant_credit_agent(
     model_name: str,
     model_provider: str = "openai",
     max_tokens: int,
+    runtime_config: Stage2RuntimeConfig | None = None,
 ) -> QuantCreditOutput:
     """Run the Agno QuantCreditAgent and map it to the CAS Stage 2 schema."""
     model_label = provider_label(model_provider)
@@ -51,23 +56,17 @@ def run_quant_credit_agent(
         model_name=model_name,
         max_tokens=max_tokens,
         response_model=AgnoQuantCreditResponse,
-        instructions=[
-            f"You are the CAS QuantCreditAgent speaking from the {model_label} perspective.",
-            "Your role is limited to quantitative credit analysis: Stage 1 model outputs, SHAP drivers, financial metrics, peer context, and credit_policy_snapshot.",
-            "Do not review external news, litigation, audit events, market rumors, or macro narratives; those belong to EvidenceAuditAgent.",
-            "Use credit_policy_snapshot as deterministic financial policy context derived from credit-signal policy themes.",
-            "When credit_policy_snapshot includes basis labels such as Beaver, Altman, Beneish, or internal_validation_required, use them only to explain the policy signal rationale.",
-            "Do not claim that a named research family directly proves this company's default risk.",
-            "Do not invent new thresholds, hidden weights, or private scoring rules.",
-            "If credit_policy_snapshot conflicts with SHAP direction or peer context, explicitly state the conflict.",
-            "Preserve the Stage 1 model label and probability_speculative; explain or qualify the quantitative rationale without overwriting them.",
-            "Return concise Korean business review prose in the structured response fields only.",
-        ],
+        runtime_config=runtime_config,
+        instructions=build_stage2_role_instructions(
+            "quant_credit",
+            provider_label=model_label,
+        ),
     )
     result = run_structured_agent(
         agent=agent,
         query=_query(bundle),
         response_model=AgnoQuantCreditResponse,
+        runtime_config=runtime_config,
     )
     return QuantCreditOutput(
         quant_summary=(
@@ -103,11 +102,9 @@ def _query(bundle: Stage2InputBundle) -> str:
             ),
         },
     }
-    return (
-        "Run QuantCreditAgent for CAS Stage 2. "
-        "Focus on model rationale, SHAP/financial drivers, peer context, and internal risk level. "
-        "Return only the AgnoQuantCreditResponse fields.\n\n"
-        f"{json_payload(prompt_payload)}"
+    return build_stage2_role_query(
+        "quant_credit",
+        prompt_payload=prompt_payload,
     )
 
 

@@ -31,8 +31,8 @@ from cas.agents.nodes.base_prediction_node import _top_risk_drivers  # noqa: E40
 from cas.utils.io import read_json, read_yaml  # noqa: E402
 
 LABELS_2026_PATH = ROOT / "data/evaluation/credit_rating_labels_2026.csv"
-INFERENCE_2026_PATH = ROOT / "data/input/credit_43_features/feature_43_inference_2026.csv"
-MODEL_DIR = ROOT / "data/outputs/modeling/feature_43_xgboost"
+INFERENCE_2026_PATH = ROOT / "data/input/credit_46_features/feature_46_inference_2026.csv"
+MODEL_DIR = ROOT / "data/outputs/modeling/feature_46_xgboost"
 MODEL_PATH = MODEL_DIR / "xgboost_model.json"
 METADATA_PATH = MODEL_DIR / "model_artifact_metadata.json"
 OUTPUT_DIR = MODEL_DIR / "diagnostics"
@@ -326,8 +326,8 @@ def stage1_model_payload(
     row: pd.Series, *, top_drivers: list[dict[str, float | str]]
 ) -> dict[str, Any]:
     return {
-        "model_name": "credit_43_features",
-        "model_version": "feature_43_xgboost",
+        "model_name": "credit_46_features",
+        "model_version": "feature_46_xgboost",
         "probability_speculative": round(float(row["prob_speculative"]), 4),
         "prediction_label": str(row["prediction_label"]),
         "risk_band": str(row["risk_band"]),

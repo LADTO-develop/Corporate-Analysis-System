@@ -27,7 +27,7 @@ from export_feature_43_candidate_feature_pack_experiments import (
 )
 
 ROOT = Path(__file__).resolve().parents[1]
-MASTER_PATH = INPUT_DIR / "feature_43_master.csv"
+MASTER_PATH = INPUT_DIR / "feature_46_master.csv"
 ROLLING_EVAL_YEARS = [2019, 2020, 2021, 2022]
 ID_COLUMNS = [
     "market",

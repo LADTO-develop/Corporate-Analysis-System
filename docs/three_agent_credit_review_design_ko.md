@@ -257,10 +257,13 @@ Agno/LLM 추론은 CI와 일반 재현 실행에서는 꺼 둔다.
 structured output 기반 실행으로 교체된다. 기본 live 모드는
 `CAS_STAGE2_AGNO_MODE=single`이며 provider/model은 `CAS_STAGE2_MODEL_PROVIDER`,
 `CAS_STAGE2_MODEL` 또는 batch CLI의 `--stage2-model-provider`, `--stage2-model`로
-선택한다. `single` 모드는 한 provider를 쓰되 QuantCredit/EvidenceAudit/ChairReport
+선택한다. 기본 provider/model catalog는 `configs/dashboard/llm_models.yaml`에서
+대시보드와 Stage 2가 함께 읽는다. `single` 모드는 한 provider를 쓰되 QuantCredit/EvidenceAudit/ChairReport
 세 역할 agent를 분리 실행한다. live 지연시간을 측정할 때는 LLM 응답 캐시를 끄기 위해
 `CAS_STAGE2_LLM_CACHE_ENABLED=0` 또는 batch CLI의 `--no-stage2-llm-cache`를 사용한다.
-여러 LLM 관점을 비교할 때만 `multi_llm_committee` 모드를 사용한다.
+여러 LLM 관점을 비교할 때만 `multi_llm_committee` 모드를 사용한다. 현재 기본 역할 배정은
+`gemini_quant_claude_evidence_openai_chair`이며, QuantCredit는 Gemini 2.5 Flash,
+EvidenceAudit는 Claude Sonnet, ChairReport는 OpenAI gpt-4.1-mini를 사용한다.
 
 이때 모델 판단은 계속 `model_view`에 보존하고, Agno 결과는 `committee_view`를
 설명·보완하는 용도로만 사용한다. 실제 기업-회계연도와 외부근거 질의를 API로

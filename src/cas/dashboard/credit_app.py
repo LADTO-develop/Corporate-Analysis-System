@@ -1,4 +1,4 @@
-"""Streamlit dashboard for 43-feature credit risk model exploration."""
+"""Streamlit dashboard for 46-feature credit risk model exploration."""
 
 from __future__ import annotations
 
@@ -6,13 +6,11 @@ import logging
 import math
 import os
 import re
-from collections.abc import Callable
-from concurrent.futures import Future, ThreadPoolExecutor
-from datetime import date, datetime
+from collections.abc import Callable, Sequence
+from concurrent.futures import Future
 from html import escape
 from pathlib import Path
 from typing import cast
-from zoneinfo import ZoneInfo
 
 import altair as alt
 import pandas as pd
@@ -21,15 +19,21 @@ from dotenv import load_dotenv
 
 from cas.agents.contracts import build_company_selection_from_row
 from cas.agents.nodes import committee_node, rule_engine_node
+from cas.agents.stage2_review_signals import (
+    LEGACY_STAGE2_REVIEW_AUX_IT_THRESHOLD_COLUMN,
+    LEGACY_STAGE2_REVIEW_AUX_PROB_COLUMN,
+    LEGACY_STAGE2_REVIEW_AUX_THRESHOLD_COLUMN,
+    STAGE2_REVIEW_AUX_ALIAS,
+    STAGE2_REVIEW_AUX_IT_THRESHOLD_COLUMN,
+    STAGE2_REVIEW_AUX_PROB_COLUMN,
+    STAGE2_REVIEW_AUX_THRESHOLD_COLUMN,
+    STAGE2_REVIEW_TRIGGER_DISPLAY_NAME,
+    normalize_stage2_review_trigger_reason,
+)
+from cas.agents.stage2_runtime_config import Stage2RuntimeConfig
 from cas.agents.state import AgentState
 from cas.dashboard.cards import (
-    CARD_SHADOW,
-    COLOR_CARD_BG,
-    COLOR_CARD_BORDER,
-    COLOR_CARD_LABEL,
-    COLOR_CARD_VALUE,
     render_accent_summary_card,
-    render_badge_hint_card,
     render_badge_value_block,
     render_bold_value_block,
     render_bullet_card,
@@ -86,151 +90,77 @@ from cas.dashboard.labels import (
     to_stage2_risk_band,
 )
 from cas.dashboard.landing_page import LandingPageFormatters, pick_selected_company
-from cas.dashboard.llm import generate_llm_explanation
+from cas.dashboard.model_catalog import (
+    DashboardModelCatalog,
+    ModelOption,
+    available_agent_model_options,
+    load_dashboard_model_catalog,
+    unavailable_agent_provider_statuses,
+)
+from cas.dashboard.scenario_tab import (
+    ScenarioTabFormatters,
+    render_scenario_tab,
+)
+from cas.dashboard.settings import (
+    ARTIFACT_PRESETS,
+    COLOR_COMPANY,
+    COLOR_DARK,
+    COLOR_INDUSTRY,
+    COLOR_MARKET,
+    COLOR_MITIGATE,
+    COLOR_MUTED,
+    COLOR_NEUTRAL,
+    COLOR_RISK,
+    COLOR_SOFT_BLUE,
+    DASHBOARD_BASE_STAGE2_RUNNER,
+    DASHBOARD_LIVE_STAGE2_RUNNER,
+    FEATURE_DIRECTION_LABELS,
+    FINANCIAL_STATEMENT_DERIVED_FEATURES,
+    LLM_OUTPUT_FORMATS,
+    MONEY_DISPLAY_MODES,
+)
+from cas.dashboard.stage2_runtime import (
+    consume_dashboard_live_stage2_job as _consume_dashboard_live_stage2_job,
+)
+from cas.dashboard.stage2_runtime import (
+    dashboard_cache_saved_at_label as _dashboard_cache_saved_at_label,
+)
+from cas.dashboard.stage2_runtime import (
+    dashboard_committee_cache_key as _dashboard_committee_cache_key,
+)
+from cas.dashboard.stage2_runtime import (
+    dashboard_needs_live_stage2_from_views as _dashboard_needs_live_stage2_from_views,
+)
+from cas.dashboard.stage2_runtime import (
+    dashboard_stage2_header_request_key as _dashboard_stage2_header_request_key,
+)
+from cas.dashboard.stage2_runtime import (
+    dashboard_stage2_job_key as _dashboard_stage2_job_key,
+)
+from cas.dashboard.stage2_runtime import (
+    dashboard_stage2_runner_name as _dashboard_stage2_runner_name,
+)
+from cas.dashboard.stage2_runtime import (
+    dashboard_stage2_runtime_config as _dashboard_stage2_runtime_config,
+)
+from cas.dashboard.stage2_runtime import (
+    empty_dashboard_evidence_snapshot as _empty_dashboard_evidence_snapshot,
+)
+from cas.dashboard.stage2_runtime import (
+    resolve_dashboard_committee_context,
+    resolve_dashboard_external_evidence_cached,
+)
+from cas.dashboard.stage2_runtime import (
+    start_dashboard_live_stage2_job as _start_dashboard_live_stage2_job,
+)
 from cas.dashboard.streamlit_compat import (
     stretch_altair_chart,
     stretch_dataframe,
-    stretch_download_button,
 )
 from cas.dashboard.theme import inject_dashboard_theme
-from cas.evidence import collect_external_evidence
 from cas.ratings import lookup_prior_rating_reference
-from cas.utils.live_cache import live_cache_dir, read_json_cache, stable_cache_key, write_json_cache
 
 LOGGER = logging.getLogger(__name__)
-
-DASHBOARD_BASE_STAGE2_RUNNER = "deterministic"
-DASHBOARD_LIVE_STAGE2_RUNNER = "agno"
-DASHBOARD_COMMITTEE_CONTEXT_CACHE_VERSION = "dashboard_committee_context_v3"
-
-PREFERRED_DEFAULT_COMPANIES = [
-    "현대모비스(주)",
-    "삼성물산(주)",
-    "삼성SDI(주)",
-    "(주)카카오",
-    "에스케이이노베이션(주)",
-]
-
-COLOR_RISK = "#c85050"
-COLOR_MITIGATE = "#2f9e5b"
-COLOR_NEUTRAL = "#4f6fad"
-COLOR_MUTED = "#9aa3b2"
-COLOR_SOFT_BLUE = "#7f93c9"
-COLOR_DARK = COLOR_MUTED
-COLOR_COMPANY = "#1d4ed8"
-COLOR_INDUSTRY = "#d97706"
-COLOR_MARKET = "#6b7280"
-
-ARTIFACT_PRESETS = {
-    "team_43": {
-        "label": "2026 예측 결과",
-        "path": DEFAULT_ARTIFACT_DIR,
-        "description": "2025 회계연도 입력값으로 2026년 신용도를 예측한 기본 결과를 불러옵니다.",
-    },
-    "custom": {
-        "label": "직접 경로 입력",
-        "path": None,
-        "description": "사용자가 직접 대시보드 아티팩트 폴더 경로를 입력합니다.",
-    },
-}
-
-LLM_PROVIDER_LABELS = {
-    "openai": "OpenAI",
-    "claude": "Claude",
-}
-
-RECOMMENDED_LLM_MODELS = {
-    "openai": [
-        ("gpt-5.5", "gpt-5.5 | 최고급 추론·요약"),
-        ("gpt-5.4-mini", "gpt-5.4-mini | 속도·비용 균형"),
-        ("gpt-4.1", "gpt-4.1 | 안정적인 고성능"),
-        ("gpt-4.1-mini", "gpt-4.1-mini | 빠른 기본 옵션"),
-    ],
-    "claude": [
-        ("claude-sonnet-4-20250514", "claude-sonnet-4-20250514 | 균형형"),
-        ("claude-opus-4-20250514", "claude-opus-4-20250514 | 고급 추론"),
-        ("claude-3-7-sonnet-20250219", "claude-3-7-sonnet-20250219 | 안정형"),
-    ],
-}
-
-LLM_OUTPUT_FORMATS = {
-    "brief": "빠르게 보기",
-    "memo": "기본으로 보기",
-    "detailed": "꼼꼼히 보기",
-}
-
-OUTPUT_FORMAT_DESCRIPTIONS = {
-    "brief": "결론과 핵심 근거만 먼저 확인합니다.",
-    "memo": "위험 요인, 완화 요인, 외부근거를 균형 있게 읽습니다.",
-    "detailed": "판단 규칙과 참고 근거까지 조금 더 자세히 살펴봅니다.",
-}
-
-MONEY_DISPLAY_MODES = {
-    "detailed": "상세 (억·만·원)",
-    "eok_only": "단순 (억 원)",
-}
-
-FEATURE_DIRECTION_LABELS = {
-    "accruals_ratio": "낮을수록 대체로 긍정",
-    "depreciation": "맥락에 따라 다름",
-    "intangible_assets_ratio": "맥락에 따라 다름",
-    "ocf_to_total_liabilities": "높을수록 대체로 긍정",
-    "total_debt_turnover": "높을수록 대체로 긍정",
-    "firm_size_group": "맥락에 따라 다름",
-    "industry_macro_category": "맥락에 따라 다름",
-    "listed_year": "맥락에 따라 다름",
-    "market": "맥락에 따라 다름",
-    "spec_spread": "낮을수록 대체로 긍정",
-    "dividend_payer": "O가 대체로 긍정",
-    "market_to_book": "맥락에 따라 다름",
-    "gross_profit": "높을수록 대체로 긍정",
-    "interest_coverage_ratio": "높을수록 대체로 긍정",
-    "net_margin": "높을수록 대체로 긍정",
-    "operating_roa": "높을수록 대체로 긍정",
-    "pretax_roa": "높을수록 대체로 긍정",
-    "pretax_roe": "높을수록 대체로 긍정",
-    "assets_total": "맥락에 따라 다름",
-    "capital_impairment_ratio": "낮을수록 대체로 긍정",
-    "cash_ratio": "높을수록 대체로 긍정",
-    "current_ratio": "높을수록 대체로 긍정",
-    "debt_ratio": "낮을수록 대체로 긍정",
-    "equity_ratio": "높을수록 대체로 긍정",
-    "total_borrowings_ratio": "낮을수록 대체로 긍정",
-    "is_2y_consecutive_ocf_deficit": "아니오가 대체로 긍정",
-    "net_margin_diff": "높을수록 대체로 긍정",
-    "short_term_borrowings_share": "낮을수록 대체로 긍정",
-    "total_assets_growth": "맥락에 따라 다름",
-}
-
-FINANCIAL_STATEMENT_DERIVED_FEATURES = {
-    "accruals_ratio",
-    "assets_total",
-    "capital_impairment_ratio",
-    "cash_ratio",
-    "cashflow_coverage_ratio",
-    "current_ratio",
-    "debt_ratio",
-    "depreciation",
-    "equity_ratio",
-    "gross_profit",
-    "icr_under_1",
-    "interest_coverage_ratio",
-    "intangible_assets_ratio",
-    "is_2y_consecutive_ocf_deficit",
-    "is_2y_consecutive_operating_loss",
-    "net_margin",
-    "net_margin_diff",
-    "ocf_to_sales",
-    "ocf_to_total_borrowings",
-    "ocf_to_total_liabilities",
-    "operating_roa",
-    "pretax_roa",
-    "pretax_roe",
-    "short_term_borrowings_share",
-    "total_assets_growth",
-    "total_borrowings_ratio",
-    "total_debt_turnover",
-}
 
 
 def dashboard_artifact_cache_token(artifact_dir: str | None = None) -> str:
@@ -319,25 +249,6 @@ def resolve_company_peer_slice(
     ].copy()
 
 
-def resolve_industry_latest_row(
-    selected_row: pd.Series,
-    industry_latest_summary: pd.DataFrame | None,
-) -> pd.Series | None:
-    """Return the latest industry summary row for the selected company."""
-    if industry_latest_summary is None:
-        return None
-    matched = industry_latest_summary.loc[
-        (industry_latest_summary["market"] == str(selected_row["market"]))
-        & (
-            industry_latest_summary["industry_macro_category"]
-            == str(selected_row["industry_macro_category"])
-        )
-    ]
-    if matched.empty:
-        return None
-    return matched.iloc[0]
-
-
 def display_name(feature: str, feature_map: pd.DataFrame) -> str:
     """Return a Korean-first display name for a feature."""
     matched = feature_map.loc[feature_map["feature"] == feature]
@@ -398,6 +309,15 @@ def _optional_float(value: object, *, default: float = 0.0) -> float:
         return float(str(cleaned))
     except (TypeError, ValueError):
         return default
+
+
+def _first_prediction_value(prediction_row: pd.Series, *columns: str) -> object:
+    for column in columns:
+        if column in prediction_row.index:
+            value = _clean_dashboard_value(prediction_row.get(column))
+            if value is not None:
+                return value
+    return None
 
 
 def _float_or_none(value: object) -> float | None:
@@ -698,375 +618,6 @@ def _format_percentile_gap(value: float) -> str:
     return f"{rounded:.1f}"
 
 
-def _empty_dashboard_evidence_snapshot() -> dict[str, object]:
-    """Return a friendly empty evidence snapshot for dashboard-first review."""
-    return {
-        "status": "not_requested",
-        "source": "external_evidence",
-        "enabled": False,
-        "items": [],
-        "providers": {},
-        "has_critical_risk": False,
-        "critical_terms": [],
-        "message": "대시보드에서 아직 실시간 뉴스/웹/OpenDART 외부 근거를 수집하지 않았습니다.",
-    }
-
-
-def _dashboard_evidence_key(selected_row: pd.Series) -> str:
-    """Build a Streamlit session key for cached dashboard evidence."""
-    return (
-        f"external_evidence:v2:{_stock_code_text(selected_row.get('stock_code'))}:"
-        f"{_optional_int(selected_row.get('fiscal_year')) or 'latest'}"
-    )
-
-
-def _dashboard_cache_read(namespace: str, key: str) -> dict[str, object] | None:
-    """Read a dashboard JSON cache that can survive browser refreshes."""
-    return cast(
-        "dict[str, object] | None",
-        read_json_cache(
-            namespace,
-            key,
-            env_var="CAS_DASHBOARD_CACHE_ENABLED",
-            default=True,
-        ),
-    )
-
-
-def _dashboard_cache_write(
-    namespace: str,
-    key: str,
-    payload: dict[str, object],
-) -> None:
-    """Persist a dashboard JSON cache without exposing this concern to render code."""
-    write_json_cache(
-        namespace,
-        key,
-        payload,
-        env_var="CAS_DASHBOARD_CACHE_ENABLED",
-        default=True,
-    )
-
-
-def _dashboard_cache_file_path(namespace: str, key: str) -> Path:
-    """Return the dashboard cache file path for metadata display."""
-    safe_namespace = namespace.replace("/", "_").replace("..", "_")
-    return Path(live_cache_dir()) / safe_namespace / f"{key}.json"
-
-
-def _dashboard_cache_saved_at_label(namespace: str, key: str) -> str | None:
-    """Return a user-facing saved timestamp for an existing dashboard cache file."""
-    path = _dashboard_cache_file_path(namespace, key)
-    if not path.exists():
-        return None
-    try:
-        saved_at = datetime.fromtimestamp(path.stat().st_mtime, tz=ZoneInfo("Asia/Seoul"))
-    except OSError:
-        return None
-    return saved_at.strftime("%Y-%m-%d %H:%M")
-
-
-def _dashboard_stage2_async_workers() -> int:
-    """Return the small worker pool size for live Stage 2 dashboard jobs."""
-    try:
-        raw_value = int(os.environ.get("CAS_DASHBOARD_STAGE2_ASYNC_WORKERS", "2"))
-    except ValueError:
-        raw_value = 2
-    return max(1, min(raw_value, 4))
-
-
-_stage2_executor_cache = cast(
-    Callable[[Callable[[int], ThreadPoolExecutor]], Callable[[int], ThreadPoolExecutor]],
-    st.cache_resource(show_spinner=False),
-)
-
-
-@_stage2_executor_cache
-def _dashboard_stage2_executor(max_workers: int) -> ThreadPoolExecutor:
-    """Share a bounded executor across Streamlit reruns."""
-    return ThreadPoolExecutor(
-        max_workers=max_workers,
-        thread_name_prefix="cas-dashboard-stage2",
-    )
-
-
-def _dashboard_get_stage2_executor() -> ThreadPoolExecutor:
-    return _dashboard_stage2_executor(_dashboard_stage2_async_workers())
-
-
-def _dashboard_evidence_cache_key(selected_row: pd.Series) -> str:
-    """Build a stable file-cache key for dashboard external evidence."""
-    return cast(
-        str,
-        stable_cache_key(
-            {
-                "cache_version": "dashboard_external_evidence_v1",
-                "stock_code": _stock_code_text(selected_row.get("stock_code")),
-                "corp_name": str(selected_row.get("corp_name") or ""),
-                "corp_code": _optional_text(selected_row.get("corp_code")),
-                "fiscal_year": _optional_int(selected_row.get("fiscal_year")),
-                "eval_year": _optional_int(selected_row.get("eval_year")),
-                "as_of_date": _dashboard_evidence_as_of_date(selected_row),
-            }
-        ),
-    )
-
-
-def _dashboard_stage2_runner_name(stage2_runner: str | None = None) -> str:
-    """Return the dashboard Stage 2 runner name used for cache separation."""
-    runner = (
-        stage2_runner
-        or os.environ.get("CAS_DASHBOARD_STAGE2_RUNNER")
-        or os.environ.get("CAS_STAGE2_RUNNER")
-        or DASHBOARD_BASE_STAGE2_RUNNER
-    )
-    return runner.strip().lower() or DASHBOARD_BASE_STAGE2_RUNNER
-
-
-def _dashboard_stage2_cache_config(stage2_runner: str | None = None) -> dict[str, object]:
-    """Return the Stage 2 prompt/model knobs that should invalidate dashboard cache."""
-    return {
-        "cache_version": DASHBOARD_COMMITTEE_CONTEXT_CACHE_VERSION,
-        "runner": _dashboard_stage2_runner_name(stage2_runner),
-        "model_provider": os.environ.get("CAS_STAGE2_MODEL_PROVIDER", "openai"),
-        "model": os.environ.get("CAS_STAGE2_MODEL", "gpt-4.1-mini"),
-        "agno_mode": os.environ.get("CAS_STAGE2_AGNO_MODE", "single"),
-        "quant_provider": os.environ.get("CAS_STAGE2_QUANT_PROVIDER"),
-        "quant_model": os.environ.get("CAS_STAGE2_QUANT_MODEL"),
-        "evidence_provider": os.environ.get("CAS_STAGE2_EVIDENCE_PROVIDER"),
-        "evidence_model": os.environ.get("CAS_STAGE2_EVIDENCE_MODEL"),
-        "chair_provider": os.environ.get("CAS_STAGE2_CHAIR_PROVIDER"),
-        "chair_model": os.environ.get("CAS_STAGE2_CHAIR_MODEL"),
-        "review_qa_enabled": os.environ.get("CAS_STAGE2_REVIEW_QA_ENABLED"),
-        "risk_recall_qa_enabled": os.environ.get("CAS_STAGE2_RISK_RECALL_QA_ENABLED"),
-        "max_tokens": os.environ.get("CAS_STAGE2_MAX_TOKENS", "6000"),
-    }
-
-
-def _dashboard_committee_cache_key(
-    selected_row: pd.Series,
-    prediction_row: pd.Series | None,
-    external_evidence_snapshot: dict[str, object],
-    *,
-    stage2_runner: str | None = None,
-) -> str | None:
-    """Build a stable cache key for the rendered committee decision context."""
-    if prediction_row is None:
-        return None
-    return cast(
-        str,
-        stable_cache_key(
-            {
-                "cache_version": DASHBOARD_COMMITTEE_CONTEXT_CACHE_VERSION,
-                "stage2_cache_config": _dashboard_stage2_cache_config(stage2_runner),
-                "stock_code": _stock_code_text(selected_row.get("stock_code")),
-                "corp_name": str(selected_row.get("corp_name") or ""),
-                "fiscal_year": _optional_int(selected_row.get("fiscal_year")),
-                "eval_year": _optional_int(selected_row.get("eval_year")),
-                "probability_speculative": _optional_float(prediction_row.get("prob_speculative")),
-                "threshold": _optional_float(prediction_row.get("threshold")),
-                "predicted_label": _clean_dashboard_value(prediction_row.get("predicted_label")),
-                "risk_band": _clean_dashboard_value(prediction_row.get("risk_band")),
-                "stage2_review_priority": _clean_dashboard_value(
-                    prediction_row.get("stage2_review_priority")
-                ),
-                "stage2_review_trigger": _optional_bool(
-                    prediction_row.get("stage2_review_trigger")
-                ),
-                "stage2_secondary_trigger": _optional_bool(
-                    prediction_row.get("stage2_secondary_trigger")
-                ),
-                "overwarning_filter_candidate": _optional_bool(
-                    prediction_row.get("stage2_overwarning_filter_candidate")
-                ),
-                "external_evidence_key": cast(str, stable_cache_key(external_evidence_snapshot)),
-            }
-        ),
-    )
-
-
-def _dashboard_stage2_job_key(
-    selected_row: pd.Series,
-    prediction_row: pd.Series | None,
-) -> str | None:
-    """Build a session key for one in-flight live Agno dashboard job."""
-    if prediction_row is None:
-        return None
-    return "dashboard_stage2_live_job:" + cast(
-        str,
-        stable_cache_key(
-            {
-                "cache_version": "dashboard_stage2_live_job_v1",
-                "stage2_cache_config": _dashboard_stage2_cache_config(DASHBOARD_LIVE_STAGE2_RUNNER),
-                "stock_code": _stock_code_text(selected_row.get("stock_code")),
-                "corp_name": str(selected_row.get("corp_name") or ""),
-                "fiscal_year": _optional_int(selected_row.get("fiscal_year")),
-                "eval_year": _optional_int(selected_row.get("eval_year")),
-                "probability_speculative": _optional_float(prediction_row.get("prob_speculative")),
-                "threshold": _optional_float(prediction_row.get("threshold")),
-                "predicted_label": _clean_dashboard_value(prediction_row.get("predicted_label")),
-                "risk_band": _clean_dashboard_value(prediction_row.get("risk_band")),
-            }
-        ),
-    )
-
-
-def _dashboard_stage2_header_request_key(selected_row: pd.Series) -> str:
-    """Return the key used when the selected-company header requests precise review."""
-    fiscal_year = _optional_int(selected_row.get("fiscal_year"))
-    fiscal_year_text = (
-        str(fiscal_year) if fiscal_year is not None else str(selected_row.get("fiscal_year"))
-    )
-    return f"{_stock_code_text(selected_row.get('stock_code'))}:{fiscal_year_text}"
-
-
-def _persist_dashboard_committee_context(
-    *,
-    selected_row: pd.Series,
-    prediction_row: pd.Series | None,
-    external_evidence_snapshot: dict[str, object],
-    committee_context: dict[str, object] | None,
-    stage2_runner: str | None = None,
-) -> None:
-    """Persist a dashboard committee context in session and disk cache."""
-    if committee_context is None:
-        return
-    cache_key = _dashboard_committee_cache_key(
-        selected_row,
-        prediction_row,
-        external_evidence_snapshot,
-        stage2_runner=stage2_runner,
-    )
-    if cache_key:
-        st.session_state[cache_key] = committee_context
-        _dashboard_cache_write("dashboard_committee_context", cache_key, committee_context)
-
-
-def resolve_dashboard_committee_context(
-    *,
-    selected_row: pd.Series,
-    prediction_row: pd.Series | None,
-    local_shap: pd.DataFrame,
-    peer_slice: pd.DataFrame,
-    external_evidence_snapshot: dict[str, object],
-    stage2_runner: str | None = None,
-    build_if_missing: bool = True,
-) -> tuple[dict[str, object] | None, bool]:
-    """Return the dashboard committee context, reusing it within the current session."""
-    cache_key = _dashboard_committee_cache_key(
-        selected_row,
-        prediction_row,
-        external_evidence_snapshot,
-        stage2_runner=stage2_runner,
-    )
-    if cache_key:
-        cached = st.session_state.get(cache_key)
-        if isinstance(cached, dict):
-            return cast(dict[str, object], cached), True
-        disk_cached = _dashboard_cache_read("dashboard_committee_context", cache_key)
-        if isinstance(disk_cached, dict):
-            st.session_state[cache_key] = disk_cached
-            return disk_cached, True
-    if not build_if_missing:
-        return None, False
-    committee_context = build_dashboard_committee_context(
-        selected_row=selected_row,
-        prediction_row=prediction_row,
-        local_shap=local_shap,
-        peer_slice=peer_slice,
-        external_evidence_snapshot=external_evidence_snapshot,
-        stage2_runner=stage2_runner,
-    )
-    _persist_dashboard_committee_context(
-        selected_row=selected_row,
-        prediction_row=prediction_row,
-        external_evidence_snapshot=external_evidence_snapshot,
-        committee_context=committee_context,
-        stage2_runner=stage2_runner,
-    )
-    return committee_context, False
-
-
-def _dashboard_evidence_as_of_date(selected_row: pd.Series) -> str:
-    """Return the date cut-off for dashboard evidence collection."""
-    fiscal_year = _optional_int(selected_row.get("fiscal_year"))
-    if fiscal_year is not None:
-        return min(date(fiscal_year, 12, 31), date.today()).isoformat()
-    eval_year = _optional_int(selected_row.get("eval_year"))
-    if eval_year is None:
-        return date.today().isoformat()
-    return min(date(eval_year, 12, 31), date.today()).isoformat()
-
-
-def collect_dashboard_external_evidence(selected_row: pd.Series) -> dict[str, object]:
-    """Collect live external evidence for the selected dashboard company on demand."""
-    env = dict(os.environ)
-    env["CAS_ENABLE_EXTERNAL_EVIDENCE"] = "1"
-    env.setdefault("CAS_OPENDART_CORP_CODE_CACHE_PATH", "/private/tmp/cas_opendart_corp_codes.csv")
-    return cast(
-        dict[str, object],
-        collect_external_evidence(
-            company_name=str(selected_row.get("corp_name") or ""),
-            stock_code=_stock_code_text(selected_row.get("stock_code")),
-            corp_code=_optional_text(selected_row.get("corp_code")),
-            as_of_date=_dashboard_evidence_as_of_date(selected_row),
-            env=env,
-        ),
-    )
-
-
-def _persist_dashboard_external_evidence(
-    selected_row: pd.Series,
-    snapshot: dict[str, object],
-) -> None:
-    """Persist a successful external-evidence snapshot in session and disk cache."""
-    evidence_key = _dashboard_evidence_key(selected_row)
-    st.session_state[evidence_key] = snapshot
-    if snapshot.get("status") != "error":
-        _dashboard_cache_write(
-            "dashboard_external_evidence",
-            _dashboard_evidence_cache_key(selected_row),
-            snapshot,
-        )
-
-
-def resolve_dashboard_external_evidence_cached(selected_row: pd.Series) -> dict[str, object]:
-    """Return cached dashboard evidence without triggering network calls."""
-    evidence_key = _dashboard_evidence_key(selected_row)
-    cached = st.session_state.get(evidence_key)
-    if isinstance(cached, dict):
-        return cast(dict[str, object], cached)
-    disk_cache_key = _dashboard_evidence_cache_key(selected_row)
-    disk_cached = _dashboard_cache_read("dashboard_external_evidence", disk_cache_key)
-    if isinstance(disk_cached, dict):
-        st.session_state[evidence_key] = disk_cached
-        return disk_cached
-    return _empty_dashboard_evidence_snapshot()
-
-
-def resolve_dashboard_external_evidence(selected_row: pd.Series) -> dict[str, object]:
-    """Return cached live evidence, collecting it automatically on first tab render."""
-    cached = resolve_dashboard_external_evidence_cached(selected_row)
-    if cached.get("status") != "not_requested":
-        return cached
-    try:
-        with st.spinner("외부 근거를 자동 수집하고 2차 위원회 판단에 반영하는 중입니다..."):
-            snapshot = collect_dashboard_external_evidence(selected_row)
-    except Exception as error:  # pragma: no cover - runtime/network dependent
-        snapshot = {
-            "status": "error",
-            "source": "external_evidence",
-            "enabled": True,
-            "items": [],
-            "providers": {},
-            "has_critical_risk": False,
-            "critical_terms": [],
-            "message": str(error),
-        }
-    _persist_dashboard_external_evidence(selected_row, snapshot)
-    return snapshot
-
-
 def _dashboard_company_id(selected_row: pd.Series) -> str:
     """Build the same human-readable company-year key used by Stage 2."""
     market = str(selected_row.get("market") or "UNKNOWN")
@@ -1109,7 +660,7 @@ def build_dashboard_model_view(
     model_label = to_stage2_model_label(prediction_row.get("predicted_label"))
     return {
         "source": "dashboard_prediction_scores",
-        "model_name": "feature_43_xgboost",
+        "model_name": "feature_46_xgboost",
         "model_version": "dashboard_artifacts",
         "prediction_label": model_label,
         "probability_speculative": probability,
@@ -1118,10 +669,28 @@ def build_dashboard_model_view(
         "risk_band": risk_band,
         "risk_band_display": format_stage2_risk_band(risk_band),
         "top_drivers": _dashboard_top_drivers(local_shap),
-        "probability_speculative_45": _optional_float(prediction_row.get("prob_speculative_45")),
-        "threshold_45": _optional_float(prediction_row.get("threshold_45")),
-        "threshold_45_it_services_review": _optional_float(
-            prediction_row.get("threshold_45_it_services_review")
+        "stage2_review_trigger_name": STAGE2_REVIEW_TRIGGER_DISPLAY_NAME,
+        "stage2_review_aux_alias": STAGE2_REVIEW_AUX_ALIAS,
+        "probability_stage2_review_aux": _optional_float(
+            _first_prediction_value(
+                prediction_row,
+                STAGE2_REVIEW_AUX_PROB_COLUMN,
+                LEGACY_STAGE2_REVIEW_AUX_PROB_COLUMN,
+            )
+        ),
+        "threshold_stage2_review_aux": _optional_float(
+            _first_prediction_value(
+                prediction_row,
+                STAGE2_REVIEW_AUX_THRESHOLD_COLUMN,
+                LEGACY_STAGE2_REVIEW_AUX_THRESHOLD_COLUMN,
+            )
+        ),
+        "threshold_stage2_review_aux_it_services_review": _optional_float(
+            _first_prediction_value(
+                prediction_row,
+                STAGE2_REVIEW_AUX_IT_THRESHOLD_COLUMN,
+                LEGACY_STAGE2_REVIEW_AUX_IT_THRESHOLD_COLUMN,
+            )
         ),
         "stage2_review_trigger": _optional_bool(prediction_row.get("stage2_review_trigger")),
         "stage2_secondary_trigger": _optional_bool(prediction_row.get("stage2_secondary_trigger")),
@@ -1132,7 +701,7 @@ def build_dashboard_model_view(
             _clean_dashboard_value(prediction_row.get("trigger_reason_code")) or "none"
         ),
         "trigger_reason": str(
-            _clean_dashboard_value(prediction_row.get("trigger_reason"))
+            normalize_stage2_review_trigger_reason(prediction_row.get("trigger_reason"))
             or "추가 위원회 검토 트리거 없음"
         ),
         "probability_speculative_overwarning_filter": _optional_float(
@@ -1161,6 +730,7 @@ def build_dashboard_committee_context(
     peer_slice: pd.DataFrame,
     external_evidence_snapshot: dict[str, object] | None = None,
     stage2_runner: str | None = None,
+    stage2_runtime_config: Stage2RuntimeConfig | None = None,
 ) -> dict[str, object] | None:
     """Run Stage 2 review for the selected dashboard company."""
     if prediction_row is None:
@@ -1215,7 +785,11 @@ def build_dashboard_committee_context(
     }
     state = cast(AgentState, state_payload)
     state.update(rule_engine_node.run(state))
-    stage2_result = _run_dashboard_stage2(state, requested_runner=stage2_runner)
+    stage2_result = _run_dashboard_stage2(
+        state,
+        requested_runner=stage2_runner,
+        runtime_config=stage2_runtime_config,
+    )
     state.update(stage2_result)
 
     return {
@@ -1232,27 +806,17 @@ def _run_dashboard_stage2(
     state: AgentState,
     *,
     requested_runner: str | None = None,
+    runtime_config: Stage2RuntimeConfig | None = None,
 ) -> dict[str, object]:
     """Run Stage 2 using the dashboard-selected runner."""
-    previous_runner = os.environ.get("CAS_STAGE2_RUNNER")
-    runner_request = (
-        requested_runner
-        or os.environ.get("CAS_DASHBOARD_STAGE2_RUNNER")
-        or os.environ.get("CAS_STAGE2_RUNNER")
-        or DASHBOARD_BASE_STAGE2_RUNNER
-    ).strip()
+    config = runtime_config or _dashboard_stage2_runtime_config(requested_runner)
+    runner_request = (requested_runner or config.runner or DASHBOARD_BASE_STAGE2_RUNNER).strip()
     dashboard_runner = _dashboard_stage2_runner_for_state(
         state,
         requested_runner=runner_request or DASHBOARD_BASE_STAGE2_RUNNER,
     )
-    os.environ["CAS_STAGE2_RUNNER"] = dashboard_runner
-    try:
+    with committee_node.stage2_runtime_config_override(config.with_runner(dashboard_runner)):
         return cast(dict[str, object], committee_node.run(state))
-    finally:
-        if previous_runner is None:
-            os.environ.pop("CAS_STAGE2_RUNNER", None)
-        else:
-            os.environ["CAS_STAGE2_RUNNER"] = previous_runner
 
 
 def _dashboard_stage2_runner_for_state(
@@ -1275,28 +839,9 @@ def _dashboard_stage2_trigger_only_enabled() -> bool:
 
 
 def _dashboard_needs_live_stage2(state: AgentState) -> bool:
-    model_view = dict(state.get("model_view") or {})
-    news_cache = dict(state.get("news_cache_snapshot") or {})
-    return _dashboard_needs_live_stage2_from_views(model_view, news_cache)
-
-
-def _dashboard_needs_live_stage2_from_views(
-    model_view: dict[str, object],
-    evidence_snapshot: dict[str, object],
-) -> bool:
-    """Return whether the dashboard should suggest live Agno review."""
-    if bool(model_view.get("stage2_review_trigger")):
-        return True
-    if bool(model_view.get("stage2_secondary_trigger")):
-        return True
-    if str(model_view.get("stage2_review_priority") or "").strip().lower() in {"medium", "high"}:
-        return True
-
-    return (
-        bool(evidence_snapshot.get("has_critical_risk"))
-        or (_optional_int(evidence_snapshot.get("veto_candidate_count")) or 0) > 0
-        or (_optional_int(evidence_snapshot.get("high_confidence_critical_count")) or 0) > 0
-    )
+    model_view = cast(dict[str, object], dict(state.get("model_view") or {}))
+    news_cache = cast(dict[str, object], dict(state.get("news_cache_snapshot") or {}))
+    return cast(bool, _dashboard_needs_live_stage2_from_views(model_view, news_cache))
 
 
 def _render_dashboard_live_stage2_notice(
@@ -1358,96 +903,6 @@ def _render_dashboard_live_stage2_loading_screen() -> None:
         ),
         unsafe_allow_html=True,
     )
-
-
-def _run_dashboard_live_stage2_job(
-    *,
-    selected_row: pd.Series,
-    prediction_row: pd.Series | None,
-    local_shap: pd.DataFrame,
-    peer_slice: pd.DataFrame,
-) -> dict[str, object]:
-    """Run network-backed evidence collection and Agno Stage 2 off the Streamlit thread."""
-    evidence_snapshot = collect_dashboard_external_evidence(selected_row)
-    committee_context = build_dashboard_committee_context(
-        selected_row=selected_row,
-        prediction_row=prediction_row,
-        local_shap=local_shap,
-        peer_slice=peer_slice,
-        external_evidence_snapshot=evidence_snapshot,
-        stage2_runner=DASHBOARD_LIVE_STAGE2_RUNNER,
-    )
-    return {
-        "evidence_snapshot": evidence_snapshot,
-        "committee_context": committee_context or {},
-    }
-
-
-def _start_dashboard_live_stage2_job(
-    *,
-    selected_row: pd.Series,
-    prediction_row: pd.Series | None,
-    local_shap: pd.DataFrame,
-    peer_slice: pd.DataFrame,
-) -> Future[dict[str, object]] | None:
-    """Start one in-flight live Agno job for the selected dashboard company."""
-    job_key = _dashboard_stage2_job_key(selected_row, prediction_row)
-    if job_key is None:
-        return None
-    existing = st.session_state.get(job_key)
-    if isinstance(existing, Future) and not existing.done():
-        return cast(Future[dict[str, object]], existing)
-    future = _dashboard_get_stage2_executor().submit(
-        _run_dashboard_live_stage2_job,
-        selected_row=selected_row.copy(deep=True),
-        prediction_row=prediction_row.copy(deep=True) if prediction_row is not None else None,
-        local_shap=local_shap.copy(deep=True),
-        peer_slice=peer_slice.copy(deep=True),
-    )
-    st.session_state[job_key] = future
-    return future
-
-
-def _consume_dashboard_live_stage2_job(
-    *,
-    selected_row: pd.Series,
-    prediction_row: pd.Series | None,
-) -> tuple[dict[str, object] | None, dict[str, object] | None, str | None]:
-    """Resolve a completed live Agno job and persist its caches."""
-    job_key = _dashboard_stage2_job_key(selected_row, prediction_row)
-    if job_key is None:
-        return None, None, None
-    future = st.session_state.get(job_key)
-    if not isinstance(future, Future):
-        return None, None, None
-    if not future.done():
-        return None, None, "running"
-    st.session_state.pop(job_key, None)
-    try:
-        result = future.result()
-    except Exception as error:  # pragma: no cover - runtime/network dependent
-        LOGGER.exception("dashboard_live_stage2_job_failed")
-        return None, None, f"error:{format_stage2_error_detail(error)}"
-
-    evidence_snapshot = cast(
-        dict[str, object],
-        result.get("evidence_snapshot") or _empty_dashboard_evidence_snapshot(),
-    )
-    raw_committee_context = result.get("committee_context")
-    committee_context = (
-        cast(dict[str, object], raw_committee_context)
-        if isinstance(raw_committee_context, dict) and raw_committee_context
-        else None
-    )
-    _persist_dashboard_external_evidence(selected_row, evidence_snapshot)
-    _persist_dashboard_committee_context(
-        selected_row=selected_row,
-        prediction_row=prediction_row,
-        external_evidence_snapshot=evidence_snapshot,
-        committee_context=committee_context,
-        stage2_runner=DASHBOARD_LIVE_STAGE2_RUNNER,
-    )
-    return committee_context, evidence_snapshot, "completed"
 
 
 def _committee_evidence_frame(evidence_summary: object) -> pd.DataFrame:
@@ -1677,1053 +1132,21 @@ def get_feature_unit(feature: str, feature_map: pd.DataFrame) -> str:
 
 def get_feature_direction_label(feature: str) -> str:
     """Return a user-friendly interpretation direction for a feature."""
-    return FEATURE_DIRECTION_LABELS.get(feature, "맥락에 따라 다름")
+    return cast(str, FEATURE_DIRECTION_LABELS.get(feature, "맥락에 따라 다름"))
 
 
-def parse_llm_report_sections(text: str) -> dict[str, list[str]]:
-    """Parse bracketed report sections from the LLM output."""
-    sections: dict[str, list[str]] = {
-        "한줄 판단": [],
-        "핵심 위험 요인": [],
-        "완화 요인": [],
-        "종합 의견": [],
-    }
-    current: str | None = None
-
-    for raw_line in text.splitlines():
-        line = raw_line.strip()
-        if not line:
-            continue
-        header_match = re.fullmatch(r"\[(.+?)\]", line)
-        if header_match:
-            title = header_match.group(1).strip()
-            current = title if title in sections else None
-            continue
-        if current is None:
-            continue
-        cleaned = re.sub(r"^[-*•]\s*", "", line).strip()
-        if cleaned:
-            sections[current].append(cleaned)
-    return sections
-
-
-def build_exportable_llm_report(
-    *,
-    selected_row: pd.Series,
-    prediction_row: pd.Series | None,
-    model: str,
-    output_format_label: str,
-    report_text: str,
-    local_shap: pd.DataFrame,
-    peer_slice: pd.DataFrame,
-    feature_map: pd.DataFrame,
-) -> str:
-    """Build a copy/export-friendly markdown report."""
-    header_lines = [
-        "# AI 심사 메모",
-        "",
-        f"- 기업명: {selected_row.get('corp_name')}",
-        f"- 종목코드: {_stock_code_text(selected_row.get('stock_code'))}",
-        f"- 시장: {to_market_label(selected_row.get('market'))}",
-        f"- 산업: {to_industry_label(selected_row.get('industry_macro_category'))}",
-        f"- 규모: {to_size_label(selected_row.get('firm_size_group'))}",
-        f"- 회계연도: {format_scalar(selected_row.get('fiscal_year'))}",
-        f"- 사용 모델: {model}",
-        f"- 출력 형식: {output_format_label}",
-    ]
-    if prediction_row is not None:
-        header_lines.extend(
-            [
-                f"- 투기등급 확률: {format_percent(prediction_row.get('prob_speculative'))}",
-                f"- 예측 라벨: {to_prediction_label(prediction_row.get('predicted_label'))}",
-                f"- 위험 밴드: {prediction_row.get('risk_band')}",
-                f"- 판정 기준선: {format_scalar(prediction_row.get('threshold'))}",
-            ]
-        )
-    local_frame = _prepare_local_driver_report_frame(local_shap, feature_map, top_n=5)
-    peer_frame = _prepare_peer_report_frame(peer_slice, feature_map, top_n=5)
-    header_lines.extend(["", "## 심사 메모", "", report_text.strip()])
-    if not local_frame.empty:
-        header_lines.extend(
-            [
-                "",
-                "## 주요 설명 변수 표",
-                "",
-                _markdown_table_from_frame(
-                    local_frame,
-                    ["표시명", "실제값", "영향방향", "일반 해석 방향", "SHAP 표시"],
-                ),
-            ]
-        )
-    if not peer_frame.empty:
-        header_lines.extend(
-            [
-                "",
-                "## 동종업계 비교 표",
-                "",
-                _markdown_table_from_frame(
-                    peer_frame,
-                    [
-                        "표시명",
-                        "선택 기업",
-                        "산업 중앙값",
-                        "시장 중앙값",
-                        "산업 내 위치",
-                        "일반 해석 방향",
-                    ],
-                ),
-            ]
-        )
-    return "\n".join(header_lines).strip() + "\n"
-
-
-def build_onepage_llm_report(
-    *,
-    selected_row: pd.Series,
-    prediction_row: pd.Series | None,
-    model: str,
-    output_format_label: str,
-    sections: dict[str, list[str]],
-    local_shap: pd.DataFrame,
-    peer_slice: pd.DataFrame,
-    feature_map: pd.DataFrame,
-) -> str:
-    """Build a one-page compact markdown memo."""
-    top_local = local_shap.head(3).copy() if not local_shap.empty else pd.DataFrame()
-    if not top_local.empty:
-        top_local["표시명"] = top_local["feature"].map(
-            lambda value: display_name(value, feature_map)
-        )
-        top_local["실제값"] = top_local.apply(
-            lambda row: format_value_with_unit(
-                row["feature_value"],
-                get_feature_unit(str(row["feature"]), feature_map),
-                str(row["feature"]),
-            ),
-            axis=1,
-        )
-    peer_summary = peer_slice.copy()
-    if not peer_summary.empty:
-        peer_summary["distance_from_industry_mid"] = (
-            peer_summary["industry_percentile"] - 50.0
-        ).abs()
-        peer_summary = peer_summary.sort_values("distance_from_industry_mid", ascending=False).head(
-            3
-        )
-        peer_summary["표시명"] = peer_summary["feature"].map(
-            lambda value: display_name(value, feature_map)
-        )
-        peer_summary["산업 대비 차이"] = peer_summary.apply(
-            lambda row: format_delta_with_unit(
-                row["value"] - row["industry_median"],
-                get_feature_unit(str(row["feature"]), feature_map),
-                str(row["feature"]),
-            ),
-            axis=1,
-        )
-
-    lines = [
-        "# 원페이지 심사 메모",
-        "",
-        "## 기업 개요",
-        f"- 기업명: {selected_row.get('corp_name')}",
-        f"- 종목코드: {_stock_code_text(selected_row.get('stock_code'))}",
-        f"- 시장/산업: {to_market_label(selected_row.get('market'))} / {to_industry_label(selected_row.get('industry_macro_category'))}",
-        f"- 규모/회계연도: {to_size_label(selected_row.get('firm_size_group'))} / {format_scalar(selected_row.get('fiscal_year'))}",
-        f"- 사용 모델: {model}",
-        f"- 출력 형식: {output_format_label}",
-    ]
-    if prediction_row is not None:
-        lines.extend(
-            [
-                f"- 투기등급 확률: {format_percent(prediction_row.get('prob_speculative'))}",
-                f"- 예측 라벨: {to_prediction_label(prediction_row.get('predicted_label'))}",
-                f"- 위험 밴드: {prediction_row.get('risk_band')}",
-                f"- 판정 기준선: {format_scalar(prediction_row.get('threshold'))}",
-            ]
-        )
-
-    headline = " ".join(sections.get("한줄 판단", [])).strip()
-    if headline:
-        lines.extend(["", "## 한줄 판단", headline])
-
-    risk_items = sections.get("핵심 위험 요인", [])[:3]
-    if risk_items:
-        lines.extend(["", "## 핵심 위험 요인"])
-        lines.extend([f"- {item}" for item in risk_items])
-
-    mitigate_items = sections.get("완화 요인", [])[:2]
-    if mitigate_items:
-        lines.extend(["", "## 완화 요인"])
-        lines.extend([f"- {item}" for item in mitigate_items])
-
-    if not top_local.empty:
-        lines.extend(["", "## 주요 설명 변수"])
-        for row in top_local.to_dict(orient="records"):
-            direction = "위험 증가" if float(row["shap_value"]) > 0 else "위험 완화"
-            lines.append(f"- {row['표시명']}: {row['실제값']} ({direction})")
-        lines.extend(
-            [
-                "",
-                _markdown_table_from_frame(
-                    top_local.rename(columns={"표시명": "지표", "실제값": "실제값"}),
-                    ["지표", "실제값"],
-                ),
-            ]
-        )
-
-    if not peer_summary.empty:
-        lines.extend(["", "## 동종업계 비교 핵심 차이"])
-        for row in peer_summary.to_dict(orient="records"):
-            lines.append(
-                f"- {row['표시명']}: 산업 중앙값 대비 {row['산업 대비 차이']}, 산업 내 위치 {format_percentile_label(row['industry_percentile'])}"
-            )
-        lines.extend(
-            [
-                "",
-                _markdown_table_from_frame(
-                    peer_summary.rename(
-                        columns={"표시명": "지표", "산업 대비 차이": "산업 대비 차이"}
-                    ),
-                    ["지표", "산업 대비 차이"],
-                ),
-            ]
-        )
-
-    opinion = " ".join(sections.get("종합 의견", [])).strip()
-    if opinion:
-        lines.extend(["", "## 종합 의견", opinion])
-
-    return "\n".join(lines).strip() + "\n"
-
-
-def _html_list(items: list[str]) -> str:
-    """Render list items for HTML report sections."""
-    if not items:
-        return "<li>해당 사항이 없습니다.</li>"
-    return "".join(f"<li>{escape(item)}</li>" for item in items if str(item).strip())
-
-
-def _prepare_local_driver_report_frame(
-    local_shap: pd.DataFrame,
-    feature_map: pd.DataFrame,
-    top_n: int = 5,
-) -> pd.DataFrame:
-    """Prepare a compact local SHAP frame for report tables and charts."""
-    if local_shap.empty:
-        return pd.DataFrame()
-    frame = local_shap.sort_values("abs_shap", ascending=False).head(top_n).copy()
-    frame["표시명"] = frame["feature"].map(lambda value: display_name(str(value), feature_map))
-    frame["실제값"] = frame.apply(
-        lambda row: format_value_with_unit(
-            row["feature_value"],
-            get_feature_unit(str(row["feature"]), feature_map),
-            str(row["feature"]),
-        ),
-        axis=1,
+def _dashboard_scenario_formatters() -> ScenarioTabFormatters:
+    """Return the dashboard value formatters needed by the scenario tab."""
+    return ScenarioTabFormatters(
+        display_name=display_name,
+        feature_unit=get_feature_unit,
+        value_with_unit=format_value_with_unit,
+        delta_with_unit=format_delta_with_unit,
+        percentile_label=format_percentile_label,
+        scalar=format_scalar,
+        feature_direction_label=get_feature_direction_label,
+        unit_description=describe_unit,
     )
-    frame["영향방향"] = frame["shap_value"].map(
-        lambda value: "위험 증가" if float(value) > 0 else "위험 완화"
-    )
-    frame["SHAP 표시"] = frame["shap_value"].map(lambda value: f"{float(value):.2f}")
-    frame["|SHAP| 표시"] = frame["abs_shap"].map(lambda value: f"{float(value):.2f}")
-    frame["일반 해석 방향"] = frame["feature"].map(
-        lambda value: get_feature_direction_label(str(value))
-    )
-    return frame
-
-
-def _prepare_peer_report_frame(
-    peer_slice: pd.DataFrame,
-    feature_map: pd.DataFrame,
-    top_n: int = 5,
-) -> pd.DataFrame:
-    """Prepare a compact peer-comparison frame for report tables and charts."""
-    if peer_slice.empty:
-        return pd.DataFrame()
-    frame = peer_slice.copy()
-    frame["distance_from_industry_mid"] = (frame["industry_percentile"] - 50.0).abs()
-    frame = frame.sort_values("distance_from_industry_mid", ascending=False).head(top_n).copy()
-    frame["표시명"] = frame["feature"].map(lambda value: display_name(str(value), feature_map))
-    frame["선택 기업"] = frame.apply(
-        lambda row: format_value_with_unit(
-            row["value"],
-            get_feature_unit(str(row["feature"]), feature_map),
-            str(row["feature"]),
-        ),
-        axis=1,
-    )
-    frame["산업 중앙값"] = frame.apply(
-        lambda row: format_value_with_unit(
-            row["industry_median"],
-            get_feature_unit(str(row["feature"]), feature_map),
-            str(row["feature"]),
-        ),
-        axis=1,
-    )
-    frame["시장 중앙값"] = frame.apply(
-        lambda row: format_value_with_unit(
-            row["market_median"],
-            get_feature_unit(str(row["feature"]), feature_map),
-            str(row["feature"]),
-        ),
-        axis=1,
-    )
-    frame["산업 내 위치"] = frame["industry_percentile"].map(format_percentile_label)
-    frame["일반 해석 방향"] = frame["feature"].map(
-        lambda value: get_feature_direction_label(str(value))
-    )
-    return frame
-
-
-def _markdown_table_from_frame(frame: pd.DataFrame, columns: list[str]) -> str:
-    """Render a simple markdown table from a dataframe."""
-    if frame.empty:
-        return "해당 내용이 없습니다."
-    header = "| " + " | ".join(columns) + " |"
-    divider = "| " + " | ".join(["---"] * len(columns)) + " |"
-    rows = [
-        "| " + " | ".join(str(row.get(column, "-")) for column in columns) + " |"
-        for row in frame.loc[:, columns].to_dict(orient="records")
-    ]
-    return "\n".join([header, divider, *rows])
-
-
-def _html_table_from_frame(frame: pd.DataFrame, columns: list[str]) -> str:
-    """Render an HTML table from a dataframe."""
-    if frame.empty:
-        return "<p>해당 내용이 없습니다.</p>"
-    header_html = "".join(f"<th>{escape(column)}</th>" for column in columns)
-    body_rows = []
-    for row in frame.loc[:, columns].to_dict(orient="records"):
-        cells = []
-        for column in columns:
-            value = row.get(column, "-")
-            if column == "일반 해석 방향":
-                cells.append(f"<td>{render_direction_badge_html(value)}</td>")
-            else:
-                cells.append(f"<td>{escape(str(value))}</td>")
-        body_rows.append("<tr>" + "".join(cells) + "</tr>")
-    return (
-        "<div class='table-wrap'><table class='report-table'>"
-        f"<thead><tr>{header_html}</tr></thead>"
-        f"<tbody>{''.join(body_rows)}</tbody>"
-        "</table></div>"
-    )
-
-
-def _html_shap_bar_rows(frame: pd.DataFrame) -> str:
-    """Render compact inline bars for top local SHAP features."""
-    if frame.empty:
-        return "<p>주요 설명 변수 그래프를 생성할 수 없습니다.</p>"
-    max_abs = max(float(frame["abs_shap"].max()), 1e-9)
-    rows: list[str] = []
-    for row in frame.to_dict(orient="records"):
-        width = max(8.0, (float(row["abs_shap"]) / max_abs) * 100.0)
-        color = COLOR_RISK if str(row["영향방향"]) == "위험 증가" else COLOR_MITIGATE
-        rows.append(
-            "<div class='mini-bar-row'>"
-            f"<div class='mini-bar-label'>{escape(str(row['표시명']))}</div>"
-            "<div class='mini-bar-track'>"
-            f"<div class='mini-bar-fill' style='width:{width:.1f}%;background:{color};'></div>"
-            "</div>"
-            f"<div class='mini-bar-value'>{escape(str(row['SHAP 표시']))}</div>"
-            "</div>"
-        )
-    return "".join(rows)
-
-
-def _html_percentile_rows(frame: pd.DataFrame) -> str:
-    """Render compact percentile bars for peer-comparison context."""
-    if frame.empty:
-        return "<p>동종업계 비교 그래프를 생성할 수 없습니다.</p>"
-    rows: list[str] = []
-    for row in frame.to_dict(orient="records"):
-        percentile = float(row.get("industry_percentile", 0.0))
-        rows.append(
-            "<div class='mini-bar-row'>"
-            f"<div class='mini-bar-label'>{escape(str(row['표시명']))}</div>"
-            "<div class='mini-bar-track'>"
-            f"<div class='mini-bar-fill' style='width:{percentile:.1f}%;background:{COLOR_COMPANY};'></div>"
-            "</div>"
-            f"<div class='mini-bar-value'>{escape(format_percentile_label(percentile))}</div>"
-            "</div>"
-        )
-    return "".join(rows)
-
-
-def build_html_report(
-    *,
-    selected_row: pd.Series,
-    prediction_row: pd.Series | None,
-    model: str,
-    output_format_label: str,
-    sections: dict[str, list[str]],
-    report_text: str,
-    local_shap: pd.DataFrame,
-    peer_slice: pd.DataFrame,
-    feature_map: pd.DataFrame,
-) -> str:
-    """Build a print-friendly detailed HTML report."""
-    probability = (
-        format_percent(prediction_row.get("prob_speculative"))
-        if prediction_row is not None
-        else "-"
-    )
-    predicted_label = (
-        to_prediction_label(prediction_row.get("predicted_label"))
-        if prediction_row is not None
-        else "-"
-    )
-    risk_band = str(prediction_row.get("risk_band")) if prediction_row is not None else "-"
-    threshold = (
-        format_scalar(prediction_row.get("threshold")) if prediction_row is not None else "-"
-    )
-    headline = " ".join(sections.get("한줄 판단", [])).strip() or "심사 요약이 생성되지 않았습니다."
-    opinion = " ".join(sections.get("종합 의견", [])).strip()
-    local_frame = _prepare_local_driver_report_frame(local_shap, feature_map, top_n=5)
-    peer_frame = _prepare_peer_report_frame(peer_slice, feature_map, top_n=5)
-    local_table_html = _html_table_from_frame(
-        local_frame,
-        ["표시명", "실제값", "영향방향", "일반 해석 방향", "SHAP 표시"],
-    )
-    peer_table_html = _html_table_from_frame(
-        peer_frame,
-        ["표시명", "선택 기업", "산업 중앙값", "시장 중앙값", "산업 내 위치", "일반 해석 방향"],
-    )
-    shap_chart_html = _html_shap_bar_rows(local_frame)
-    percentile_chart_html = _html_percentile_rows(peer_frame)
-
-    return f"""<!DOCTYPE html>
-<html lang="ko">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>AI 심사 보고서</title>
-  <style>
-    @page {{
-      size: A4;
-      margin: 18mm 16mm;
-    }}
-    body {{
-      font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
-      background: #f3f5f9;
-      color: #1f2937;
-      margin: 0;
-      padding: 32px;
-      -webkit-print-color-adjust: exact;
-      print-color-adjust: exact;
-    }}
-    .page {{
-      max-width: 960px;
-      margin: 0 auto;
-      background: white;
-      border-radius: 20px;
-      box-shadow: 0 10px 30px rgba(15,23,42,0.08);
-      overflow: hidden;
-    }}
-    .header {{
-      padding: 28px 32px;
-      background: linear-gradient(135deg, #e9eefb 0%, #f8fafc 100%);
-      border-bottom: 1px solid #e5e7eb;
-    }}
-    .header-top {{
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 16px;
-      margin-bottom: 18px;
-    }}
-    .brand {{
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }}
-    .brand-mark {{
-      width: 46px;
-      height: 46px;
-      border-radius: 14px;
-      background: linear-gradient(135deg, #1d4ed8 0%, #60a5fa 100%);
-      color: white;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 13px;
-      font-weight: 800;
-      letter-spacing: 0.02em;
-      box-shadow: 0 6px 18px rgba(29, 78, 216, 0.18);
-    }}
-    .brand-copy {{
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-    }}
-    .brand-title {{
-      font-size: 14px;
-      font-weight: 800;
-      color: #0f172a;
-      letter-spacing: 0.02em;
-    }}
-    .brand-subtitle {{
-      font-size: 12px;
-      color: #64748b;
-      line-height: 1.4;
-    }}
-    .doc-badges {{
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: flex-end;
-      gap: 8px;
-    }}
-    .doc-chip {{
-      padding: 7px 11px;
-      border-radius: 999px;
-      background: rgba(255,255,255,0.82);
-      border: 1px solid #d8dfeb;
-      color: #475569;
-      font-size: 12px;
-      font-weight: 700;
-      white-space: nowrap;
-    }}
-    .eyebrow {{
-      font-size: 13px;
-      font-weight: 700;
-      color: #5c6473;
-      letter-spacing: 0.02em;
-      margin-bottom: 8px;
-    }}
-    h1 {{
-      margin: 0 0 10px 0;
-      font-size: 28px;
-    }}
-    .summary {{
-      line-height: 1.7;
-      color: #374151;
-    }}
-    .meta-grid {{
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-      gap: 12px;
-      padding: 24px 32px 8px 32px;
-    }}
-    .meta-card {{
-      background: #f7f8fb;
-      border: 1px solid #e3e7ef;
-      border-radius: 14px;
-      padding: 14px 16px;
-    }}
-    .meta-label {{
-      font-size: 13px;
-      font-weight: 700;
-      color: #5c6473;
-      margin-bottom: 6px;
-    }}
-    .meta-value {{
-      font-size: 18px;
-      font-weight: 700;
-      color: #1f2937;
-    }}
-    .body {{
-      padding: 8px 32px 32px 32px;
-    }}
-    .section {{
-      margin-top: 24px;
-      padding: 18px 20px;
-      border-radius: 16px;
-      background: #f9fafb;
-      border: 1px solid #e5e7eb;
-    }}
-    .section h2 {{
-      margin: 0 0 12px 0;
-      font-size: 18px;
-    }}
-    .section ul {{
-      margin: 0;
-      padding-left: 20px;
-      line-height: 1.8;
-    }}
-    .section p {{
-      margin: 0;
-      line-height: 1.8;
-    }}
-    .note {{
-      white-space: pre-wrap;
-      line-height: 1.8;
-    }}
-    .table-wrap {{
-      overflow-x: auto;
-    }}
-    .report-table {{
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 14px;
-    }}
-    .report-table th,
-    .report-table td {{
-      border-bottom: 1px solid #e5e7eb;
-      padding: 10px 8px;
-      text-align: left;
-      vertical-align: middle;
-    }}
-    .report-table th {{
-      background: #f3f6fb;
-      color: #475467;
-      font-weight: 700;
-    }}
-    .mini-bar-row {{
-      display: grid;
-      grid-template-columns: 180px 1fr 84px;
-      gap: 10px;
-      align-items: center;
-      margin-bottom: 10px;
-    }}
-    .mini-bar-label {{
-      font-weight: 700;
-      color: #334155;
-      font-size: 14px;
-    }}
-    .mini-bar-track {{
-      width: 100%;
-      height: 12px;
-      background: #edf1f7;
-      border-radius: 999px;
-      overflow: hidden;
-    }}
-    .mini-bar-fill {{
-      height: 100%;
-      border-radius: 999px;
-    }}
-    .mini-bar-value {{
-      text-align: right;
-      font-weight: 700;
-      color: #1f2937;
-      font-size: 13px;
-    }}
-    @media print {{
-      body {{
-        background: white;
-        padding: 0;
-      }}
-      .page {{
-        max-width: none;
-        border-radius: 0;
-        box-shadow: none;
-      }}
-    }}
-  </style>
-</head>
-<body>
-  <div class="page">
-    <div class="header">
-      <div class="header-top">
-        <div class="brand">
-          <div class="brand-mark">CAS</div>
-          <div class="brand-copy">
-            <div class="brand-title">기업 신용위험 분석 보고서</div>
-            <div class="brand-subtitle">Corporate Analysis System 기반 AI 심사 메모 정리본입니다.</div>
-          </div>
-        </div>
-        <div class="doc-badges">
-          <div class="doc-chip">현재 데이터 기준</div>
-          <div class="doc-chip">{escape(output_format_label)}</div>
-        </div>
-      </div>
-      <div class="eyebrow">CREDIT RISK MEMO</div>
-      <h1>{escape(str(selected_row.get("corp_name")))}</h1>
-      <div class="summary">{escape(headline)}</div>
-    </div>
-    <div class="meta-grid">
-      <div class="meta-card"><div class="meta-label">종목코드</div><div class="meta-value">{escape(_stock_code_text(selected_row.get("stock_code")))}</div></div>
-      <div class="meta-card"><div class="meta-label">시장</div><div class="meta-value">{escape(to_market_label(selected_row.get("market")))}</div></div>
-      <div class="meta-card"><div class="meta-label">산업</div><div class="meta-value">{escape(to_industry_label(selected_row.get("industry_macro_category")))}</div></div>
-      <div class="meta-card"><div class="meta-label">규모</div><div class="meta-value">{escape(to_size_label(selected_row.get("firm_size_group")))}</div></div>
-      <div class="meta-card"><div class="meta-label">회계연도</div><div class="meta-value">{escape(format_scalar(selected_row.get("fiscal_year")))}</div></div>
-      <div class="meta-card"><div class="meta-label">사용 모델</div><div class="meta-value">{escape(model)}</div></div>
-      <div class="meta-card"><div class="meta-label">출력 형식</div><div class="meta-value">{escape(output_format_label)}</div></div>
-      <div class="meta-card"><div class="meta-label">투기등급 확률</div><div class="meta-value">{escape(probability)}</div></div>
-      <div class="meta-card"><div class="meta-label">예측 라벨</div><div class="meta-value">{escape(predicted_label)}</div></div>
-      <div class="meta-card"><div class="meta-label">위험 밴드</div><div class="meta-value">{escape(risk_band)}</div></div>
-      <div class="meta-card"><div class="meta-label">판정 기준선</div><div class="meta-value">{escape(threshold)}</div></div>
-    </div>
-    <div class="body">
-      <div class="section">
-        <h2>핵심 위험 요인</h2>
-        <ul>{_html_list(sections.get("핵심 위험 요인", []))}</ul>
-      </div>
-      <div class="section">
-        <h2>완화 요인</h2>
-        <ul>{_html_list(sections.get("완화 요인", []))}</ul>
-      </div>
-      <div class="section">
-        <h2>주요 설명 변수 표</h2>
-        {local_table_html}
-      </div>
-      <div class="section">
-        <h2>주요 설명 변수 그래프</h2>
-        {shap_chart_html}
-      </div>
-      <div class="section">
-        <h2>동종업계 비교 표</h2>
-        {peer_table_html}
-      </div>
-      <div class="section">
-        <h2>동종업계 산업 내 위치</h2>
-        {percentile_chart_html}
-      </div>
-      <div class="section">
-        <h2>종합 의견</h2>
-        <p>{escape(opinion or "종합 의견이 생성되지 않았습니다.")}</p>
-      </div>
-      <div class="section">
-        <h2>AI 심사 메모 원문</h2>
-        <div class="note">{escape(report_text.strip())}</div>
-      </div>
-    </div>
-  </div>
-</body>
-</html>
-"""
-
-
-def build_onepage_html_report(
-    *,
-    selected_row: pd.Series,
-    prediction_row: pd.Series | None,
-    model: str,
-    output_format_label: str,
-    sections: dict[str, list[str]],
-    local_shap: pd.DataFrame,
-    peer_slice: pd.DataFrame,
-    feature_map: pd.DataFrame,
-) -> str:
-    """Build a compact one-page HTML memo."""
-    probability = (
-        format_percent(prediction_row.get("prob_speculative"))
-        if prediction_row is not None
-        else "-"
-    )
-    predicted_label = (
-        to_prediction_label(prediction_row.get("predicted_label"))
-        if prediction_row is not None
-        else "-"
-    )
-    risk_band = str(prediction_row.get("risk_band")) if prediction_row is not None else "-"
-    threshold = (
-        format_scalar(prediction_row.get("threshold")) if prediction_row is not None else "-"
-    )
-    headline = " ".join(sections.get("한줄 판단", [])).strip() or "심사 요약이 생성되지 않았습니다."
-    top_local = local_shap.head(3).copy() if not local_shap.empty else pd.DataFrame()
-    if not top_local.empty:
-        top_local["표시명"] = top_local["feature"].map(
-            lambda value: display_name(value, feature_map)
-        )
-        top_local["실제값"] = top_local.apply(
-            lambda row: format_value_with_unit(
-                row["feature_value"],
-                get_feature_unit(str(row["feature"]), feature_map),
-                str(row["feature"]),
-            ),
-            axis=1,
-        )
-    peer_summary = peer_slice.copy()
-    if not peer_summary.empty:
-        peer_summary["distance_from_industry_mid"] = (
-            peer_summary["industry_percentile"] - 50.0
-        ).abs()
-        peer_summary = peer_summary.sort_values("distance_from_industry_mid", ascending=False).head(
-            3
-        )
-        peer_summary["표시명"] = peer_summary["feature"].map(
-            lambda value: display_name(value, feature_map)
-        )
-        peer_summary["산업 대비 차이"] = peer_summary.apply(
-            lambda row: format_delta_with_unit(
-                row["value"] - row["industry_median"],
-                get_feature_unit(str(row["feature"]), feature_map),
-                str(row["feature"]),
-            ),
-            axis=1,
-        )
-
-    peer_html = (
-        "".join(
-            f"<li>{escape(str(row['표시명']))}: 산업 대비 {escape(str(row['산업 대비 차이']))}</li>"
-            for row in peer_summary.to_dict(orient="records")
-        )
-        or "<li>동종업계 비교 데이터가 없습니다.</li>"
-    )
-    local_table_html = _html_table_from_frame(
-        top_local.rename(
-            columns={
-                "표시명": "지표",
-                "실제값": "실제값",
-            }
-        ),
-        ["지표", "실제값"],
-    )
-    peer_table_html = _html_table_from_frame(
-        peer_summary.rename(
-            columns={
-                "표시명": "지표",
-                "산업 대비 차이": "산업 대비 차이",
-            }
-        ),
-        ["지표", "산업 대비 차이"],
-    )
-    local_chart_html = _html_shap_bar_rows(
-        _prepare_local_driver_report_frame(local_shap, feature_map, top_n=3)
-    )
-
-    return f"""<!DOCTYPE html>
-<html lang="ko">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>원페이지 심사 메모</title>
-  <style>
-    @page {{
-      size: A4;
-      margin: 16mm;
-    }}
-    body {{
-      font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
-      background: white;
-      color: #1f2937;
-      margin: 0;
-      padding: 24px;
-      -webkit-print-color-adjust: exact;
-      print-color-adjust: exact;
-    }}
-    .page {{
-      max-width: 960px;
-      margin: 0 auto;
-      border: 1px solid #e5e7eb;
-      border-radius: 18px;
-      overflow: hidden;
-    }}
-    .header {{
-      padding: 22px 24px;
-      background: linear-gradient(135deg, #eef4ff 0%, #f8fafc 100%);
-      border-bottom: 1px solid #e5e7eb;
-    }}
-    .header-top {{
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 14px;
-      margin-bottom: 14px;
-    }}
-    .brand {{
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }}
-    .brand-mark {{
-      width: 40px;
-      height: 40px;
-      border-radius: 12px;
-      background: linear-gradient(135deg, #1d4ed8 0%, #60a5fa 100%);
-      color: white;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 11px;
-      font-weight: 800;
-      letter-spacing: 0.02em;
-    }}
-    .brand-copy {{
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-    }}
-    .brand-title {{
-      font-size: 13px;
-      font-weight: 800;
-      color: #0f172a;
-    }}
-    .brand-subtitle {{
-      font-size: 11px;
-      color: #64748b;
-      line-height: 1.35;
-    }}
-    .doc-chip {{
-      padding: 6px 10px;
-      border-radius: 999px;
-      background: rgba(255,255,255,0.82);
-      border: 1px solid #d8dfeb;
-      color: #475569;
-      font-size: 11px;
-      font-weight: 700;
-      white-space: nowrap;
-    }}
-    h1 {{
-      margin: 0 0 8px 0;
-      font-size: 24px;
-    }}
-    .headline {{
-      line-height: 1.7;
-      color: #374151;
-    }}
-    .meta {{
-      display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 10px;
-      padding: 16px 24px 0 24px;
-    }}
-    .meta-card {{
-      padding: 12px 14px;
-      border-radius: 12px;
-      background: #f7f8fb;
-      border: 1px solid #e3e7ef;
-    }}
-    .meta-label {{
-      font-size: 12px;
-      font-weight: 700;
-      color: #5c6473;
-      margin-bottom: 4px;
-    }}
-    .meta-value {{
-      font-size: 15px;
-      font-weight: 700;
-      color: #1f2937;
-    }}
-    .grid {{
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 12px;
-      padding: 16px 24px 24px 24px;
-    }}
-    .section {{
-      border: 1px solid #e5e7eb;
-      background: #fafafa;
-      border-radius: 14px;
-      padding: 16px;
-    }}
-    .section h2 {{
-      margin: 0 0 10px 0;
-      font-size: 17px;
-    }}
-    .section ul, .section p {{
-      margin: 0;
-      line-height: 1.75;
-    }}
-    .full {{
-      grid-column: 1 / -1;
-    }}
-    .table-wrap {{
-      overflow-x: auto;
-    }}
-    .report-table {{
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 13px;
-    }}
-    .report-table th,
-    .report-table td {{
-      border-bottom: 1px solid #e5e7eb;
-      padding: 8px 6px;
-      text-align: left;
-      vertical-align: middle;
-    }}
-    .report-table th {{
-      background: #f3f6fb;
-      color: #475467;
-      font-weight: 700;
-    }}
-    .mini-bar-row {{
-      display: grid;
-      grid-template-columns: 140px 1fr 56px;
-      gap: 8px;
-      align-items: center;
-      margin-bottom: 8px;
-    }}
-    .mini-bar-label {{
-      font-weight: 700;
-      color: #334155;
-      font-size: 13px;
-    }}
-    .mini-bar-track {{
-      width: 100%;
-      height: 10px;
-      background: #edf1f7;
-      border-radius: 999px;
-      overflow: hidden;
-    }}
-    .mini-bar-fill {{
-      height: 100%;
-      border-radius: 999px;
-    }}
-    .mini-bar-value {{
-      text-align: right;
-      font-weight: 700;
-      color: #1f2937;
-      font-size: 12px;
-    }}
-    @media print {{
-      body {{
-        padding: 0;
-      }}
-      .page {{
-        max-width: none;
-        border-radius: 0;
-      }}
-    }}
-  </style>
-</head>
-<body>
-  <div class="page">
-    <div class="header">
-      <div class="header-top">
-        <div class="brand">
-          <div class="brand-mark">CAS</div>
-          <div class="brand-copy">
-            <div class="brand-title">원페이지 심사 메모</div>
-            <div class="brand-subtitle">핵심 판단과 주요 근거를 한 장으로 정리한 버전입니다.</div>
-          </div>
-        </div>
-        <div class="doc-chip">{escape(output_format_label)}</div>
-      </div>
-      <h1>{escape(str(selected_row.get("corp_name")))} 원페이지 심사 메모</h1>
-      <div class="headline">{escape(headline)}</div>
-    </div>
-    <div class="meta">
-      <div class="meta-card"><div class="meta-label">시장/산업</div><div class="meta-value">{escape(to_market_label(selected_row.get("market")))} / {escape(to_industry_label(selected_row.get("industry_macro_category")))}</div></div>
-      <div class="meta-card"><div class="meta-label">규모/회계연도</div><div class="meta-value">{escape(to_size_label(selected_row.get("firm_size_group")))} / {escape(format_scalar(selected_row.get("fiscal_year")))}</div></div>
-      <div class="meta-card"><div class="meta-label">투기등급 확률</div><div class="meta-value">{escape(probability)}</div></div>
-      <div class="meta-card"><div class="meta-label">예측 라벨</div><div class="meta-value">{escape(predicted_label)} ({escape(risk_band)})</div></div>
-      <div class="meta-card"><div class="meta-label">판정 기준선</div><div class="meta-value">{escape(threshold)}</div></div>
-      <div class="meta-card"><div class="meta-label">종목코드</div><div class="meta-value">{escape(_stock_code_text(selected_row.get("stock_code")))}</div></div>
-      <div class="meta-card"><div class="meta-label">사용 모델</div><div class="meta-value">{escape(model)}</div></div>
-      <div class="meta-card"><div class="meta-label">출력 형식</div><div class="meta-value">{escape(output_format_label)}</div></div>
-    </div>
-    <div class="grid">
-      <div class="section">
-        <h2>핵심 위험 요인</h2>
-        <ul>{_html_list(sections.get("핵심 위험 요인", []))}</ul>
-      </div>
-      <div class="section">
-        <h2>완화 요인</h2>
-        <ul>{_html_list(sections.get("완화 요인", []))}</ul>
-      </div>
-      <div class="section">
-        <h2>주요 설명 변수</h2>
-        <div style="margin-bottom:10px;">{local_table_html}</div>
-        <div>{local_chart_html}</div>
-      </div>
-      <div class="section">
-        <h2>동종업계 비교 핵심 차이</h2>
-        <div style="margin-bottom:10px;">{peer_table_html}</div>
-        <ul>{peer_html}</ul>
-      </div>
-      <div class="section full">
-        <h2>종합 의견</h2>
-        <p>{escape(" ".join(sections.get("종합 의견", [])).strip() or "종합 의견이 생성되지 않았습니다.")}</p>
-      </div>
-    </div>
-  </div>
-</body>
-</html>
-"""
 
 
 def build_probability_chart(probability: float, threshold: float) -> alt.Chart:
@@ -2756,210 +1179,6 @@ def build_probability_chart(probability: float, threshold: float) -> alt.Chart:
         .properties(height=260)
     )
     return cast(alt.Chart, chart)
-
-
-def approximate_percentile(series: pd.Series, new_value: float) -> float | None:
-    """Approximate percentile rank if a scenario changes one variable."""
-    clean = series.dropna()
-    if clean.empty or pd.isna(new_value):
-        return None
-    augmented = pd.concat([clean, pd.Series([new_value])], ignore_index=True)
-    return float(augmented.rank(method="average", pct=True).iloc[-1] * 100.0)
-
-
-def build_llm_payload(
-    selected_row: pd.Series,
-    prediction_row: pd.Series | None,
-    feature_map: pd.DataFrame,
-    local_shap: pd.DataFrame,
-    peer_slice: pd.DataFrame,
-    industry_latest_row: pd.Series | None,
-) -> dict[str, object]:
-    """Build a concise payload for LLM explanation generation."""
-    top_features = feature_map.sort_values("feature").head(0)
-    if not local_shap.empty:
-        top_shap = local_shap.head(5).copy()
-        top_shap["display_name"] = top_shap["feature"].map(
-            lambda value: display_name(value, feature_map)
-        )
-        top_shap["feature_value_display"] = top_shap.apply(
-            lambda row: format_value_with_unit(
-                row["feature_value"],
-                get_feature_unit(str(row["feature"]), feature_map),
-                str(row["feature"]),
-            ),
-            axis=1,
-        )
-        top_shap["shap_strength_display"] = top_shap["abs_shap"].map(
-            lambda value: f"{float(value):.2f}"
-        )
-        top_shap["direction_korean"] = (
-            top_shap["direction"]
-            .map(
-                {
-                    "increase_risk": "위험 증가",
-                    "decrease_risk": "위험 완화",
-                }
-            )
-            .fillna("중립")
-        )
-        top_shap["interpretation_direction"] = top_shap["feature"].map(
-            lambda value: get_feature_direction_label(str(value))
-        )
-        top_shap_records = (
-            top_shap.loc[
-                :,
-                [
-                    "display_name",
-                    "feature",
-                    "feature_value_display",
-                    "shap_strength_display",
-                    "direction_korean",
-                    "interpretation_direction",
-                ],
-            ]
-            .rename(
-                columns={
-                    "display_name": "korean_name",
-                    "feature_value_display": "feature_value_display",
-                    "shap_strength_display": "shap_strength_display",
-                    "direction_korean": "direction",
-                    "interpretation_direction": "interpretation_direction",
-                }
-            )
-            .to_dict(orient="records")
-        )
-        driver_features = top_shap["feature"].tolist()
-        top_features = feature_map.loc[feature_map["feature"].isin(driver_features)].copy()
-    else:
-        top_shap_records = []
-
-    if top_features.empty:
-        top_features = feature_map.head(5).copy()
-
-    feature_records = top_features.loc[
-        :,
-        ["feature", "korean_name", "value", "unit", "description"],
-    ].copy()
-    if not feature_records.empty:
-        feature_records["value_display"] = feature_records.apply(
-            lambda row: format_value_with_unit(row["value"], row["unit"], str(row["feature"])),
-            axis=1,
-        )
-        feature_records["interpretation_direction"] = feature_records["feature"].map(
-            lambda value: get_feature_direction_label(str(value))
-        )
-    feature_records = feature_records.loc[
-        :,
-        ["feature", "korean_name", "value_display", "description", "interpretation_direction"],
-    ].to_dict(orient="records")
-
-    peer_records: list[dict[str, object]] = []
-    if not peer_slice.empty:
-        peer_slice = peer_slice.copy()
-        peer_slice["distance_from_industry_mid"] = (peer_slice["industry_percentile"] - 50.0).abs()
-        peer_slice = peer_slice.sort_values("distance_from_industry_mid", ascending=False).head(5)
-        peer_slice["korean_name"] = peer_slice["feature"].map(
-            lambda value: display_name(value, feature_map)
-        )
-        peer_slice["value_display"] = peer_slice.apply(
-            lambda row: format_value_with_unit(
-                row["value"],
-                get_feature_unit(str(row["feature"]), feature_map),
-                str(row["feature"]),
-            ),
-            axis=1,
-        )
-        peer_slice["industry_median_display"] = peer_slice.apply(
-            lambda row: format_value_with_unit(
-                row["industry_median"],
-                get_feature_unit(str(row["feature"]), feature_map),
-                str(row["feature"]),
-            ),
-            axis=1,
-        )
-        peer_slice["market_median_display"] = peer_slice.apply(
-            lambda row: format_value_with_unit(
-                row["market_median"],
-                get_feature_unit(str(row["feature"]), feature_map),
-                str(row["feature"]),
-            ),
-            axis=1,
-        )
-        peer_slice["industry_percentile_display"] = peer_slice["industry_percentile"].map(
-            format_percentile_label
-        )
-        peer_slice["market_percentile_display"] = peer_slice["market_percentile"].map(
-            format_percentile_label
-        )
-        peer_slice["industry_delta_display"] = peer_slice.apply(
-            lambda row: format_delta_with_unit(
-                row["value"] - row["industry_median"],
-                get_feature_unit(str(row["feature"]), feature_map),
-                str(row["feature"]),
-            ),
-            axis=1,
-        )
-        peer_slice["interpretation_direction"] = peer_slice["feature"].map(
-            lambda value: get_feature_direction_label(str(value))
-        )
-        peer_records = peer_slice.loc[
-            :,
-            [
-                "feature",
-                "korean_name",
-                "value_display",
-                "industry_percentile_display",
-                "market_percentile_display",
-                "industry_median_display",
-                "market_median_display",
-                "industry_delta_display",
-                "interpretation_direction",
-            ],
-        ].to_dict(orient="records")
-
-    industry_context = None
-    if industry_latest_row is not None:
-        industry_context = {
-            "market": to_market_label(industry_latest_row.get("market")),
-            "industry_macro_category": to_industry_label(
-                industry_latest_row.get("industry_macro_category")
-            ),
-            "companies_display": f"{format_scalar(industry_latest_row.get('companies'))}개사",
-            "positive_rate_display": format_percent(industry_latest_row.get("positive_rate")),
-            "mean_prob_speculative_display": format_percent(
-                industry_latest_row.get("mean_prob_speculative")
-            ),
-            "pred_share_tuned_display": format_percent(industry_latest_row.get("pred_share_tuned")),
-        }
-
-    model_output = None
-    if prediction_row is not None:
-        model_output = {
-            "prob_speculative_display": format_percent(prediction_row.get("prob_speculative")),
-            "predicted_label": to_prediction_label(prediction_row.get("predicted_label")),
-            "threshold_display": format_scalar(prediction_row.get("threshold")),
-            "risk_band": prediction_row.get("risk_band"),
-        }
-
-    return {
-        "company_profile": {
-            "corp_name": selected_row.get("corp_name"),
-            "stock_code": _stock_code_text(selected_row.get("stock_code")),
-            "market": to_market_label(selected_row.get("market")),
-            "industry_macro_category": to_industry_label(
-                selected_row.get("industry_macro_category")
-            ),
-            "firm_size_group": to_size_label(selected_row.get("firm_size_group")),
-            "fiscal_year": format_scalar(selected_row.get("fiscal_year")),
-            "eval_year": format_scalar(selected_row.get("eval_year")),
-        },
-        "model_output": model_output,
-        "key_metrics": feature_records,
-        "top_shap": top_shap_records,
-        "peer_context": peer_records,
-        "industry_context": industry_context,
-    }
 
 
 def render_overview_tab(
@@ -3128,6 +1347,9 @@ def render_committee_view_tab(
         unsafe_allow_html=True,
     )
 
+    base_runtime_config = _dashboard_stage2_runtime_config(DASHBOARD_BASE_STAGE2_RUNNER)
+    live_runtime_config = _dashboard_stage2_runtime_config(DASHBOARD_LIVE_STAGE2_RUNNER)
+    requested_runtime_config = _dashboard_stage2_runtime_config()
     loading_placeholder = st.empty()
     render_committee_loading_state(loading_placeholder, selected_row)
     try:
@@ -3138,7 +1360,9 @@ def render_committee_view_tab(
             local_shap=local_shap,
             peer_slice=peer_slice,
             external_evidence_snapshot=evidence_snapshot,
+            build_committee_context=build_dashboard_committee_context,
             stage2_runner=DASHBOARD_BASE_STAGE2_RUNNER,
+            runtime_config=base_runtime_config,
         )
         committee_context_source = DASHBOARD_BASE_STAGE2_RUNNER
         live_stage2_status: str | None = None
@@ -3146,6 +1370,8 @@ def render_committee_view_tab(
             _consume_dashboard_live_stage2_job(
                 selected_row=selected_row,
                 prediction_row=prediction_row,
+                format_error_detail=format_stage2_error_detail,
+                runtime_config=live_runtime_config,
             )
         )
         if live_committee_context is not None and live_evidence_snapshot is not None:
@@ -3160,7 +1386,9 @@ def render_committee_view_tab(
                 local_shap=local_shap,
                 peer_slice=peer_slice,
                 external_evidence_snapshot=evidence_snapshot,
+                build_committee_context=build_dashboard_committee_context,
                 stage2_runner=DASHBOARD_LIVE_STAGE2_RUNNER,
+                runtime_config=live_runtime_config,
                 build_if_missing=False,
             )
             if cached_live_context is not None:
@@ -3185,11 +1413,16 @@ def render_committee_view_tab(
         return
     committee_cache_saved_at = None
     if committee_cache_hit:
+        committee_runtime_config = (
+            live_runtime_config
+            if committee_context_source == DASHBOARD_LIVE_STAGE2_RUNNER
+            else base_runtime_config
+        )
         resolved_committee_cache_key = _dashboard_committee_cache_key(
             selected_row,
             prediction_row,
             evidence_snapshot,
-            stage2_runner=committee_context_source,
+            runtime_config=committee_runtime_config,
         )
         if resolved_committee_cache_key:
             committee_cache_saved_at = _dashboard_cache_saved_at_label(
@@ -3268,10 +1501,16 @@ def render_committee_view_tab(
     )
     review_qa_reasons = _as_text_list(stage2_runtime_diagnostics.get("review_qa_trigger_reasons"))
 
-    requested_dashboard_runner = _dashboard_stage2_runner_name()
+    requested_dashboard_runner = _dashboard_stage2_runner_name(
+        runtime_config=requested_runtime_config
+    )
     live_review_suggested = _dashboard_needs_live_stage2_from_views(model_view, evidence_snapshot)
     if requested_dashboard_runner == DASHBOARD_LIVE_STAGE2_RUNNER:
-        live_job_key = _dashboard_stage2_job_key(selected_row, prediction_row)
+        live_job_key = _dashboard_stage2_job_key(
+            selected_row,
+            prediction_row,
+            runtime_config=live_runtime_config,
+        )
         live_job_running = False
         if live_job_key:
             live_job = st.session_state.get(live_job_key)
@@ -3285,6 +1524,8 @@ def render_committee_view_tab(
                     prediction_row=prediction_row,
                     local_shap=local_shap,
                     peer_slice=peer_slice,
+                    build_committee_context=build_dashboard_committee_context,
+                    runtime_config=live_runtime_config,
                 )
                 st.rerun()
 
@@ -3369,6 +1610,8 @@ def render_committee_view_tab(
                 prediction_row=prediction_row,
                 local_shap=local_shap,
                 peer_slice=peer_slice,
+                build_committee_context=build_dashboard_committee_context,
+                runtime_config=live_runtime_config,
             )
             st.rerun()
         if live_control_cols[2].button(
@@ -3550,8 +1793,8 @@ def render_committee_view_tab(
             )
             render_bold_value_block(
                 trigger_cols[1],
-                "45개 보조 변수셋 확률",
-                format_percent(model_view.get("probability_speculative_45")),
+                "Stage 2 보조 확률",
+                format_percent(model_view.get("probability_stage2_review_aux")),
             )
             render_badge_value_block(
                 trigger_cols[2],
@@ -3756,261 +1999,6 @@ def render_committee_view_tab(
             st.json(committee_context)
         with st.expander("개발자용 규칙 기반 판단 JSON", expanded=False):
             st.json(rule_result)
-
-
-def render_llm_panel(
-    *,
-    selected_row: pd.Series,
-    prediction_row: pd.Series | None,
-    feature_map: pd.DataFrame,
-    local_shap: pd.DataFrame,
-    peer_slice: pd.DataFrame,
-    industry_latest_row: pd.Series | None,
-    provider: str,
-    api_key: str,
-    model: str,
-    developer_mode: bool,
-) -> None:
-    """Render an optional LLM explanation section."""
-    provider_label = LLM_PROVIDER_LABELS.get(provider, provider)
-    st.subheader("AI 심사 메모")
-    st.caption("선택 기업의 점수와 비교 결과를 바탕으로, 바로 읽을 수 있는 심사 메모를 생성합니다.")
-    intro_col1, intro_col2, intro_col3 = st.columns(3)
-    selected_output_format = st.selectbox(
-        "출력 형식",
-        options=list(LLM_OUTPUT_FORMATS.keys()),
-        format_func=lambda value: LLM_OUTPUT_FORMATS.get(value, value),
-        index=1,
-        help="같은 근거 데이터를 바탕으로 더 짧게, 기본 심사메모형, 또는 조금 더 자세한 보고서형으로 요약할 수 있습니다.",
-    )
-    output_format_label = LLM_OUTPUT_FORMATS.get(selected_output_format, selected_output_format)
-    format_description = {
-        "brief": "핵심만 빠르게 읽을 수 있는 짧은 요약 형식입니다.",
-        "memo": "가장 균형 잡힌 기본 심사 메모 형식입니다.",
-        "detailed": "숫자와 비교 맥락을 조금 더 살린 상세 보고서형입니다.",
-    }.get(selected_output_format, "선택한 형식에 맞춰 요약합니다.")
-    render_text_card(
-        intro_col1,
-        "어떤 형식인가요?",
-        f"현재는 {output_format_label} 형식으로 보여줍니다. {format_description}",
-    )
-    render_text_card(
-        intro_col2,
-        "무엇을 참고하나요?",
-        "예측확률, 핵심 지표, SHAP, 동종업계 비교 결과를 함께 참고합니다.",
-    )
-    render_text_card(
-        intro_col3,
-        "어떤 모델을 쓰나요?",
-        f"현재 선택 모델은 {provider_label}의 {model}이며, API 키를 입력하면 바로 메모를 생성할 수 있습니다.",
-    )
-    if not api_key.strip():
-        st.info(
-            f"사이드바의 `AI 메모 설정`에서 {provider_label} API 키를 입력하면 AI 심사 메모를 생성할 수 있습니다."
-        )
-
-    payload = build_llm_payload(
-        selected_row,
-        prediction_row,
-        feature_map,
-        local_shap,
-        peer_slice,
-        industry_latest_row,
-    )
-
-    cache_key = (
-        f"{_stock_code_text(selected_row['stock_code'])}-{selected_row['fiscal_year']}-"
-        f"{provider}-{model}-{selected_output_format}"
-    )
-    if st.button("AI 심사 메모 생성", type="primary"):
-        if not api_key.strip():
-            st.warning(f"{provider_label} API 키를 입력해야 AI 심사 메모를 생성할 수 있습니다.")
-        else:
-            try:
-                with st.spinner("AI가 심사 메모를 정리하는 중입니다..."):
-                    explanation = generate_llm_explanation(
-                        provider=provider,
-                        api_key=api_key.strip(),
-                        model=model.strip(),
-                        payload=payload,
-                        output_format=selected_output_format,
-                    )
-                st.session_state[cache_key] = explanation
-            except Exception as error:  # pragma: no cover - runtime/network dependent
-                st.error(format_llm_error_message(error, provider_label))
-
-    cached = st.session_state.get(cache_key)
-    if cached:
-        st.success("AI 심사 메모 생성 완료")
-        sections = parse_llm_report_sections(cached)
-        headline = " ".join(sections["한줄 판단"]).strip() or cached.splitlines()[0].strip()
-        render_summary_banner("AI 한줄 판단", headline, COLOR_NEUTRAL)
-
-        risk_badge_items: list[tuple[str, str]] = []
-        mitigate_badge_items: list[tuple[str, str]] = []
-        if not local_shap.empty:
-            shap_view = local_shap.copy().sort_values("abs_shap", ascending=False)
-            top_risk_features = (
-                shap_view.loc[shap_view["shap_value"] > 0, "feature"].head(3).tolist()
-            )
-            top_mitigate_features = (
-                shap_view.loc[shap_view["shap_value"] < 0, "feature"].head(3).tolist()
-            )
-            risk_badge_items = [
-                (display_name(feature, feature_map), get_feature_direction_label(str(feature)))
-                for feature in top_risk_features
-            ]
-            mitigate_badge_items = [
-                (display_name(feature, feature_map), get_feature_direction_label(str(feature)))
-                for feature in top_mitigate_features
-            ]
-
-        report_col1, report_col2 = st.columns(2)
-        render_list_card(report_col1, "핵심 위험 요인", sections["핵심 위험 요인"], COLOR_RISK)
-        render_list_card(report_col2, "완화 요인", sections["완화 요인"], COLOR_MITIGATE)
-        render_badge_hint_card(
-            report_col1,
-            "관련 지표 방향",
-            risk_badge_items,
-            COLOR_RISK,
-            "연결할 대표 위험 지표가 없습니다.",
-        )
-        render_badge_hint_card(
-            report_col2,
-            "관련 지표 방향",
-            mitigate_badge_items,
-            COLOR_MITIGATE,
-            "연결할 대표 완화 지표가 없습니다.",
-        )
-
-        opinion_text = " ".join(sections["종합 의견"]).strip()
-        if opinion_text:
-            render_text_card(st.container(), "종합 의견", opinion_text)
-        export_text = build_exportable_llm_report(
-            selected_row=selected_row,
-            prediction_row=prediction_row,
-            model=f"{provider_label} · {model}",
-            output_format_label=output_format_label,
-            report_text=cached,
-            local_shap=local_shap,
-            peer_slice=peer_slice,
-            feature_map=feature_map,
-        )
-        onepage_text = build_onepage_llm_report(
-            selected_row=selected_row,
-            prediction_row=prediction_row,
-            model=f"{provider_label} · {model}",
-            output_format_label=output_format_label,
-            sections=sections,
-            local_shap=local_shap,
-            peer_slice=peer_slice,
-            feature_map=feature_map,
-        )
-        html_report = build_html_report(
-            selected_row=selected_row,
-            prediction_row=prediction_row,
-            model=f"{provider_label} · {model}",
-            output_format_label=output_format_label,
-            sections=sections,
-            report_text=cached,
-            local_shap=local_shap,
-            peer_slice=peer_slice,
-            feature_map=feature_map,
-        )
-        onepage_html = build_onepage_html_report(
-            selected_row=selected_row,
-            prediction_row=prediction_row,
-            model=f"{provider_label} · {model}",
-            output_format_label=output_format_label,
-            sections=sections,
-            local_shap=local_shap,
-            peer_slice=peer_slice,
-            feature_map=feature_map,
-        )
-        html_col1, html_col2 = st.columns([1, 1])
-        with html_col1:
-            stretch_download_button(
-                label="보고서형 HTML 다운로드",
-                data=html_report,
-                file_name=(
-                    f"credit_report_{_stock_code_text(selected_row['stock_code'])}_"
-                    f"{selected_row['fiscal_year']}.html"
-                ),
-                mime="text/html",
-            )
-        with html_col2:
-            stretch_download_button(
-                label="원페이지 HTML 다운로드",
-                data=onepage_html,
-                file_name=(
-                    f"credit_onepage_{_stock_code_text(selected_row['stock_code'])}_"
-                    f"{selected_row['fiscal_year']}.html"
-                ),
-                mime="text/html",
-            )
-        utility_col1, utility_col2 = st.columns([1, 1])
-        with utility_col1:
-            stretch_download_button(
-                label="상세 보고서형 다운로드 (.md)",
-                data=export_text,
-                file_name=(
-                    f"credit_report_{_stock_code_text(selected_row['stock_code'])}_"
-                    f"{selected_row['fiscal_year']}.md"
-                ),
-                mime="text/markdown",
-            )
-        with utility_col2:
-            stretch_download_button(
-                label="원페이지 요약 다운로드 (.md)",
-                data=onepage_text,
-                file_name=(
-                    f"credit_onepage_{_stock_code_text(selected_row['stock_code'])}_"
-                    f"{selected_row['fiscal_year']}.md"
-                ),
-                mime="text/markdown",
-            )
-        preview_tab1, preview_tab2, preview_tab3, preview_tab4 = st.tabs(
-            ["보고서형 HTML", "원페이지 HTML", "보고서형 미리보기", "원페이지 미리보기"]
-        )
-        with preview_tab1:
-            st.components.v1.html(html_report, height=720, scrolling=True)
-        with preview_tab2:
-            st.components.v1.html(onepage_html, height=720, scrolling=True)
-        with preview_tab3:
-            st.text_area(
-                "복사용 보고서형 메모",
-                value=export_text,
-                height=180,
-                help="상세 보고서 버전을 그대로 복사해 문서나 메신저에 붙여넣을 수 있습니다.",
-            )
-        with preview_tab4:
-            st.text_area(
-                "복사용 원페이지 메모",
-                value=onepage_text,
-                height=180,
-                help="한 장 요약본을 그대로 복사해 발표자료나 요약 메모에 붙여넣을 수 있습니다.",
-            )
-        with st.expander("원문 보기"):
-            st.markdown(
-                (
-                    f"<div style='padding:1rem 1.05rem;border-radius:8px;"
-                    f"background:{COLOR_CARD_BG};border:1px solid {COLOR_CARD_BORDER};"
-                    f"border-left:6px solid {COLOR_NEUTRAL};box-shadow:{CARD_SHADOW};"
-                    "margin-top:0.25rem;'>"
-                    f"<div style='font-size:0.95rem;font-weight:700;color:{COLOR_CARD_LABEL};margin-bottom:0.45rem;'>"
-                    "AI 심사 메모 원문"
-                    "</div>"
-                    f"<div style='font-size:0.98rem;line-height:1.75;color:{COLOR_CARD_VALUE};white-space:pre-wrap;'>"
-                    f"{escape(cached)}"
-                    "</div>"
-                    "</div>"
-                ),
-                unsafe_allow_html=True,
-            )
-
-    if developer_mode:
-        with st.expander("AI 입력 payload 보기"):
-            st.json(payload)
 
 
 def render_drivers_tab(
@@ -4916,240 +2904,11 @@ def render_industry_tab(
         stretch_dataframe(styled_industry, hide_index=True)
 
 
-def render_scenario_tab(
-    selected_row: pd.Series,
-    artifacts: DashboardArtifacts,
-) -> None:
-    """Render the scenario tab."""
-    st.subheader("가정별 변화 보기")
-    st.caption(
-        "핵심 지표 값을 가정적으로 바꿔 보면서, 현재 기업의 상대적 위치가 어떻게 달라지는지 살펴봅니다."
-    )
-    presets = list(artifacts.scenario_presets.keys())
-    preset_label_map = {
-        "base": "기본",
-        "mild_stress": "완만한 스트레스",
-        "severe_stress": "강한 스트레스",
-    }
-    selected_preset = st.selectbox(
-        "시나리오 선택", presets, format_func=lambda value: preset_label_map.get(value, value)
-    )
-    preset_changes = artifacts.scenario_presets[selected_preset]
-    intro_col1, intro_col2, intro_col3 = st.columns(3)
-    render_text_card(
-        intro_col1,
-        "현재 시나리오",
-        f"현재 선택한 시나리오는 {preset_label_map.get(selected_preset, selected_preset)}입니다.",
-    )
-    render_text_card(
-        intro_col2,
-        "어떻게 보나요?",
-        "핵심 지표 값을 가정적으로 바꿔 보고, 산업이나 시장 안에서 위치가 어떻게 달라지는지 확인합니다.",
-    )
-    render_text_card(
-        intro_col3,
-        "해석할 때 참고할 점",
-        "현재는 예측확률을 다시 계산하는 단계가 아니라, 지표 수준 변화와 상대적 위치 변화를 중심으로 보여줍니다.",
-    )
-
-    scenario_features = [
-        "spec_spread",
-        "cash_ratio",
-        "net_margin",
-        "short_term_borrowings_share",
-        "capital_impairment_ratio",
-    ]
-    rows: list[dict[str, object]] = []
-    for feature in scenario_features:
-        baseline_value = selected_row.get(feature)
-        default_delta = (
-            float(preset_changes.get(feature, 0.0)) if isinstance(preset_changes, dict) else 0.0
-        )
-        feature_map = build_company_feature_map(selected_row, artifacts.feature_dictionary)
-        label = display_name(feature, feature_map)
-        unit = get_feature_unit(feature, feature_map)
-        delta = st.slider(
-            f"{label} 얼마나 바꿔볼까요?",
-            min_value=-1.0,
-            max_value=1.0,
-            value=default_delta,
-            step=0.01,
-        )
-        scenario_value = None if pd.isna(baseline_value) else float(baseline_value) + delta
-        distribution = (
-            artifacts.company_universe.loc[:, feature]
-            if feature in artifacts.company_universe
-            else pd.Series(dtype=float)
-        )
-        scenario_percentile = (
-            approximate_percentile(distribution, scenario_value)
-            if scenario_value is not None
-            else None
-        )
-        rows.append(
-            {
-                "변수": label,
-                "feature": feature,
-                "현재값": baseline_value,
-                "변화량": delta,
-                "시나리오 조정값": scenario_value,
-                "시나리오 적용 후 대략적 위치": scenario_percentile,
-                "unit": unit,
-                "일반 해석 방향": get_feature_direction_label(feature),
-            }
-        )
-
-    scenario_frame = pd.DataFrame(rows)
-    scenario_frame["현재값_표시"] = scenario_frame.apply(
-        lambda row: format_value_with_unit(row["현재값"], row["unit"], str(row["feature"])),
-        axis=1,
-    )
-    scenario_frame["시나리오 조정값_표시"] = scenario_frame.apply(
-        lambda row: format_value_with_unit(
-            row["시나리오 조정값"], row["unit"], str(row["feature"])
-        ),
-        axis=1,
-    )
-    scenario_frame["시나리오 적용 후 위치"] = scenario_frame["시나리오 적용 후 대략적 위치"].map(
-        format_percentile_label
-    )
-    strongest_change = (
-        scenario_frame.loc[scenario_frame["변화량"].abs().idxmax()]
-        if not scenario_frame.empty
-        else None
-    )
-    summary_col1, summary_col2, summary_col3 = st.columns(3)
-    render_accent_summary_card(
-        summary_col1,
-        "현재 시나리오",
-        preset_label_map.get(selected_preset, selected_preset),
-        "슬라이더 시작값은 이 시나리오를 기준으로 자동 채워집니다.",
-        COLOR_NEUTRAL,
-    )
-    render_accent_summary_card(
-        summary_col2,
-        "가장 크게 바꾼 지표",
-        str(strongest_change["변수"]) if strongest_change is not None else "없음",
-        format_delta_with_unit(
-            strongest_change["변화량"],
-            strongest_change["unit"],
-            str(strongest_change["feature"]),
-        )
-        if strongest_change is not None
-        else "-",
-        COLOR_RISK,
-    )
-    render_accent_summary_card(
-        summary_col3,
-        "바꿔볼 수 있는 지표 수",
-        format_scalar(len(scenario_frame)),
-        "현재 화면에서 직접 움직여 볼 수 있는 핵심 지표 개수입니다.",
-        COLOR_COMPANY,
-    )
-    st.markdown("**시나리오 적용 전후 보기**")
-    for unit_value, unit_frame in scenario_frame.groupby("unit", dropna=False):
-        unit_label = describe_unit(str(unit_value))
-        st.markdown(f"**{unit_label}**")
-        chart_rows: list[dict[str, object]] = []
-        money_view = str(unit_value) == "KRW thousand"
-        for row in unit_frame.to_dict(orient="records"):
-            current_value = (
-                float(row["현재값"]) * 1000 / 100_000_000
-                if money_view and pd.notna(row["현재값"])
-                else row["현재값"]
-            )
-            scenario_value = (
-                float(row["시나리오 조정값"]) * 1000 / 100_000_000
-                if money_view and pd.notna(row["시나리오 조정값"])
-                else row["시나리오 조정값"]
-            )
-            chart_rows.extend(
-                [
-                    {
-                        "변수": row["변수"],
-                        "구분": "현재 수준",
-                        "값": current_value,
-                        "값_표시": row["현재값_표시"],
-                    },
-                    {
-                        "변수": row["변수"],
-                        "구분": "시나리오 반영값",
-                        "값": scenario_value,
-                        "값_표시": row["시나리오 조정값_표시"],
-                    },
-                ]
-            )
-        scenario_chart_frame = finite_chart_frame(chart_rows, ["값"])
-        scenario_chart = (
-            alt.Chart(scenario_chart_frame)
-            .mark_bar()
-            .encode(
-                x=alt.X("값:Q", title="값 (억 원)" if money_view else "값"),
-                y=alt.Y("변수:N", title=""),
-                color=alt.Color(
-                    "구분:N",
-                    scale=alt.Scale(
-                        domain=["현재 수준", "시나리오 반영값"], range=[COLOR_MUTED, COLOR_RISK]
-                    ),
-                ),
-                yOffset="구분:N",
-                tooltip=["변수:N", "구분:N", alt.Tooltip("값_표시:N", title="값")],
-            )
-            .properties(height=max(160, len(unit_frame) * 56))
-        )
-        if scenario_chart_frame.empty:
-            st.caption("이 단위 그룹은 차트로 표시할 수 있는 숫자형 값이 없습니다.")
-        else:
-            stretch_altair_chart(scenario_chart)
-    scenario_table = scenario_frame.loc[
-        :,
-        [
-            "변수",
-            "현재값_표시",
-            "변화량",
-            "시나리오 조정값_표시",
-            "일반 해석 방향",
-            "시나리오 적용 후 위치",
-        ],
-    ].rename(
-        columns={
-            "현재값_표시": "현재값",
-            "시나리오 조정값_표시": "시나리오 조정값",
-        }
-    )
-    styled_scenario = (
-        scenario_table.style.map(style_direction_badge, subset=["일반 해석 방향"])
-        .set_properties(subset=["일반 해석 방향"], **{"text-align": "center"})
-        .hide(axis="index")
-    )
-    stretch_dataframe(
-        styled_scenario,
-        hide_index=True,
-    )
-    st.warning(
-        "현재 시나리오 탭은 지표를 바꿔 보았을 때 상대적 위치가 어떻게 달라지는지 보여줍니다. "
-        "기업별 예측확률을 다시 계산하는 기능은 다음 단계에서 추가할 수 있습니다."
-    )
-
-
 def render_footer(artifacts: DashboardArtifacts, *, developer_mode: bool) -> None:
     """Render footer metadata."""
     if developer_mode:
-        with st.expander("LLM payload template 보기"):
-            st.json(artifacts.llm_payload_template)
         with st.expander("Export manifest 보기"):
             st.json(artifacts.export_manifest)
-
-
-def format_llm_error_message(error: Exception, provider_label: str) -> str:
-    """Convert raw LLM errors into a short, user-friendly message."""
-    message = str(error).strip()
-    if not message:
-        return f"{provider_label} 메모를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요."
-    return (
-        f"{provider_label} 메모를 불러오지 못했습니다. {message}"
-        " 입력한 API 키와 모델명을 다시 확인한 뒤 한 번 더 시도해 주세요."
-    )
 
 
 def format_stage2_error_detail(error: Exception) -> str:
@@ -5162,6 +2921,111 @@ def format_stage2_error_detail(error: Exception) -> str:
     )
     message = re.sub(r"(sk-[A-Za-z0-9_-]{8})[A-Za-z0-9_-]+", r"\1...[redacted]", message)
     return message[:500]
+
+
+def _agent_model_index(model_ids: Sequence[str], preferred_model: str) -> int:
+    """Return the selectbox index for a preferred model ID."""
+    return model_ids.index(preferred_model) if preferred_model in model_ids else 0
+
+
+def _configured_agent_model(
+    *,
+    env_key: str,
+    default_key: str,
+    agent_defaults: dict[str, str],
+) -> str:
+    """Return the current environment model or configured role default."""
+    return os.environ.get(env_key, agent_defaults.get(default_key, "")).strip()
+
+
+def _select_agent_model(
+    *,
+    label: str,
+    env_key: str,
+    default_key: str,
+    agent_defaults: dict[str, str],
+    model_ids: Sequence[str],
+    model_labels: dict[str, str],
+) -> str:
+    """Render one agent model selectbox backed by the configured catalog."""
+    preferred_model = _configured_agent_model(
+        env_key=env_key,
+        default_key=default_key,
+        agent_defaults=agent_defaults,
+    )
+    if not model_ids:
+        return preferred_model
+    return str(
+        st.selectbox(
+            label,
+            options=list(model_ids),
+            index=_agent_model_index(model_ids, preferred_model),
+            format_func=lambda value: model_labels.get(str(value), str(value)),
+        )
+    )
+
+
+def _agent_preflight_summary(catalog: DashboardModelCatalog) -> str:
+    """Return a compact summary of agent providers hidden by preflight."""
+    hidden_statuses = unavailable_agent_provider_statuses(catalog, env=os.environ)
+    hidden_parts: list[str] = []
+    for status in hidden_statuses:
+        reasons = ", ".join(status.missing_reasons) or "모델 없음"
+        hidden_parts.append(f"{status.provider.label}({reasons})")
+    return " / ".join(hidden_parts)
+
+
+def render_agent_model_settings() -> None:
+    """Render config-backed Stage 2 agent model settings."""
+    catalog = load_dashboard_model_catalog()
+    agent_model_options: tuple[ModelOption, ...] = available_agent_model_options(
+        catalog,
+        env=os.environ,
+    )
+    model_ids = [option.id for option in agent_model_options]
+    model_labels = {option.id: option.label for option in agent_model_options}
+
+    hidden_summary = _agent_preflight_summary(catalog)
+    if hidden_summary:
+        st.caption(f"Preflight에서 제외된 provider: {hidden_summary}")
+    if not model_ids:
+        st.warning(
+            "API 키와 provider 패키지가 모두 확인된 에이전트 provider가 없습니다. "
+            "모델 선택은 숨기고 현재 환경값 또는 기본값을 유지합니다."
+        )
+
+    quant_sel = _select_agent_model(
+        label="재무 분석 (Quant)",
+        env_key="QUANT_AGENT_MODEL",
+        default_key="quant",
+        agent_defaults=catalog.agent_defaults,
+        model_ids=model_ids,
+        model_labels=model_labels,
+    )
+    research_sel = _select_agent_model(
+        label="리서치 (Research/Macro)",
+        env_key="RESEARCH_AGENT_MODEL",
+        default_key="research",
+        agent_defaults=catalog.agent_defaults,
+        model_ids=model_ids,
+        model_labels=model_labels,
+    )
+    manager_sel = _select_agent_model(
+        label="의장 (Manager)",
+        env_key="MANAGER_AGENT_MODEL",
+        default_key="manager",
+        agent_defaults=catalog.agent_defaults,
+        model_ids=model_ids,
+        model_labels=model_labels,
+    )
+
+    if quant_sel:
+        os.environ["QUANT_AGENT_MODEL"] = quant_sel
+    if research_sel:
+        os.environ["RESEARCH_AGENT_MODEL"] = research_sel
+        os.environ["MACRO_AGENT_MODEL"] = research_sel
+    if manager_sel:
+        os.environ["MANAGER_AGENT_MODEL"] = manager_sel
 
 
 def main() -> None:
@@ -5191,71 +3055,7 @@ def main() -> None:
 
     with st.sidebar.expander("에이전트별 모델 설정", expanded=True):
         st.caption("각 에이전트의 LLM을 실시간으로 교체합니다.")
-
-        agent_model_options = [
-            "openai:gpt-4o",
-            "openai:gpt-4o-mini",
-            "anthropic:claude-3-5-sonnet-latest",
-            "anthropic:claude-3-haiku-20240307",
-            "gemini:gemini-2.5-flash",
-            "gemini:gemini-2.0-flash",
-        ]
-
-        def get_model_index(env_key: str, default_val: str) -> int:
-            val = os.environ.get(env_key, default_val)
-            return agent_model_options.index(val) if val in agent_model_options else 0
-
-        quant_sel = st.selectbox(
-            "재무 분석 (Quant)",
-            options=agent_model_options,
-            index=get_model_index("QUANT_AGENT_MODEL", "openai:gpt-4o"),
-        )
-        research_sel = st.selectbox(
-            "리서치 (Research/Macro)",
-            options=agent_model_options,
-            index=get_model_index("RESEARCH_AGENT_MODEL", "anthropic:claude-3-5-sonnet-latest"),
-        )
-        manager_sel = st.selectbox(
-            "의장 (Manager)",
-            options=agent_model_options,
-            index=get_model_index("MANAGER_AGENT_MODEL", "gemini:gemini-2.5-flash"),
-        )
-
-        os.environ["QUANT_AGENT_MODEL"] = quant_sel
-        os.environ["RESEARCH_AGENT_MODEL"] = research_sel
-        os.environ["MACRO_AGENT_MODEL"] = research_sel
-        os.environ["MANAGER_AGENT_MODEL"] = manager_sel
-
-    with st.sidebar.expander("AI 메모 설정", expanded=False):
-        llm_provider = str(
-            st.selectbox(
-                "LLM 제공자",
-                options=list(LLM_PROVIDER_LABELS.keys()),
-                format_func=lambda value: LLM_PROVIDER_LABELS.get(value, value),
-                key="llm_provider",
-                help="AI 심사 메모 탭에서 사용할 LLM 제공자를 선택합니다.",
-            )
-        )
-        model_options: list[tuple[str, str]] = RECOMMENDED_LLM_MODELS[llm_provider]
-        model_labels = dict(model_options)
-        model_ids = [model for model, _label in model_options]
-        llm_model = str(
-            st.selectbox(
-                "LLM 모델",
-                options=model_ids,
-                format_func=lambda value: model_labels.get(str(value), str(value)),
-                key="llm_model",
-                help="추천 모델 중 하나를 선택합니다.",
-            )
-        )
-        api_key_env_var = "OPENAI_API_KEY" if llm_provider == "openai" else "ANTHROPIC_API_KEY"
-        llm_api_key = st.text_input(
-            f"{LLM_PROVIDER_LABELS.get(llm_provider, llm_provider)} API 키",
-            value=os.environ.get(api_key_env_var, ""),
-            type="password",
-            key=f"llm_api_key_{llm_provider}",
-            help=f".env 또는 현재 환경변수의 {api_key_env_var} 값을 기본으로 사용합니다.",
-        )
+        render_agent_model_settings()
     with st.sidebar.expander("고급 설정", expanded=False):
         developer_mode = st.checkbox(
             "개발자 모드",
@@ -5309,7 +3109,6 @@ def main() -> None:
         peers_tab,
         industry_tab,
         scenario_tab,
-        llm_tab,
     ) = st.tabs(
         [
             "위원회 검토",
@@ -5318,7 +3117,6 @@ def main() -> None:
             "시장/산업 비교",
             "산업 흐름 보기",
             "가정별 변화 보기",
-            "AI 심사 메모",
         ]
     )
 
@@ -5342,23 +3140,11 @@ def main() -> None:
     with industry_tab:
         render_industry_tab(selected_row, artifacts)
     with scenario_tab:
-        render_scenario_tab(selected_row, artifacts)
-    with llm_tab:
-        industry_latest_row = resolve_industry_latest_row(
+        render_scenario_tab(
             selected_row,
-            artifacts.industry_latest_summary,
-        )
-        render_llm_panel(
-            selected_row=selected_row,
-            prediction_row=prediction_row,
+            artifacts,
             feature_map=feature_map,
-            local_shap=local_shap,
-            peer_slice=peer_slice,
-            industry_latest_row=industry_latest_row,
-            provider=llm_provider,
-            api_key=llm_api_key,
-            model=llm_model,
-            developer_mode=developer_mode,
+            formatters=_dashboard_scenario_formatters(),
         )
 
     render_footer(artifacts, developer_mode=developer_mode)

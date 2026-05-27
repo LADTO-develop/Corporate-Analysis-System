@@ -82,12 +82,14 @@ def conflict_resolution(
     if secondary_review_risk.triggered:
         if not secondary_review_risk.risk_signal:
             return (
-                f"모델 원판단은 {prediction_label}이지만, 45개 보조 변수셋이 추가 확인 대상으로 "
+                f"모델 원판단은 {prediction_label}이지만, full_review_trigger_73 보조 트리거가 "
+                "추가 확인 대상으로 "
                 "올린 케이스라 위원회 의견은 보류로 정리했습니다. 다만 확률 수준은 위험신호 "
                 "표시 기준선보다 낮아 확인필요 보류로 구분합니다."
             )
         return (
-            f"모델 원판단은 {prediction_label}이지만, 45개 보조 변수셋의 추가 검토 신호가 "
+            f"모델 원판단은 {prediction_label}이지만, full_review_trigger_73 보조 트리거의 "
+            "추가 검토 신호가 "
             "FN 가능성을 보완해 위원회 의견은 보류로 정리했습니다."
         )
     model_label = "적격" if prediction_label == "투자적격" else "부적격"
@@ -162,13 +164,15 @@ def final_review_memo(
     if secondary_review_risk.triggered:
         if not secondary_review_risk.risk_signal:
             return (
-                f"모델 원판단은 {prediction_label}으로 보존합니다. 다만 45개 보조 변수셋이 "
+                f"모델 원판단은 {prediction_label}으로 보존합니다. 다만 full_review_trigger_73 "
+                "보조 트리거가 "
                 "추가 확인 대상으로 올린 케이스라 최종 적격으로 바로 확정하지 않고 보류로 "
                 "정리했습니다. 확률 수준은 위험신호 표시 기준선보다 낮아 확인필요 보류로 "
                 f"구분합니다. {secondary_review_risk.reason}"
             )
         return (
-            f"모델 원판단은 {prediction_label}으로 보존합니다. 다만 45개 보조 변수셋이 "
+            f"모델 원판단은 {prediction_label}으로 보존합니다. 다만 full_review_trigger_73 "
+            "보조 트리거가 "
             f"추가 검토 대상으로 올린 케이스라 FN 가능성을 보수적으로 보완했습니다. "
             f"위원회는 최종 의견을 {committee_label}로 정리했습니다. "
             f"{secondary_review_risk.reason}"

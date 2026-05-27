@@ -8,7 +8,7 @@ from typing import Any, Literal
 
 from cas.utils.io import read_json
 
-_FEATURE_METADATA_PATH = Path("data/input/credit_43_features/feature_43_dictionary_metadata.json")
+_FEATURE_METADATA_PATH = Path("data/input/credit_46_features/feature_46_dictionary_metadata.json")
 
 _INDUSTRY_LABELS = {
     "manufacturing": "제조업",

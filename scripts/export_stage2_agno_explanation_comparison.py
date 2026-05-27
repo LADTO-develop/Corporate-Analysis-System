@@ -18,7 +18,7 @@ from typing import Any
 import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[1]
-DIAGNOSTICS_DIR = ROOT / "data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents"
+DIAGNOSTICS_DIR = ROOT / "data/outputs/modeling/feature_46_xgboost/diagnostics/stage2_agents"
 DEFAULT_DETERMINISTIC_RESULTS = (
     DIAGNOSTICS_DIR
     / "committee_review_openai_agno_comparison_deterministic/committee_review_batch_results.csv"

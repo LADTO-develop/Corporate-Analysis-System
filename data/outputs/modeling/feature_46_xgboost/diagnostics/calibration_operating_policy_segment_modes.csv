@@ -1,0 +1,181 @@
+﻿variant,display_name,operating_mode,operating_mode_display,dimension,segment,rows,positive_rows,precision,recall,f1,true_negative,false_positive,false_negative,true_positive
+current_platt,Current Platt,recall_first,Recall 우선,overall,all,924,203,0.6411149825783972,0.9064039408866995,0.7510204081632653,618,103,19,184
+current_platt,Current Platt,recall_first,Recall 우선,market,KOSDAQ,427,163,0.6548672566371682,0.9079754601226994,0.7609254498714653,186,78,15,148
+current_platt,Current Platt,recall_first,Recall 우선,market,KOSPI,497,40,0.5901639344262295,0.9,0.7128712871287128,432,25,4,36
+current_platt,Current Platt,recall_first,Recall 우선,industry,manufacturing,598,162,0.6517857142857143,0.9012345679012346,0.7564766839378239,358,78,16,146
+current_platt,Current Platt,recall_first,Recall 우선,industry,it_services,176,21,0.6206896551724138,0.8571428571428571,0.72,144,11,3,18
+current_platt,Current Platt,balanced,균형,overall,all,924,203,0.6941176470588235,0.8719211822660099,0.7729257641921398,643,78,26,177
+current_platt,Current Platt,balanced,균형,market,KOSDAQ,427,163,0.7014925373134329,0.8650306748466258,0.7747252747252747,204,60,22,141
+current_platt,Current Platt,balanced,균형,market,KOSPI,497,40,0.6666666666666666,0.9,0.7659574468085106,439,18,4,36
+current_platt,Current Platt,balanced,균형,industry,manufacturing,598,162,0.7035175879396985,0.8641975308641975,0.775623268698061,377,59,22,140
+current_platt,Current Platt,balanced,균형,industry,it_services,176,21,0.6538461538461539,0.8095238095238095,0.723404255319149,146,9,4,17
+current_platt,Current Platt,fp_reduction_global,FP 축소 Global,overall,all,924,203,0.7222222222222222,0.8325123152709359,0.7734553775743707,656,65,34,169
+current_platt,Current Platt,fp_reduction_global,FP 축소 Global,market,KOSDAQ,427,163,0.7362637362637363,0.8220858895705522,0.7768115942028986,216,48,29,134
+current_platt,Current Platt,fp_reduction_global,FP 축소 Global,market,KOSPI,497,40,0.6730769230769231,0.875,0.7608695652173914,440,17,5,35
+current_platt,Current Platt,fp_reduction_global,FP 축소 Global,industry,manufacturing,598,162,0.7297297297297297,0.8333333333333334,0.7780979827089337,386,50,27,135
+current_platt,Current Platt,fp_reduction_global,FP 축소 Global,industry,it_services,176,21,0.6818181818181818,0.7142857142857143,0.6976744186046512,148,7,6,15
+current_platt,Current Platt,fp_reduction_kosdaq,FP 축소 KOSDAQ,overall,all,924,203,0.7203389830508474,0.8374384236453202,0.7744874715261959,655,66,33,170
+current_platt,Current Platt,fp_reduction_kosdaq,FP 축소 KOSDAQ,market,KOSDAQ,427,163,0.7362637362637363,0.8220858895705522,0.7768115942028986,216,48,29,134
+current_platt,Current Platt,fp_reduction_kosdaq,FP 축소 KOSDAQ,market,KOSPI,497,40,0.6666666666666666,0.9,0.7659574468085106,439,18,4,36
+current_platt,Current Platt,fp_reduction_kosdaq,FP 축소 KOSDAQ,industry,manufacturing,598,162,0.7272727272727273,0.8395061728395061,0.7793696275071633,385,51,26,136
+current_platt,Current Platt,fp_reduction_kosdaq,FP 축소 KOSDAQ,industry,it_services,176,21,0.6818181818181818,0.7142857142857143,0.6976744186046512,148,7,6,15
+refit_platt_valid,Refit Platt,recall_first,Recall 우선,overall,all,924,203,0.6411149825783972,0.9064039408866995,0.7510204081632653,618,103,19,184
+refit_platt_valid,Refit Platt,recall_first,Recall 우선,market,KOSDAQ,427,163,0.6548672566371682,0.9079754601226994,0.7609254498714653,186,78,15,148
+refit_platt_valid,Refit Platt,recall_first,Recall 우선,market,KOSPI,497,40,0.5901639344262295,0.9,0.7128712871287128,432,25,4,36
+refit_platt_valid,Refit Platt,recall_first,Recall 우선,industry,manufacturing,598,162,0.6517857142857143,0.9012345679012346,0.7564766839378239,358,78,16,146
+refit_platt_valid,Refit Platt,recall_first,Recall 우선,industry,it_services,176,21,0.6206896551724138,0.8571428571428571,0.72,144,11,3,18
+refit_platt_valid,Refit Platt,balanced,균형,overall,all,924,203,0.6941176470588235,0.8719211822660099,0.7729257641921398,643,78,26,177
+refit_platt_valid,Refit Platt,balanced,균형,market,KOSDAQ,427,163,0.7014925373134329,0.8650306748466258,0.7747252747252747,204,60,22,141
+refit_platt_valid,Refit Platt,balanced,균형,market,KOSPI,497,40,0.6666666666666666,0.9,0.7659574468085106,439,18,4,36
+refit_platt_valid,Refit Platt,balanced,균형,industry,manufacturing,598,162,0.7035175879396985,0.8641975308641975,0.775623268698061,377,59,22,140
+refit_platt_valid,Refit Platt,balanced,균형,industry,it_services,176,21,0.6538461538461539,0.8095238095238095,0.723404255319149,146,9,4,17
+refit_platt_valid,Refit Platt,fp_reduction_global,FP 축소 Global,overall,all,924,203,0.7222222222222222,0.8325123152709359,0.7734553775743707,656,65,34,169
+refit_platt_valid,Refit Platt,fp_reduction_global,FP 축소 Global,market,KOSDAQ,427,163,0.7362637362637363,0.8220858895705522,0.7768115942028986,216,48,29,134
+refit_platt_valid,Refit Platt,fp_reduction_global,FP 축소 Global,market,KOSPI,497,40,0.6730769230769231,0.875,0.7608695652173914,440,17,5,35
+refit_platt_valid,Refit Platt,fp_reduction_global,FP 축소 Global,industry,manufacturing,598,162,0.7297297297297297,0.8333333333333334,0.7780979827089337,386,50,27,135
+refit_platt_valid,Refit Platt,fp_reduction_global,FP 축소 Global,industry,it_services,176,21,0.6818181818181818,0.7142857142857143,0.6976744186046512,148,7,6,15
+refit_platt_valid,Refit Platt,fp_reduction_kosdaq,FP 축소 KOSDAQ,overall,all,924,203,0.7203389830508474,0.8374384236453202,0.7744874715261959,655,66,33,170
+refit_platt_valid,Refit Platt,fp_reduction_kosdaq,FP 축소 KOSDAQ,market,KOSDAQ,427,163,0.7362637362637363,0.8220858895705522,0.7768115942028986,216,48,29,134
+refit_platt_valid,Refit Platt,fp_reduction_kosdaq,FP 축소 KOSDAQ,market,KOSPI,497,40,0.6666666666666666,0.9,0.7659574468085106,439,18,4,36
+refit_platt_valid,Refit Platt,fp_reduction_kosdaq,FP 축소 KOSDAQ,industry,manufacturing,598,162,0.7272727272727273,0.8395061728395061,0.7793696275071633,385,51,26,136
+refit_platt_valid,Refit Platt,fp_reduction_kosdaq,FP 축소 KOSDAQ,industry,it_services,176,21,0.6818181818181818,0.7142857142857143,0.6976744186046512,148,7,6,15
+isotonic_valid,Isotonic Valid,recall_first,Recall 우선,overall,all,924,203,0.6279863481228669,0.9064039408866995,0.7419354838709677,612,109,19,184
+isotonic_valid,Isotonic Valid,recall_first,Recall 우선,market,KOSDAQ,427,163,0.6379310344827587,0.9079754601226994,0.7493670886075949,180,84,15,148
+isotonic_valid,Isotonic Valid,recall_first,Recall 우선,market,KOSPI,497,40,0.5901639344262295,0.9,0.7128712871287128,432,25,4,36
+isotonic_valid,Isotonic Valid,recall_first,Recall 우선,industry,manufacturing,598,162,0.6431718061674009,0.9012345679012346,0.7506426735218509,355,81,16,146
+isotonic_valid,Isotonic Valid,recall_first,Recall 우선,industry,it_services,176,21,0.5625,0.8571428571428571,0.6792452830188679,141,14,3,18
+isotonic_valid,Isotonic Valid,balanced,균형,overall,all,924,203,0.6929133858267716,0.8669950738916257,0.7702407002188184,643,78,27,176
+isotonic_valid,Isotonic Valid,balanced,균형,market,KOSDAQ,427,163,0.7,0.8588957055214724,0.7713498622589532,204,60,23,140
+isotonic_valid,Isotonic Valid,balanced,균형,market,KOSPI,497,40,0.6666666666666666,0.9,0.7659574468085106,439,18,4,36
+isotonic_valid,Isotonic Valid,balanced,균형,industry,manufacturing,598,162,0.702020202020202,0.8580246913580247,0.7722222222222223,377,59,23,139
+isotonic_valid,Isotonic Valid,balanced,균형,industry,it_services,176,21,0.6538461538461539,0.8095238095238095,0.723404255319149,146,9,4,17
+isotonic_valid,Isotonic Valid,fp_reduction_global,FP 축소 Global,overall,all,924,203,0.6929133858267716,0.8669950738916257,0.7702407002188184,643,78,27,176
+isotonic_valid,Isotonic Valid,fp_reduction_global,FP 축소 Global,market,KOSDAQ,427,163,0.7,0.8588957055214724,0.7713498622589532,204,60,23,140
+isotonic_valid,Isotonic Valid,fp_reduction_global,FP 축소 Global,market,KOSPI,497,40,0.6666666666666666,0.9,0.7659574468085106,439,18,4,36
+isotonic_valid,Isotonic Valid,fp_reduction_global,FP 축소 Global,industry,manufacturing,598,162,0.702020202020202,0.8580246913580247,0.7722222222222223,377,59,23,139
+isotonic_valid,Isotonic Valid,fp_reduction_global,FP 축소 Global,industry,it_services,176,21,0.6538461538461539,0.8095238095238095,0.723404255319149,146,9,4,17
+isotonic_valid,Isotonic Valid,fp_reduction_kosdaq,FP 축소 KOSDAQ,overall,all,924,203,0.6929133858267716,0.8669950738916257,0.7702407002188184,643,78,27,176
+isotonic_valid,Isotonic Valid,fp_reduction_kosdaq,FP 축소 KOSDAQ,market,KOSDAQ,427,163,0.7,0.8588957055214724,0.7713498622589532,204,60,23,140
+isotonic_valid,Isotonic Valid,fp_reduction_kosdaq,FP 축소 KOSDAQ,market,KOSPI,497,40,0.6666666666666666,0.9,0.7659574468085106,439,18,4,36
+isotonic_valid,Isotonic Valid,fp_reduction_kosdaq,FP 축소 KOSDAQ,industry,manufacturing,598,162,0.702020202020202,0.8580246913580247,0.7722222222222223,377,59,23,139
+isotonic_valid,Isotonic Valid,fp_reduction_kosdaq,FP 축소 KOSDAQ,industry,it_services,176,21,0.6538461538461539,0.8095238095238095,0.723404255319149,146,9,4,17
+beta_valid,Beta Valid,recall_first,Recall 우선,overall,all,924,203,0.6433566433566433,0.9064039408866995,0.7525562372188139,619,102,19,184
+beta_valid,Beta Valid,recall_first,Recall 우선,market,KOSDAQ,427,163,0.6577777777777778,0.9079754601226994,0.7628865979381443,187,77,15,148
+beta_valid,Beta Valid,recall_first,Recall 우선,market,KOSPI,497,40,0.5901639344262295,0.9,0.7128712871287128,432,25,4,36
+beta_valid,Beta Valid,recall_first,Recall 우선,industry,manufacturing,598,162,0.6517857142857143,0.9012345679012346,0.7564766839378239,358,78,16,146
+beta_valid,Beta Valid,recall_first,Recall 우선,industry,it_services,176,21,0.6206896551724138,0.8571428571428571,0.72,144,11,3,18
+beta_valid,Beta Valid,balanced,균형,overall,all,924,203,0.6941176470588235,0.8719211822660099,0.7729257641921398,643,78,26,177
+beta_valid,Beta Valid,balanced,균형,market,KOSDAQ,427,163,0.7014925373134329,0.8650306748466258,0.7747252747252747,204,60,22,141
+beta_valid,Beta Valid,balanced,균형,market,KOSPI,497,40,0.6666666666666666,0.9,0.7659574468085106,439,18,4,36
+beta_valid,Beta Valid,balanced,균형,industry,manufacturing,598,162,0.7035175879396985,0.8641975308641975,0.775623268698061,377,59,22,140
+beta_valid,Beta Valid,balanced,균형,industry,it_services,176,21,0.6538461538461539,0.8095238095238095,0.723404255319149,146,9,4,17
+beta_valid,Beta Valid,fp_reduction_global,FP 축소 Global,overall,all,924,203,0.7222222222222222,0.8325123152709359,0.7734553775743707,656,65,34,169
+beta_valid,Beta Valid,fp_reduction_global,FP 축소 Global,market,KOSDAQ,427,163,0.7362637362637363,0.8220858895705522,0.7768115942028986,216,48,29,134
+beta_valid,Beta Valid,fp_reduction_global,FP 축소 Global,market,KOSPI,497,40,0.6730769230769231,0.875,0.7608695652173914,440,17,5,35
+beta_valid,Beta Valid,fp_reduction_global,FP 축소 Global,industry,manufacturing,598,162,0.7297297297297297,0.8333333333333334,0.7780979827089337,386,50,27,135
+beta_valid,Beta Valid,fp_reduction_global,FP 축소 Global,industry,it_services,176,21,0.6818181818181818,0.7142857142857143,0.6976744186046512,148,7,6,15
+beta_valid,Beta Valid,fp_reduction_kosdaq,FP 축소 KOSDAQ,overall,all,924,203,0.7203389830508474,0.8374384236453202,0.7744874715261959,655,66,33,170
+beta_valid,Beta Valid,fp_reduction_kosdaq,FP 축소 KOSDAQ,market,KOSDAQ,427,163,0.7362637362637363,0.8220858895705522,0.7768115942028986,216,48,29,134
+beta_valid,Beta Valid,fp_reduction_kosdaq,FP 축소 KOSDAQ,market,KOSPI,497,40,0.6666666666666666,0.9,0.7659574468085106,439,18,4,36
+beta_valid,Beta Valid,fp_reduction_kosdaq,FP 축소 KOSDAQ,industry,manufacturing,598,162,0.7272727272727273,0.8395061728395061,0.7793696275071633,385,51,26,136
+beta_valid,Beta Valid,fp_reduction_kosdaq,FP 축소 KOSDAQ,industry,it_services,176,21,0.6818181818181818,0.7142857142857143,0.6976744186046512,148,7,6,15
+rolling_oof_platt,Rolling OOF Platt,recall_first,Recall 우선,overall,all,924,203,0.6411149825783972,0.9064039408866995,0.7510204081632653,618,103,19,184
+rolling_oof_platt,Rolling OOF Platt,recall_first,Recall 우선,market,KOSDAQ,427,163,0.6548672566371682,0.9079754601226994,0.7609254498714653,186,78,15,148
+rolling_oof_platt,Rolling OOF Platt,recall_first,Recall 우선,market,KOSPI,497,40,0.5901639344262295,0.9,0.7128712871287128,432,25,4,36
+rolling_oof_platt,Rolling OOF Platt,recall_first,Recall 우선,industry,manufacturing,598,162,0.6517857142857143,0.9012345679012346,0.7564766839378239,358,78,16,146
+rolling_oof_platt,Rolling OOF Platt,recall_first,Recall 우선,industry,it_services,176,21,0.6206896551724138,0.8571428571428571,0.72,144,11,3,18
+rolling_oof_platt,Rolling OOF Platt,balanced,균형,overall,all,924,203,0.6941176470588235,0.8719211822660099,0.7729257641921398,643,78,26,177
+rolling_oof_platt,Rolling OOF Platt,balanced,균형,market,KOSDAQ,427,163,0.7014925373134329,0.8650306748466258,0.7747252747252747,204,60,22,141
+rolling_oof_platt,Rolling OOF Platt,balanced,균형,market,KOSPI,497,40,0.6666666666666666,0.9,0.7659574468085106,439,18,4,36
+rolling_oof_platt,Rolling OOF Platt,balanced,균형,industry,manufacturing,598,162,0.7035175879396985,0.8641975308641975,0.775623268698061,377,59,22,140
+rolling_oof_platt,Rolling OOF Platt,balanced,균형,industry,it_services,176,21,0.6538461538461539,0.8095238095238095,0.723404255319149,146,9,4,17
+rolling_oof_platt,Rolling OOF Platt,fp_reduction_global,FP 축소 Global,overall,all,924,203,0.7222222222222222,0.8325123152709359,0.7734553775743707,656,65,34,169
+rolling_oof_platt,Rolling OOF Platt,fp_reduction_global,FP 축소 Global,market,KOSDAQ,427,163,0.7362637362637363,0.8220858895705522,0.7768115942028986,216,48,29,134
+rolling_oof_platt,Rolling OOF Platt,fp_reduction_global,FP 축소 Global,market,KOSPI,497,40,0.6730769230769231,0.875,0.7608695652173914,440,17,5,35
+rolling_oof_platt,Rolling OOF Platt,fp_reduction_global,FP 축소 Global,industry,manufacturing,598,162,0.7297297297297297,0.8333333333333334,0.7780979827089337,386,50,27,135
+rolling_oof_platt,Rolling OOF Platt,fp_reduction_global,FP 축소 Global,industry,it_services,176,21,0.6818181818181818,0.7142857142857143,0.6976744186046512,148,7,6,15
+rolling_oof_platt,Rolling OOF Platt,fp_reduction_kosdaq,FP 축소 KOSDAQ,overall,all,924,203,0.7203389830508474,0.8374384236453202,0.7744874715261959,655,66,33,170
+rolling_oof_platt,Rolling OOF Platt,fp_reduction_kosdaq,FP 축소 KOSDAQ,market,KOSDAQ,427,163,0.7362637362637363,0.8220858895705522,0.7768115942028986,216,48,29,134
+rolling_oof_platt,Rolling OOF Platt,fp_reduction_kosdaq,FP 축소 KOSDAQ,market,KOSPI,497,40,0.6666666666666666,0.9,0.7659574468085106,439,18,4,36
+rolling_oof_platt,Rolling OOF Platt,fp_reduction_kosdaq,FP 축소 KOSDAQ,industry,manufacturing,598,162,0.7272727272727273,0.8395061728395061,0.7793696275071633,385,51,26,136
+rolling_oof_platt,Rolling OOF Platt,fp_reduction_kosdaq,FP 축소 KOSDAQ,industry,it_services,176,21,0.6818181818181818,0.7142857142857143,0.6976744186046512,148,7,6,15
+rolling_oof_isotonic,Rolling OOF Isotonic,recall_first,Recall 우선,overall,all,924,203,0.6153846153846154,0.9064039408866995,0.7330677290836654,606,115,19,184
+rolling_oof_isotonic,Rolling OOF Isotonic,recall_first,Recall 우선,market,KOSDAQ,427,163,0.6297872340425532,0.9079754601226994,0.7437185929648241,177,87,15,148
+rolling_oof_isotonic,Rolling OOF Isotonic,recall_first,Recall 우선,market,KOSPI,497,40,0.5625,0.9,0.6923076923076923,429,28,4,36
+rolling_oof_isotonic,Rolling OOF Isotonic,recall_first,Recall 우선,industry,manufacturing,598,162,0.6347826086956522,0.9012345679012346,0.7448979591836735,352,84,16,146
+rolling_oof_isotonic,Rolling OOF Isotonic,recall_first,Recall 우선,industry,it_services,176,21,0.5454545454545454,0.8571428571428571,0.6666666666666666,140,15,3,18
+rolling_oof_isotonic,Rolling OOF Isotonic,balanced,균형,overall,all,924,203,0.6819923371647509,0.8768472906403941,0.7672413793103449,638,83,25,178
+rolling_oof_isotonic,Rolling OOF Isotonic,balanced,균형,market,KOSDAQ,427,163,0.6926829268292682,0.8711656441717791,0.7717391304347826,201,63,21,142
+rolling_oof_isotonic,Rolling OOF Isotonic,balanced,균형,market,KOSPI,497,40,0.6428571428571429,0.9,0.75,437,20,4,36
+rolling_oof_isotonic,Rolling OOF Isotonic,balanced,균형,industry,manufacturing,598,162,0.6862745098039216,0.8641975308641975,0.7650273224043715,372,64,22,140
+rolling_oof_isotonic,Rolling OOF Isotonic,balanced,균형,industry,it_services,176,21,0.6666666666666666,0.8571428571428571,0.75,146,9,3,18
+rolling_oof_isotonic,Rolling OOF Isotonic,fp_reduction_global,FP 축소 Global,overall,all,924,203,0.6819923371647509,0.8768472906403941,0.7672413793103449,638,83,25,178
+rolling_oof_isotonic,Rolling OOF Isotonic,fp_reduction_global,FP 축소 Global,market,KOSDAQ,427,163,0.6926829268292682,0.8711656441717791,0.7717391304347826,201,63,21,142
+rolling_oof_isotonic,Rolling OOF Isotonic,fp_reduction_global,FP 축소 Global,market,KOSPI,497,40,0.6428571428571429,0.9,0.75,437,20,4,36
+rolling_oof_isotonic,Rolling OOF Isotonic,fp_reduction_global,FP 축소 Global,industry,manufacturing,598,162,0.6862745098039216,0.8641975308641975,0.7650273224043715,372,64,22,140
+rolling_oof_isotonic,Rolling OOF Isotonic,fp_reduction_global,FP 축소 Global,industry,it_services,176,21,0.6666666666666666,0.8571428571428571,0.75,146,9,3,18
+rolling_oof_isotonic,Rolling OOF Isotonic,fp_reduction_kosdaq,FP 축소 KOSDAQ,overall,all,924,203,0.6819923371647509,0.8768472906403941,0.7672413793103449,638,83,25,178
+rolling_oof_isotonic,Rolling OOF Isotonic,fp_reduction_kosdaq,FP 축소 KOSDAQ,market,KOSDAQ,427,163,0.6926829268292682,0.8711656441717791,0.7717391304347826,201,63,21,142
+rolling_oof_isotonic,Rolling OOF Isotonic,fp_reduction_kosdaq,FP 축소 KOSDAQ,market,KOSPI,497,40,0.6428571428571429,0.9,0.75,437,20,4,36
+rolling_oof_isotonic,Rolling OOF Isotonic,fp_reduction_kosdaq,FP 축소 KOSDAQ,industry,manufacturing,598,162,0.6862745098039216,0.8641975308641975,0.7650273224043715,372,64,22,140
+rolling_oof_isotonic,Rolling OOF Isotonic,fp_reduction_kosdaq,FP 축소 KOSDAQ,industry,it_services,176,21,0.6666666666666666,0.8571428571428571,0.75,146,9,3,18
+rolling_oof_beta,Rolling OOF Beta,recall_first,Recall 우선,overall,all,924,203,0.6411149825783972,0.9064039408866995,0.7510204081632653,618,103,19,184
+rolling_oof_beta,Rolling OOF Beta,recall_first,Recall 우선,market,KOSDAQ,427,163,0.6548672566371682,0.9079754601226994,0.7609254498714653,186,78,15,148
+rolling_oof_beta,Rolling OOF Beta,recall_first,Recall 우선,market,KOSPI,497,40,0.5901639344262295,0.9,0.7128712871287128,432,25,4,36
+rolling_oof_beta,Rolling OOF Beta,recall_first,Recall 우선,industry,manufacturing,598,162,0.6517857142857143,0.9012345679012346,0.7564766839378239,358,78,16,146
+rolling_oof_beta,Rolling OOF Beta,recall_first,Recall 우선,industry,it_services,176,21,0.6206896551724138,0.8571428571428571,0.72,144,11,3,18
+rolling_oof_beta,Rolling OOF Beta,balanced,균형,overall,all,924,203,0.6941176470588235,0.8719211822660099,0.7729257641921398,643,78,26,177
+rolling_oof_beta,Rolling OOF Beta,balanced,균형,market,KOSDAQ,427,163,0.7014925373134329,0.8650306748466258,0.7747252747252747,204,60,22,141
+rolling_oof_beta,Rolling OOF Beta,balanced,균형,market,KOSPI,497,40,0.6666666666666666,0.9,0.7659574468085106,439,18,4,36
+rolling_oof_beta,Rolling OOF Beta,balanced,균형,industry,manufacturing,598,162,0.7035175879396985,0.8641975308641975,0.775623268698061,377,59,22,140
+rolling_oof_beta,Rolling OOF Beta,balanced,균형,industry,it_services,176,21,0.6538461538461539,0.8095238095238095,0.723404255319149,146,9,4,17
+rolling_oof_beta,Rolling OOF Beta,fp_reduction_global,FP 축소 Global,overall,all,924,203,0.7215189873417721,0.8423645320197044,0.7772727272727272,655,66,32,171
+rolling_oof_beta,Rolling OOF Beta,fp_reduction_global,FP 축소 Global,market,KOSDAQ,427,163,0.7351351351351352,0.8343558282208589,0.7816091954022989,215,49,27,136
+rolling_oof_beta,Rolling OOF Beta,fp_reduction_global,FP 축소 Global,market,KOSPI,497,40,0.6730769230769231,0.875,0.7608695652173914,440,17,5,35
+rolling_oof_beta,Rolling OOF Beta,fp_reduction_global,FP 축소 Global,industry,manufacturing,598,162,0.7258064516129032,0.8333333333333334,0.7758620689655172,385,51,27,135
+rolling_oof_beta,Rolling OOF Beta,fp_reduction_global,FP 축소 Global,industry,it_services,176,21,0.7083333333333334,0.8095238095238095,0.7555555555555555,148,7,4,17
+rolling_oof_beta,Rolling OOF Beta,fp_reduction_kosdaq,FP 축소 KOSDAQ,overall,all,924,203,0.7196652719665272,0.8472906403940886,0.7782805429864253,654,67,31,172
+rolling_oof_beta,Rolling OOF Beta,fp_reduction_kosdaq,FP 축소 KOSDAQ,market,KOSDAQ,427,163,0.7351351351351352,0.8343558282208589,0.7816091954022989,215,49,27,136
+rolling_oof_beta,Rolling OOF Beta,fp_reduction_kosdaq,FP 축소 KOSDAQ,market,KOSPI,497,40,0.6666666666666666,0.9,0.7659574468085106,439,18,4,36
+rolling_oof_beta,Rolling OOF Beta,fp_reduction_kosdaq,FP 축소 KOSDAQ,industry,manufacturing,598,162,0.723404255319149,0.8395061728395061,0.7771428571428571,384,52,26,136
+rolling_oof_beta,Rolling OOF Beta,fp_reduction_kosdaq,FP 축소 KOSDAQ,industry,it_services,176,21,0.7083333333333334,0.8095238095238095,0.7555555555555555,148,7,4,17
+segment_market_platt,Market Segment Platt,recall_first,Recall 우선,overall,all,924,203,0.6216216216216216,0.9064039408866995,0.7374749498997996,609,112,19,184
+segment_market_platt,Market Segment Platt,recall_first,Recall 우선,market,KOSDAQ,427,163,0.6297872340425532,0.9079754601226994,0.7437185929648241,177,87,15,148
+segment_market_platt,Market Segment Platt,recall_first,Recall 우선,market,KOSPI,497,40,0.5901639344262295,0.9,0.7128712871287128,432,25,4,36
+segment_market_platt,Market Segment Platt,recall_first,Recall 우선,industry,manufacturing,598,162,0.6403508771929824,0.9012345679012346,0.7487179487179487,354,82,16,146
+segment_market_platt,Market Segment Platt,recall_first,Recall 우선,industry,it_services,176,21,0.5454545454545454,0.8571428571428571,0.6666666666666666,140,15,3,18
+segment_market_platt,Market Segment Platt,balanced,균형,overall,all,924,203,0.6941176470588235,0.8719211822660099,0.7729257641921398,643,78,26,177
+segment_market_platt,Market Segment Platt,balanced,균형,market,KOSDAQ,427,163,0.7014925373134329,0.8650306748466258,0.7747252747252747,204,60,22,141
+segment_market_platt,Market Segment Platt,balanced,균형,market,KOSPI,497,40,0.6666666666666666,0.9,0.7659574468085106,439,18,4,36
+segment_market_platt,Market Segment Platt,balanced,균형,industry,manufacturing,598,162,0.7035175879396985,0.8641975308641975,0.775623268698061,377,59,22,140
+segment_market_platt,Market Segment Platt,balanced,균형,industry,it_services,176,21,0.6538461538461539,0.8095238095238095,0.723404255319149,146,9,4,17
+segment_market_platt,Market Segment Platt,fp_reduction_global,FP 축소 Global,overall,all,924,203,0.7253218884120172,0.8325123152709359,0.7752293577981652,657,64,34,169
+segment_market_platt,Market Segment Platt,fp_reduction_global,FP 축소 Global,market,KOSDAQ,427,163,0.7362637362637363,0.8220858895705522,0.7768115942028986,216,48,29,134
+segment_market_platt,Market Segment Platt,fp_reduction_global,FP 축소 Global,market,KOSPI,497,40,0.6862745098039216,0.875,0.7692307692307693,441,16,5,35
+segment_market_platt,Market Segment Platt,fp_reduction_global,FP 축소 Global,industry,manufacturing,598,162,0.7336956521739131,0.8333333333333334,0.7803468208092486,387,49,27,135
+segment_market_platt,Market Segment Platt,fp_reduction_global,FP 축소 Global,industry,it_services,176,21,0.6818181818181818,0.7142857142857143,0.6976744186046512,148,7,6,15
+segment_market_platt,Market Segment Platt,fp_reduction_kosdaq,FP 축소 KOSDAQ,overall,all,924,203,0.7203389830508474,0.8374384236453202,0.7744874715261959,655,66,33,170
+segment_market_platt,Market Segment Platt,fp_reduction_kosdaq,FP 축소 KOSDAQ,market,KOSDAQ,427,163,0.7362637362637363,0.8220858895705522,0.7768115942028986,216,48,29,134
+segment_market_platt,Market Segment Platt,fp_reduction_kosdaq,FP 축소 KOSDAQ,market,KOSPI,497,40,0.6666666666666666,0.9,0.7659574468085106,439,18,4,36
+segment_market_platt,Market Segment Platt,fp_reduction_kosdaq,FP 축소 KOSDAQ,industry,manufacturing,598,162,0.7272727272727273,0.8395061728395061,0.7793696275071633,385,51,26,136
+segment_market_platt,Market Segment Platt,fp_reduction_kosdaq,FP 축소 KOSDAQ,industry,it_services,176,21,0.6818181818181818,0.7142857142857143,0.6976744186046512,148,7,6,15
+segment_industry_platt,Industry Segment Platt,recall_first,Recall 우선,overall,all,924,203,0.6323024054982818,0.9064039408866995,0.7449392712550608,614,107,19,184
+segment_industry_platt,Industry Segment Platt,recall_first,Recall 우선,market,KOSDAQ,427,163,0.6434782608695652,0.9079754601226994,0.7531806615776081,182,82,15,148
+segment_industry_platt,Industry Segment Platt,recall_first,Recall 우선,market,KOSPI,497,40,0.5901639344262295,0.9,0.7128712871287128,432,25,4,36
+segment_industry_platt,Industry Segment Platt,recall_first,Recall 우선,industry,manufacturing,598,162,0.6431718061674009,0.9012345679012346,0.7506426735218509,355,81,16,146
+segment_industry_platt,Industry Segment Platt,recall_first,Recall 우선,industry,it_services,176,21,0.5454545454545454,0.8571428571428571,0.6666666666666666,140,15,3,18
+segment_industry_platt,Industry Segment Platt,balanced,균형,overall,all,924,203,0.701195219123506,0.8669950738916257,0.775330396475771,646,75,27,176
+segment_industry_platt,Industry Segment Platt,balanced,균형,market,KOSDAQ,427,163,0.7106598984771574,0.8588957055214724,0.7777777777777778,207,57,23,140
+segment_industry_platt,Industry Segment Platt,balanced,균형,market,KOSPI,497,40,0.6666666666666666,0.9,0.7659574468085106,439,18,4,36
+segment_industry_platt,Industry Segment Platt,balanced,균형,industry,manufacturing,598,162,0.7035175879396985,0.8641975308641975,0.775623268698061,377,59,22,140
+segment_industry_platt,Industry Segment Platt,balanced,균형,industry,it_services,176,21,0.68,0.8095238095238095,0.7391304347826086,147,8,4,17
+segment_industry_platt,Industry Segment Platt,fp_reduction_global,FP 축소 Global,overall,all,924,203,0.7236842105263158,0.812807881773399,0.765661252900232,658,63,38,165
+segment_industry_platt,Industry Segment Platt,fp_reduction_global,FP 축소 Global,market,KOSDAQ,427,163,0.7386363636363636,0.7975460122699386,0.7669616519174042,218,46,33,130
+segment_industry_platt,Industry Segment Platt,fp_reduction_global,FP 축소 Global,market,KOSPI,497,40,0.6730769230769231,0.875,0.7608695652173914,440,17,5,35
+segment_industry_platt,Industry Segment Platt,fp_reduction_global,FP 축소 Global,industry,manufacturing,598,162,0.7258064516129032,0.8333333333333334,0.7758620689655172,385,51,27,135
+segment_industry_platt,Industry Segment Platt,fp_reduction_global,FP 축소 Global,industry,it_services,176,21,0.7222222222222222,0.6190476190476191,0.6666666666666666,150,5,8,13
+segment_industry_platt,Industry Segment Platt,fp_reduction_kosdaq,FP 축소 KOSDAQ,overall,all,924,203,0.7217391304347827,0.8177339901477833,0.766743648960739,657,64,37,166
+segment_industry_platt,Industry Segment Platt,fp_reduction_kosdaq,FP 축소 KOSDAQ,market,KOSDAQ,427,163,0.7386363636363636,0.7975460122699386,0.7669616519174042,218,46,33,130
+segment_industry_platt,Industry Segment Platt,fp_reduction_kosdaq,FP 축소 KOSDAQ,market,KOSPI,497,40,0.6666666666666666,0.9,0.7659574468085106,439,18,4,36
+segment_industry_platt,Industry Segment Platt,fp_reduction_kosdaq,FP 축소 KOSDAQ,industry,manufacturing,598,162,0.723404255319149,0.8395061728395061,0.7771428571428571,384,52,26,136
+segment_industry_platt,Industry Segment Platt,fp_reduction_kosdaq,FP 축소 KOSDAQ,industry,it_services,176,21,0.7222222222222222,0.6190476190476191,0.6666666666666666,150,5,8,13

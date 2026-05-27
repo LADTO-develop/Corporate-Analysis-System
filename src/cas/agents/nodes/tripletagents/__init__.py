@@ -10,6 +10,7 @@ from typing import TypeVar
 
 from cas.agents.stage2_bundle import Stage2InputBundle
 from cas.agents.stage2_outputs import ChairReportOutput, EvidenceAuditOutput, QuantCreditOutput
+from cas.agents.stage2_runtime_config import Stage2RuntimeConfig
 from cas.agents.state import Recommendation
 
 from .chair_report_agent import run_chair_report_agent
@@ -35,11 +36,13 @@ def run_triplet_agents(
     chair_model_provider: str | None = None,
     chair_model_name: str | None = None,
     max_tokens: int,
+    runtime_config: Stage2RuntimeConfig | None = None,
     diagnostics: dict[str, object] | None = None,
 ) -> tuple[QuantCreditOutput, EvidenceAuditOutput, ChairReportOutput]:
     """Run QuantCredit, EvidenceAudit, and ChairReport Agno agents in order."""
     timings: dict[str, float] = {}
-    parallel_enabled = _parallel_independent_agents_enabled()
+    runtime = _resolved_runtime_config(runtime_config)
+    parallel_enabled = _parallel_independent_agents_enabled(runtime)
     if parallel_enabled:
         with ThreadPoolExecutor(max_workers=2) as executor:
             quant_future = executor.submit(
@@ -51,6 +54,7 @@ def run_triplet_agents(
                 model_provider=quant_model_provider or model_provider,
                 model_name=quant_model_name or model_name,
                 max_tokens=max_tokens,
+                runtime_config=runtime,
             )
             evidence_future = executor.submit(
                 _timed_call,
@@ -61,6 +65,7 @@ def run_triplet_agents(
                 model_provider=evidence_model_provider or model_provider,
                 model_name=evidence_model_name or model_name,
                 max_tokens=max_tokens,
+                runtime_config=runtime,
             )
             quant_credit = quant_future.result()
             evidence_audit = evidence_future.result()
@@ -73,6 +78,7 @@ def run_triplet_agents(
             model_provider=quant_model_provider or model_provider,
             model_name=quant_model_name or model_name,
             max_tokens=max_tokens,
+            runtime_config=runtime,
         )
         evidence_audit = _timed_call(
             "evidence_audit",
@@ -82,6 +88,7 @@ def run_triplet_agents(
             model_provider=evidence_model_provider or model_provider,
             model_name=evidence_model_name or model_name,
             max_tokens=max_tokens,
+            runtime_config=runtime,
         )
     chair_report = _timed_call(
         "chair_report",
@@ -95,6 +102,7 @@ def run_triplet_agents(
         model_provider=chair_model_provider or model_provider,
         model_name=chair_model_name or model_name,
         max_tokens=max_tokens,
+        runtime_config=runtime,
     )
     if diagnostics is not None:
         diagnostics["agent_elapsed_seconds"] = dict(timings)
@@ -115,9 +123,14 @@ def _timed_call(
         timings[role] = round(time.perf_counter() - started_at, 4)
 
 
-def _parallel_independent_agents_enabled() -> bool:
-    value = os.environ.get("CAS_STAGE2_PARALLEL_INDEPENDENT_AGENTS", "1").strip().lower()
-    return value not in {"0", "false", "no", "off"}
+def _resolved_runtime_config(
+    runtime_config: Stage2RuntimeConfig | None,
+) -> Stage2RuntimeConfig:
+    return runtime_config or Stage2RuntimeConfig.from_env(os.environ)
+
+
+def _parallel_independent_agents_enabled(runtime_config: Stage2RuntimeConfig) -> bool:
+    return bool(runtime_config.parallel_independent_agents)
 
 
 __all__ = [

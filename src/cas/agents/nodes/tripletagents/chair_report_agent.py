@@ -6,9 +6,14 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from cas.agents.stage2_bundle import Stage2InputBundle
 from cas.agents.stage2_outputs import ChairReportOutput, EvidenceAuditOutput, QuantCreditOutput
+from cas.agents.stage2_prompt_contracts import (
+    build_stage2_role_instructions,
+    build_stage2_role_query,
+)
+from cas.agents.stage2_runtime_config import Stage2RuntimeConfig
 from cas.agents.state import Recommendation
 
-from .runtime import build_agno_agent, clamp, json_payload, provider_label, run_structured_agent
+from .runtime import build_agno_agent, clamp, provider_label, run_structured_agent
 
 
 class AgnoChairReportResponse(BaseModel):
@@ -38,6 +43,7 @@ def run_chair_report_agent(
     model_name: str,
     model_provider: str = "openai",
     max_tokens: int,
+    runtime_config: Stage2RuntimeConfig | None = None,
 ) -> ChairReportOutput:
     """Run the Agno ChairReportAgent and map it to the CAS Stage 2 schema."""
     model_label = provider_label(model_provider)
@@ -47,32 +53,11 @@ def run_chair_report_agent(
         model_name=model_name,
         max_tokens=max_tokens,
         response_model=AgnoChairReportResponse,
-        instructions=[
-            f"You are the CAS ChairReportAgent speaking from the {model_label} perspective.",
-            "Synthesize QuantCreditAgent and EvidenceAuditAgent outputs into committee-ready language.",
-            "Treat the QuantCredit and EvidenceAudit outputs as the Claude/GPT committee discussion to summarize.",
-            "Preserve the Stage 1 model label and explain any committee qualification separately.",
-            "Write in Korean business-report language for a decision-support report.",
-            "Do not say the system confirms, approves, assigns, or finalizes an official credit rating.",
-            "Treat rule_engine_confidence as a rule-engine review confidence, not as model confidence.",
-            "Do not invent external news, DART filings, macro events, or industry events not present in the evidence input.",
-            "If external evidence is unavailable, clearly state that the external review is limited.",
-            (
-                "Use EvidenceAudit structured fields first: critical_evidence_count, "
-                "watch_context_count, materiality_summary, hard_distress_detected, and "
-                "recommended_evidence_treatment. Treat watch_context as observation, not "
-                "confirmed distress, unless the structured fields identify substantive or critical evidence."
-            ),
-            (
-                "If recommended_evidence_treatment is not critical_veto_review or "
-                "hard_distress_detected is false, do not describe the evidence as "
-                "`치명적 위험 신호`, `치명 외부근거`, or confirmed fatal distress. Use softer "
-                "phrases such as `외부 위험 단서`, `관찰 근거`, or `추가 확인 필요`."
-            ),
-            "Return concise Korean review prose in the structured response fields only.",
-            "Use credit_policy_summary only to explain the already computed committee qualification.",
-            "Do not convert policy signals into a new official rating, probability, or label.",
-        ],
+        runtime_config=runtime_config,
+        instructions=build_stage2_role_instructions(
+            "chair_report",
+            provider_label=model_label,
+        ),
     )
     result = run_structured_agent(
         agent=agent,
@@ -84,6 +69,7 @@ def run_chair_report_agent(
             evidence_audit=evidence_audit,
         ),
         response_model=AgnoChairReportResponse,
+        runtime_config=runtime_config,
     )
     report_summary = _safe_committee_text(result.executive_summary)
     conflict_resolution = _safe_committee_text(result.conflict_resolution)
@@ -144,11 +130,9 @@ def _query(
         "materiality_summary": prompt_context["materiality_summary"],
         "credit_policy_summary": _policy_summary(bundle),
     }
-    return (
-        "Run ChairReportAgent for CAS Stage 2. "
-        "Resolve model/evidence conflict and write the final committee synthesis. "
-        "Return only the AgnoChairReportResponse fields.\n\n"
-        f"{json_payload(prompt_payload)}"
+    return build_stage2_role_query(
+        "chair_report",
+        prompt_payload=prompt_payload,
     )
 
 

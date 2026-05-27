@@ -3,7 +3,7 @@
 이 문서는 Corporate Analysis System에서 사용하는 신용위험 조기경보 모델의
 주요 데이터 전처리 기준을 정리한다. 현재 기준 데이터는
 `data/raw/ts2000/TS2000_Credit_Model_Dataset_Model_V1.csv`이며,
-이 파일에서 43개 모델 입력셋과 대시보드용 산출물을 생성한다.
+이 파일에서 46개 모델 입력셋과 대시보드용 산출물을 생성한다.
 
 ## 1. 전체 전처리 흐름
 
@@ -16,7 +16,7 @@ flowchart LR
     D --> F
     F --> G["Model_V1 모델용 원본"]
     G --> G2["OpenDART CFS/OFS 보강"]
-    G2 --> H["credit_43_features 입력셋"]
+    G2 --> H["credit_46_features 입력셋"]
     H --> I["XGBoost / 대시보드 산출물"]
 ```
 
@@ -26,7 +26,7 @@ flowchart LR
 | 재무/거시 결합 | `TS2000_Credit_Model_Dataset.csv` | 타겟, 재무제표, 시장/배당, 거시지표 결합 |
 | 모델용 원본 정리 | `TS2000_Credit_Model_Dataset_Model_V1.csv` | 모델 학습에 필요한 ID, 시점, 변수, 타겟만 남김 |
 | OpenDART 재무 보강 | `data/raw/opendart/*`, `model_v1_opendart_supplement_audit.csv` | CFS가 비어 있는 기업-연도에 대해 CFS 우선, 없으면 OFS fallback으로 원천 재무값 보강 |
-| 43개 입력셋 생성 | `feature_43_master.csv`, `xgb_train.csv`, `xgb_valid.csv`, `xgb_test.csv` | XGBoost 학습 및 대시보드 입력 생성 |
+| 46개 입력셋 생성 | `feature_46_master.csv`, `xgb_train.csv`, `xgb_valid.csv`, `xgb_test.csv` | XGBoost 학습 및 대시보드 입력 생성 |
 
 ## 2. 신용등급 타겟 전처리 기준
 
@@ -158,24 +158,26 @@ OpenDART 금액 단위는 `원`이고 Model V1 원천 단위는 `천원`이므�
 
 ## 5. 모델 입력셋 생성 기준
 
-현재 대시보드와 Stage 1 XGBoost의 기본 입력은 `credit_43_features`이다.
-43개 입력셋은 34개 원천 변수를 선택한 뒤, 범주형 변수 3개를 원-핫 인코딩하여
-최종 43개 모델 입력 변수로 만든다. 산업 내 유동성 백분위
-`industry_current_ratio_percentile`은 44개 후보 변수셋으로 성능을 비교했지만
-공식 43개 변수셋보다 성능이 낮아 공식 입력에서는 제외한다. 해당 칼럼은
-Model V1의 후보 칼럼으로만 보존하고, 비교 기록은 43개 모델 diagnostics에 남긴다.
+현재 대시보드와 Stage 1 XGBoost의 기본 입력은 `credit_46_features`이다.
+46개 입력셋은 34개 원천 변수에 산업-연도 금액 백분위 3개 파생 변수를 더한 뒤,
+범주형 변수 3개를 원-핫 인코딩하여 최종 46개 모델 입력 변수로 만든다.
+추가 파생 변수는 `assets_total_industry_year_pct`,
+`gross_profit_industry_year_pct`, `depreciation_industry_year_pct`이다.
+산업 내 유동성 백분위 `industry_current_ratio_percentile`은 과거 44개 후보
+변수셋으로 성능을 비교했지만 당시 공식 변수셋보다 성능이 낮아 제외했다. 해당
+칼럼은 Model V1의 후보 칼럼으로만 보존하고, 비교 기록은 diagnostics에 남긴다.
 
 | 구분 | 개수 | 설명 |
 |---|---:|---|
-| 선택 원천 변수 | 34개 | 재무비율, 원천 재무값, 시장/규모/산업 맥락 변수, 거시 변수 |
+| 선택 원천/파생 변수 | 37개 | 재무비율, 원천 재무값, 시장/규모/산업 맥락 변수, 거시 변수, 산업-연도 금액 백분위 |
 | 원-핫 대상 | 3개 | `market`, `firm_size_group`, `industry_macro_category` |
-| 최종 모델 입력 | 43개 | XGBoost 학습 및 추론에 사용하는 실제 입력 변수 |
+| 최종 모델 입력 | 46개 | XGBoost 학습 및 추론에 사용하는 실제 입력 변수 |
 
-43개 입력셋은 다음 파일로 저장된다.
+46개 입력셋은 다음 파일로 저장된다.
 
 | 파일 | 설명 |
 |---|---|
-| `feature_43_master.csv` | 전체 5,451개 라벨 기업-연도 기준 테이블 |
+| `feature_46_master.csv` | 전체 5,451개 라벨 기업-연도 기준 테이블 |
 | `xgb_train.csv` | 학습용 입력 |
 | `xgb_valid.csv` | 검증용 입력 |
 | `xgb_test.csv` | 테스트용 입력 |
@@ -224,13 +226,13 @@ Model V1의 후보 칼럼으로만 보존하고, 비교 기록은 43개 모델 d
 | Model V1 재무제표 누락 후보 | 73행 |
 | 2026 추론 입력 재무제표 누락 후보 | 2행 |
 
-OpenDART OFS fallback 보강 후 재학습한 현재 43-feature XGBoost artifact의 test
+OpenDART OFS fallback 보강 후 재학습한 현재 46-feature XGBoost artifact의 test
 성능은 다음과 같다.
 
 | 기준 | PR-AUC | ROC-AUC | Precision | Recall | F1 |
 |---|---:|---:|---:|---:|---:|
-| Threshold 0.5 | 0.8329 | 0.9415 | 0.7737 | 0.7241 | 0.7481 |
-| Tuned threshold 0.32 | 0.8329 | 0.9415 | 0.7004 | 0.8522 | 0.7689 |
+| Threshold 0.5 | 0.8321 | 0.9415 | 0.7656 | 0.7241 | 0.7443 |
+| Tuned threshold 0.30 | 0.8321 | 0.9415 | 0.6941 | 0.8719 | 0.7729 |
 
 ## 8. CAS 내부 처리 기준
 
@@ -240,15 +242,19 @@ Corporate Analysis System은 상위 작업공간이나 외부 로컬 폴더를 �
 
 | 내부 경로 | 역할 |
 |---|---|
-| `data/raw/ts2000/TS2000_Credit_Model_Dataset_Model_V1.csv` | 공식 43개 입력셋을 재생성하는 CAS 기준 원본 |
+| `data/raw/ts2000/TS2000_Credit_Model_Dataset_Model_V1.csv` | 공식 46개 입력셋을 재생성하는 CAS 기준 원본 |
 | `data/raw/opendart/` | OpenDART CFS/OFS 보강 원천, 요약, audit 파일 |
-| `data/raw/ts2000/feature_43_inference_2026_aux.csv` | 2026 추론 입력의 기업규모와 `market_to_book` 보정을 위한 최소 2025 보조 원천 |
-| `data/input/credit_43_features/feature_43_master.csv` | 전체 라벨 기업-연도 기준 입력 테이블 |
-| `data/input/credit_43_features/feature_43_inference_2026.csv` | 2026 예측용 CAS 내부 추론 입력 테이블 |
-| `data/outputs/modeling/feature_43_xgboost/` | Stage 1 XGBoost 모델 artifact 및 팀 공유용 모델링 산출물 |
-| `data/outputs/modeling/feature_43_xgboost/diagnostics/` | Stage 1 성능 진단 리포트, segment/threshold/calibration/error-case 테이블 |
-| `data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents/` | Stage 2 에이전트/위원회 진단 리포트, 파일럿 배치, Agno 비교 산출물 |
-| `data/outputs/dashboard/feature_43_mvp/` | 대시보드용 예측, SHAP, 요약 산출물 |
+| `data/raw/ts2000/feature_46_inference_2026_aux.csv` | 2026 추론 입력의 기업규모와 `market_to_book` 보정을 위한 최소 2025 보조 원천 |
+| `data/input/credit_46_features/feature_46_master.csv` | 전체 라벨 기업-연도 기준 입력 테이블 |
+| `data/input/credit_46_features/feature_46_inference_2026.csv` | 2026 예측용 CAS 내부 추론 입력 테이블 |
+| `data/outputs/modeling/feature_46_xgboost/` | Stage 1 XGBoost 모델 artifact 및 팀 공유용 모델링 산출물 |
+| `data/outputs/modeling/feature_46_xgboost/diagnostics/` | Stage 1 성능 진단 리포트, segment/threshold/calibration/error-case 테이블 |
+| `data/outputs/dashboard/feature_46_mvp/` | 대시보드용 예측, SHAP, 요약 산출물 |
+
+Stage 2 반복 실행 원시 산출물과 샘플 CSV는 공식 모델 artifact 트리에 보관하지
+않고, 필요할 때 `data/outputs/reports/stage2_live_runs/` 아래에서 로컬 재생성하거나
+release artifact로 공유한다. PR/발표용 핵심 수치는
+`docs/stage2_agent_experiment_results_ko.md`에 보존한다.
 
 신용등급 타겟 전처리 규칙은 본 문서에 고정하고, CAS 실행 기준은 아래 내부
 스크립트와 내부 데이터 파일만 사용한다.
@@ -259,12 +265,12 @@ Corporate Analysis System은 상위 작업공간이나 외부 로컬 폴더를 �
 | `scripts/apply_opendart_financial_supplements.py` | OpenDART 보강값을 Model V1에 반영하고 재무 파생변수 재계산 |
 | `scripts/apply_opendart_inference_financial_supplements.py` | OpenDART 보강값을 2026 추론 입력에 반영하고 과거 패널을 이용해 lag/diff 변수 재계산 |
 | `scripts/export_inference_2026_missing_2024_lag_targets.py` | 2026 추론 대상 중 Model V1에 2024 행이 없는 기업만 OpenDART lag 수집 대상으로 추출 |
-| `scripts/rebuild_feature_43_dataset.py` | Corporate Analysis System의 공식 43개 입력셋 재생성 |
-| `scripts/import_feature_43_inference_2026_aux.py` | 2026 추론 입력 보정을 위한 최소 2025 보조 원천 생성 |
-| `scripts/build_feature_43_inference_2026.py` | CAS 내부 2026 추론 입력 테이블 보정, 검증 및 정렬 |
-| `scripts/export_feature_43_dashboard_artifacts.py` | XGBoost 학습, Platt scaling 확률 보정, SHAP, 대시보드 산출물 생성 |
-| `scripts/export_feature_43_model_diagnostics.py` | 기존 예측 결과 기준 모델 성능 진단 산출물 생성 |
-| `scripts/export_feature_43_threshold_policy_experiments.py` | global/segment threshold 정책별 성능 비교 실험 |
+| `scripts/rebuild_feature_46_dataset.py` | Corporate Analysis System의 공식 46개 입력셋 재생성 |
+| `scripts/import_feature_46_inference_2026_aux.py` | 2026 추론 입력 보정을 위한 최소 2025 보조 원천 생성 |
+| `scripts/build_feature_46_inference_2026.py` | CAS 내부 2026 추론 입력 테이블 보정, 검증 및 정렬 |
+| `scripts/export_feature_46_dashboard_artifacts.py` | XGBoost 학습, Platt scaling 확률 보정, SHAP, 대시보드 산출물 생성 |
+| `scripts/export_feature_46_model_diagnostics.py` | 기존 예측 결과 기준 모델 성능 진단 산출물 생성 |
+| `scripts/export_feature_46_threshold_policy_experiments.py` | global/segment threshold 정책별 성능 비교 실험 |
 | `scripts/export_feature_43_error_shap_analysis.py` | FP/FN 오류 사례의 SHAP 패턴 분석 |
 | `scripts/export_feature_43_error_case_review.py` | FP/FN 오류 사례의 유형, 모델 오해 가설, 개선 액션 리뷰 테이블 생성 |
 | `scripts/export_feature_43_shap_feature_experiments.py` | SHAP 오류 패턴 기반 변수 개선 후보 비교 실험 |

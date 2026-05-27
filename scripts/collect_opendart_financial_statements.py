@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_INFERENCE_PATH = (
-    ROOT / "data" / "input" / "credit_43_features" / "feature_43_inference_2026.csv"
+    ROOT / "data" / "input" / "credit_46_features" / "feature_46_inference_2026.csv"
 )
 DEFAULT_MODEL_V1_PATH = (
     ROOT / "data" / "raw" / "ts2000" / "TS2000_Credit_Model_Dataset_Model_V1.csv"

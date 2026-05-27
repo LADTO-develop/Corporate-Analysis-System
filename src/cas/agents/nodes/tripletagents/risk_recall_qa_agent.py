@@ -13,8 +13,13 @@ from cas.agents.stage2_outputs import (
     QuantCreditOutput,
     RiskRecallQAOutput,
 )
+from cas.agents.stage2_prompt_contracts import (
+    build_stage2_role_instructions,
+    build_stage2_role_query,
+)
+from cas.agents.stage2_runtime_config import Stage2RuntimeConfig
 
-from .runtime import build_agno_agent, clamp, json_payload, provider_label, run_structured_agent
+from .runtime import build_agno_agent, clamp, provider_label, run_structured_agent
 
 
 class AgnoRiskRecallQAResponse(BaseModel):
@@ -59,6 +64,7 @@ def run_risk_recall_qa_agent(
     model_name: str,
     model_provider: str = "openai",
     max_tokens: int,
+    runtime_config: Stage2RuntimeConfig | None = None,
 ) -> RiskRecallQAOutput:
     """Run the Agno RiskRecallQAAgent and map it to the CAS Stage 2 schema."""
     model_label = provider_label(model_provider)
@@ -68,18 +74,11 @@ def run_risk_recall_qa_agent(
         model_name=model_name,
         max_tokens=max_tokens,
         response_model=AgnoRiskRecallQAResponse,
-        instructions=[
-            f"You are the CAS RiskRecallQAAgent speaking from the {model_label} perspective.",
-            "Audit only already-eligible committee decisions for missed-risk recall safety.",
-            "Do not rewrite model_view. Treat committee_view as decision-support, not an official rating.",
-            "Do not invent external news, DART filings, macro events, or industry events not present in the input.",
-            "Use EvidenceAudit recommended_evidence_treatment and hard_distress_detected before prose when judging missed-risk recall.",
-            "Do not escalate from low-quality news snippets alone; require direct structured evidence, confirmed materiality, or severe financial stress.",
-            "Escalate to risk_hold only when verified adverse evidence or severe financial stress is present.",
-            "Use boundary_hold or manual review for near-threshold uncertainty without confirmed adverse evidence.",
-            "If financial defenses and external evidence are adequate, keep committee_view unchanged.",
-            "Return concise Korean review prose in the structured response fields only.",
-        ],
+        runtime_config=runtime_config,
+        instructions=build_stage2_role_instructions(
+            "risk_recall_qa",
+            provider_label=model_label,
+        ),
     )
     result = run_structured_agent(
         agent=agent,
@@ -92,6 +91,7 @@ def run_risk_recall_qa_agent(
             trigger_reasons=trigger_reasons,
         ),
         response_model=AgnoRiskRecallQAResponse,
+        runtime_config=runtime_config,
     )
     return RiskRecallQAOutput(
         qa_summary=_safe_qa_text(result.qa_summary),
@@ -129,19 +129,10 @@ def _query(
             "chair_report": chair_report.model_dump(mode="json"),
         },
         "qa_trigger_reasons": trigger_reasons,
-        "qa_checks": [
-            "final_committee_label must already be eligible",
-            "near-threshold eligible decisions need recall safety if financial defenses are weak",
-            "repeated financing, guarantee, audit, litigation, suspension, or contract-cancellation evidence needs materiality context",
-            "risk_hold requires verified adverse evidence or severe financial stress",
-            "boundary_hold is preferred for uncertainty without confirmed adverse evidence",
-        ],
     }
-    return (
-        "Run RiskRecallQAAgent for CAS Stage 2. "
-        "Audit the resolved eligible committee_view for missed-risk recall safety. "
-        "Return only the AgnoRiskRecallQAResponse fields.\n\n"
-        f"{json_payload(prompt_payload)}"
+    return build_stage2_role_query(
+        "risk_recall_qa",
+        prompt_payload=prompt_payload,
     )
 
 

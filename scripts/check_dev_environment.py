@@ -6,11 +6,16 @@ import argparse
 import importlib.util
 import subprocess
 import sys
+import tomllib
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 
+from packaging.requirements import InvalidRequirement, Requirement
+from packaging.version import InvalidVersion, Version
+
 ROOT = Path(__file__).resolve().parents[1]
 INSTALL_HINT = 'python -m pip install -e ".[dev,agent,ml,viz,dashboard]"'
+DEFAULT_CHECK_EXTRAS = ("dev", "agent", "ml", "viz", "dashboard")
 
 REQUIRED_IMPORTS = {
     "project": {
@@ -57,7 +62,8 @@ def main() -> None:
     print(f"- python: {sys.version.split()[0]}")
 
     failures = _python_version_failures()
-    failures.extend(_import_failures())
+    requirement_specs = _project_requirement_specs()
+    failures.extend(_import_failures(requirement_specs))
     if args.live_agno:
         failures.extend(_live_agno_failures())
 
@@ -90,7 +96,7 @@ def _python_version_failures() -> list[str]:
     return []
 
 
-def _import_failures() -> list[str]:
+def _import_failures(requirement_specs: dict[str, Requirement]) -> list[str]:
     failures: list[str] = []
     for group, packages in REQUIRED_IMPORTS.items():
         print(f"\n[{group}]")
@@ -100,8 +106,64 @@ def _import_failures() -> list[str]:
                 print(f"- {package_name}: missing")
                 failures.append(f"Missing {package_name} ({import_name})")
                 continue
-            print(f"- {package_name}: {_package_version(package_name)}")
+            installed_version = _package_version(package_name)
+            requirement = requirement_specs.get(package_name)
+            status, failure = _requirement_status(
+                package_name=package_name,
+                installed_version=installed_version,
+                requirement=requirement,
+            )
+            print(f"- {package_name}: {status}")
+            if failure:
+                failures.append(failure)
     return failures
+
+
+def _project_requirement_specs(
+    extras: tuple[str, ...] = DEFAULT_CHECK_EXTRAS,
+) -> dict[str, Requirement]:
+    """Return dependency requirements declared in pyproject.toml, keyed by package name."""
+    pyproject = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    project = pyproject.get("project", {})
+    raw_requirements = list(project.get("dependencies", []))
+    optional_dependencies = project.get("optional-dependencies", {})
+    if isinstance(optional_dependencies, dict):
+        for extra_name in extras:
+            requirements = optional_dependencies.get(extra_name, [])
+            if isinstance(requirements, list):
+                raw_requirements.extend(requirements)
+
+    requirement_specs: dict[str, Requirement] = {}
+    for raw_requirement in raw_requirements:
+        if not isinstance(raw_requirement, str):
+            continue
+        try:
+            requirement = Requirement(raw_requirement)
+        except InvalidRequirement:
+            continue
+        requirement_specs[requirement.name] = requirement
+    return requirement_specs
+
+
+def _requirement_status(
+    *,
+    package_name: str,
+    installed_version: str,
+    requirement: Requirement | None,
+) -> tuple[str, str | None]:
+    if requirement is None or not requirement.specifier:
+        return installed_version, None
+    status = f"{installed_version} (requires {requirement.specifier})"
+    try:
+        installed = Version(installed_version)
+    except InvalidVersion:
+        return status, None
+    if installed in requirement.specifier:
+        return status, None
+    return (
+        f"{status} [out of range]",
+        f"{package_name} version {installed_version} does not satisfy {requirement.specifier}",
+    )
 
 
 def _live_agno_failures() -> list[str]:

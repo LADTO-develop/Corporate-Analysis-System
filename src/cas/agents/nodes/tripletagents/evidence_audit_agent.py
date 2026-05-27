@@ -12,12 +12,16 @@ from cas.agents.signals.evidence_treatment_signals import (
 )
 from cas.agents.stage2_bundle import Stage2InputBundle
 from cas.agents.stage2_outputs import EvidenceAuditOutput, EvidenceTreatment
+from cas.agents.stage2_prompt_contracts import (
+    build_stage2_role_instructions,
+    build_stage2_role_query,
+)
+from cas.agents.stage2_runtime_config import Stage2RuntimeConfig
 
 from .runtime import (
     build_agno_agent,
     clamp,
     compact_items,
-    json_payload,
     provider_label,
     run_structured_agent,
 )
@@ -88,6 +92,7 @@ def run_evidence_audit_agent(
     model_name: str,
     model_provider: str = "openai",
     max_tokens: int,
+    runtime_config: Stage2RuntimeConfig | None = None,
 ) -> EvidenceAuditOutput:
     """Run the Agno EvidenceAuditAgent and map it to the CAS Stage 2 schema."""
     if _external_evidence_unavailable(bundle.news_status):
@@ -100,34 +105,17 @@ def run_evidence_audit_agent(
         model_name=model_name,
         max_tokens=max_tokens,
         response_model=AgnoEvidenceAuditResponse,
-        instructions=[
-            f"You are the CAS EvidenceAuditAgent speaking from the {model_label} perspective.",
-            "Your role is limited to non-financial external evidence: DART/news events, litigation, audit opinions, trading halts, delisting risk, regulatory sanctions, financing events, and other tail-risk indicators.",
-            "Do not perform basic financial ratio analysis such as margin, leverage, liquidity, interest coverage, or cash-flow coverage; those belong to QuantCreditAgent.",
-            "Use only the provided news_cache_snapshot and source_feature_row as evidence.",
-            "Do not use general market knowledge as confirmed company-specific evidence.",
-            "If direct external evidence is missing, state that evidence is unavailable and do not infer events.",
-            "In the committee meeting, challenge or qualify the quantitative view only with supplied evidence.",
-            "Separate confirmed external facts from evidence limitations, weak company relevance, and unverified snippets.",
-            "For historical evaluation, use only evidence already present in the bundle after as_of_date filtering.",
-            "Treat credit_policy_snapshot, if present in context, only as QuantCredit financial-policy context; it is not news, not a DART filing, and not external evidence.",
-            (
-                "Use disclosure_severity, disclosure_event_class, disclosure_materiality, "
-                "materiality_basis, and dilution_basis when present. "
-                "Treat procedural trading halts, low-materiality litigation, one-off voluntary contract cancellations, "
-                "low/watch materiality financing, debt guarantees, litigation, contract cancellations, "
-                "or business suspensions, routine audit filings, and single medium financing disclosures "
-                "as context/watch items unless repeated, unresolved, or combined with hard distress evidence."
-            ),
-            "If no critical external risk is confirmed, say that no veto-grade external evidence was found within the provided evidence scope; do not imply that the company is safe.",
-            "Write in Korean business-report language. Do not say a credit decision is confirmed or approved.",
-            "Return concise Korean review prose in the structured response fields only.",
-        ],
+        runtime_config=runtime_config,
+        instructions=build_stage2_role_instructions(
+            "evidence_audit",
+            provider_label=model_label,
+        ),
     )
     result = run_structured_agent(
         agent=agent,
         query=_query(bundle),
         response_model=AgnoEvidenceAuditResponse,
+        runtime_config=runtime_config,
     )
     prompt_context = bundle.to_compact_prompt_payload(role="evidence_audit")
     treatment = evaluate_evidence_treatment(
@@ -217,11 +205,9 @@ def _query(bundle: Stage2InputBundle) -> str:
             ),
         },
     }
-    return (
-        "Run EvidenceAuditAgent for CAS Stage 2. "
-        "Focus on external evidence, DART/news context, macro sensitivity, and veto-grade tail risk. "
-        "Return only the AgnoEvidenceAuditResponse fields.\n\n"
-        f"{json_payload(prompt_payload)}"
+    return build_stage2_role_query(
+        "evidence_audit",
+        prompt_payload=prompt_payload,
     )
 
 

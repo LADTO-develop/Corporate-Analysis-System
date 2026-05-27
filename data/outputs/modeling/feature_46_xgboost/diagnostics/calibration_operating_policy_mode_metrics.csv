@@ -1,0 +1,73 @@
+﻿variant,display_name,operating_mode,operating_mode_display,threshold_detail,evaluation_scope,precision,recall,f1,true_negative,false_positive,false_negative,true_positive
+current_platt,Current Platt,recall_first,Recall 우선,global:0.225; valid recall floor 0.90,valid,0.6794871794871795,0.9034090909090909,0.775609756097561,425,75,17,159
+current_platt,Current Platt,recall_first,Recall 우선,global:0.225; valid recall floor 0.90,test,0.6411149825783972,0.9064039408866995,0.7510204081632653,618,103,19,184
+current_platt,Current Platt,balanced,균형,global:0.300; valid recall floor 0.85,valid,0.7238095238095238,0.8636363636363636,0.7875647668393783,442,58,24,152
+current_platt,Current Platt,balanced,균형,global:0.300; valid recall floor 0.85,test,0.6941176470588235,0.8719211822660099,0.7729257641921398,643,78,26,177
+current_platt,Current Platt,fp_reduction_global,FP 축소 Global,global:0.380; valid recall floor 0.80,valid,0.7395833333333334,0.8068181818181818,0.7717391304347826,450,50,34,142
+current_platt,Current Platt,fp_reduction_global,FP 축소 Global,global:0.380; valid recall floor 0.80,test,0.7222222222222222,0.8325123152709359,0.7734553775743707,656,65,34,169
+current_platt,Current Platt,fp_reduction_kosdaq,FP 축소 KOSDAQ,market=KOSDAQ:0.380; fallback:0.300,valid,0.7395833333333334,0.8068181818181818,0.7717391304347826,450,50,34,142
+current_platt,Current Platt,fp_reduction_kosdaq,FP 축소 KOSDAQ,market=KOSDAQ:0.380; fallback:0.300,test,0.7203389830508474,0.8374384236453202,0.7744874715261959,655,66,33,170
+refit_platt_valid,Refit Platt,recall_first,Recall 우선,global:0.225; valid recall floor 0.90,valid,0.6794871794871795,0.9034090909090909,0.775609756097561,425,75,17,159
+refit_platt_valid,Refit Platt,recall_first,Recall 우선,global:0.225; valid recall floor 0.90,test,0.6411149825783972,0.9064039408866995,0.7510204081632653,618,103,19,184
+refit_platt_valid,Refit Platt,balanced,균형,global:0.300; valid recall floor 0.85,valid,0.7238095238095238,0.8636363636363636,0.7875647668393783,442,58,24,152
+refit_platt_valid,Refit Platt,balanced,균형,global:0.300; valid recall floor 0.85,test,0.6941176470588235,0.8719211822660099,0.7729257641921398,643,78,26,177
+refit_platt_valid,Refit Platt,fp_reduction_global,FP 축소 Global,global:0.380; valid recall floor 0.80,valid,0.7395833333333334,0.8068181818181818,0.7717391304347826,450,50,34,142
+refit_platt_valid,Refit Platt,fp_reduction_global,FP 축소 Global,global:0.380; valid recall floor 0.80,test,0.7222222222222222,0.8325123152709359,0.7734553775743707,656,65,34,169
+refit_platt_valid,Refit Platt,fp_reduction_kosdaq,FP 축소 KOSDAQ,market=KOSDAQ:0.380; fallback:0.300,valid,0.7395833333333334,0.8068181818181818,0.7717391304347826,450,50,34,142
+refit_platt_valid,Refit Platt,fp_reduction_kosdaq,FP 축소 KOSDAQ,market=KOSDAQ:0.380; fallback:0.300,test,0.7203389830508474,0.8374384236453202,0.7744874715261959,655,66,33,170
+isotonic_valid,Isotonic Valid,recall_first,Recall 우선,global:0.310; valid recall floor 0.90,valid,0.6736401673640168,0.9147727272727273,0.7759036144578313,422,78,15,161
+isotonic_valid,Isotonic Valid,recall_first,Recall 우선,global:0.310; valid recall floor 0.90,test,0.6279863481228669,0.9064039408866995,0.7419354838709677,612,109,19,184
+isotonic_valid,Isotonic Valid,balanced,균형,global:0.440; valid recall floor 0.85,valid,0.7238095238095238,0.8636363636363636,0.7875647668393783,442,58,24,152
+isotonic_valid,Isotonic Valid,balanced,균형,global:0.440; valid recall floor 0.85,test,0.6929133858267716,0.8669950738916257,0.7702407002188184,643,78,27,176
+isotonic_valid,Isotonic Valid,fp_reduction_global,FP 축소 Global,global:0.440; valid recall floor 0.80,valid,0.7238095238095238,0.8636363636363636,0.7875647668393783,442,58,24,152
+isotonic_valid,Isotonic Valid,fp_reduction_global,FP 축소 Global,global:0.440; valid recall floor 0.80,test,0.6929133858267716,0.8669950738916257,0.7702407002188184,643,78,27,176
+isotonic_valid,Isotonic Valid,fp_reduction_kosdaq,FP 축소 KOSDAQ,market=KOSDAQ:0.440; fallback:0.440,valid,0.7238095238095238,0.8636363636363636,0.7875647668393783,442,58,24,152
+isotonic_valid,Isotonic Valid,fp_reduction_kosdaq,FP 축소 KOSDAQ,market=KOSDAQ:0.440; fallback:0.440,test,0.6929133858267716,0.8669950738916257,0.7702407002188184,643,78,27,176
+beta_valid,Beta Valid,recall_first,Recall 우선,global:0.245; valid recall floor 0.90,valid,0.6824034334763949,0.9034090909090909,0.7775061124694377,426,74,17,159
+beta_valid,Beta Valid,recall_first,Recall 우선,global:0.245; valid recall floor 0.90,test,0.6433566433566433,0.9064039408866995,0.7525562372188139,619,102,19,184
+beta_valid,Beta Valid,balanced,균형,global:0.325; valid recall floor 0.85,valid,0.7238095238095238,0.8636363636363636,0.7875647668393783,442,58,24,152
+beta_valid,Beta Valid,balanced,균형,global:0.325; valid recall floor 0.85,test,0.6941176470588235,0.8719211822660099,0.7729257641921398,643,78,26,177
+beta_valid,Beta Valid,fp_reduction_global,FP 축소 Global,global:0.410; valid recall floor 0.80,valid,0.7395833333333334,0.8068181818181818,0.7717391304347826,450,50,34,142
+beta_valid,Beta Valid,fp_reduction_global,FP 축소 Global,global:0.410; valid recall floor 0.80,test,0.7222222222222222,0.8325123152709359,0.7734553775743707,656,65,34,169
+beta_valid,Beta Valid,fp_reduction_kosdaq,FP 축소 KOSDAQ,market=KOSDAQ:0.410; fallback:0.325,valid,0.7395833333333334,0.8068181818181818,0.7717391304347826,450,50,34,142
+beta_valid,Beta Valid,fp_reduction_kosdaq,FP 축소 KOSDAQ,market=KOSDAQ:0.410; fallback:0.325,test,0.7203389830508474,0.8374384236453202,0.7744874715261959,655,66,33,170
+rolling_oof_platt,Rolling OOF Platt,recall_first,Recall 우선,global:0.215; valid recall floor 0.90,valid,0.6824034334763949,0.9034090909090909,0.7775061124694377,426,74,17,159
+rolling_oof_platt,Rolling OOF Platt,recall_first,Recall 우선,global:0.215; valid recall floor 0.90,test,0.6411149825783972,0.9064039408866995,0.7510204081632653,618,103,19,184
+rolling_oof_platt,Rolling OOF Platt,balanced,균형,global:0.290; valid recall floor 0.85,valid,0.7238095238095238,0.8636363636363636,0.7875647668393783,442,58,24,152
+rolling_oof_platt,Rolling OOF Platt,balanced,균형,global:0.290; valid recall floor 0.85,test,0.6941176470588235,0.8719211822660099,0.7729257641921398,643,78,26,177
+rolling_oof_platt,Rolling OOF Platt,fp_reduction_global,FP 축소 Global,global:0.370; valid recall floor 0.80,valid,0.7395833333333334,0.8068181818181818,0.7717391304347826,450,50,34,142
+rolling_oof_platt,Rolling OOF Platt,fp_reduction_global,FP 축소 Global,global:0.370; valid recall floor 0.80,test,0.7222222222222222,0.8325123152709359,0.7734553775743707,656,65,34,169
+rolling_oof_platt,Rolling OOF Platt,fp_reduction_kosdaq,FP 축소 KOSDAQ,market=KOSDAQ:0.370; fallback:0.290,valid,0.7395833333333334,0.8068181818181818,0.7717391304347826,450,50,34,142
+rolling_oof_platt,Rolling OOF Platt,fp_reduction_kosdaq,FP 축소 KOSDAQ,market=KOSDAQ:0.370; fallback:0.290,test,0.7203389830508474,0.8374384236453202,0.7744874715261959,655,66,33,170
+rolling_oof_isotonic,Rolling OOF Isotonic,recall_first,Recall 우선,global:0.230; valid recall floor 0.90,valid,0.6417322834645669,0.9261363636363636,0.7581395348837209,409,91,13,163
+rolling_oof_isotonic,Rolling OOF Isotonic,recall_first,Recall 우선,global:0.230; valid recall floor 0.90,test,0.6153846153846154,0.9064039408866995,0.7330677290836654,606,115,19,184
+rolling_oof_isotonic,Rolling OOF Isotonic,balanced,균형,global:0.380; valid recall floor 0.85,valid,0.7069767441860465,0.8636363636363636,0.7774936061381074,437,63,24,152
+rolling_oof_isotonic,Rolling OOF Isotonic,balanced,균형,global:0.380; valid recall floor 0.85,test,0.6819923371647509,0.8768472906403941,0.7672413793103449,638,83,25,178
+rolling_oof_isotonic,Rolling OOF Isotonic,fp_reduction_global,FP 축소 Global,global:0.380; valid recall floor 0.80,valid,0.7069767441860465,0.8636363636363636,0.7774936061381074,437,63,24,152
+rolling_oof_isotonic,Rolling OOF Isotonic,fp_reduction_global,FP 축소 Global,global:0.380; valid recall floor 0.80,test,0.6819923371647509,0.8768472906403941,0.7672413793103449,638,83,25,178
+rolling_oof_isotonic,Rolling OOF Isotonic,fp_reduction_kosdaq,FP 축소 KOSDAQ,market=KOSDAQ:0.380; fallback:0.380,valid,0.7069767441860465,0.8636363636363636,0.7774936061381074,437,63,24,152
+rolling_oof_isotonic,Rolling OOF Isotonic,fp_reduction_kosdaq,FP 축소 KOSDAQ,market=KOSDAQ:0.380; fallback:0.380,test,0.6819923371647509,0.8768472906403941,0.7672413793103449,638,83,25,178
+rolling_oof_beta,Rolling OOF Beta,recall_first,Recall 우선,global:0.215; valid recall floor 0.90,valid,0.6794871794871795,0.9034090909090909,0.775609756097561,425,75,17,159
+rolling_oof_beta,Rolling OOF Beta,recall_first,Recall 우선,global:0.215; valid recall floor 0.90,test,0.6411149825783972,0.9064039408866995,0.7510204081632653,618,103,19,184
+rolling_oof_beta,Rolling OOF Beta,balanced,균형,global:0.290; valid recall floor 0.85,valid,0.7238095238095238,0.8636363636363636,0.7875647668393783,442,58,24,152
+rolling_oof_beta,Rolling OOF Beta,balanced,균형,global:0.290; valid recall floor 0.85,test,0.6941176470588235,0.8719211822660099,0.7729257641921398,643,78,26,177
+rolling_oof_beta,Rolling OOF Beta,fp_reduction_global,FP 축소 Global,global:0.370; valid recall floor 0.80,valid,0.7395833333333334,0.8068181818181818,0.7717391304347826,450,50,34,142
+rolling_oof_beta,Rolling OOF Beta,fp_reduction_global,FP 축소 Global,global:0.370; valid recall floor 0.80,test,0.7215189873417721,0.8423645320197044,0.7772727272727272,655,66,32,171
+rolling_oof_beta,Rolling OOF Beta,fp_reduction_kosdaq,FP 축소 KOSDAQ,market=KOSDAQ:0.370; fallback:0.290,valid,0.7395833333333334,0.8068181818181818,0.7717391304347826,450,50,34,142
+rolling_oof_beta,Rolling OOF Beta,fp_reduction_kosdaq,FP 축소 KOSDAQ,market=KOSDAQ:0.370; fallback:0.290,test,0.7196652719665272,0.8472906403940886,0.7782805429864253,654,67,31,172
+segment_market_platt,Market Segment Platt,recall_first,Recall 우선,global:0.210; valid recall floor 0.90,valid,0.6611570247933884,0.9090909090909091,0.7655502392344498,418,82,16,160
+segment_market_platt,Market Segment Platt,recall_first,Recall 우선,global:0.210; valid recall floor 0.90,test,0.6216216216216216,0.9064039408866995,0.7374749498997996,609,112,19,184
+segment_market_platt,Market Segment Platt,balanced,균형,global:0.310; valid recall floor 0.85,valid,0.7238095238095238,0.8636363636363636,0.7875647668393783,442,58,24,152
+segment_market_platt,Market Segment Platt,balanced,균형,global:0.310; valid recall floor 0.85,test,0.6941176470588235,0.8719211822660099,0.7729257641921398,643,78,26,177
+segment_market_platt,Market Segment Platt,fp_reduction_global,FP 축소 Global,global:0.385; valid recall floor 0.80,valid,0.7395833333333334,0.8068181818181818,0.7717391304347826,450,50,34,142
+segment_market_platt,Market Segment Platt,fp_reduction_global,FP 축소 Global,global:0.385; valid recall floor 0.80,test,0.7253218884120172,0.8325123152709359,0.7752293577981652,657,64,34,169
+segment_market_platt,Market Segment Platt,fp_reduction_kosdaq,FP 축소 KOSDAQ,market=KOSDAQ:0.385; fallback:0.310,valid,0.7395833333333334,0.8068181818181818,0.7717391304347826,450,50,34,142
+segment_market_platt,Market Segment Platt,fp_reduction_kosdaq,FP 축소 KOSDAQ,market=KOSDAQ:0.385; fallback:0.310,test,0.7203389830508474,0.8374384236453202,0.7744874715261959,655,66,33,170
+segment_industry_platt,Industry Segment Platt,recall_first,Recall 우선,global:0.215; valid recall floor 0.90,valid,0.6808510638297872,0.9090909090909091,0.7785888077858881,425,75,16,160
+segment_industry_platt,Industry Segment Platt,recall_first,Recall 우선,global:0.215; valid recall floor 0.90,test,0.6323024054982818,0.9064039408866995,0.7449392712550608,614,107,19,184
+segment_industry_platt,Industry Segment Platt,balanced,균형,global:0.310; valid recall floor 0.85,valid,0.7259615384615384,0.8579545454545454,0.7864583333333334,443,57,25,151
+segment_industry_platt,Industry Segment Platt,balanced,균형,global:0.310; valid recall floor 0.85,test,0.701195219123506,0.8669950738916257,0.775330396475771,646,75,27,176
+segment_industry_platt,Industry Segment Platt,fp_reduction_global,FP 축소 Global,global:0.390; valid recall floor 0.80,valid,0.743455497382199,0.8068181818181818,0.773841961852861,451,49,34,142
+segment_industry_platt,Industry Segment Platt,fp_reduction_global,FP 축소 Global,global:0.390; valid recall floor 0.80,test,0.7236842105263158,0.812807881773399,0.765661252900232,658,63,38,165
+segment_industry_platt,Industry Segment Platt,fp_reduction_kosdaq,FP 축소 KOSDAQ,market=KOSDAQ:0.390; fallback:0.310,valid,0.743455497382199,0.8068181818181818,0.773841961852861,451,49,34,142
+segment_industry_platt,Industry Segment Platt,fp_reduction_kosdaq,FP 축소 KOSDAQ,market=KOSDAQ:0.390; fallback:0.310,test,0.7217391304347827,0.8177339901477833,0.766743648960739,657,64,37,166

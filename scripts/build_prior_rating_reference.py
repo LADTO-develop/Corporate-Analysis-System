@@ -19,8 +19,8 @@ import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[1]
 
-MASTER_PATH = ROOT / "data/input/credit_43_features/feature_43_master.csv"
-INFERENCE_2026_PATH = ROOT / "data/input/credit_43_features/feature_43_inference_2026.csv"
+MASTER_PATH = ROOT / "data/input/credit_46_features/feature_46_master.csv"
+INFERENCE_2026_PATH = ROOT / "data/input/credit_46_features/feature_46_inference_2026.csv"
 RATING_HISTORY_PATH = ROOT / "data/evaluation/target_label_reference.csv"
 OUTPUT_PATH = ROOT / "data/evaluation/prior_rating_reference.csv"
 SUMMARY_PATH = ROOT / "data/evaluation/prior_rating_reference_summary.json"

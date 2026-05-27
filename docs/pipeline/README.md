@@ -8,7 +8,7 @@ CAS 데이터 파이프라인 관련 문서를 모아 둔 디렉토리다.
 - 정규화된 입력을 `AgentState` 시작 상태로 변환한다.
 - `data` 노드는 `company_selection`을 feature master/inference row로 해석한다.
 - feature master와 inference row는 TS2000 원천에 OpenDART CFS/OFS 보강을 반영한
-  공식 43개 입력셋을 기준으로 한다.
+  공식 46개 입력셋을 기준으로 한다.
 - 기존 `company_id` 기반 실행 경로는 유지한다.
 - 로컬에 `xgboost`가 없거나 모델 artifact를 읽을 수 없는 경우 Stage 1 deterministic fallback으로 이어진다.
 
@@ -23,7 +23,7 @@ CAS 데이터 파이프라인 관련 문서를 모아 둔 디렉토리다.
 ## 문서
 
 - `data_pipeline.md`: 웹 리스팅 입력부터 분석 파이프라인 진입까지의 계약과 실패 규칙
-- `../preprocessing_rules_ko.md`: 신용등급 타겟, 재무/거시 결합, 43개 입력셋 전처리 기준
+- `../preprocessing_rules_ko.md`: 신용등급 타겟, 재무/거시 결합, 46개 입력셋 전처리 기준
 
 ## 검증
 

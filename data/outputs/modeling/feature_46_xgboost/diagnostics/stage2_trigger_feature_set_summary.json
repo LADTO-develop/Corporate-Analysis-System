@@ -1,0 +1,189 @@
+{
+  "generated_at": "2026-05-26T14:52:47.442756+00:00",
+  "model": "feature_46_xgboost",
+  "dataset": "credit_46_features",
+  "baseline_candidate": "stage2_aux_48_baseline",
+  "eval_years": [
+    2019,
+    2020,
+    2021,
+    2022
+  ],
+  "it_services_recall_floor": 0.9,
+  "candidates": [
+    {
+      "candidate_id": "stage2_aux_48_baseline",
+      "note": "현재 운영 기준 Stage2 aux feature set",
+      "added_columns": [
+        "delta_accruals_ratio",
+        "is_3y_consecutive_operating_loss"
+      ]
+    },
+    {
+      "candidate_id": "stage2_aux_plus_fn_rescue_scores_53",
+      "note": "기존 aux에 제조업 FN rescue composite score 5개 추가",
+      "added_columns": [
+        "delta_accruals_ratio",
+        "is_3y_consecutive_operating_loss",
+        "fn_rescue_working_capital_stress_score",
+        "fn_rescue_cashflow_turn_stress_score",
+        "fn_rescue_borrowing_pressure_score",
+        "fn_rescue_score",
+        "fn_rescue_group_count"
+      ]
+    },
+    {
+      "candidate_id": "working_capital_trigger_54",
+      "note": "매출채권, 재고, 운전자본 shock 원천 변수 추가",
+      "added_columns": [
+        "delta_accruals_ratio",
+        "is_3y_consecutive_operating_loss",
+        "accounts_receivable_ratio",
+        "inventory_ratio",
+        "contract_assets_ratio",
+        "ar_days_diff",
+        "inventory_days_diff",
+        "ap_days_diff"
+      ]
+    },
+    {
+      "candidate_id": "cashflow_turn_trigger_53",
+      "note": "OCF/영업손익 turn negative와 현금흐름 악화 diff 추가",
+      "added_columns": [
+        "delta_accruals_ratio",
+        "is_3y_consecutive_operating_loss",
+        "is_ocf_turn_negative",
+        "is_operating_income_turn_negative",
+        "ocf_to_total_borrowings_diff",
+        "ocf_to_total_liabilities_diff",
+        "cash_ratio_diff"
+      ]
+    },
+    {
+      "candidate_id": "borrowing_pressure_trigger_52",
+      "note": "단기차입, 총차입 증가, 유동성/자본잠식 악화 diff 추가",
+      "added_columns": [
+        "delta_accruals_ratio",
+        "is_3y_consecutive_operating_loss",
+        "delta_st_borrowings_share",
+        "total_borrowings_growth",
+        "current_ratio_diff",
+        "capital_impairment_diff"
+      ]
+    },
+    {
+      "candidate_id": "fn_rescue_raw_trigger_64",
+      "note": "제조업 FN rescue 원천 변수 전체 추가",
+      "added_columns": [
+        "delta_accruals_ratio",
+        "is_3y_consecutive_operating_loss",
+        "accounts_receivable_ratio",
+        "inventory_ratio",
+        "contract_assets_ratio",
+        "ar_days_diff",
+        "inventory_days_diff",
+        "ap_days_diff",
+        "delta_accruals_ratio",
+        "is_ocf_turn_negative",
+        "is_operating_income_turn_negative",
+        "ocf_to_total_borrowings_diff",
+        "ocf_to_total_liabilities_diff",
+        "cash_ratio_diff",
+        "delta_st_borrowings_share",
+        "total_borrowings_growth",
+        "current_ratio_diff",
+        "capital_impairment_diff"
+      ]
+    },
+    {
+      "candidate_id": "macro_regime_trigger_53",
+      "note": "금리, 스프레드, 환율 변화량을 보조 트리거 모델에 추가",
+      "added_columns": [
+        "delta_accruals_ratio",
+        "is_3y_consecutive_operating_loss",
+        "market_spread_diff",
+        "spec_spread_diff",
+        "base_rate_diff",
+        "treasury_3y_diff",
+        "usd_krw_diff"
+      ]
+    },
+    {
+      "candidate_id": "full_review_trigger_73",
+      "note": "aux, FN rescue score, raw rescue, macro regime 후보를 모두 추가",
+      "added_columns": [
+        "delta_accruals_ratio",
+        "is_3y_consecutive_operating_loss",
+        "fn_rescue_working_capital_stress_score",
+        "fn_rescue_cashflow_turn_stress_score",
+        "fn_rescue_borrowing_pressure_score",
+        "fn_rescue_score",
+        "fn_rescue_group_count",
+        "accounts_receivable_ratio",
+        "inventory_ratio",
+        "contract_assets_ratio",
+        "ar_days_diff",
+        "inventory_days_diff",
+        "ap_days_diff",
+        "delta_accruals_ratio",
+        "is_ocf_turn_negative",
+        "is_operating_income_turn_negative",
+        "ocf_to_total_borrowings_diff",
+        "ocf_to_total_liabilities_diff",
+        "cash_ratio_diff",
+        "delta_st_borrowings_share",
+        "total_borrowings_growth",
+        "current_ratio_diff",
+        "capital_impairment_diff",
+        "market_spread_diff",
+        "spec_spread_diff",
+        "base_rate_diff",
+        "treasury_3y_diff",
+        "usd_krw_diff"
+      ]
+    }
+  ],
+  "best_by_rolling_recall": {
+    "candidate_id": "full_review_trigger_73",
+    "note": "aux, FN rescue score, raw rescue, macro regime 후보를 모두 추가",
+    "added_features": "delta_accruals_ratio, is_3y_consecutive_operating_loss, fn_rescue_working_capital_stress_score, fn_rescue_cashflow_turn_stress_score, fn_rescue_borrowing_pressure_score, fn_rescue_score, fn_rescue_group_count, accounts_receivable_ratio, inventory_ratio, contract_assets_ratio, ar_days_diff, inventory_days_diff, ap_days_diff, delta_accruals_ratio, is_ocf_turn_negative, is_operating_income_turn_negative, ocf_to_total_borrowings_diff, ocf_to_total_liabilities_diff, cash_ratio_diff, delta_st_borrowings_share, total_borrowings_growth, current_ratio_diff, capital_impairment_diff, market_spread_diff, spec_spread_diff, base_rate_diff, treasury_3y_diff, usd_krw_diff",
+    "added_feature_count": 27,
+    "feature_count": 73,
+    "folds": 4,
+    "stage2_aux_pr_auc_mean": 0.8280835294971042,
+    "trigger_precision_mean": 0.6409555312449182,
+    "trigger_recall_mean": 0.880005590436054,
+    "trigger_f1_mean": 0.7392310761182259,
+    "stage2_secondary_precision_mean": 0.272157666894509,
+    "trigger_false_positive_sum": 318,
+    "trigger_false_negative_sum": 76,
+    "stage2_secondary_trigger_count_sum": 101,
+    "stage2_secondary_true_risk_count_sum": 23,
+    "stage2_secondary_normal_count_sum": 78,
+    "rolling_recall_delta_vs_stage2_aux_48": 0.009058656575212876,
+    "rolling_f1_delta_vs_stage2_aux_48": -0.017916676831082556,
+    "rolling_fp_delta_vs_stage2_aux_48": 44,
+    "rolling_fn_delta_vs_stage2_aux_48": -5,
+    "final_stage2_aux_pr_auc": 0.8185558506344545,
+    "final_trigger_precision": 0.6428571428571429,
+    "final_trigger_recall": 0.8866995073891626,
+    "final_trigger_f1": 0.7453416149068323,
+    "final_trigger_false_positive": 100,
+    "final_trigger_false_negative": 23,
+    "final_stage2_secondary_trigger_count": 25,
+    "final_stage2_secondary_true_risk_count": 3,
+    "final_stage2_secondary_normal_count": 22,
+    "final_stage2_secondary_precision": 0.12,
+    "final_recall_delta_vs_stage2_aux_48": 0.0049261083743842304,
+    "final_f1_delta_vs_stage2_aux_48": -0.013132961364354157,
+    "final_fp_delta_vs_stage2_aux_48": 10,
+    "final_fn_delta_vs_stage2_aux_48": -1
+  },
+  "output_files": {
+    "fold_metrics": "data/outputs/modeling/feature_46_xgboost/diagnostics/stage2_trigger_feature_set_rolling_fold_metrics.csv",
+    "final_test": "data/outputs/modeling/feature_46_xgboost/diagnostics/stage2_trigger_feature_set_final_test.csv",
+    "summary": "data/outputs/modeling/feature_46_xgboost/diagnostics/stage2_trigger_feature_set_summary.csv",
+    "report": "data/outputs/modeling/feature_46_xgboost/diagnostics/stage2_trigger_feature_set_report.md",
+    "metadata": "data/outputs/modeling/feature_46_xgboost/diagnostics/stage2_trigger_feature_set_summary.json"
+  }
+}

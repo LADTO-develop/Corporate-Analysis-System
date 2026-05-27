@@ -1,3 +1,0 @@
-model,feature_count,added_feature,threshold,rows,positive_rows,pr_auc,roc_auc,precision,recall,f1,false_positive,false_negative,true_positive,true_negative,decision_note
-feature_43_xgboost,43,,0.315,924,203,0.7930,0.9286,0.6603,0.8522,0.7441,89,30,173,632,official_stage1_model
-feature_44_xgboost,44,industry_current_ratio_percentile,0.305,924,203,0.7912,0.9250,0.6196,0.8424,0.7140,105,32,171,616,deprecated_candidate

@@ -9,7 +9,7 @@ from typing import Any
 from cas.agents.state import AgentState, AuditEntry
 from cas.utils.io import read_json, read_yaml
 
-_FEATURE_LIST_PATH = Path("data/input/credit_43_features/feature_43_list.json")
+_FEATURE_LIST_PATH = Path("data/input/credit_46_features/feature_46_list.json")
 
 
 def run(state: AgentState) -> dict[str, Any]:

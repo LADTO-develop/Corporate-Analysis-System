@@ -17,12 +17,12 @@ from sklearn.metrics import (
 
 ROOT = Path(__file__).resolve().parents[1]
 PREDICTION_SCORES_PATH = (
-    ROOT / "data" / "outputs" / "dashboard" / "feature_43_mvp" / "prediction_scores.csv"
+    ROOT / "data" / "outputs" / "dashboard" / "feature_46_mvp" / "prediction_scores.csv"
 )
-FEATURE_MASTER_PATH = ROOT / "data" / "input" / "credit_43_features" / "feature_43_master.csv"
-FEATURE_SPEC_PATH = ROOT / "data" / "input" / "credit_43_features" / "feature_43_list.json"
+FEATURE_MASTER_PATH = ROOT / "data" / "input" / "credit_46_features" / "feature_46_master.csv"
+FEATURE_SPEC_PATH = ROOT / "data" / "input" / "credit_46_features" / "feature_46_list.json"
 TARGET_PROCESSED_PATH = ROOT / "data" / "evaluation" / "target_label_reference.csv"
-OUTPUT_DIR = ROOT / "data" / "outputs" / "modeling" / "feature_43_xgboost" / "diagnostics"
+OUTPUT_DIR = ROOT / "data" / "outputs" / "modeling" / "feature_46_xgboost" / "diagnostics"
 
 KEY_COLUMNS = ["market", "stock_code", "corp_name", "fiscal_year", "eval_year"]
 BASE_SEGMENT_DIMENSIONS = [

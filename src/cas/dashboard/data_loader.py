@@ -10,11 +10,11 @@ import pandas as pd
 from cas.utils.io import read_json
 
 ROOT = Path(__file__).resolve().parents[3]
-FEATURE43_ARTIFACT_DIR = ROOT / "data" / "outputs" / "dashboard" / "feature_43_mvp"
-FEATURE43_INFERENCE_2026_ARTIFACT_DIR = (
-    ROOT / "data" / "outputs" / "dashboard" / "feature_43_inference_2026"
+FEATURE46_ARTIFACT_DIR = ROOT / "data" / "outputs" / "dashboard" / "feature_46_mvp"
+FEATURE46_INFERENCE_2026_ARTIFACT_DIR = (
+    ROOT / "data" / "outputs" / "dashboard" / "feature_46_inference_2026"
 )
-DEFAULT_ARTIFACT_DIR = FEATURE43_INFERENCE_2026_ARTIFACT_DIR
+DEFAULT_ARTIFACT_DIR = FEATURE46_INFERENCE_2026_ARTIFACT_DIR
 
 
 @dataclass(slots=True)
@@ -28,7 +28,6 @@ class DashboardArtifacts:
     feature_dictionary: pd.DataFrame
     global_shap_reference: pd.DataFrame
     scenario_presets: dict[str, object]
-    llm_payload_template: dict[str, object]
     model_summary: dict[str, object]
     export_manifest: dict[str, object]
     prediction_scores: pd.DataFrame | None
@@ -74,7 +73,6 @@ def load_dashboard_artifacts(artifact_dir: Path | None = None) -> DashboardArtif
     )
 
     scenario_presets = read_json(base_dir / "scenario_presets.json")
-    llm_payload_template = read_json(base_dir / "llm_payload_template.json")
     model_summary = read_json(base_dir / "model_summary.json")
     export_manifest = read_json(base_dir / "dashboard_export_manifest.json")
 
@@ -92,7 +90,6 @@ def load_dashboard_artifacts(artifact_dir: Path | None = None) -> DashboardArtif
         feature_dictionary=feature_dictionary,
         global_shap_reference=global_shap_reference,
         scenario_presets=scenario_presets,
-        llm_payload_template=llm_payload_template,
         model_summary=model_summary,
         export_manifest=export_manifest,
         prediction_scores=prediction_scores,

@@ -1,9 +1,0 @@
-﻿dimension,segment,rows,positive_rows,negative_rows,false_positive,false_negative,fp_rate_among_negative,fn_rate_among_positive
-market,KOSDAQ,427,163,264,71,26,0.2689393939393939,0.15950920245398773
-industry_macro_category,manufacturing,598,162,436,66,26,0.15137614678899083,0.16049382716049382
-market,KOSPI,497,40,457,18,4,0.03938730853391685,0.1
-industry_macro_category,it_services,176,21,155,16,3,0.1032258064516129,0.14285714285714285
-industry_macro_category,wholesale_retail,63,14,49,4,1,0.08163265306122448,0.07142857142857142
-industry_macro_category,construction,44,6,38,2,0,0.05263157894736842,0.0
-industry_macro_category,other,22,0,22,1,0,0.045454545454545456,
-industry_macro_category,transport_storage,21,0,21,0,0,0.0,

@@ -1,12 +1,17 @@
-# Live Agno/OpenAI External API Runbook
+# Live Agno/OpenAI/Gemini External API Runbook
 
 작성일: 2026-05-21
+최종 업데이트: 2026-05-27
 
 ## 문제 원인
 
-현재 Stage 2 Agno 기본 모드는 OpenAI 단일 provider 실행(`CAS_STAGE2_AGNO_MODE=single`, `CAS_STAGE2_MODEL_PROVIDER=openai`)이다. 이 모드는 `OPENAI_API_KEY`만 있으면 preflight가 통과하도록 맞춰져 있다. `single`은 OpenAI 한 provider를 쓰되 QuantCredit/EvidenceAudit/ChairReport 세 역할 agent를 분리 실행하는 모드다. Agno live 실행에서는 특정 조건에만 ReviewQAAgent와 RiskRecallQAAgent가 사후 검수로 추가될 수 있다. 실제 live latency를 측정할 때는 캐시 재사용을 피하기 위해 `--no-stage2-llm-cache`를 붙인다.
+Stage 2 Agno 운영 배치는 OpenAI 단일 provider 실행(`CAS_STAGE2_AGNO_MODE=single`, `CAS_STAGE2_MODEL_PROVIDER=openai`)으로도 돌릴 수 있다. 다만 개발환경 검증 기준은 OpenAI 단일, Gemini 단일, multi-role 조합을 모두 확인하는 쪽으로 올렸다. `scripts/check_agno_stage2.py`의 기본 scenario는 `all`이며, 이 경우 OpenAI와 Gemini 단일 smoke/preflight, 그리고 catalog 기본 multi-role 구성을 함께 점검한다.
 
-여러 LLM 관점을 비교하는 `multi_llm_committee`는 선택 사항이다. 이 모드는 역할별로 Claude, GPT, Gemini를 함께 쓰므로 `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GOOGLE_API_KEY` 또는 `GEMINI_API_KEY`가 모두 필요할 수 있다.
+`single`은 한 provider를 쓰되 QuantCredit/EvidenceAudit/ChairReport 세 역할 agent를 분리 실행하는 모드다. 여러 LLM 관점을 비교하는 `multi_llm_committee`는 역할별로 Gemini, Claude, GPT를 함께 쓰므로 `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GOOGLE_API_KEY` 또는 `GEMINI_API_KEY`가 모두 필요할 수 있다. 현재 catalog 기본 역할 배정은 `gemini_quant_claude_evidence_openai_chair`, 즉 QuantCredit=Gemini 2.5 Flash, EvidenceAudit=Claude Sonnet, ChairReport=OpenAI gpt-4.1-mini다. Agno live 실행에서는 특정 조건에만 ReviewQAAgent와 RiskRecallQAAgent가 사후 검수로 추가될 수 있다. 실제 live latency를 측정할 때는 캐시 재사용을 피하기 위해 `--no-stage2-llm-cache`를 붙인다.
+
+provider/API key/model 기본값은 `configs/dashboard/llm_models.yaml`의 공통 catalog에서
+관리한다. 대시보드 모델 선택, Stage 2 runner, Agno preflight가 같은 catalog를
+읽으므로 기본 모델을 바꿀 때는 이 파일을 먼저 수정한다.
 
 ## Codex 실행 환경 제한
 
@@ -14,20 +19,29 @@ Codex 작업환경에서는 private workspace-derived holdout/evaluation data를
 
 따라서 실제 기업-회계연도 데이터를 OpenAI API로 보내는 live batch는 로컬 터미널에서 직접 실행한다. 아래 명령은 같은 저장소와 같은 Python 환경을 사용하므로 결과 파일 경로는 Codex에서 만든 산출물과 동일하게 남는다.
 
+Stage 2 live batch의 샘플 CSV와 원시 output 디렉터리는 공식 46-feature artifact
+트리에 보관하지 않는다. 필요할 때 release artifact에서 내려받거나 로컬에서 다시
+생성한 뒤 `data/outputs/reports/stage2_live_runs/` 아래에 둔다.
+
 ## Preflight
+
+개발환경 전체 검증은 기본 scenario를 사용한다. 이 명령은 OpenAI 단일, Gemini 단일, multi-role catalog 기본값을 모두 확인하므로 Gemini API key가 없으면 의도적으로 실패한다.
 
 ```bash
 cd "/Users/inji/Documents/금융 데이터 분석/Project/Corporate-Analysis-System"
 
-/usr/bin/env \
-  CAS_STAGE2_RUNNER=agno \
-  CAS_STAGE2_AGNO_MODE=single \
-  CAS_STAGE2_MODEL_PROVIDER=openai \
-  CAS_STAGE2_MODEL=gpt-4.1-mini \
-  /opt/anaconda3/envs/aura/bin/python scripts/check_agno_stage2.py
+/opt/anaconda3/envs/aura/bin/python scripts/check_agno_stage2.py
 ```
 
-예상 결과:
+개별 provider만 빠르게 볼 때:
+
+```bash
+/opt/anaconda3/envs/aura/bin/python scripts/check_agno_stage2.py --scenario openai-single
+/opt/anaconda3/envs/aura/bin/python scripts/check_agno_stage2.py --scenario gemini-single
+/opt/anaconda3/envs/aura/bin/python scripts/check_agno_stage2.py --scenario multi-role
+```
+
+예상 결과는 환경변수 상태에 따라 다르다. `OPENAI_API_KEY`만 있는 개발환경에서는 `openai-single`이 통과하고, `gemini-single`과 `multi-role`은 `GOOGLE_API_KEY` 또는 `GEMINI_API_KEY` 누락을 명확히 보고해야 한다. Gemini를 기본 개발환경으로 쓰려면 둘 중 하나를 `.env` 또는 shell 환경에 설정한다.
 
 ```text
 Agno Stage 2 preflight passed.
@@ -45,9 +59,9 @@ Agno Stage 2 preflight passed.
   CAS_STAGE2_AGENT_RETRIES=2 \
   CAS_STAGE2_PROVIDER_MAX_RETRIES=0 \
   /opt/anaconda3/envs/aura/bin/python scripts/run_committee_review_evaluation_batch.py \
-  --samples data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents/committee_review_holdout_unseen_8_samples.csv \
-  --output-dir data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents/committee_review_holdout_unseen_agno_openai_live_batch \
-  --policy balanced_current_45_or_near_threshold_0_10 \
+  --samples data/outputs/reports/stage2_live_runs/committee_review_holdout_unseen_8_samples.csv \
+  --output-dir data/outputs/reports/stage2_live_runs/committee_review_holdout_unseen_agno_openai_live_batch \
+  --policy feature46_full_review_trigger_73 \
   --per-category 2 \
   --max-cases 8 \
   --stage2-runner agno \
@@ -63,7 +77,7 @@ Agno Stage 2 preflight passed.
 
 외부 뉴스/공시 수집까지 함께 켤 때는 `OPENDART_API_KEY`, `NAVER_CLIENT_ID`, `NAVER_CLIENT_SECRET`, `TAVILY_API_KEY`를 `.env`에 설정한 뒤 `--live-external-evidence`를 추가한다.
 
-OpenAI/Claude Agno 호출 지연 outlier를 줄일 때는 `CAS_STAGE2_AGENT_TIMEOUT_SECONDS`를 설정한다. 이 값은 개별 agent HTTP 요청 timeout이며, timeout 또는 일시 오류가 나면 `CAS_STAGE2_AGENT_RETRIES` 횟수만큼 CAS retry 루프가 다시 시도한다. provider SDK 내부 재시도와 CAS 재시도가 겹치면 지연시간이 길어질 수 있으므로, 속도 측정에서는 `CAS_STAGE2_PROVIDER_MAX_RETRIES=0`을 권장한다. timeout을 끄려면 `CAS_STAGE2_AGENT_TIMEOUT_SECONDS=0` 또는 `off`를 사용한다.
+OpenAI/Gemini/Claude Agno 호출 지연 outlier를 줄일 때는 `CAS_STAGE2_AGENT_TIMEOUT_SECONDS`를 설정한다. 이 값은 개별 agent HTTP 요청 timeout이며, timeout 또는 일시 오류가 나면 `CAS_STAGE2_AGENT_RETRIES` 횟수만큼 CAS retry 루프가 다시 시도한다. `CAS_STAGE2_PROVIDER_MAX_RETRIES`는 OpenAI SDK의 `max_retries`, Gemini SDK의 `retries`로 전달된다. Claude는 현재 CAS agent retry를 기준으로 다룬다. provider SDK 내부 재시도와 CAS 재시도가 겹치면 지연시간이 길어질 수 있으므로, 속도 측정에서는 `CAS_STAGE2_PROVIDER_MAX_RETRIES=0`을 권장한다. timeout을 끄려면 `CAS_STAGE2_AGENT_TIMEOUT_SECONDS=0` 또는 `off`를 사용한다.
 
 ## API 실패행 자동 재시도
 
@@ -81,8 +95,8 @@ OpenAI/Claude Agno 호출 지연 outlier를 줄일 때는 `CAS_STAGE2_AGENT_TIME
 
 ```bash
 /opt/anaconda3/envs/aura/bin/python scripts/run_committee_review_evaluation_batch.py \
-  --samples data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents/committee_review_mixed_hard_40_timeout30_speed_gate_v3_samples.csv \
-  --output-dir data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents/committee_review_mixed_hard_40_agno_openai_live_with_retry \
+  --samples data/outputs/reports/stage2_live_runs/committee_review_mixed_hard_40_timeout30_speed_gate_v3_samples.csv \
+  --output-dir data/outputs/reports/stage2_live_runs/committee_review_mixed_hard_40_agno_openai_live_with_retry \
   --policy mixed_hard_40_timeout30_speed_gate_v3 \
   --per-category 12 \
   --max-cases 40 \
@@ -174,10 +188,10 @@ bash scripts/run_openai_agno_comparison_local.sh
 
 생성되는 주요 파일:
 
-- `data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents/committee_review_openai_agno_comparison_deterministic/committee_review_batch_results.csv`
-- `data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents/committee_review_openai_agno_comparison_agno/committee_review_batch_results.csv`
-- `data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents/stage2_openai_agno_explanation_comparison.md`
-- `data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents/stage2_evaluation_report.md`
+- `data/outputs/reports/stage2_live_runs/committee_review_openai_agno_comparison_deterministic/committee_review_batch_results.csv`
+- `data/outputs/reports/stage2_live_runs/committee_review_openai_agno_comparison_agno/committee_review_batch_results.csv`
+- `data/outputs/reports/stage2_live_runs/stage2_openai_agno_explanation_comparison.md`
+- `data/outputs/reports/stage2_live_runs/stage2_evaluation_report.md`
 
 수동으로 나눠 실행하고 싶을 때:
 
@@ -185,9 +199,9 @@ bash scripts/run_openai_agno_comparison_local.sh
 cd "/Users/inji/Documents/금융 데이터 분석/Project/Corporate-Analysis-System"
 
 /opt/anaconda3/envs/aura/bin/python scripts/run_committee_review_evaluation_batch.py \
-  --samples data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents/committee_review_holdout_unseen_8_samples.csv \
-  --output-dir data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents/committee_review_openai_agno_comparison_deterministic \
-  --policy balanced_current_45_or_near_threshold_0_10 \
+  --samples data/outputs/reports/stage2_live_runs/committee_review_holdout_unseen_8_samples.csv \
+  --output-dir data/outputs/reports/stage2_live_runs/committee_review_openai_agno_comparison_deterministic \
+  --policy feature46_full_review_trigger_73 \
   --per-category 1 \
   --max-cases 4 \
   --stage2-runner deterministic \
@@ -196,9 +210,9 @@ cd "/Users/inji/Documents/금융 데이터 분서�
 /usr/bin/env \
   CAS_STAGE2_FALLBACK_ON_ERROR=0 \
   /opt/anaconda3/envs/aura/bin/python scripts/run_committee_review_evaluation_batch.py \
-  --samples data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents/committee_review_holdout_unseen_8_samples.csv \
-  --output-dir data/outputs/modeling/feature_43_xgboost/diagnostics/stage2_agents/committee_review_openai_agno_comparison_agno \
-  --policy balanced_current_45_or_near_threshold_0_10 \
+  --samples data/outputs/reports/stage2_live_runs/committee_review_holdout_unseen_8_samples.csv \
+  --output-dir data/outputs/reports/stage2_live_runs/committee_review_openai_agno_comparison_agno \
+  --policy feature46_full_review_trigger_73 \
   --per-category 1 \
   --max-cases 4 \
   --stage2-runner agno \

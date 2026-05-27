@@ -15,8 +15,8 @@ rebuild the CAS credit-risk model inputs.
   but the official Stage 1 runtime input remains the 43-feature set. The
   rejected 44-feature performance comparison is summarized under the 43-feature
   diagnostics folder.
-- `feature_43_inference_2026_aux.csv`: minimal 2025 profile/market auxiliary
-  source used to repair `feature_43_inference_2026.csv`. It carries only
+- `feature_46_inference_2026_aux.csv`: minimal 2025 profile/market auxiliary
+  source used to repair `feature_46_inference_2026.csv`. It carries only
   repository-local inference support fields such as latest available
   `firm_size_group` and 2025 `market_to_book` source values.
 

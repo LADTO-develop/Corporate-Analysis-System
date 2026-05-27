@@ -13,8 +13,13 @@ from cas.agents.stage2_outputs import (
     QuantCreditOutput,
     ReviewQAOutput,
 )
+from cas.agents.stage2_prompt_contracts import (
+    build_stage2_role_instructions,
+    build_stage2_role_query,
+)
+from cas.agents.stage2_runtime_config import Stage2RuntimeConfig
 
-from .runtime import build_agno_agent, clamp, json_payload, provider_label, run_structured_agent
+from .runtime import build_agno_agent, clamp, provider_label, run_structured_agent
 
 
 class AgnoReviewQAResponse(BaseModel):
@@ -56,6 +61,7 @@ def run_review_qa_agent(
     model_name: str,
     model_provider: str = "openai",
     max_tokens: int,
+    runtime_config: Stage2RuntimeConfig | None = None,
 ) -> ReviewQAOutput:
     """Run the Agno ReviewQAAgent and map it to the CAS Stage 2 schema."""
     model_label = provider_label(model_provider)
@@ -65,18 +71,11 @@ def run_review_qa_agent(
         model_name=model_name,
         max_tokens=max_tokens,
         response_model=AgnoReviewQAResponse,
-        instructions=[
-            f"You are the CAS ReviewQAAgent speaking from the {model_label} perspective.",
-            "Audit the already-resolved committee_view; do not rewrite model_view.",
-            "Check label/memo consistency, risk_hold subtype quality, evidence cutoff discipline, and normal-company over-hold risk.",
-            "Treat your output as advisory QA only. Do not claim an official credit rating decision.",
-            "Do not invent external news, DART filings, macro events, or industry events not present in the input.",
-            "For historical replay, use only evidence that passes the supplied cutoff context.",
-            "Use EvidenceAudit recommended_evidence_treatment before prose when judging whether evidence is watch-context or substantive.",
-            "If a single medium financing, procedural halt, or routine audit filing is the only concern, prefer subtype downgrade or manual review over risk escalation.",
-            "If final reject relies on model confidence plus financial weakness but external evidence is only routine/caution/watch-context, consider downgrade_reject_to_boundary_hold instead of a hard reject.",
-            "Return concise Korean review prose in the structured response fields only.",
-        ],
+        runtime_config=runtime_config,
+        instructions=build_stage2_role_instructions(
+            "review_qa",
+            provider_label=model_label,
+        ),
     )
     result = run_structured_agent(
         agent=agent,
@@ -89,6 +88,7 @@ def run_review_qa_agent(
             trigger_reasons=trigger_reasons,
         ),
         response_model=AgnoReviewQAResponse,
+        runtime_config=runtime_config,
     )
     return ReviewQAOutput(
         qa_summary=_safe_qa_text(result.qa_summary),
@@ -125,20 +125,10 @@ def _query(
             "chair_report": chair_report.model_dump(mode="json"),
         },
         "qa_trigger_reasons": trigger_reasons,
-        "qa_checks": [
-            "final_committee_label and final_review_memo must not contradict each other",
-            "risk_hold requires verified adverse evidence or severe financial stress",
-            "hard reject requires stronger support than routine/caution/watch-context filings",
-            "external evidence must respect historical cutoff context",
-            "single medium financing, resolved procedural halt, or routine audit filing may support boundary_hold/manual_review instead of risk_hold",
-            "normal-company over-hold guardrail should be considered when Stage 1 is investment-grade and severe evidence is absent",
-        ],
     }
-    return (
-        "Run ReviewQAAgent for CAS Stage 2. "
-        "Audit the resolved committee_view and return advisory QA only. "
-        "Return only the AgnoReviewQAResponse fields.\n\n"
-        f"{json_payload(prompt_payload)}"
+    return build_stage2_role_query(
+        "review_qa",
+        prompt_payload=prompt_payload,
     )
 
 
