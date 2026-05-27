@@ -27,14 +27,15 @@ def evaluate_external_evidence(news_cache: dict[str, Any]) -> ExternalEvidenceSi
             continue
         source = str(item.get("source", "external"))
         title = str(item.get("title") or item.get("summary") or "근거 제목 없음")
-        reliability = str(item.get("reliability", "unknown"))
+        reliability = str(item.get("source_reliability") or item.get("reliability") or "unknown")
         evidence_quality = str(item.get("evidence_quality", "unknown"))
         relevance = _relevance_label(item.get("company_match"))
         disclosure_note = _disclosure_note(item)
+        diagnostic_note = _diagnostic_note(item)
         keyword_note = _keyword_note(item)
         findings.append(
             f"외부 근거({source}, {relevance}, 품질 {evidence_quality}, "
-            f"신뢰도 {reliability}{disclosure_note}): {title}{keyword_note}"
+            f"신뢰도 {reliability}{diagnostic_note}{disclosure_note}): {title}{keyword_note}"
         )
     if news_cache.get("has_critical_risk"):
         terms = ", ".join(str(term) for term in news_cache.get("critical_terms", []) or [])
@@ -82,4 +83,18 @@ def _disclosure_note(item: dict[str, Any]) -> str:
         pieces.append(f"실질성 {materiality}")
     if materiality_basis:
         pieces.append(f"상세중요도 {materiality_basis}")
+    return f", {', '.join(pieces)}" if pieces else ""
+
+
+def _diagnostic_note(item: dict[str, Any]) -> str:
+    pieces = []
+    disambiguation = str(item.get("company_disambiguation", "")).strip()
+    if disambiguation:
+        pieces.append(f"동명이인검증 {disambiguation}")
+    temporal_status = str(item.get("temporal_status", "")).strip()
+    if temporal_status:
+        pieces.append(f"시점 {temporal_status}")
+    event_id = str(item.get("event_id", "")).strip()
+    if event_id:
+        pieces.append(f"event_id {event_id}")
     return f", {', '.join(pieces)}" if pieces else ""

@@ -275,10 +275,19 @@ def _risk_recall_confirmed_external_escalation_evidence(bundle: Stage2InputBundl
 
 def _risk_recall_evidence_item_is_confirmed(item: dict[str, Any]) -> bool:
     policy = load_stage2_policy()
-    if item.get("veto_candidate") is True or item.get("critical_context_confirmed") is True:
+    if item.get("as_of_date_violation") is True:
+        return False
+    if item.get("veto_candidate") is True:
         return True
 
     source = str(item.get("source") or "").lower()
+    if item.get("critical_context_confirmed") is True:
+        if source in {"naver_news", "tavily"} and str(
+            item.get("company_disambiguation") or ""
+        ).lower() == "name_only_search_result":
+            return len(_string_list(item.get("duplicate_sources"))) >= 2
+        return True
+
     quality = str(item.get("evidence_quality") or "").lower()
     score = _safe_float(item.get("evidence_score"))
     if source == "opendart":
@@ -299,6 +308,12 @@ def _risk_recall_evidence_item_is_confirmed(item: dict[str, Any]) -> bool:
         "evidence",
         "fallback_min_score",
     )
+
+
+def _string_list(value: object) -> list[str]:
+    if not isinstance(value, list | tuple):
+        return []
+    return [str(item) for item in value if str(item).strip()]
 
 
 def _risk_recall_hold_reason_fields(apply_reason: str) -> tuple[list[str], list[str], str]:

@@ -133,6 +133,10 @@ def overwarning_blocking_external_items(
 
 def is_adverse_external_item(item: dict[str, Any]) -> bool:
     """Return whether an item's structured metadata marks adverse external context."""
+    if item.get("as_of_date_violation") is True:
+        return False
+    if _is_uncorroborated_name_only_search_item(item):
+        return False
     if item.get("veto_candidate") is True:
         return True
     severity = str(item.get("disclosure_severity", "")).lower()
@@ -166,6 +170,8 @@ def is_blocking_external_adverse_item(
     if item.get("veto_candidate") is True:
         return True
     source = str(item.get("source", "")).lower()
+    if _is_uncorroborated_name_only_search_item(item):
+        return False
     severity = str(item.get("disclosure_severity", "")).lower()
     if severity in {"veto", "adverse"}:
         return source == "opendart" or item.get("critical_context_confirmed") is True
@@ -223,6 +229,8 @@ def is_resolved_procedural_trading_halt_item(
 
 def is_verified_adverse_item(item: dict[str, Any]) -> bool:
     """Return whether an adverse item is verified by evidence quality or score."""
+    if item.get("as_of_date_violation") is True:
+        return False
     quality = str(item.get("evidence_quality", "")).lower()
     if quality in ADVERSE_EVIDENCE_QUALITY:
         return True
@@ -237,6 +245,18 @@ def item_critical_terms(item: dict[str, Any]) -> list[str]:
         return [str(term) for term in raw_terms if str(term).strip()]
     text = " ".join(str(item.get(key, "")) for key in ("title", "summary"))
     return cast(list[str], critical_terms_in_text(text))
+
+
+def _is_uncorroborated_name_only_search_item(item: dict[str, Any]) -> bool:
+    source = str(item.get("source", "")).lower()
+    if source not in {"naver_news", "tavily"}:
+        return False
+    if str(item.get("company_disambiguation", "")).lower() != "name_only_search_result":
+        return False
+    duplicate_sources = item.get("duplicate_sources", [])
+    if not isinstance(duplicate_sources, list | tuple):
+        return True
+    return len({str(source) for source in duplicate_sources if str(source).strip()}) < 2
 
 
 def _is_resolved_spac_merger_halt_item(text: str, news_cache: dict[str, Any]) -> bool:

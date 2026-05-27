@@ -144,6 +144,35 @@ def test_evidence_treatment_ignores_weakly_related_search_summary_keywords() -> 
     assert signals.recommended_evidence_treatment == "context_only"
 
 
+def test_evidence_treatment_downgrades_uncorroborated_name_only_search_hits() -> None:
+    signals = evaluate_evidence_treatment(
+        {
+            "status": "ready",
+            "items": [
+                {
+                    "source": "naver_news",
+                    "title": "테스트기업 횡령 의혹",
+                    "summary": "테스트기업 횡령 키워드가 검색 스니펫에 노출됨",
+                    "company_match": True,
+                    "company_disambiguation": "name_only_search_result",
+                    "duplicate_sources": ["naver_news"],
+                    "critical_terms": ["횡령"],
+                    "critical_context_confirmed": True,
+                    "veto_candidate": False,
+                    "provider_relevance": "risk",
+                    "disclosure_severity": "veto",
+                    "evidence_quality": "high",
+                    "evidence_score": 0.84,
+                }
+            ],
+        }
+    )
+
+    assert signals.critical_evidence_count == 0
+    assert signals.hard_distress_detected is False
+    assert signals.recommended_evidence_treatment == "context_only"
+
+
 def test_evidence_treatment_keeps_confirmed_hard_distress_critical() -> None:
     signals = evaluate_evidence_treatment(
         {
