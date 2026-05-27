@@ -81,8 +81,8 @@ COMMITTEE_HOLD_SUBTYPE_GUIDE = [
     },
     {
         "label": "경계등급 보류",
-        "signal": "위험신호 아님",
-        "tone": "neutral",
+        "signal": "위험신호 있음",
+        "tone": "risk",
         "title": "경계등급 보류",
         "body": "등급이나 확률이 기준선 근처라 판단을 세게 내리기보다 관찰로 남긴 보류입니다.",
         "action": "BBB-/BB+ 경계, 확률 기준선 근접, 최근 등급 방향을 함께 확인합니다.",

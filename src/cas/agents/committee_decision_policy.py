@@ -135,7 +135,7 @@ def committee_decision_type_label(decision_type: CommitteeDecisionType) -> str:
 
 def committee_risk_signal(decision_type: CommitteeDecisionType) -> bool:
     """Return whether the subtype should be treated as a risk signal."""
-    return decision_type in {"risk_hold", "reject"}
+    return decision_type in {"risk_hold", "boundary_hold", "reject"}
 
 
 _RISK_HOLD_REASON_LABELS: dict[RiskHoldReasonTag, str] = {

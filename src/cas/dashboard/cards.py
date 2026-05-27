@@ -148,9 +148,9 @@ def render_decision_badge(label: object, *, muted: bool = False) -> str:
             "border": "var(--cas-risk-border)",
         },
         "경계등급 보류": {
-            "bg": "var(--cas-warning-soft)",
-            "fg": "var(--cas-warning)",
-            "border": "var(--cas-warning-border)",
+            "bg": "var(--cas-risk-soft)",
+            "fg": "var(--cas-risk)",
+            "border": "var(--cas-risk-border)",
         },
         "과민경고 완화 보류": {
             "bg": "var(--cas-success-soft)",

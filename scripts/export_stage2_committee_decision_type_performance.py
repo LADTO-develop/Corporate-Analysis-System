@@ -21,10 +21,10 @@ DEFAULT_INPUT = (
 DEFAULT_OUTPUT_PREFIX = DIAGNOSTICS_DIR / "stage2_committee_decision_type_performance"
 
 POSITIVE_LABELS = {"투기등급", "부적격", "speculative", "1", "true"}
-RISK_DECISION_TYPES = {"위험 보류", "부적격"}
+RISK_DECISION_TYPES = {"위험 보류", "경계등급 보류", "부적격"}
 REVIEW_OR_REJECT_LABELS = {"보류", "부적격"}
 INVESTMENT_FRIENDLY_TYPES = {"적격", "과민경고 완화 보류"}
-AMBIGUOUS_REVIEW_TYPES = {"경계등급 보류", "확인필요 보류"}
+AMBIGUOUS_REVIEW_TYPES = {"확인필요 보류"}
 
 
 def parse_args() -> argparse.Namespace:
@@ -280,9 +280,9 @@ def build_report(
             "놓치지 않는 방향의 넓은 그물 역할을 합니다."
         ),
         (
-            "- `경계등급 보류`, `과민경고 완화 보류`, `확인필요 보류`는 모두 "
-            "투기등급 확정 신호가 아니므로, one-vs-rest 위험 Precision만으로 "
-            "좋고 나쁨을 해석하면 안 됩니다."
+            "- `경계등급 보류`는 부적격 확정은 아니지만 위험신호 카운트에 포함합니다. "
+            "`과민경고 완화 보류`, `확인필요 보류`는 추가 확인 상태이므로 "
+            "one-vs-rest 위험 Precision만으로 좋고 나쁨을 해석하면 안 됩니다."
         ),
         "",
         "## Overall Risk-Signal Metrics",
@@ -299,9 +299,9 @@ def build_report(
         "",
         "## Interpretation Guide",
         "",
-        "- `위험 보류`와 `부적격`은 실제 위험신호로 읽습니다. 여기서는 actual speculative rate가 높을수록 좋습니다.",
+        "- `위험 보류`, `경계등급 보류`, `부적격`은 실제 위험신호로 읽습니다. 여기서는 actual speculative rate가 높을수록 좋습니다.",
         "- `과민경고 완화 보류`와 `적격`은 과도한 위험 경고를 낮추는 방향입니다. 여기서는 actual investment rate가 높을수록 좋습니다.",
-        "- `경계등급 보류`와 `확인필요 보류`는 확정 분류라기보다 검토 상태입니다. 실제 위험/정상 혼합이 자연스럽고, 발표에서는 경계·근거부족 케이스를 분리 관리한다는 의미로 설명하는 것이 안전합니다.",
+        "- `확인필요 보류`는 확정 분류라기보다 검토 상태입니다. 실제 위험/정상 혼합이 자연스럽고, 발표에서는 근거부족 케이스를 분리 관리한다는 의미로 설명하는 것이 안전합니다.",
         "",
         "## Source",
         "",
@@ -373,7 +373,7 @@ def _decision_type_interpretation(label: str) -> str:
     descriptions = {
         "부적격": "위원회가 명확한 위험신호로 본 케이스입니다.",
         "위험 보류": "투기등급 가능성을 놓치지 않기 위해 보류로 올린 케이스입니다.",
-        "경계등급 보류": "등급·확률 경계에 있어 확정보다 추가 확인을 택한 케이스입니다.",
+        "경계등급 보류": "등급·확률 경계에 있어 부적격 확정보다 위험 라벨 보류로 추가 확인을 택한 케이스입니다.",
         "과민경고 완화 보류": "모델 경고를 바로 부적격으로 확정하지 않은 케이스입니다.",
         "확인필요 보류": "근거 부족 또는 판단 충돌 때문에 추가 확인을 남긴 케이스입니다.",
         "적격": "위원회가 추가 위험신호를 강하게 보지 않은 케이스입니다.",

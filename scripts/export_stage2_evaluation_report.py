@@ -32,7 +32,7 @@ OPENAI_AGNO_COMPARISON_DETAILS = "stage2_openai_agno_explanation_comparison_deta
 
 POSITIVE_LABELS = {"투기등급", "부적격", "speculative", "1", "true"}
 REVIEW_OR_REJECT_LABELS = {"보류", "부적격"}
-RISK_SIGNAL_TYPES = {"위험 보류", "부적격"}
+RISK_SIGNAL_TYPES = {"위험 보류", "경계등급 보류", "부적격"}
 
 
 @dataclass(frozen=True, slots=True)
@@ -419,7 +419,7 @@ def build_report(
         "- `2차 검토대상(보류+부적격)`은 조기경보 관점의 넓은 그물이다. Recall이 높을수록 위험 기업을 검토망에 올리는 능력이 좋다.",
         "- `2차 위험신호(risk_signal)`은 실제 빨간 경고에 가까운 신호다. Precision과 Recall을 함께 본다.",
         "- `2차 부적격만`은 가장 엄격한 확정 판단이다. Precision은 높을 수 있지만 Recall이 낮아질 수 있다.",
-        "- `과민경고 완화 보류`, `확인필요 보류`, `경계등급 보류`는 위험 확정이 아니라 추가 확인 상태로 해석한다.",
+        "- `경계등급 보류`는 부적격 확정은 아니지만 위험신호 카운트에 포함하고, `과민경고 완화 보류`와 `확인필요 보류`는 추가 확인 상태로 해석한다.",
         "",
         "## 입력 파일 상태",
         "",
