@@ -239,9 +239,7 @@ def run_triplet_agents(
         )
         diagnostics["role_token_usage"] = dict(role_token_usage)
         diagnostics["token_usage_totals"] = aggregate_role_usage(role_token_usage)
-        failed_roles = [
-            role for role in _PRIMARY_ROLES if role_fallback_used.get(role) is True
-        ]
+        failed_roles = [role for role in _PRIMARY_ROLES if role_fallback_used.get(role) is True]
         diagnostics["degraded"] = bool(failed_roles)
         diagnostics["failed_role"] = failed_roles[0] if failed_roles else ""
         diagnostics["failed_roles"] = failed_roles
@@ -372,9 +370,7 @@ def _role_cache_payload(
                         quant_credit.model_dump(mode="json") if quant_credit is not None else {}
                     ),
                     "evidence_audit": (
-                        evidence_audit.model_dump(mode="json")
-                        if evidence_audit is not None
-                        else {}
+                        evidence_audit.model_dump(mode="json") if evidence_audit is not None else {}
                     ),
                 },
             }

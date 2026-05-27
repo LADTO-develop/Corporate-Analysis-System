@@ -178,7 +178,9 @@ def optimize_policy_thresholds(
                     trial_updates = dict(current_updates)
                     trial_updates[spec.path] = value
                     trial = evaluate(trial_updates)
-                    if objective_score(trial, objective) > objective_score(iteration_best, objective):
+                    if objective_score(trial, objective) > objective_score(
+                        iteration_best, objective
+                    ):
                         iteration_best = trial | {
                             "objective_iteration": iteration,
                             "objective_last_changed_path": spec.path,

@@ -209,7 +209,9 @@ def build_committee_view_model(
         mitigating_factors = [overwarning_mitigation.reason, *mitigating_factors]
     mitigation_residual_risk_reason = (
         _mitigation_hold_residual_risk_reason(bundle)
-        if overwarning_mitigation.triggered and not veto_triggered and not hidden_tail_risk.triggered
+        if overwarning_mitigation.triggered
+        and not veto_triggered
+        and not hidden_tail_risk.triggered
         else ""
     )
     if mitigation_residual_risk_reason:
@@ -619,14 +621,18 @@ def _committee_action_plan(
     if secondary_review_risk.triggered:
         missing.append("2차 보조 레이더가 감지한 유동성/현금흐름 약점의 최신 원자료")
     if overwarning_mitigation.triggered:
-        monitoring.append("방어축이 약화되거나 투기등급 확률이 기준선을 재상회하면 보류 해소 판단 재검토")
+        monitoring.append(
+            "방어축이 약화되거나 투기등급 확률이 기준선을 재상회하면 보류 해소 판단 재검토"
+        )
     if reject_confirmation.triggered and not reject_confirmation.confirmed:
         missing.append("부적격 확정에 필요한 치명 외부근거 또는 복수 재무부실 신호")
 
     if _prior_rating_has_hard_distress_context(bundle.prior_rating_reference):
         tasks.append("기준일 이전 CCC/C/D 등 severe 공개등급의 원문과 이후 해소 근거를 확인합니다.")
         missing.append("기준일 이전 severe 공개등급 원문, 등급전망, 후속 등급조정 또는 해소 공시")
-        monitoring.append("등급하향, 회생/상장폐지/거래정지, 감사의견 변형 후속 이벤트 발생 시 재심사")
+        monitoring.append(
+            "등급하향, 회생/상장폐지/거래정지, 감사의견 변형 후속 이벤트 발생 시 재심사"
+        )
 
     if _external_evidence_unavailable(bundle.news_status):
         tasks.append("외부근거 수집을 활성화한 뒤 기준일 이전 직접 공시/뉴스를 재조회합니다.")
@@ -635,7 +641,9 @@ def _committee_action_plan(
         missing.append("기준일 이전 공개 신용등급 reference")
 
     if committee_label == "보류":
-        monitoring.append("신규 DART 수시공시, 감사의견 변형, 거래정지, 대규모 차입/보증 발생 시 재심사")
+        monitoring.append(
+            "신규 DART 수시공시, 감사의견 변형, 거래정지, 대규모 차입/보증 발생 시 재심사"
+        )
     elif committee_label == "적격" and _external_evidence_unavailable(bundle.news_status):
         monitoring.append("외부근거 수집이 가능해지면 적격 판단의 누락위험을 재점검")
 

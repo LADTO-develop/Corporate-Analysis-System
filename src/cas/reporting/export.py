@@ -99,11 +99,21 @@ def render_report(state: AgentState | dict[str, Any]) -> dict[str, Any]:
     if manual_review_tasks or missing_evidence or monitoring_triggers:
         md_lines += ["### 실행 계획", ""]
         if manual_review_tasks:
-            md_lines += ["**수동 검토 과제**", "", *[f"- {item}" for item in manual_review_tasks], ""]
+            md_lines += [
+                "**수동 검토 과제**",
+                "",
+                *[f"- {item}" for item in manual_review_tasks],
+                "",
+            ]
         if missing_evidence:
             md_lines += ["**누락 근거**", "", *[f"- {item}" for item in missing_evidence], ""]
         if monitoring_triggers:
-            md_lines += ["**모니터링 트리거**", "", *[f"- {item}" for item in monitoring_triggers], ""]
+            md_lines += [
+                "**모니터링 트리거**",
+                "",
+                *[f"- {item}" for item in monitoring_triggers],
+                "",
+            ]
 
     md_lines += [
         "## 에이전트 종합 의견",
@@ -207,7 +217,9 @@ def _fallback_response(state: dict[str, Any]) -> dict[str, Any]:
             "key_risk_factors": [],
             "mitigating_factors": [],
             "evidence_summary": [],
-            "manual_review_tasks": ["No committee_view was generated; rerun Stage 2 after input validation."],
+            "manual_review_tasks": [
+                "No committee_view was generated; rerun Stage 2 after input validation."
+            ],
             "missing_evidence": [],
             "monitoring_triggers": [],
             "final_review_memo": "No committee_view was generated.",

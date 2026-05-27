@@ -160,9 +160,7 @@ def normalize_usage_record(
     record["billable_input_tokens"] = int(input_tokens or 0) if effective_billable else 0
     record["billable_output_tokens"] = int(output_tokens or 0) if effective_billable else 0
     record["billable_total_tokens"] = int(total_tokens or 0) if effective_billable else 0
-    record["billable_cost_usd"] = (
-        round(float(cost_usd or 0.0), 8) if effective_billable else 0.0
-    )
+    record["billable_cost_usd"] = round(float(cost_usd or 0.0), 8) if effective_billable else 0.0
     return record
 
 

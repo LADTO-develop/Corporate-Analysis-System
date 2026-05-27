@@ -337,7 +337,9 @@ def explanation_quality_metrics(results: pd.DataFrame) -> dict[str, Any]:
         "explanation_quality_score": explanation_quality,
         "memo_quality_score": memo_quality,
         "evidence_grounding_score": evidence_grounding,
-        "financial_specificity_score": round(float(scores["financial_specificity_score"].mean()), 4),
+        "financial_specificity_score": round(
+            float(scores["financial_specificity_score"].mean()), 4
+        ),
         "actionability_score": round(float(scores["actionability_score"].mean()), 4),
         "disagreement_resolution_score": round(
             float(scores["disagreement_resolution_score"].mean()), 4
@@ -436,13 +438,17 @@ def _memo_quality_score(text: str) -> float:
 def _evidence_grounding_score(row: pd.Series, text: str) -> float:
     evidence_status = str(row.get("evidence_status") or "").strip().lower()
     evidence_items = _safe_int(row.get("evidence_items"))
-    evidence_unavailable = evidence_status in {
-        "disabled",
-        "missing_credentials",
-        "not_implemented",
-        "not_requested",
-        "placeholder",
-    } or evidence_items == 0
+    evidence_unavailable = (
+        evidence_status
+        in {
+            "disabled",
+            "missing_credentials",
+            "not_implemented",
+            "not_requested",
+            "placeholder",
+        }
+        or evidence_items == 0
+    )
     if evidence_unavailable:
         if _overclaims_external_evidence(text):
             return 0.25
@@ -556,7 +562,10 @@ def _hallucination_flag(row: pd.Series, text: str) -> bool:
         return True
     evidence_status = str(row.get("evidence_status") or "").strip().lower()
     evidence_items = _safe_int(row.get("evidence_items"))
-    if evidence_status in {"disabled", "missing_credentials", "not_requested"} or evidence_items == 0:
+    if (
+        evidence_status in {"disabled", "missing_credentials", "not_requested"}
+        or evidence_items == 0
+    ):
         return _overclaims_external_evidence(text)
     return False
 

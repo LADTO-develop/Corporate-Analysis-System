@@ -165,7 +165,9 @@ def _attach_qa_action_plan(
     if qa_output.recommended_action == "request_manual_review":
         updated["manual_review_tasks"] = _merge_text_items(
             list(updated.get("manual_review_tasks", []) or []),
-            ["QA 권고가 수동 검토를 요청했으므로 보류 사유, 근거 누락, 모니터링 조건을 담당자가 확정합니다."],
+            [
+                "QA 권고가 수동 검토를 요청했으므로 보류 사유, 근거 누락, 모니터링 조건을 담당자가 확정합니다."
+            ],
         )
     return updated
 

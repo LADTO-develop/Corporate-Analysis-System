@@ -1985,8 +1985,7 @@ def test_committee_view_marks_overwarning_residual_risk_as_risk_hold() -> None:
     assert committee_view["committee_risk_signal"] is True
     assert "financial_stress_hold" in committee_view["risk_hold_reason_tags"]
     assert any(
-        "과민경고 완화 보류 잔여위험" in factor
-        for factor in committee_view["key_risk_factors"]
+        "과민경고 완화 보류 잔여위험" in factor for factor in committee_view["key_risk_factors"]
     )
     assert "위험 보류로 유지합니다" in committee_view["conflict_resolution"]
     assert any(

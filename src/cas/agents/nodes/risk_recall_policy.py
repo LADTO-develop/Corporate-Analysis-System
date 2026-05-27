@@ -396,9 +396,10 @@ def _risk_recall_evidence_item_is_confirmed(item: dict[str, Any]) -> bool:
 
     source = str(item.get("source") or "").lower()
     if item.get("critical_context_confirmed") is True:
-        if source in {"naver_news", "tavily"} and str(
-            item.get("company_disambiguation") or ""
-        ).lower() == "name_only_search_result":
+        if (
+            source in {"naver_news", "tavily"}
+            and str(item.get("company_disambiguation") or "").lower() == "name_only_search_result"
+        ):
             return len(_string_list(item.get("duplicate_sources"))) >= 2
         return True
 

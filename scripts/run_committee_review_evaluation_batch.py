@@ -776,22 +776,16 @@ def _result_row(
         "stage2_evidence_audit_retry_count": stage2_retry_count_by_role.get("evidence_audit"),
         "stage2_chair_report_retry_count": stage2_retry_count_by_role.get("chair_report"),
         "stage2_quant_credit_error_message": stage2_role_error_messages.get("quant_credit", ""),
-        "stage2_evidence_audit_error_message": stage2_role_error_messages.get(
-            "evidence_audit", ""
-        ),
+        "stage2_evidence_audit_error_message": stage2_role_error_messages.get("evidence_audit", ""),
         "stage2_chair_report_error_message": stage2_role_error_messages.get("chair_report", ""),
         "stage2_role_cache_hit_count": stage2_runtime.get("role_cache_hit_count"),
         "stage2_role_cache_any_hit": bool(stage2_runtime.get("role_cache_any_hit", False)),
         "stage2_role_cache_all_hit": bool(stage2_runtime.get("role_cache_all_hit", False)),
-        "stage2_quant_credit_cache_hit": bool(
-            stage2_role_cache_hits.get("quant_credit", False)
-        ),
+        "stage2_quant_credit_cache_hit": bool(stage2_role_cache_hits.get("quant_credit", False)),
         "stage2_evidence_audit_cache_hit": bool(
             stage2_role_cache_hits.get("evidence_audit", False)
         ),
-        "stage2_chair_report_cache_hit": bool(
-            stage2_role_cache_hits.get("chair_report", False)
-        ),
+        "stage2_chair_report_cache_hit": bool(stage2_role_cache_hits.get("chair_report", False)),
         "stage2_total_elapsed_seconds": stage2_runtime.get("stage2_total_elapsed_seconds"),
         "stage2_agent_elapsed_seconds_sum": stage2_runtime.get("agent_elapsed_seconds_sum"),
         "stage2_quant_credit_elapsed_seconds": stage2_agent_timings.get("quant_credit"),

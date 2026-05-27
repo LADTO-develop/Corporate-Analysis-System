@@ -1776,8 +1776,7 @@ def test_risk_recall_qa_advisory_escalates_prior_hard_distress_to_risk_hold() ->
     assert adjusted["risk_hold_reason_tags"] == ["prior_hard_distress_hold"]
     assert runtime["risk_recall_qa_advisory_applied"] is True
     assert (
-        runtime["risk_recall_qa_advisory_apply_reason"]
-        == "risk_recall_prior_hard_distress_context"
+        runtime["risk_recall_qa_advisory_apply_reason"] == "risk_recall_prior_hard_distress_context"
     )
 
 

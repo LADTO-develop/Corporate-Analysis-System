@@ -312,9 +312,7 @@ class AgnoStage2AgentRunner:
                     "retry_count_by_role": {
                         role: _retry_count(runtime_config) for role in STAGE2_TRIPLET_AGENT_ROLES
                     },
-                    "role_fallback_used": {
-                        role: True for role in STAGE2_TRIPLET_AGENT_ROLES
-                    },
+                    "role_fallback_used": {role: True for role in STAGE2_TRIPLET_AGENT_ROLES},
                     "prompt_contract_versions": _prompt_contract_versions(self),
                 },
             )
@@ -511,9 +509,11 @@ def _stage2_run_diagnostics(
     degraded = bool((extra or {}).get("degraded", False) or failed_roles)
     role_cache_hit_count = sum(1 for value in role_cache_hits.values() if value is True)
     role_cache_any_hit = bool(role_cache_hit_count)
-    role_cache_all_hit = all(
-        role_cache_hits.get(role) is True for role in STAGE2_TRIPLET_AGENT_ROLES
-    ) if role_cache_hits else False
+    role_cache_all_hit = (
+        all(role_cache_hits.get(role) is True for role in STAGE2_TRIPLET_AGENT_ROLES)
+        if role_cache_hits
+        else False
+    )
     diagnostics = {
         "backend_name": backend_name,
         "cache_hit": cache_hit or role_cache_any_hit,
@@ -568,9 +568,7 @@ def _cached_response_diagnostics(cached_diagnostics: Mapping[str, Any]) -> dict[
             "stage2_total_elapsed_seconds",
         }
     }
-    role_cache_hits = {
-        role: True for role in STAGE2_TRIPLET_AGENT_ROLES
-    }
+    role_cache_hits = {role: True for role in STAGE2_TRIPLET_AGENT_ROLES}
     diagnostics["role_cache_hits"] = role_cache_hits
     diagnostics["role_cache_hit_count"] = len(STAGE2_TRIPLET_AGENT_ROLES)
     diagnostics["role_cache_all_hit"] = True

@@ -115,7 +115,9 @@ def collect_external_evidence(
     verified_item_count = sum(
         1 for item in items if _evidence_score_from_item(item) >= _DIRECT_EVIDENCE_SCORE_FLOOR
     )
-    high_confidence_critical_count = sum(1 for item in items if _high_confidence_critical_item(item))
+    high_confidence_critical_count = sum(
+        1 for item in items if _high_confidence_critical_item(item)
+    )
     provider_statuses = [str(provider.get("status", "unknown")) for provider in providers.values()]
     if items:
         status = "ready"

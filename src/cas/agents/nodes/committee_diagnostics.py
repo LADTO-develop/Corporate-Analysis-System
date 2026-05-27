@@ -43,9 +43,7 @@ def _runtime_diagnostic_metrics(diagnostics: dict[str, Any]) -> dict[str, float]
     role_cache_hits = diagnostics.get("role_cache_hits")
     if isinstance(role_cache_hits, dict):
         for role in ("quant_credit", "evidence_audit", "chair_report"):
-            metrics[f"stage2_{role}_cache_hit"] = (
-                1.0 if role_cache_hits.get(role) is True else 0.0
-            )
+            metrics[f"stage2_{role}_cache_hit"] = 1.0 if role_cache_hits.get(role) is True else 0.0
     role_fallback_used = diagnostics.get("role_fallback_used")
     if isinstance(role_fallback_used, dict):
         for role in ("quant_credit", "evidence_audit", "chair_report"):

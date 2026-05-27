@@ -628,9 +628,7 @@ def _external_evidence_items_frame(snapshot: dict[str, object] | None) -> pd.Dat
                 "순번": index,
                 "근거ID": _short_text(str(item.get("event_id") or "-"), limit=18),
                 "출처": _external_evidence_source_label(item.get("source")),
-                "근거 유형": _external_evidence_source_type_label(
-                    item.get("source_evidence_type")
-                ),
+                "근거 유형": _external_evidence_source_type_label(item.get("source_evidence_type")),
                 "제목/공시명": _short_text(str(item.get("title") or "제목 없음"), limit=110),
                 "관련성": _external_evidence_match_label(item),
                 "검증 품질": _external_evidence_quality_label(item.get("evidence_quality")),

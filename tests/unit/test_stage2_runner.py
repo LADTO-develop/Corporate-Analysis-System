@@ -450,9 +450,7 @@ def test_agno_stage2_runner_degrades_only_failed_role(
     assert runner.last_run_diagnostics["failed_roles"] == ["evidence_audit"]
     assert runner.last_run_diagnostics["retry_count"] == 2
     assert runner.last_run_diagnostics["role_fallback_used"]["evidence_audit"] is True
-    assert "provider outage" in runner.last_run_diagnostics["role_error_messages"][
-        "evidence_audit"
-    ]
+    assert "provider outage" in runner.last_run_diagnostics["role_error_messages"]["evidence_audit"]
 
 
 def test_agno_stage2_runner_falls_back_to_deterministic_runner_on_error() -> None:

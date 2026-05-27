@@ -42,7 +42,10 @@ def test_stage2_policy_override_applies_candidate_threshold_temporarily() -> Non
         policy_version_suffix="optimizer_test",
     )
 
-    assert load_stage2_policy().float("committee_guardrails", "secondary_review", "threshold_buffer") == 0.10
+    assert (
+        load_stage2_policy().float("committee_guardrails", "secondary_review", "threshold_buffer")
+        == 0.10
+    )
     with stage2_policy_override(candidate):
         assert load_stage2_policy().policy_version.endswith(":optimizer_test")
         assert (
@@ -63,7 +66,10 @@ def test_stage2_policy_override_applies_candidate_threshold_temporarily() -> Non
         )
 
     assert load_stage2_policy().policy_version == base.policy_version
-    assert load_stage2_policy().float("committee_guardrails", "secondary_review", "threshold_buffer") == 0.10
+    assert (
+        load_stage2_policy().float("committee_guardrails", "secondary_review", "threshold_buffer")
+        == 0.10
+    )
 
 
 def test_post_committee_qa_cache_payloads_include_policy_version() -> None:

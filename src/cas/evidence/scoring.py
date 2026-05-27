@@ -542,7 +542,10 @@ def _evidence_score(
         score += 0.08
     else:
         score -= 0.20
-    if source_lower in {"naver_news", "tavily"} and company_disambiguation == "name_only_search_result":
+    if (
+        source_lower in {"naver_news", "tavily"}
+        and company_disambiguation == "name_only_search_result"
+    ):
         score -= 0.06
     if critical_terms and critical_context_confirmed:
         score += 0.10

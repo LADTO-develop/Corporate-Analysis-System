@@ -23,8 +23,7 @@ from cas.utils.io import write_json, write_yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_ROLLING_SCORES_PATH = (
-    ROOT
-    / "data/outputs/modeling/feature_46_xgboost/diagnostics/stage2_agents/"
+    ROOT / "data/outputs/modeling/feature_46_xgboost/diagnostics/stage2_agents/"
     "feature46_full_review_trigger_73_harness/rolling_samples/stage2_rolling_validation_scores.csv"
 )
 DEFAULT_FEATURE_MASTER_PATH = ROOT / "data/input/credit_46_features/feature_46_master.csv"
