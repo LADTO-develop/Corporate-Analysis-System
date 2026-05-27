@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
+from contextlib import contextmanager
+from contextvars import ContextVar
+from copy import deepcopy
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
@@ -11,6 +14,10 @@ from typing import Any, cast
 from cas.utils.io import read_yaml
 
 DEFAULT_STAGE2_POLICY_PATH = Path("configs/agent/stage2_policy.yaml")
+_STAGE2_POLICY_OVERRIDE: ContextVar[Stage2Policy | None] = ContextVar(
+    "stage2_policy_override",
+    default=None,
+)
 
 _DEFAULT_STAGE2_POLICY: dict[str, Any] = {
     "policy_version": "stage2_policy_v1",
@@ -288,7 +295,7 @@ class Stage2Policy:
 
 
 @lru_cache(maxsize=4)
-def load_stage2_policy(path: str | Path = DEFAULT_STAGE2_POLICY_PATH) -> Stage2Policy:
+def _load_stage2_policy_cached(path: str) -> Stage2Policy:
     """Load the versioned Stage 2 policy from YAML."""
     raw = read_yaml(path)
     values = _deep_merge(_DEFAULT_STAGE2_POLICY, raw)
@@ -296,9 +303,47 @@ def load_stage2_policy(path: str | Path = DEFAULT_STAGE2_POLICY_PATH) -> Stage2P
     return Stage2Policy(policy_version=version, values=values)
 
 
+def load_stage2_policy(path: str | Path = DEFAULT_STAGE2_POLICY_PATH) -> Stage2Policy:
+    """Load the versioned Stage 2 policy from YAML or the active optimizer override."""
+    override = _STAGE2_POLICY_OVERRIDE.get()
+    if override is not None:
+        return override
+    return _load_stage2_policy_cached(str(path))
+
+
 def stage2_policy_version() -> str:
     """Return the active Stage 2 policy version string."""
     return load_stage2_policy().policy_version
+
+
+def stage2_policy_with_updates(
+    updates: Mapping[str, Any],
+    *,
+    base_policy: Stage2Policy | None = None,
+    policy_version_suffix: str = "candidate",
+) -> Stage2Policy:
+    """Return a policy copy with dot-path threshold updates applied."""
+    base = base_policy or load_stage2_policy()
+    values = deepcopy(dict(base.values))
+    for path, value in updates.items():
+        _set_nested_value(values, path, value)
+    version = (
+        f"{base.policy_version}:{policy_version_suffix}"
+        if policy_version_suffix
+        else base.policy_version
+    )
+    values["policy_version"] = version
+    return Stage2Policy(policy_version=version, values=values)
+
+
+@contextmanager
+def stage2_policy_override(policy: Stage2Policy) -> Iterator[None]:
+    """Temporarily route default policy reads to a candidate policy."""
+    token = _STAGE2_POLICY_OVERRIDE.set(policy)
+    try:
+        yield
+    finally:
+        _STAGE2_POLICY_OVERRIDE.reset(token)
 
 
 def _deep_merge(defaults: Mapping[str, Any], overrides: Mapping[str, Any]) -> dict[str, Any]:
@@ -312,9 +357,25 @@ def _deep_merge(defaults: Mapping[str, Any], overrides: Mapping[str, Any]) -> di
     return merged
 
 
+def _set_nested_value(values: dict[str, Any], dot_path: str, value: object) -> None:
+    keys = [part for part in dot_path.split(".") if part]
+    if not keys:
+        raise ValueError("Policy update path must not be empty.")
+    current = values
+    for key in keys[:-1]:
+        next_value = current.get(key)
+        if not isinstance(next_value, dict):
+            next_value = {}
+            current[key] = next_value
+        current = next_value
+    current[keys[-1]] = value
+
+
 __all__ = [
     "DEFAULT_STAGE2_POLICY_PATH",
     "Stage2Policy",
     "load_stage2_policy",
+    "stage2_policy_override",
     "stage2_policy_version",
+    "stage2_policy_with_updates",
 ]

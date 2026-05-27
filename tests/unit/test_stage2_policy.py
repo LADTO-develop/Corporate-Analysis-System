@@ -5,7 +5,12 @@ from __future__ import annotations
 from cas.agents.nodes.qa_cache import _review_qa_cache_payload, _risk_recall_qa_cache_payload
 from cas.agents.stage2_bundle import build_stage2_input_bundle
 from cas.agents.stage2_outputs import ChairReportOutput, EvidenceAuditOutput, QuantCreditOutput
-from cas.agents.stage2_policy import load_stage2_policy, stage2_policy_version
+from cas.agents.stage2_policy import (
+    load_stage2_policy,
+    stage2_policy_override,
+    stage2_policy_version,
+    stage2_policy_with_updates,
+)
 
 
 def test_stage2_policy_loads_versioned_thresholds_from_yaml() -> None:
@@ -24,6 +29,41 @@ def test_stage2_policy_loads_versioned_thresholds_from_yaml() -> None:
     )
     assert policy.float("review_qa", "extreme_distress", "cashflow_coverage_ratio_floor") == 0.0
     assert policy.int("review_qa", "boundary_defense", "min_defensive_axes") == 3
+
+
+def test_stage2_policy_override_applies_candidate_threshold_temporarily() -> None:
+    base = load_stage2_policy()
+    candidate = stage2_policy_with_updates(
+        {
+            "committee_guardrails.secondary_review.threshold_buffer": 0.14,
+            "risk_recall_qa.advisory.near_threshold_min_weak_axes": 1,
+        },
+        base_policy=base,
+        policy_version_suffix="optimizer_test",
+    )
+
+    assert load_stage2_policy().float("committee_guardrails", "secondary_review", "threshold_buffer") == 0.10
+    with stage2_policy_override(candidate):
+        assert load_stage2_policy().policy_version.endswith(":optimizer_test")
+        assert (
+            load_stage2_policy().float(
+                "committee_guardrails",
+                "secondary_review",
+                "threshold_buffer",
+            )
+            == 0.14
+        )
+        assert (
+            load_stage2_policy().int(
+                "risk_recall_qa",
+                "advisory",
+                "near_threshold_min_weak_axes",
+            )
+            == 1
+        )
+
+    assert load_stage2_policy().policy_version == base.policy_version
+    assert load_stage2_policy().float("committee_guardrails", "secondary_review", "threshold_buffer") == 0.10
 
 
 def test_post_committee_qa_cache_payloads_include_policy_version() -> None:
