@@ -102,6 +102,18 @@ DEFAULT_SEARCH_SPACE: tuple[ThresholdSpec, ...] = (
         description="Probability floor for turning softened over-warning holds back into risk holds.",
     ),
     ThresholdSpec(
+        path="committee_guardrails.risk_label_recall.mitigation_probability_floor",
+        values=(0.60, 0.65, 0.70),
+        objectives=("strict", "fn_rescue"),
+        description="Risk-label recall floor for softened over-warning holds.",
+    ),
+    ThresholdSpec(
+        path="committee_guardrails.risk_label_recall.review_hold_probability_floor",
+        values=(0.75, 0.80, 0.85),
+        objectives=("strict", "fn_rescue"),
+        description="Risk-label recall floor for unconfirmed model-reject review holds.",
+    ),
+    ThresholdSpec(
         path="committee_guardrails.severe_financial_watch.current_ratio_floor",
         values=(0.60, 0.70, 0.80),
         objectives=("strict", "fn_rescue"),

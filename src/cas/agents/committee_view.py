@@ -39,6 +39,9 @@ from cas.agents.committee_decision_policy import (
     hidden_tail_risk_assessment as _hidden_tail_risk_assessment,
 )
 from cas.agents.committee_decision_policy import (
+    mitigation_hold_model_risk_label_reason as _mitigation_hold_model_risk_label_reason,
+)
+from cas.agents.committee_decision_policy import (
     mitigation_hold_residual_risk_reason as _mitigation_hold_residual_risk_reason,
 )
 from cas.agents.committee_decision_policy import (
@@ -48,6 +51,9 @@ from cas.agents.committee_decision_policy import (
     overwarning_mitigation_assessment as _overwarning_mitigation_assessment,
 )
 from cas.agents.committee_decision_policy import (
+    prior_hard_distress_risk_label_reason as _prior_hard_distress_risk_label_reason,
+)
+from cas.agents.committee_decision_policy import (
     prior_rating_boundary_hold_reason as _prior_rating_boundary_hold_reason,
 )
 from cas.agents.committee_decision_policy import (
@@ -55,6 +61,9 @@ from cas.agents.committee_decision_policy import (
 )
 from cas.agents.committee_decision_policy import (
     reject_confirmation_assessment as _reject_confirmation_assessment,
+)
+from cas.agents.committee_decision_policy import (
+    review_hold_model_risk_label_reason as _review_hold_model_risk_label_reason,
 )
 from cas.agents.committee_decision_policy import (
     risk_hold_reason_labels as _risk_hold_reason_labels,
@@ -257,6 +266,28 @@ def build_committee_view_model(
     )
     if boundary_review.triggered:
         risk_factors = [boundary_review.reason, *risk_factors]
+    prior_hard_distress_risk_label_reason = (
+        _prior_hard_distress_risk_label_reason(bundle)
+        if committee_label == "보류" and not veto_triggered and not hidden_tail_risk.triggered
+        else ""
+    )
+    mitigation_model_risk_label_reason = (
+        _mitigation_hold_model_risk_label_reason(bundle)
+        if committee_label == "보류"
+        and overwarning_mitigation.triggered
+        and not veto_triggered
+        and not hidden_tail_risk.triggered
+        else ""
+    )
+    review_model_risk_label_reason = (
+        _review_hold_model_risk_label_reason(bundle)
+        if committee_label == "보류"
+        and reject_confirmation.triggered
+        and not overwarning_mitigation.triggered
+        and not veto_triggered
+        and not hidden_tail_risk.triggered
+        else ""
+    )
     evidence_summary = _evidence_summary_items(bundle, agents)
     conflict_resolution = _conflict_resolution(
         prediction_label=prediction_label,
@@ -301,7 +332,18 @@ def build_committee_view_model(
         overwarning_mitigation=overwarning_mitigation,
         reject_confirmation=reject_confirmation,
         mitigation_residual_risk_reason=mitigation_residual_risk_reason,
+        prior_hard_distress_risk_label_reason=prior_hard_distress_risk_label_reason,
+        mitigation_model_risk_label_reason=mitigation_model_risk_label_reason,
+        review_model_risk_label_reason=review_model_risk_label_reason,
     )
+    risk_label_recall_reason = _risk_label_recall_reason(
+        decision_type=decision_type,
+        prior_hard_distress_reason=prior_hard_distress_risk_label_reason,
+        mitigation_model_reason=mitigation_model_risk_label_reason,
+        review_model_reason=review_model_risk_label_reason,
+    )
+    if risk_label_recall_reason:
+        risk_factors = [*risk_factors, risk_label_recall_reason]
     risk_hold_reason_tags = _risk_hold_reason_tags(
         bundle=bundle,
         decision_type=decision_type,
@@ -318,6 +360,8 @@ def build_committee_view_model(
         final_review_memo = f"{final_review_memo} {risk_hold_reason_summary}"
     if mitigation_residual_risk_reason:
         conflict_resolution = f"{conflict_resolution} 다만 {mitigation_residual_risk_reason}"
+    if risk_label_recall_reason:
+        conflict_resolution = f"{conflict_resolution} 또한 {risk_label_recall_reason}"
 
     risk_factors = _clean_text_items(risk_factors)
     mitigating_factors = _clean_text_items(mitigating_factors)
@@ -363,6 +407,7 @@ def build_committee_view_model(
             overwarning_mitigation=overwarning_mitigation,
             reject_confirmation=reject_confirmation,
             mitigation_residual_risk_reason=mitigation_residual_risk_reason,
+            risk_label_recall_reason=risk_label_recall_reason,
             risk_hold_reason_tags=risk_hold_reason_tags,
             risk_hold_reason_summary=risk_hold_reason_summary,
         ),
@@ -691,6 +736,7 @@ def _decision_trace_items(
     overwarning_mitigation: OverwarningMitigationAssessment,
     reject_confirmation: RejectConfirmationAssessment,
     mitigation_residual_risk_reason: str,
+    risk_label_recall_reason: str,
     risk_hold_reason_tags: list[RiskHoldReasonTag],
     risk_hold_reason_summary: str,
 ) -> list[DecisionTraceItem]:
@@ -778,6 +824,14 @@ def _decision_trace_items(
             or "과민경고 완화 보류 안에서 위험 보류로 되돌릴 잔여 재무위험은 제한적입니다.",
         ),
         DecisionTraceItem(
+            gate="risk_label_recall_adjustment",
+            label="위험 라벨 리콜 보정",
+            triggered=bool(risk_label_recall_reason),
+            severity="risk" if risk_label_recall_reason else "info",
+            summary=risk_label_recall_reason
+            or "보류 케이스를 위험 보류로 올릴 추가 리콜 보정 조건은 제한적입니다.",
+        ),
+        DecisionTraceItem(
             gate="reject_confirmation",
             label="부적격 확정 게이트",
             triggered=reject_confirmation.confirmed,
@@ -807,6 +861,26 @@ def _decision_trace_items(
         ),
     ]
     return trace
+
+
+def _risk_label_recall_reason(
+    *,
+    decision_type: CommitteeDecisionType,
+    prior_hard_distress_reason: str,
+    mitigation_model_reason: str,
+    review_model_reason: str,
+) -> str:
+    """Return the risk-label recall reason that actually affected the display type."""
+    if decision_type != "risk_hold":
+        return ""
+    for reason in (
+        prior_hard_distress_reason,
+        mitigation_model_reason,
+        review_model_reason,
+    ):
+        if reason:
+            return reason
+    return ""
 
 
 def _prior_hard_distress_trace_summary(prior: dict[str, Any]) -> str:

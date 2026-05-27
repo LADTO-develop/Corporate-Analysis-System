@@ -217,6 +217,10 @@ _DEFAULT_STAGE2_POLICY: dict[str, Any] = {
         "mitigation_residual_risk": {
             "probability_floor": 0.92,
         },
+        "risk_label_recall": {
+            "mitigation_probability_floor": 0.60,
+            "review_hold_probability_floor": 0.80,
+        },
         "cashflow_backed_fp_resilience": {
             "capital_impairment_ratio_ceiling": 0.0,
             "cashflow_coverage_ratio_floor": 0.0,

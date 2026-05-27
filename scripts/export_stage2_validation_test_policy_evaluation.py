@@ -42,7 +42,10 @@ TRACE_GATES = (
     ("hidden_tail_risk", "숨은 꼬리위험 점검"),
     ("secondary_review_trigger", "2차 보조 레이더"),
     ("boundary_rating_review", "경계등급 점검"),
+    ("prior_hard_distress_context", "기준일 이전 severe 등급 컨텍스트"),
     ("overwarning_mitigation", "과민경고 완화 점검"),
+    ("mitigation_residual_risk", "과민경고 완화 잔여위험"),
+    ("risk_label_recall_adjustment", "위험 라벨 리콜 보정"),
     ("reject_confirmation", "부적격 확정 게이트"),
     ("final_committee_decision", "최종 위원회 판단"),
 )
