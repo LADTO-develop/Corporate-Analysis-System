@@ -115,6 +115,7 @@ class _TripletAgentModule(Protocol):
         max_tokens: int,
         runtime_config: Stage2RuntimeConfig | None,
         diagnostics: dict[str, Any] | None = None,
+        role_fallbacks: Mapping[str, Callable[..., object]] | None = None,
     ) -> Stage2RunnerOutputs:
         """Run the Agno Stage 2 triplet agents."""
 
@@ -256,16 +257,22 @@ class AgnoStage2AgentRunner:
                     max_tokens=self.max_tokens,
                     runtime_config=runtime_config,
                     diagnostics=runner_diagnostics,
+                    role_fallbacks=(
+                        _deterministic_role_fallbacks(self.deterministic_runner)
+                        if self.fallback_on_error
+                        else None
+                    ),
                 )
                 successful_backend_name = self.backend_name
             response = _coerce_llm_response(raw_response)
-            _write_stage2_cached_response(
-                cache_key=cache_key,
-                backend_name=successful_backend_name,
-                response=response,
-                diagnostics=runner_diagnostics,
-                env=cache_env,
-            )
+            if not bool(runner_diagnostics.get("degraded", False)):
+                _write_stage2_cached_response(
+                    cache_key=cache_key,
+                    backend_name=successful_backend_name,
+                    response=response,
+                    diagnostics=runner_diagnostics,
+                    env=cache_env,
+                )
             outputs = response.as_outputs()
             self.last_run_backend_name = successful_backend_name
             self.last_error_message = ""
@@ -297,6 +304,17 @@ class AgnoStage2AgentRunner:
                 started_at=run_started_at,
                 extra={
                     "error_message": str(error),
+                    "degraded": True,
+                    "failed_role": "stage2_triplet",
+                    "failed_roles": list(STAGE2_TRIPLET_AGENT_ROLES),
+                    "fallback_scope": "full_triplet",
+                    "retry_count": _retry_count(runtime_config),
+                    "retry_count_by_role": {
+                        role: _retry_count(runtime_config) for role in STAGE2_TRIPLET_AGENT_ROLES
+                    },
+                    "role_fallback_used": {
+                        role: True for role in STAGE2_TRIPLET_AGENT_ROLES
+                    },
                     "prompt_contract_versions": _prompt_contract_versions(self),
                 },
             )
@@ -481,6 +499,16 @@ def _stage2_run_diagnostics(
 ) -> dict[str, Any]:
     timings = agent_timings or {}
     role_cache_hits = _coerce_role_cache_hits((extra or {}).get("role_cache_hits"))
+    role_fallback_used = _coerce_role_cache_hits((extra or {}).get("role_fallback_used"))
+    failed_roles = _coerce_failed_roles((extra or {}).get("failed_roles"))
+    if not failed_roles:
+        failed_roles = [role for role, used in role_fallback_used.items() if used]
+    failed_role = str((extra or {}).get("failed_role") or (failed_roles[0] if failed_roles else ""))
+    retry_count_by_role = _coerce_retry_counts((extra or {}).get("retry_count_by_role"))
+    retry_count = _coerce_int((extra or {}).get("retry_count"))
+    if retry_count is None:
+        retry_count = max(retry_count_by_role.values(), default=0)
+    degraded = bool((extra or {}).get("degraded", False) or failed_roles)
     role_cache_hit_count = sum(1 for value in role_cache_hits.values() if value is True)
     role_cache_any_hit = bool(role_cache_hit_count)
     role_cache_all_hit = all(
@@ -497,6 +525,10 @@ def _stage2_run_diagnostics(
         "role_cache_hit_count": role_cache_hit_count,
         "role_cache_any_hit": role_cache_any_hit,
         "role_cache_all_hit": role_cache_all_hit,
+        "degraded": degraded,
+        "failed_role": failed_role,
+        "failed_roles": failed_roles,
+        "retry_count": retry_count,
     }
     if extra:
         for key, value in extra.items():
@@ -568,6 +600,52 @@ def _coerce_role_cache_hits(value: object) -> dict[str, bool]:
     return {str(role): bool(hit) for role, hit in value.items()}
 
 
+def _coerce_failed_roles(value: object) -> list[str]:
+    if not isinstance(value, list | tuple | set):
+        return []
+    return [str(role) for role in value if str(role)]
+
+
+def _coerce_retry_counts(value: object) -> dict[str, int]:
+    if not isinstance(value, Mapping):
+        return {}
+    output: dict[str, int] = {}
+    for role, count in value.items():
+        coerced = _coerce_int(count)
+        if coerced is not None:
+            output[str(role)] = coerced
+    return output
+
+
+def _coerce_int(value: object) -> int | None:
+    try:
+        return int(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None
+
+
+def _retry_count(runtime_config: Stage2RuntimeConfig) -> int:
+    return max(int(runtime_config.agent_retries) - 1, 0)
+
+
+def _deterministic_role_fallbacks(
+    deterministic_runner: DeterministicStage2AgentRunner | None,
+) -> dict[str, Callable[..., object]] | None:
+    if deterministic_runner is None:
+        return None
+    return {
+        "quant_credit": lambda *, bundle, **_kwargs: deterministic_runner.quant_credit_agent(
+            bundle
+        ),
+        "evidence_audit": lambda *, bundle, **_kwargs: deterministic_runner.evidence_audit_agent(
+            bundle
+        ),
+        "chair_report": lambda *, bundle, recommendation, confidence, **_kwargs: (
+            deterministic_runner.chair_report_agent(bundle, recommendation, confidence)
+        ),
+    }
+
+
 def _run_triplet_agents_with_agno(
     *,
     bundle: Stage2InputBundle,
@@ -584,6 +662,7 @@ def _run_triplet_agents_with_agno(
     max_tokens: int,
     runtime_config: Stage2RuntimeConfig | None,
     diagnostics: dict[str, Any] | None = None,
+    role_fallbacks: Mapping[str, Callable[..., object]] | None = None,
 ) -> Stage2LLMResponse:
     try:
         triplet_module = cast(
@@ -610,6 +689,7 @@ def _run_triplet_agents_with_agno(
         max_tokens=max_tokens,
         runtime_config=runtime_config,
         diagnostics=diagnostics,
+        role_fallbacks=role_fallbacks,
     )
     if not isinstance(raw_outputs, tuple) or len(raw_outputs) != 3:
         raise TypeError("Agno triplet agents must return exactly three Stage 2 outputs.")

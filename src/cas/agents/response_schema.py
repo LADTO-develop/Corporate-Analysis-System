@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from pydantic import BaseModel, ConfigDict, Field
 
 from cas.agents.committee_schema import CommitteeViewPayload
@@ -62,6 +64,7 @@ class AgentSummaryPayload(_StrictModel):
     final_confidence: float = Field(ge=0.0, le=1.0)
     synthesis: str
     agents: dict[str, AgentRolePayload]
+    runtime: dict[str, Any] = Field(default_factory=dict)
 
 
 class DashboardResponse(_StrictModel):

@@ -94,6 +94,9 @@ def _build_response_payload(state: AgentState) -> dict[str, Any]:
                 )
             ),
             "agents": _agent_payloads(agent_summary),
+            "runtime": _runtime_payload(
+                agent_summary.get("runtime") or state.get("stage2_runtime_diagnostics")
+            ),
         },
         "committee_view": _committee_view_payload(
             committee_view,
@@ -138,6 +141,29 @@ def _agent_payloads(agent_summary: dict[str, Any]) -> dict[str, dict[str, Any]]:
             "confidence": 0.0,
         }
     }
+
+
+def _runtime_payload(raw_runtime: object) -> dict[str, Any]:
+    if not isinstance(raw_runtime, dict):
+        return {}
+    return _json_safe_dict(raw_runtime)
+
+
+def _json_safe_dict(value: dict[str, Any]) -> dict[str, Any]:
+    output: dict[str, Any] = {}
+    for key, raw_value in value.items():
+        output[str(key)] = _json_safe_value(raw_value)
+    return output
+
+
+def _json_safe_value(value: object) -> object:
+    if isinstance(value, dict):
+        return _json_safe_dict(value)
+    if isinstance(value, list | tuple | set):
+        return [_json_safe_value(item) for item in value]
+    if isinstance(value, str | int | float | bool) or value is None:
+        return value
+    return str(value)
 
 
 def _committee_view_payload(
@@ -300,6 +326,9 @@ def _build_schema_failure_response(
                     "confidence": 0.0,
                 }
             },
+            "runtime": _runtime_payload(
+                agent_summary.get("runtime") or state.get("stage2_runtime_diagnostics")
+            ),
         },
         "committee_view": {
             "final_committee_label": str(committee_view.get("final_committee_label") or "보류"),

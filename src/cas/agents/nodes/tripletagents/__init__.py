@@ -51,14 +51,19 @@ def run_triplet_agents(
     max_tokens: int,
     runtime_config: Stage2RuntimeConfig | None = None,
     diagnostics: dict[str, object] | None = None,
+    role_fallbacks: Mapping[str, Callable[..., object]] | None = None,
 ) -> tuple[QuantCreditOutput, EvidenceAuditOutput, ChairReportOutput]:
     """Run QuantCredit, EvidenceAudit, and ChairReport Agno agents in order."""
     timings: dict[str, float] = {}
     role_cache_hits: dict[str, bool] = {}
     role_cache_keys: dict[str, str] = {}
     role_token_usage: dict[str, dict[str, Any]] = {}
+    role_fallback_used: dict[str, bool] = {}
+    role_error_messages: dict[str, str] = {}
+    role_retry_counts: dict[str, int] = {}
     runtime = _resolved_runtime_config(runtime_config)
     cache_env = runtime.cache_env()
+    fallback_map = dict(role_fallbacks or {})
     parallel_enabled = _parallel_independent_agents_enabled(runtime)
     if parallel_enabled:
         with ThreadPoolExecutor(max_workers=2) as executor:
@@ -71,6 +76,9 @@ def run_triplet_agents(
                 role_cache_hits,
                 role_cache_keys,
                 role_token_usage,
+                role_fallback_used,
+                role_error_messages,
+                role_retry_counts,
                 cache_env,
                 _role_cache_payload(
                     role="quant_credit",
@@ -84,6 +92,9 @@ def run_triplet_agents(
                 model_name=quant_model_name or model_name,
                 max_tokens=max_tokens,
                 runtime_config=runtime,
+                fallback_fn=fallback_map.get("quant_credit"),
+                fallback_kwargs={"bundle": bundle},
+                retry_count=_retry_count(runtime),
             )
             evidence_future = executor.submit(
                 _cached_role_call,
@@ -94,6 +105,9 @@ def run_triplet_agents(
                 role_cache_hits,
                 role_cache_keys,
                 role_token_usage,
+                role_fallback_used,
+                role_error_messages,
+                role_retry_counts,
                 cache_env,
                 _role_cache_payload(
                     role="evidence_audit",
@@ -107,6 +121,9 @@ def run_triplet_agents(
                 model_name=evidence_model_name or model_name,
                 max_tokens=max_tokens,
                 runtime_config=runtime,
+                fallback_fn=fallback_map.get("evidence_audit"),
+                fallback_kwargs={"bundle": bundle},
+                retry_count=_retry_count(runtime),
             )
             quant_credit = quant_future.result()
             evidence_audit = evidence_future.result()
@@ -119,6 +136,9 @@ def run_triplet_agents(
             role_cache_hits,
             role_cache_keys,
             role_token_usage,
+            role_fallback_used,
+            role_error_messages,
+            role_retry_counts,
             cache_env,
             _role_cache_payload(
                 role="quant_credit",
@@ -132,6 +152,9 @@ def run_triplet_agents(
             model_name=quant_model_name or model_name,
             max_tokens=max_tokens,
             runtime_config=runtime,
+            fallback_fn=fallback_map.get("quant_credit"),
+            fallback_kwargs={"bundle": bundle},
+            retry_count=_retry_count(runtime),
         )
         evidence_audit = _cached_role_call(
             "evidence_audit",
@@ -141,6 +164,9 @@ def run_triplet_agents(
             role_cache_hits,
             role_cache_keys,
             role_token_usage,
+            role_fallback_used,
+            role_error_messages,
+            role_retry_counts,
             cache_env,
             _role_cache_payload(
                 role="evidence_audit",
@@ -154,6 +180,9 @@ def run_triplet_agents(
             model_name=evidence_model_name or model_name,
             max_tokens=max_tokens,
             runtime_config=runtime,
+            fallback_fn=fallback_map.get("evidence_audit"),
+            fallback_kwargs={"bundle": bundle},
+            retry_count=_retry_count(runtime),
         )
     chair_report = _cached_role_call(
         "chair_report",
@@ -163,6 +192,9 @@ def run_triplet_agents(
         role_cache_hits,
         role_cache_keys,
         role_token_usage,
+        role_fallback_used,
+        role_error_messages,
+        role_retry_counts,
         cache_env,
         _role_cache_payload(
             role="chair_report",
@@ -184,6 +216,15 @@ def run_triplet_agents(
         model_name=chair_model_name or model_name,
         max_tokens=max_tokens,
         runtime_config=runtime,
+        fallback_fn=fallback_map.get("chair_report"),
+        fallback_kwargs={
+            "bundle": bundle,
+            "recommendation": recommendation,
+            "confidence": confidence,
+            "quant_credit": quant_credit,
+            "evidence_audit": evidence_audit,
+        },
+        retry_count=_retry_count(runtime),
     )
     if diagnostics is not None:
         diagnostics["agent_elapsed_seconds"] = dict(timings)
@@ -198,6 +239,17 @@ def run_triplet_agents(
         )
         diagnostics["role_token_usage"] = dict(role_token_usage)
         diagnostics["token_usage_totals"] = aggregate_role_usage(role_token_usage)
+        failed_roles = [
+            role for role in _PRIMARY_ROLES if role_fallback_used.get(role) is True
+        ]
+        diagnostics["degraded"] = bool(failed_roles)
+        diagnostics["failed_role"] = failed_roles[0] if failed_roles else ""
+        diagnostics["failed_roles"] = failed_roles
+        diagnostics["role_fallback_used"] = dict(role_fallback_used)
+        diagnostics["role_error_messages"] = dict(role_error_messages)
+        diagnostics["retry_count_by_role"] = dict(role_retry_counts)
+        diagnostics["retry_count"] = max(role_retry_counts.values(), default=0)
+        diagnostics["fallback_scope"] = "role" if failed_roles else ""
     return quant_credit, evidence_audit, chair_report
 
 
@@ -209,6 +261,9 @@ def _cached_role_call(
     role_cache_hits: dict[str, bool],
     role_cache_keys: dict[str, str],
     role_token_usage: dict[str, dict[str, Any]],
+    role_fallback_used: dict[str, bool],
+    role_error_messages: dict[str, str],
+    role_retry_counts: dict[str, int],
     cache_env: Mapping[str, str],
     cache_payload: Mapping[str, object],
     **kwargs: object,
@@ -236,6 +291,9 @@ def _cached_role_call(
         return output  # type: ignore[return-value]
 
     usage: dict[str, object] = {}
+    fallback_fn = kwargs.pop("fallback_fn", None)
+    fallback_kwargs = kwargs.pop("fallback_kwargs", None)
+    retry_count = int(kwargs.pop("retry_count", 0) or 0)
     try:
         output = fn(**kwargs, usage=usage)
         normalized_usage = normalize_usage_record(
@@ -246,6 +304,7 @@ def _cached_role_call(
             cache_hit=False,
             billable=bool(usage),
         )
+        role_fallback_used[role] = False
         role_cache_hits[role] = False
         role_cache_keys[role] = cache_key
         role_token_usage[role] = normalized_usage
@@ -255,6 +314,24 @@ def _cached_role_call(
             output=output,
             usage=normalized_usage,
             env=cache_env,
+        )
+        return output
+    except Exception as error:
+        if not callable(fallback_fn):
+            raise
+        output = fallback_fn(**_fallback_kwargs(fallback_kwargs))
+        role_fallback_used[role] = True
+        role_error_messages[role] = str(error)
+        role_retry_counts[role] = retry_count
+        role_cache_hits[role] = False
+        role_cache_keys[role] = cache_key
+        role_token_usage[role] = normalize_usage_record(
+            {},
+            provider=model_provider,
+            model_name=model_name,
+            role=role,
+            cache_hit=False,
+            billable=False,
         )
         return output
     finally:
@@ -353,6 +430,14 @@ def _resolved_runtime_config(
     runtime_config: Stage2RuntimeConfig | None,
 ) -> Stage2RuntimeConfig:
     return runtime_config or Stage2RuntimeConfig.from_env(os.environ)
+
+
+def _fallback_kwargs(value: object) -> dict[str, object]:
+    return dict(value) if isinstance(value, Mapping) else {}
+
+
+def _retry_count(runtime_config: Stage2RuntimeConfig) -> int:
+    return max(int(runtime_config.agent_retries) - 1, 0)
 
 
 def _parallel_independent_agents_enabled(runtime_config: Stage2RuntimeConfig) -> bool:

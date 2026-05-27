@@ -36,11 +36,21 @@ def _runtime_diagnostic_metrics(diagnostics: dict[str, Any]) -> dict[str, float]
     metrics["stage2_response_cache_hit"] = (
         1.0 if diagnostics.get("response_cache_hit") is True else 0.0
     )
+    metrics["stage2_degraded"] = 1.0 if diagnostics.get("degraded") is True else 0.0
+    retry_count = _safe_float(diagnostics.get("retry_count"))
+    if retry_count is not None:
+        metrics["stage2_retry_count"] = retry_count
     role_cache_hits = diagnostics.get("role_cache_hits")
     if isinstance(role_cache_hits, dict):
         for role in ("quant_credit", "evidence_audit", "chair_report"):
             metrics[f"stage2_{role}_cache_hit"] = (
                 1.0 if role_cache_hits.get(role) is True else 0.0
+            )
+    role_fallback_used = diagnostics.get("role_fallback_used")
+    if isinstance(role_fallback_used, dict):
+        for role in ("quant_credit", "evidence_audit", "chair_report"):
+            metrics[f"stage2_{role}_fallback_used"] = (
+                1.0 if role_fallback_used.get(role) is True else 0.0
             )
     role_cache_count = _safe_float(diagnostics.get("role_cache_hit_count"))
     if role_cache_count is not None:
