@@ -1129,6 +1129,56 @@ def get_feature_unit(feature: str, feature_map: pd.DataFrame) -> str:
         return ""
     return str(matched.iloc[0])
 
+def apply_altair_cas_theme(chart: alt.Chart, theme_mode: str = "light") -> alt.Chart:
+    """Apply CAS-controlled light/dark styling to Altair charts."""
+    if theme_mode == "dark":
+        return cast(
+            alt.Chart,
+            chart.properties(background="#080b12")
+            .configure_view(
+                strokeOpacity=0,
+                fill="#080b12",
+            )
+            .configure_axis(
+                labelColor="#f8fafc",
+                titleColor="#cbd5e1",
+                gridColor="rgba(250, 204, 21, 0.14)",
+                domainColor="rgba(250, 204, 21, 0.28)",
+                tickColor="rgba(250, 204, 21, 0.28)",
+            )
+            .configure_legend(
+                labelColor="#f8fafc",
+                titleColor="#cbd5e1",
+            )
+            .configure_title(
+                color="#f8fafc",
+                subtitleColor="#cbd5e1",
+            ),
+        )
+
+    return cast(
+        alt.Chart,
+        chart.properties(background="#ffffff")
+        .configure_view(
+            strokeOpacity=0,
+            fill="#ffffff",
+        )
+        .configure_axis(
+            labelColor="#334155",
+            titleColor="#64748b",
+            gridColor="rgba(148, 163, 184, 0.22)",
+            domainColor="rgba(148, 163, 184, 0.34)",
+            tickColor="rgba(148, 163, 184, 0.34)",
+        )
+        .configure_legend(
+            labelColor="#334155",
+            titleColor="#64748b",
+        )
+        .configure_title(
+            color="#0f172a",
+            subtitleColor="#64748b",
+        ),
+    )
 
 def get_feature_direction_label(feature: str) -> str:
     """Return a user-friendly interpretation direction for a feature."""
@@ -1149,7 +1199,11 @@ def _dashboard_scenario_formatters() -> ScenarioTabFormatters:
     )
 
 
-def build_probability_chart(probability: float, threshold: float) -> alt.Chart:
+def build_probability_chart(
+    probability: float,
+    threshold: float,
+    theme_mode: str = "light",
+) -> alt.Chart:
     """Create a simple chart comparing company probability and decision threshold."""
     frame = pd.DataFrame(
         [
@@ -1178,7 +1232,7 @@ def build_probability_chart(probability: float, threshold: float) -> alt.Chart:
         )
         .properties(height=260)
     )
-    return cast(alt.Chart, chart)
+    return apply_altair_cas_theme(cast(alt.Chart, chart), theme_mode)
 
 
 def render_overview_tab(
@@ -1187,6 +1241,7 @@ def render_overview_tab(
     _model_summary: dict[str, object],
     feature_map: pd.DataFrame,
     artifacts: DashboardArtifacts,
+    theme_mode: str = "light",
 ) -> None:
     """Render the core financial signal tab."""
     st.subheader("재무 핵심 신호")
@@ -1306,6 +1361,10 @@ def render_overview_tab(
             if peer_chart_slice.empty:
                 st.caption("차트로 표시할 수 있는 산업 백분위 값이 없습니다.")
             else:
+                percentile_chart = apply_altair_cas_theme(
+                    cast(alt.Chart, percentile_chart),
+                    theme_mode,
+                )
                 stretch_altair_chart(percentile_chart)
 
 
@@ -2004,6 +2063,7 @@ def render_committee_view_tab(
 def render_drivers_tab(
     selected_row: pd.Series,
     artifacts: DashboardArtifacts,
+    theme_mode: str = "light",
 ) -> None:
     """Render the drivers tab."""
     st.subheader("주요 영향 요인")
@@ -2191,6 +2251,10 @@ def render_drivers_tab(
     if top_feature_chart.empty:
         st.caption("차트로 표시할 수 있는 전체 SHAP 기준값이 없습니다.")
     else:
+        chart = apply_altair_cas_theme(
+            cast(alt.Chart, chart),
+            theme_mode,
+        )
         stretch_altair_chart(chart)
     global_table = top_features.loc[
         :,
@@ -2214,6 +2278,7 @@ def render_drivers_tab(
 def render_peer_tab(
     selected_row: pd.Series,
     artifacts: DashboardArtifacts,
+    theme_mode: str = "light",
 ) -> None:
     """Render the peer comparison tab."""
     st.subheader("시장/산업 비교")
@@ -2469,6 +2534,10 @@ def render_peer_tab(
         if compare_frame.empty:
             st.caption("차트로 표시할 수 있는 숫자형 비교 값이 없습니다.")
         else:
+            compare_chart = apply_altair_cas_theme(
+                cast(alt.Chart, compare_chart),
+                theme_mode,
+            )
             stretch_altair_chart(compare_chart)
     else:
         st.caption("선택한 변수의 단위가 섞여 있어 변수별 비교 카드로 나누어 표시합니다.")
@@ -2522,6 +2591,10 @@ def render_peer_tab(
                 if row_chart_data.empty:
                     st.caption("이 변수는 차트로 표시할 수 있는 숫자형 비교 값이 없습니다.")
                 else:
+                    mini_chart = apply_altair_cas_theme(
+                        cast(alt.Chart, mini_chart),
+                        theme_mode,
+                    )
                     stretch_altair_chart(mini_chart)
 
     table["산업 대비 차이"] = table.apply(
@@ -2636,6 +2709,10 @@ def render_peer_tab(
             if gap_frame.empty:
                 st.caption("차트로 표시할 수 있는 숫자형 차이 값이 없습니다.")
             else:
+                gap_chart = apply_altair_cas_theme(
+                    cast(alt.Chart, gap_chart),
+                    theme_mode,
+                )
                 stretch_altair_chart(gap_chart)
         else:
             st.caption("단위가 섞여 있어 차이는 표에서 변수별로 읽는 것이 더 적절합니다.")
@@ -2645,6 +2722,10 @@ def render_peer_tab(
         if percentile_frame.empty:
             st.caption("차트로 표시할 수 있는 백분위 값이 없습니다.")
         else:
+            percentile_chart = apply_altair_cas_theme(
+                cast(alt.Chart, percentile_chart),
+                theme_mode,
+            )
             stretch_altair_chart(percentile_chart)
         st.caption("50백분위 점선을 기준으로, 오른쪽일수록 상대적으로 높은 수준입니다.")
 
@@ -2679,6 +2760,7 @@ def render_peer_tab(
 def render_industry_tab(
     selected_row: pd.Series,
     artifacts: DashboardArtifacts,
+    theme_mode: str = "light",
 ) -> None:
     """Render the industry aggregate tab."""
     default_share_label = "기본 기준선(0.5) 적용 시 고위험 판정 비중"
@@ -2812,6 +2894,10 @@ def render_industry_tab(
             )
             .properties(height=320)
         )
+        trend_chart = apply_altair_cas_theme(
+        cast(alt.Chart, trend_chart),
+        theme_mode,
+        )
         stretch_altair_chart(trend_chart)
         year_summary_view = year_summary.copy()
         for column in [
@@ -2884,6 +2970,10 @@ def render_industry_tab(
         if top_shap.empty:
             st.caption("차트로 표시할 수 있는 산업 SHAP 기준값이 없습니다.")
         else:
+            chart = apply_altair_cas_theme(
+                cast(alt.Chart, chart),
+                theme_mode,
+            )
             stretch_altair_chart(chart)
         top_shap_view = top_shap.loc[
             :,
@@ -3027,17 +3117,31 @@ def render_agent_model_settings() -> None:
     if manager_sel:
         os.environ["MANAGER_AGENT_MODEL"] = manager_sel
 
-
 def main() -> None:
     """Run the credit risk Streamlit dashboard MVP."""
     load_dotenv()
     st.set_page_config(page_title="2026 상장기업 신용도 예측·분석 서비스", layout="wide")
+
+    theme_mode_label = st.sidebar.radio(
+        "화면 테마",
+        ["라이트", "다크"],
+        index=0,
+        horizontal=True,
+        key="cas_dashboard_theme_mode",
+    )
+    theme_mode = "dark" if theme_mode_label == "다크" else "light"
+
+    st.sidebar.caption(
+    "화면 색상은 이 설정을 기준으로 적용됩니다. 우측 Streamlit 기본 테마 메뉴와 다르게 보일 수 있습니다."
+    )
+
+    inject_dashboard_theme(theme_mode=theme_mode)
+
     st.title("2026 상장기업 신용도 예측·분석 서비스")
     st.caption(
         "궁금한 상장기업을 선택하면 재무 데이터, 모델 판단, 뉴스·공시 근거를 함께 살펴보고 "
         "현재 신용도를 어떻게 해석할 수 있는지 쉽게 정리해 드립니다."
     )
-    inject_dashboard_theme()
 
     preset_info = ARTIFACT_PRESETS["team_43"]
     artifact_dir_input = os.environ.get("CAS_DASHBOARD_ARTIFACT_DIR") or str(
@@ -3131,14 +3235,34 @@ def main() -> None:
         )
     with overview_tab:
         render_overview_tab(
-            selected_row, prediction_row, artifacts.model_summary, feature_map, artifacts
-        )
+            selected_row,
+            prediction_row,
+            artifacts.model_summary,
+            feature_map,
+            artifacts,
+            theme_mode=theme_mode,
+    )
+
     with drivers_tab:
-        render_drivers_tab(selected_row, artifacts)
+        render_drivers_tab(
+            selected_row,
+            artifacts,
+            theme_mode=theme_mode,
+    )
+
     with peers_tab:
-        render_peer_tab(selected_row, artifacts)
+        render_peer_tab(
+            selected_row,
+            artifacts,
+            theme_mode=theme_mode,
+    )
+
     with industry_tab:
-        render_industry_tab(selected_row, artifacts)
+        render_industry_tab(
+            selected_row,
+            artifacts,
+            theme_mode=theme_mode,
+    )
     with scenario_tab:
         render_scenario_tab(
             selected_row,

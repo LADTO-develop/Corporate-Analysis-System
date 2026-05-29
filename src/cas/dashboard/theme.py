@@ -5,7 +5,97 @@ from __future__ import annotations
 import streamlit as st
 
 
-def inject_dashboard_theme() -> None:
+def inject_dashboard_theme(theme_mode: str = "light") -> None:
+    normalized_theme = str(theme_mode or "light").strip().lower()
+
+    if normalized_theme == "dark":
+        cas_theme_vars = """
+          color-scheme: dark;
+          --cas-page-bg: #080b12;
+          --cas-base-text: #f8fafc;
+
+          --cas-blue: #facc15;
+          --cas-accent: #facc15;
+          --cas-accent-text: #fde68a;
+          --cas-accent-text-strong: #fff7d6;
+          --cas-accent-soft: rgba(250, 204, 21, 0.14);
+          --cas-accent-surface: rgba(250, 204, 21, 0.12);
+          --cas-accent-surface-strong: rgba(250, 204, 21, 0.18);
+          --cas-accent-border: rgba(250, 204, 21, 0.38);
+          --cas-accent-border-strong: rgba(250, 204, 21, 0.58);
+          --cas-tab-selected-bg: rgba(250, 204, 21, 0.16);
+          --cas-step-track-bg: rgba(250, 204, 21, 0.10);
+          --cas-live-step-bg: rgba(250, 204, 21, 0.10);
+
+          --cas-risk: #fb7185;
+          --cas-risk-text: #fda4af;
+          --cas-success: #34d399;
+          --cas-warning: #f59e0b;
+          --cas-neutral: #facc15;
+
+          --cas-text: var(--cas-base-text);
+          --cas-muted: rgba(203, 213, 225, 0.86);
+          --cas-panel: rgba(255, 255, 255, 0.055);
+          --cas-panel-strong: rgba(255, 255, 255, 0.085);
+          --cas-border: rgba(250, 204, 21, 0.22);
+          --cas-border-soft: rgba(250, 204, 21, 0.14);
+          --cas-shadow: 0 1px 2px rgba(0, 0, 0, 0.32);
+          --cas-card-bg: rgba(255, 255, 255, 0.045);
+          --cas-card-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+
+          --cas-risk-soft: rgba(251, 113, 133, 0.14);
+          --cas-risk-border: rgba(251, 113, 133, 0.40);
+          --cas-success-soft: rgba(52, 211, 153, 0.14);
+          --cas-success-border: rgba(52, 211, 153, 0.38);
+          --cas-warning-soft: rgba(245, 158, 11, 0.16);
+          --cas-warning-border: rgba(245, 158, 11, 0.48);
+          --cas-neutral-soft: rgba(250, 204, 21, 0.10);
+          --cas-neutral-border: rgba(250, 204, 21, 0.32);
+        """
+    else:
+        cas_theme_vars = """
+          color-scheme: light;
+          --cas-page-bg: #ffffff;
+          --cas-base-text: #0f172a;
+
+          --cas-blue: var(--st-primary-color, var(--primary-color, #1d4ed8));
+          --cas-accent: #0284c7;
+          --cas-accent-text: #0369a1;
+          --cas-accent-text-strong: #075985;
+          --cas-accent-soft: rgba(2, 132, 199, 0.10);
+          --cas-accent-surface: rgba(224, 242, 254, 0.48);
+          --cas-accent-surface-strong: rgba(224, 242, 254, 0.66);
+          --cas-accent-border: rgba(2, 132, 199, 0.24);
+          --cas-accent-border-strong: rgba(2, 132, 199, 0.34);
+          --cas-tab-selected-bg: rgba(224, 242, 254, 0.58);
+          --cas-step-track-bg: rgba(248, 250, 252, 0.74);
+          --cas-live-step-bg: rgba(248, 250, 252, 0.78);
+
+          --cas-risk: #c85050;
+          --cas-risk-text: #d14a4a;
+          --cas-success: #2f9e5b;
+          --cas-warning: #b7791f;
+          --cas-neutral: #4f6fad;
+
+          --cas-text: var(--cas-base-text);
+          --cas-muted: rgba(71, 85, 105, 0.76);
+          --cas-panel: rgba(15, 23, 42, 0.035);
+          --cas-panel-strong: rgba(15, 23, 42, 0.06);
+          --cas-border: rgba(148, 163, 184, 0.34);
+          --cas-border-soft: rgba(148, 163, 184, 0.22);
+          --cas-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+          --cas-card-bg: rgba(15, 23, 42, 0.025);
+          --cas-card-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+
+          --cas-risk-soft: rgba(200, 80, 80, 0.14);
+          --cas-risk-border: rgba(200, 80, 80, 0.38);
+          --cas-success-soft: rgba(47, 158, 91, 0.14);
+          --cas-success-border: rgba(47, 158, 91, 0.38);
+          --cas-warning-soft: rgba(183, 121, 31, 0.14);
+          --cas-warning-border: rgba(183, 121, 31, 0.38);
+          --cas-neutral-soft: rgba(128, 128, 128, 0.10);
+          --cas-neutral-border: rgba(128, 128, 128, 0.28);
+        """
     """Apply dashboard styling without forcing a fixed light theme.
 
     Streamlit's Settings menu changes the app theme on the client side.  CSS
@@ -15,58 +105,11 @@ def inject_dashboard_theme() -> None:
     translucent surfaces, which makes them follow both Streamlit light and dark
     themes automatically.
     """
-    st.markdown(
-        """
+    css ="""
         <style>
         :root,
         .stApp {
-          color-scheme: light dark;
-          --cas-blue: var(--st-primary-color, var(--primary-color, #1d4ed8));
-          --cas-risk: #c85050;
-          --cas-risk-text: #d14a4a;
-          --cas-success: #2f9e5b;
-          --cas-warning: #b7791f;
-          --cas-neutral: #4f6fad;
-          --cas-text: inherit;
-          --cas-muted: currentColor;
-          --cas-panel: rgba(128, 128, 128, 0.08);
-          --cas-panel-strong: rgba(128, 128, 128, 0.12);
-          --cas-border: rgba(128, 128, 128, 0.28);
-          --cas-border-soft: rgba(128, 128, 128, 0.18);
-          --cas-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
-          --cas-card-bg: rgba(128, 128, 128, 0.06);
-          --cas-card-radius: 14px;
-          --cas-card-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
-          --cas-risk-soft: rgba(200, 80, 80, 0.14);
-          --cas-risk-border: rgba(200, 80, 80, 0.38);
-          --cas-success-soft: rgba(47, 158, 91, 0.14);
-          --cas-success-border: rgba(47, 158, 91, 0.38);
-          --cas-warning-soft: rgba(183, 121, 31, 0.14);
-          --cas-warning-border: rgba(183, 121, 31, 0.38);
-          --cas-neutral-soft: rgba(128, 128, 128, 0.10);
-          --cas-neutral-border: rgba(128, 128, 128, 0.28);
-        }
-
-        @supports (color: color-mix(in srgb, white, black)) {
-          :root,
-          .stApp {
-            --cas-muted: color-mix(in srgb, currentColor 64%, transparent);
-            --cas-panel: color-mix(in srgb, currentColor 5%, transparent);
-            --cas-panel-strong: color-mix(in srgb, currentColor 8%, transparent);
-            --cas-border: color-mix(in srgb, currentColor 18%, transparent);
-            --cas-border-soft: color-mix(in srgb, currentColor 10%, transparent);
-            --cas-shadow: 0 1px 2px color-mix(in srgb, currentColor 13%, transparent);
-            --cas-card-bg: color-mix(in srgb, currentColor 4%, transparent);
-            --cas-card-shadow: 0 8px 24px color-mix(in srgb, currentColor 9%, transparent);
-            --cas-risk-soft: color-mix(in srgb, var(--cas-risk) 17%, transparent);
-            --cas-risk-border: color-mix(in srgb, var(--cas-risk) 42%, transparent);
-            --cas-success-soft: color-mix(in srgb, var(--cas-success) 17%, transparent);
-            --cas-success-border: color-mix(in srgb, var(--cas-success) 42%, transparent);
-            --cas-warning-soft: color-mix(in srgb, var(--cas-warning) 17%, transparent);
-            --cas-warning-border: color-mix(in srgb, var(--cas-warning) 42%, transparent);
-            --cas-neutral-soft: color-mix(in srgb, currentColor 7%, transparent);
-            --cas-neutral-border: color-mix(in srgb, currentColor 18%, transparent);
-          }
+        __CAS_THEME_VARS__
         }
 
         .stApp,
@@ -75,7 +118,8 @@ def inject_dashboard_theme() -> None:
         div[data-testid="stMainBlockContainer"],
         .main,
         .main .block-container {
-          color: inherit !important;
+          background: var(--cas-page-bg) !important;
+          color: var(--cas-text) !important;
         }
 
         .main .block-container {
@@ -175,22 +219,22 @@ def inject_dashboard_theme() -> None:
         }
 
         button[role="tab"][aria-selected="true"] {
-          background: rgba(224, 242, 254, 0.58) !important;
-          border-color: rgba(2, 132, 199, 0.34) !important;
-          box-shadow: var(--cas-card-shadow), inset 0 -3px 0 rgba(79, 111, 173, 0.52);
-          color: #0369a1 !important;
+          background: var(--cas-tab-selected-bg) !important;
+          border-color: var(--cas-accent-border-strong) !important;
+          box-shadow: var(--cas-card-shadow), inset 0 -3px 0 var(--cas-accent-text) !important;
+          color: var(--cas-accent-text) !important;
           transform: translateY(-1px);
         }
 
         div[data-testid="stTabs"] [data-baseweb="tab-highlight"] {
-          background: rgba(79, 111, 173, 0.54) !important;
+          background: var(--cas-accent-border-strong) !important;
           height: 2px !important;
         }
 
         div[data-testid="stTabs"] button[role="tab"]::after,
         div[data-testid="stTabs"] button[role="tab"][aria-selected="true"]::after {
-          background: rgba(79, 111, 173, 0.54) !important;
-          border-color: rgba(79, 111, 173, 0.54) !important;
+          background: var(--cas-accent-border-strong) !important;
+          border-color: var(--cas-accent-border-strong) !important;
         }
 
         button[role="tab"] p {
@@ -215,6 +259,179 @@ def inject_dashboard_theme() -> None:
           border: 1px solid var(--cas-border);
           border-radius: 8px;
           overflow: hidden;
+        }
+
+        /* CAS controlled text/readability fixes */
+        div[data-testid="stMarkdownContainer"],
+        div[data-testid="stMarkdownContainer"] p,
+        div[data-testid="stMarkdownContainer"] li,
+        div[data-testid="stCaptionContainer"],
+        label,
+        span,
+        p {
+          color: var(--cas-text) !important;
+        }
+
+        div[data-testid="stCaptionContainer"],
+        .stCaption,
+        small {
+          color: var(--cas-muted) !important;
+        }
+
+        section[data-testid="stSidebar"] {
+          background: var(--cas-page-bg) !important;
+          color: var(--cas-text) !important;
+        }
+
+        section[data-testid="stSidebar"] * {
+          color: var(--cas-text) !important;
+        }
+
+        section[data-testid="stSidebar"] div[data-testid="stMarkdownContainer"] p,
+        section[data-testid="stSidebar"] small,
+        section[data-testid="stSidebar"] label {
+          color: var(--cas-muted) !important;
+        }
+
+        /* Native Streamlit widgets */
+        div[data-baseweb="select"] > div,
+        div[data-baseweb="input"] > div,
+        textarea,
+        input {
+          background: var(--cas-panel-strong) !important;
+          border-color: var(--cas-border) !important;
+          color: var(--cas-text) !important;
+        }
+
+        div[data-baseweb="select"] *,
+        div[data-baseweb="input"] *,
+        textarea,
+        input {
+          color: var(--cas-text) !important;
+        }
+
+        div[data-baseweb="popover"],
+        div[data-baseweb="menu"],
+        ul[role="listbox"] {
+          background: var(--cas-page-bg) !important;
+          border: 1px solid var(--cas-border) !important;
+          color: var(--cas-text) !important;
+        }
+
+        div[data-baseweb="popover"] *,
+        div[data-baseweb="menu"] *,
+        ul[role="listbox"] * {
+          color: var(--cas-text) !important;
+        }
+
+        /* Dataframe/table readability */
+        div[data-testid="stDataFrame"],
+        div[data-testid="stTable"] {
+          background: var(--cas-panel) !important;
+          border: 1px solid var(--cas-border) !important;
+          border-radius: 8px !important;
+          overflow: hidden !important;
+        }
+
+        div[data-testid="stDataFrame"] *,
+        div[data-testid="stTable"] * {
+          color: var(--cas-text) !important;
+        }
+
+        div[data-testid="stDataFrame"] [role="columnheader"],
+        div[data-testid="stDataFrame"] thead,
+        div[data-testid="stTable"] thead {
+          background: var(--cas-panel-strong) !important;
+          color: var(--cas-text) !important;
+        }
+
+        /* Slider label/readability */
+        div[data-testid="stSlider"] label,
+        div[data-testid="stSlider"] p,
+        div[data-testid="stSlider"] span {
+          color: var(--cas-text) !important;
+        }
+
+        div[data-testid="stSlider"] [data-testid="stTickBar"] {
+          color: var(--cas-muted) !important;
+        }
+
+        /* Buttons */
+        div.stButton > button,
+        div.stDownloadButton > button,
+        button[kind],
+        [data-testid="stBaseButton-secondary"] {
+          background: var(--cas-panel-strong) !important;
+          border: 1px solid var(--cas-border) !important;
+          color: var(--cas-text) !important;
+        }
+
+        div.stButton > button:hover,
+        div.stDownloadButton > button:hover,
+        button[kind]:hover,
+        [data-testid="stBaseButton-secondary"]:hover {
+          background: var(--cas-accent-soft) !important;
+          border-color: var(--cas-accent-border-strong) !important;
+          color: var(--cas-accent-text-strong) !important;
+        }
+
+        /* CAS-controlled native Streamlit widgets */
+        div[data-baseweb="select"] > div,
+        div[data-baseweb="input"] > div,
+        textarea,
+        input {
+          background: var(--cas-panel-strong) !important;
+          border-color: var(--cas-border) !important;
+          color: var(--cas-text) !important;
+        }
+
+        div[data-baseweb="select"] *,
+        div[data-baseweb="input"] *,
+        textarea,
+        input {
+          color: var(--cas-text) !important;
+        }
+
+        div[data-baseweb="popover"],
+        div[data-baseweb="menu"],
+        ul[role="listbox"] {
+          background: var(--cas-page-bg) !important;
+          border: 1px solid var(--cas-border) !important;
+          color: var(--cas-text) !important;
+        }
+
+        div[data-baseweb="popover"] *,
+        div[data-baseweb="menu"] *,
+        ul[role="listbox"] * {
+          color: var(--cas-text) !important;
+        }
+
+        div.stButton > button,
+        div.stDownloadButton > button,
+        button[kind],
+        [data-testid="stBaseButton-secondary"] {
+          background: var(--cas-panel-strong) !important;
+          border: 1px solid var(--cas-border) !important;
+          color: var(--cas-text) !important;
+        }
+
+        div.stButton > button:hover,
+        div.stDownloadButton > button:hover,
+        button[kind]:hover,
+        [data-testid="stBaseButton-secondary"]:hover {
+          background: var(--cas-accent-soft) !important;
+          border-color: var(--cas-accent-border-strong) !important;
+          color: var(--cas-accent-text-strong) !important;
+        }
+
+        section[data-testid="stSidebar"] {
+          background: var(--cas-page-bg) !important;
+          color: var(--cas-text) !important;
+          border-right: 1px solid var(--cas-border);
+        }
+
+        section[data-testid="stSidebar"] * {
+          color: inherit;
         }
 
         div.stButton > button,
@@ -245,7 +462,7 @@ def inject_dashboard_theme() -> None:
         }
 
         .committee-live-note.ready {
-          border-left-color: rgba(79, 111, 173, 0.78);
+          border-left-color: var(--cas-accent);
         }
 
         .committee-live-note.error {
@@ -366,8 +583,8 @@ def inject_dashboard_theme() -> None:
         }
 
         .committee-live-loading-steps div {
-          background: rgba(248, 250, 252, 0.78);
-          border: 1px solid rgba(148, 163, 184, 0.22);
+          background: var(--cas-live-step-bg);
+          border: 1px solid var(--cas-border-soft);
           border-radius: 8px;
           padding: 0.72rem 0.8rem;
         }
@@ -437,10 +654,10 @@ def inject_dashboard_theme() -> None:
 
         .market-search-panel {
           background:
-            linear-gradient(135deg, rgba(224, 242, 254, 0.48), rgba(255, 255, 255, 0.02)),
+            linear-gradient(135deg, var(--cas-accent-surface), rgba(255, 255, 255, 0.02)),
             var(--cas-panel);
-          border: 1px solid rgba(2, 132, 199, 0.24);
-          border-left: 6px solid #0284c7;
+          border: 1px solid var(--cas-accent-border);
+          border-left: 6px solid var(--cas-accent);
           border-radius: 12px;
           box-shadow: var(--cas-shadow);
           margin: 0.9rem 0 1rem 0;
@@ -448,7 +665,7 @@ def inject_dashboard_theme() -> None:
         }
 
         .market-search-eyebrow {
-          color: #0284c7;
+          color: var(--cas-accent);
           font-size: 0.78rem;
           font-weight: 850;
           letter-spacing: 0.04em;
@@ -479,10 +696,10 @@ def inject_dashboard_theme() -> None:
         }
 
         .market-search-chip {
-          background: rgba(2, 132, 199, 0.10);
-          border: 1px solid rgba(2, 132, 199, 0.20);
+          background: var(--cas-accent-soft);
+          border: 1px solid var(--cas-accent-border);
           border-radius: 999px;
-          color: #0369a1;
+          color: var(--cas-accent-text);
           font-size: 0.78rem;
           font-weight: 800;
           padding: 0.28rem 0.62rem;
@@ -532,9 +749,9 @@ def inject_dashboard_theme() -> None:
         }
 
         .market-card.explore {
-          background: rgba(224, 242, 254, 0.38);
-          border-color: rgba(2, 132, 199, 0.24);
-          border-left-color: #0284c7;
+          background: var(--cas-accent-soft);
+          border-color: var(--cas-accent-border);
+          border-left-color: var(--cas-accent);
         }
 
         .market-card-rank {
@@ -546,7 +763,7 @@ def inject_dashboard_theme() -> None:
         }
 
         .market-card-rank.explore {
-          color: #0284c7;
+          color: var(--cas-accent);
           letter-spacing: 0.01em;
           text-transform: none;
         }
@@ -642,10 +859,10 @@ def inject_dashboard_theme() -> None:
         .selected-company-hero {
           align-items: stretch;
           background:
-            linear-gradient(135deg, rgba(224, 242, 254, 0.48), rgba(255, 255, 255, 0.02)),
+            linear-gradient(135deg, var(--cas-accent-surface), rgba(255, 255, 255, 0.02)),
             var(--cas-panel);
-          border: 1px solid rgba(2, 132, 199, 0.24);
-          border-left: 6px solid #0284c7;
+          border: 1px solid var(--cas-accent-border);
+          border-left: 6px solid var(--cas-accent);
           border-radius: 12px;
           box-shadow: var(--cas-shadow);
           display: flex;
@@ -663,7 +880,7 @@ def inject_dashboard_theme() -> None:
         }
 
         .selected-company-eyebrow {
-          color: #0284c7;
+          color: var(--cas-accent);
           font-size: 0.76rem;
           font-weight: 900;
           letter-spacing: 0.02em;
@@ -696,10 +913,10 @@ def inject_dashboard_theme() -> None:
 
         .selected-company-chip {
           align-items: center;
-          background: rgba(2, 132, 199, 0.10);
-          border: 1px solid rgba(2, 132, 199, 0.20);
+          background: var(--cas-accent-soft);
+          border: 1px solid var(--cas-accent-border);
           border-radius: 999px;
-          color: #0369a1;
+          color: var(--cas-accent-text);
           display: inline-flex;
           font-size: 0.8rem;
           font-weight: 800;
@@ -709,10 +926,10 @@ def inject_dashboard_theme() -> None:
 
         .selected-company-action-panel {
           background:
-            linear-gradient(135deg, rgba(224, 242, 254, 0.48), rgba(255, 255, 255, 0.02)),
+            linear-gradient(135deg, var(--cas-accent-surface), rgba(255, 255, 255, 0.02)),
             var(--cas-panel);
-          border: 1px solid rgba(2, 132, 199, 0.24);
-          border-left: 6px solid #0284c7;
+          border: 1px solid var(--cas-accent-border);
+          border-left: 6px solid var(--cas-accent);
           border-radius: 12px;
           box-shadow: var(--cas-shadow);
           margin: 0.1rem 0 0.62rem 0;
@@ -727,7 +944,7 @@ def inject_dashboard_theme() -> None:
         }
 
         .selected-company-action-label {
-          color: #0284c7;
+          color: var(--cas-accent);
           font-size: 0.76rem;
           font-weight: 900;
           letter-spacing: 0.02em;
@@ -911,10 +1128,10 @@ def inject_dashboard_theme() -> None:
 
         .committee-review-hero {
           background:
-            linear-gradient(135deg, rgba(224, 242, 254, 0.48), rgba(255, 255, 255, 0.02)),
+            linear-gradient(135deg, var(--cas-accent-surface), rgba(255, 255, 255, 0.02)),
             var(--cas-panel);
-          border: 1px solid rgba(2, 132, 199, 0.24);
-          border-left: 6px solid #0284c7;
+          border: 1px solid var(--cas-accent-border);
+          border-left: 6px solid var(--cas-accent);
           border-radius: 12px;
           box-shadow: var(--cas-shadow);
           margin: 0.35rem 0 0.85rem 0;
@@ -930,15 +1147,15 @@ def inject_dashboard_theme() -> None:
         .committee-review-hero.risk,
         .committee-review-hero.watch,
         .committee-review-hero.stable {
-          border-left-color: #0284c7;
+          border-left-color: var(--cas-accent);
         }
 
         .agent-disagreement-card {
           background:
-            linear-gradient(135deg, rgba(224, 242, 254, 0.34), rgba(255, 255, 255, 0.02)),
+            linear-gradient(135deg, var(--cas-accent-soft), rgba(255, 255, 255, 0.02)),
             var(--cas-panel);
-          border: 1px solid rgba(2, 132, 199, 0.18);
-          border-left: 5px solid #0284c7;
+          border: 1px solid var(--cas-accent-border);
+          border-left: 5px solid var(--cas-accent);
           border-radius: 10px;
           box-shadow: var(--cas-shadow);
           margin: 0.1rem 0 0.95rem 0;
@@ -954,7 +1171,7 @@ def inject_dashboard_theme() -> None:
         }
 
         .agent-disagreement-card.medium {
-          border-left-color: #0284c7;
+          border-left-color: var(--cas-accent);
         }
 
         .agent-disagreement-head {
@@ -991,9 +1208,9 @@ def inject_dashboard_theme() -> None:
         }
 
         .agent-disagreement-level {
-          background: rgba(224, 242, 254, 0.66);
-          border: 1px solid rgba(2, 132, 199, 0.20);
-          color: #0369a1;
+          background: var(--cas-accent-surface-strong);
+          border: 1px solid var(--cas-accent-border);
+          color: var(--cas-accent-text);
         }
 
         .agent-disagreement-level.high {
@@ -1040,9 +1257,9 @@ def inject_dashboard_theme() -> None:
         }
 
         .agent-disagreement-qa.qa-on {
-          background: rgba(224, 242, 254, 0.54);
-          border: 1px solid rgba(2, 132, 199, 0.20);
-          color: #075985;
+          background: var(--cas-accent-soft);
+          border: 1px solid var(--cas-accent-border);
+          color: var(--cas-accent-text-strong);
         }
 
         .agent-disagreement-qa.qa-off {
@@ -1065,7 +1282,7 @@ def inject_dashboard_theme() -> None:
         .committee-loading-card {
           align-items: center;
           background:
-            linear-gradient(135deg, rgba(224, 242, 254, 0.42), rgba(255, 255, 255, 0.04)),
+            linear-gradient(135deg, var(--cas-accent-surface), rgba(255, 255, 255, 0.04)),
             var(--cas-card-bg);
           border: 1px solid var(--cas-border-soft);
           border-radius: var(--cas-card-radius);
@@ -1079,8 +1296,8 @@ def inject_dashboard_theme() -> None:
 
         .committee-loading-orb {
           align-items: center;
-          background: rgba(224, 242, 254, 0.74);
-          border: 1px solid rgba(2, 132, 199, 0.24);
+          background: var(--cas-accent-surface-strong);
+          border: 1px solid var(--cas-accent-border);
           border-radius: 999px;
           display: inline-flex;
           height: 42px;
@@ -1091,8 +1308,8 @@ def inject_dashboard_theme() -> None:
 
         .committee-loading-orb::before {
           animation: committee-loading-spin 1.1s linear infinite;
-          border: 3px solid rgba(2, 132, 199, 0.18);
-          border-top-color: #0284c7;
+          border: 3px solid var(--cas-accent-border);
+          border-top-color: var(--cas-accent);
           border-radius: 999px;
           content: "";
           height: 24px;
@@ -1128,7 +1345,7 @@ def inject_dashboard_theme() -> None:
         }
 
         .committee-review-eyebrow {
-          color: #0284c7;
+          color: var(--cas-accent);
           font-size: 0.76rem;
           font-weight: 900;
           letter-spacing: 0.02em;
@@ -1170,10 +1387,10 @@ def inject_dashboard_theme() -> None:
 
         .committee-review-chip {
           align-items: center;
-          background: rgba(2, 132, 199, 0.10);
-          border: 1px solid rgba(2, 132, 199, 0.20);
+          background: var(--cas-accent-soft);
+          border: 1px solid var(--cas-accent-border);
           border-radius: 999px;
-          color: #0369a1;
+          color: var(--cas-accent-text);
           display: inline-flex;
           font-size: 0.82rem;
           font-weight: 820;
@@ -1183,14 +1400,14 @@ def inject_dashboard_theme() -> None:
 
         .committee-review-facts {
           align-self: center;
-          border-left: 1px solid rgba(2, 132, 199, 0.20);
+          border-left: 1px solid var(--cas-accent-border);
           display: grid;
           gap: 0.1rem;
           padding-left: 1.1rem;
         }
 
         .committee-review-facts-title {
-          color: #0284c7;
+          color: var(--cas-accent);
           font-size: 0.82rem;
           font-weight: 900;
           margin-bottom: 0.45rem;
@@ -1199,7 +1416,7 @@ def inject_dashboard_theme() -> None:
 
         .committee-review-fact-row {
           align-items: center;
-          border-top: 1px solid rgba(2, 132, 199, 0.14);
+          border-top: 1px solid var(--cas-accent-border);
           display: flex;
           gap: 0.7rem;
           justify-content: space-between;
@@ -1235,7 +1452,7 @@ def inject_dashboard_theme() -> None:
 
           .committee-review-facts {
             border-left: 0;
-            border-top: 1px solid rgba(2, 132, 199, 0.18);
+            border-top: 1px solid var(--cas-accent-border);
             padding-left: 0;
             padding-top: 0.8rem;
           }
@@ -1257,8 +1474,8 @@ def inject_dashboard_theme() -> None:
         }
 
         .committee-stage-track {
-          background: rgba(248, 250, 252, 0.74);
-          border: 1px solid rgba(2, 132, 199, 0.16);
+          background: var(--cas-step-track-bg);
+          border: 1px solid var(--cas-accent-border);
           border-radius: 999px;
           display: grid;
           gap: 0.28rem;
@@ -1294,9 +1511,9 @@ def inject_dashboard_theme() -> None:
         }
 
         .committee-stage-step.active {
-          background: rgba(2, 132, 199, 0.12);
-          box-shadow: inset 0 0 0 1px rgba(2, 132, 199, 0.28);
-          color: #0369a1;
+          background: var(--cas-accent-soft);
+          box-shadow: inset 0 0 0 1px var(--cas-accent-border);
+          color: var(--cas-accent-text);
         }
 
         @media (max-width: 900px) {
@@ -1328,10 +1545,10 @@ def inject_dashboard_theme() -> None:
 
         .committee-highlight-card {
           background:
-            linear-gradient(135deg, rgba(224, 242, 254, 0.36), rgba(255, 255, 255, 0.02)),
+            linear-gradient(135deg, var(--cas-accent-surface), rgba(255, 255, 255, 0.02)),
             var(--cas-panel);
-          border: 1px solid rgba(2, 132, 199, 0.20);
-          border-left: 5px solid #0284c7;
+          border: 1px solid var(--cas-accent-border);
+          border-left: 5px solid var(--cas-accent);
           border-radius: 8px;
           box-shadow: var(--cas-shadow);
           min-height: 116px;
@@ -1341,11 +1558,11 @@ def inject_dashboard_theme() -> None:
         .committee-highlight-card.risk,
         .committee-highlight-card.mitigate,
         .committee-highlight-card.warning {
-          border-left-color: #0284c7;
+          border-left-color: var(--cas-accent);
         }
 
         .committee-highlight-title {
-          color: #0284c7;
+          color: var(--cas-accent);
           font-size: 0.9rem;
           font-weight: 800;
           margin-bottom: 0.45rem;
@@ -1378,7 +1595,7 @@ def inject_dashboard_theme() -> None:
           background: var(--cas-card-bg);
           border: 1px solid var(--cas-border-soft);
           border-radius: var(--cas-card-radius);
-          box-shadow: var(--cas-card-shadow), inset 0 3px 0 var(--cas-blue);
+          box-shadow: var(--cas-card-shadow), inset 0 3px 0 var(--cas-accent);
           margin: 0.35rem 0 0.95rem 0;
           padding: 1rem 1.05rem;
         }
@@ -1410,7 +1627,7 @@ def inject_dashboard_theme() -> None:
           background: var(--cas-card-bg);
           border: 1px solid var(--cas-border-soft);
           border-radius: 12px;
-          box-shadow: inset 0 3px 0 var(--cas-blue);
+          box-shadow: inset 0 3px 0 var(--cas-accent);
           padding: 0.85rem 0.95rem;
         }
 
@@ -1459,7 +1676,7 @@ def inject_dashboard_theme() -> None:
           background: var(--cas-card-bg);
           border: 1px solid var(--cas-border-soft);
           border-radius: var(--cas-card-radius);
-          box-shadow: var(--cas-card-shadow), inset 0 3px 0 var(--cas-blue);
+          box-shadow: inset 0 3px 0 var(--cas-accent);
           padding: 0.9rem 1rem;
           position: relative;
         }
@@ -1482,7 +1699,7 @@ def inject_dashboard_theme() -> None:
 
         .committee-signal-card.active {
           background:
-            linear-gradient(180deg, rgba(224, 242, 254, 0.22), transparent 68%),
+            linear-gradient(180deg, var(--cas-accent-soft), transparent 68%),
             var(--cas-panel-strong);
           border-color: var(--cas-neutral-border);
           transform: translateY(-1px);
@@ -1630,7 +1847,7 @@ def inject_dashboard_theme() -> None:
         }
 
         .committee-section-kicker {
-          color: #0284c7;
+          color: var(--cas-accent);
           font-size: 0.78rem;
           font-weight: 900;
           letter-spacing: 0.04em;
@@ -1662,6 +1879,8 @@ def inject_dashboard_theme() -> None:
           }
         }
         </style>
-        """,
-        unsafe_allow_html=True,
-    )
+        """
+    
+    css = css.replace("__CAS_THEME_VARS__", cas_theme_vars)
+    st.markdown(css, unsafe_allow_html=True)
+    
