@@ -1878,6 +1878,193 @@ def inject_dashboard_theme(theme_mode: str = "light") -> None:
             grid-template-columns: 1fr;
           }
         }
+
+        /* ------------------------------------------------------------------
+        CAS dark-mode hard fixes for Streamlit native widgets
+        ------------------------------------------------------------------ */
+
+        section[data-testid="stSidebar"] {
+          background: var(--cas-page-bg) !important;
+          color: var(--cas-text) !important;
+          border-right: 1px solid var(--cas-border) !important;
+        }
+
+        section[data-testid="stSidebar"] * {
+          color: var(--cas-text) !important;
+        }
+
+        section[data-testid="stSidebar"] [data-testid="stCaptionContainer"],
+        section[data-testid="stSidebar"] small,
+        section[data-testid="stSidebar"] p {
+          color: var(--cas-muted) !important;
+        }
+
+        /* Selectbox closed state */
+        div[data-baseweb="select"] > div {
+          background: var(--cas-panel-strong) !important;
+          border-color: var(--cas-border) !important;
+          color: var(--cas-text) !important;
+        }
+
+        div[data-baseweb="select"] span,
+        div[data-baseweb="select"] div {
+          color: var(--cas-text) !important;
+        }
+
+        /* Selectbox opened dropdown / popover */
+        div[data-baseweb="popover"],
+        div[data-baseweb="menu"],
+        ul[role="listbox"],
+        div[role="listbox"] {
+          background: var(--cas-panel-strong) !important;
+          border: 1px solid var(--cas-border) !important;
+          color: var(--cas-text) !important;
+        }
+
+        div[data-baseweb="popover"] *,
+        div[data-baseweb="menu"] *,
+        ul[role="listbox"] *,
+        div[role="listbox"] * {
+          background-color: transparent !important;
+          color: var(--cas-text) !important;
+        }
+
+        li[role="option"],
+        div[role="option"] {
+          background: var(--cas-panel-strong) !important;
+          color: var(--cas-text) !important;
+        }
+
+        li[role="option"]:hover,
+        div[role="option"]:hover,
+        li[aria-selected="true"],
+        div[aria-selected="true"] {
+          background: var(--cas-accent-soft) !important;
+          color: var(--cas-accent-text-strong) !important;
+        }
+
+        /* Expander header / expanded top bar */
+        details[data-testid="stExpander"],
+        div[data-testid="stExpander"] {
+          background: var(--cas-panel) !important;
+          border: 1px solid var(--cas-border) !important;
+          color: var(--cas-text) !important;
+        }
+
+        details[data-testid="stExpander"] summary,
+        div[data-testid="stExpander"] summary,
+        div[data-testid="stExpander"] [data-testid="stExpanderToggleIcon"],
+        div[data-testid="stExpander"] > div:first-child {
+          background: var(--cas-panel-strong) !important;
+          color: var(--cas-text) !important;
+          border-color: var(--cas-border) !important;
+        }
+
+        div[data-testid="stExpander"] * {
+          color: var(--cas-text) !important;
+        }
+
+        /* Tabs and overflow arrow */
+        div[data-testid="stTabs"] {
+          color: var(--cas-text) !important;
+        }
+
+        div[data-testid="stTabs"] button {
+          background: var(--cas-panel-strong) !important;
+          color: var(--cas-text) !important;
+          border-color: var(--cas-border) !important;
+        }
+
+        div[data-testid="stTabs"] button[aria-selected="true"] {
+          background: var(--cas-tab-selected-bg) !important;
+          color: var(--cas-accent-text-strong) !important;
+          border-color: var(--cas-accent-border-strong) !important;
+        }
+
+        div[data-testid="stTabs"] button svg,
+        div[data-testid="stTabs"] svg,
+        button[aria-label*="scroll"] svg,
+        button[title*="scroll"] svg {
+          color: var(--cas-accent-text-strong) !important;
+          fill: var(--cas-accent-text-strong) !important;
+          stroke: var(--cas-accent-text-strong) !important;
+        }
+
+        div[data-testid="stTabs"] button:last-child,
+        div[data-testid="stTabs"] [data-baseweb="button"] {
+          background: var(--cas-panel-strong) !important;
+          color: var(--cas-accent-text-strong) !important;
+          border-color: var(--cas-border) !important;
+        }
+
+        /* Native text inputs, number inputs, textarea */
+        input,
+        textarea,
+        div[data-baseweb="input"] > div,
+        div[data-baseweb="textarea"] > div {
+          background: var(--cas-panel-strong) !important;
+          border-color: var(--cas-border) !important;
+          color: var(--cas-text) !important;
+        }
+
+        input::placeholder,
+        textarea::placeholder {
+          color: var(--cas-muted) !important;
+        }
+
+        /* Streamlit dataframe/table shell */
+        div[data-testid="stDataFrame"],
+        div[data-testid="stTable"] {
+          background: var(--cas-panel) !important;
+          border: 1px solid var(--cas-border) !important;
+          border-radius: 8px !important;
+          overflow: hidden !important;
+        }
+
+        div[data-testid="stDataFrame"] *,
+        div[data-testid="stTable"] * {
+          color: var(--cas-text) !important;
+        }
+
+        div[data-testid="stDataFrame"] canvas {
+          background: var(--cas-panel) !important;
+        }
+
+        /* HTML tables rendered from pandas Styler */
+        table,
+        .dataframe,
+        div[data-testid="stMarkdownContainer"] table {
+          background: var(--cas-panel) !important;
+          color: var(--cas-text) !important;
+          border-color: var(--cas-border) !important;
+        }
+
+        table thead,
+        .dataframe thead,
+        table th,
+        .dataframe th {
+          background: var(--cas-panel-strong) !important;
+          color: var(--cas-text) !important;
+          border-color: var(--cas-border) !important;
+        }
+
+        table tbody,
+        table tbody tr,
+        table tbody td,
+        .dataframe tbody,
+        .dataframe tbody tr,
+        .dataframe tbody td {
+          background: var(--cas-panel) !important;
+          color: var(--cas-text) !important;
+          border-color: var(--cas-border-soft) !important;
+        }
+
+        /* Keep direction-badge cells visible even when pandas Styler injects pale colors */
+        table tbody td[style*="background-color"],
+        .dataframe tbody td[style*="background-color"] {
+          color: var(--cas-text) !important;
+        }
+
         </style>
         """
     

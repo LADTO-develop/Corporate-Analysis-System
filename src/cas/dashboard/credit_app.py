@@ -1180,6 +1180,83 @@ def apply_altair_cas_theme(chart: alt.Chart, theme_mode: str = "light") -> alt.C
         ),
     )
 
+def apply_dataframe_cas_theme(styler: object) -> object:
+    """Apply CAS CSS variable based styles to pandas Styler tables."""
+    if not hasattr(styler, "set_table_styles"):
+        return styler
+
+    return styler.set_table_styles(
+        [
+            {
+                "selector": "table",
+                "props": [
+                    ("background-color", "var(--cas-panel)"),
+                    ("color", "var(--cas-text)"),
+                    ("border-color", "var(--cas-border)"),
+                ],
+            },
+            {
+                "selector": "thead th",
+                "props": [
+                    ("background-color", "var(--cas-panel-strong)"),
+                    ("color", "var(--cas-text)"),
+                    ("border-color", "var(--cas-border)"),
+                ],
+            },
+            {
+                "selector": "tbody tr",
+                "props": [
+                    ("background-color", "var(--cas-panel)"),
+                    ("color", "var(--cas-text)"),
+                ],
+            },
+            {
+                "selector": "tbody td",
+                "props": [
+                    ("background-color", "var(--cas-panel)"),
+                    ("color", "var(--cas-text)"),
+                    ("border-color", "var(--cas-border-soft)"),
+                ],
+            },
+        ],
+        overwrite=False,
+    )
+
+def apply_dataframe_cas_theme(styler: object) -> object:
+    """Apply CAS CSS variables to pandas Styler tables."""
+    if not hasattr(styler, "set_table_styles"):
+        return styler
+
+    return styler.set_table_styles(
+        [
+            {
+                "selector": "table",
+                "props": [
+                    ("background-color", "var(--cas-panel)"),
+                    ("color", "var(--cas-text)"),
+                    ("border-color", "var(--cas-border)"),
+                ],
+            },
+            {
+                "selector": "thead th",
+                "props": [
+                    ("background-color", "var(--cas-panel-strong)"),
+                    ("color", "var(--cas-text)"),
+                    ("border-color", "var(--cas-border)"),
+                ],
+            },
+            {
+                "selector": "tbody td",
+                "props": [
+                    ("background-color", "var(--cas-panel)"),
+                    ("color", "var(--cas-text)"),
+                    ("border-color", "var(--cas-border-soft)"),
+                ],
+            },
+        ],
+        overwrite=False,
+    )
+
 def get_feature_direction_label(feature: str) -> str:
     """Return a user-friendly interpretation direction for a feature."""
     return cast(str, FEATURE_DIRECTION_LABELS.get(feature, "맥락에 따라 다름"))
@@ -2187,8 +2264,8 @@ def render_drivers_tab(
                 .set_properties(subset=["일반 해석 방향"], **{"text-align": "center"})
                 .hide(axis="index")
             )
+            styled_local = apply_dataframe_cas_theme(styled_local)
             stretch_dataframe(styled_local, hide_index=True)
-            return
 
     st.info(
         "현재는 전체 모델 기준 주요 영향 요인을 보여주고 있습니다. "
@@ -2272,6 +2349,7 @@ def render_drivers_tab(
         .set_properties(subset=["일반 해석 방향"], **{"text-align": "center"})
         .hide(axis="index")
     )
+    styled_global = apply_dataframe_cas_theme(styled_global)
     stretch_dataframe(styled_global, hide_index=True)
 
 
@@ -2748,6 +2826,7 @@ def render_peer_tab(
         .set_properties(subset=["일반 해석 방향"], **{"text-align": "center"})
         .hide(axis="index")
     )
+    styled_table = apply_dataframe_cas_theme(styled_table)
     stretch_dataframe(
         styled_table,
         hide_index=True,
@@ -2895,8 +2974,8 @@ def render_industry_tab(
             .properties(height=320)
         )
         trend_chart = apply_altair_cas_theme(
-        cast(alt.Chart, trend_chart),
-        theme_mode,
+            cast(alt.Chart, trend_chart),
+            theme_mode,
         )
         stretch_altair_chart(trend_chart)
         year_summary_view = year_summary.copy()
@@ -2991,6 +3070,7 @@ def render_industry_tab(
             .set_properties(subset=["일반 해석 방향"], **{"text-align": "center"})
             .hide(axis="index")
         )
+        styled_industry = apply_dataframe_cas_theme(styled_industry)
         stretch_dataframe(styled_industry, hide_index=True)
 
 
@@ -3248,7 +3328,7 @@ def main() -> None:
             selected_row,
             artifacts,
             theme_mode=theme_mode,
-    )
+        )
 
     with peers_tab:
         render_peer_tab(
@@ -3269,6 +3349,7 @@ def main() -> None:
             artifacts,
             feature_map=feature_map,
             formatters=_dashboard_scenario_formatters(),
+            theme_mode=theme_mode,
         )
 
     render_footer(artifacts, developer_mode=developer_mode)

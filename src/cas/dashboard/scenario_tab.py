@@ -107,6 +107,91 @@ def build_scenario_frame(
     )
     return scenario_frame
 
+def apply_altair_cas_theme(chart: alt.Chart, theme_mode: str = "light") -> alt.Chart:
+    """Apply CAS-controlled light/dark styling to Altair charts."""
+    if theme_mode == "dark":
+        return cast(
+            alt.Chart,
+            chart.properties(background="#080b12")
+            .configure_view(
+                strokeOpacity=0,
+                fill="#080b12",
+            )
+            .configure_axis(
+                labelColor="#f8fafc",
+                titleColor="#cbd5e1",
+                gridColor="rgba(250, 204, 21, 0.14)",
+                domainColor="rgba(250, 204, 21, 0.28)",
+                tickColor="rgba(250, 204, 21, 0.28)",
+            )
+            .configure_legend(
+                labelColor="#f8fafc",
+                titleColor="#cbd5e1",
+            )
+            .configure_title(
+                color="#f8fafc",
+                subtitleColor="#cbd5e1",
+            ),
+        )
+
+    return cast(
+        alt.Chart,
+        chart.properties(background="#ffffff")
+        .configure_view(
+            strokeOpacity=0,
+            fill="#ffffff",
+        )
+        .configure_axis(
+            labelColor="#334155",
+            titleColor="#64748b",
+            gridColor="rgba(148, 163, 184, 0.22)",
+            domainColor="rgba(148, 163, 184, 0.34)",
+            tickColor="rgba(148, 163, 184, 0.34)",
+        )
+        .configure_legend(
+            labelColor="#334155",
+            titleColor="#64748b",
+        )
+        .configure_title(
+            color="#0f172a",
+            subtitleColor="#64748b",
+        ),
+    )
+
+def apply_dataframe_cas_theme(styler: object) -> object:
+    """Apply CAS CSS variables to pandas Styler tables."""
+    if not hasattr(styler, "set_table_styles"):
+        return styler
+
+    return styler.set_table_styles(
+        [
+            {
+                "selector": "table",
+                "props": [
+                    ("background-color", "var(--cas-panel)"),
+                    ("color", "var(--cas-text)"),
+                    ("border-color", "var(--cas-border)"),
+                ],
+            },
+            {
+                "selector": "thead th",
+                "props": [
+                    ("background-color", "var(--cas-panel-strong)"),
+                    ("color", "var(--cas-text)"),
+                    ("border-color", "var(--cas-border)"),
+                ],
+            },
+            {
+                "selector": "tbody td",
+                "props": [
+                    ("background-color", "var(--cas-panel)"),
+                    ("color", "var(--cas-text)"),
+                    ("border-color", "var(--cas-border-soft)"),
+                ],
+            },
+        ],
+        overwrite=False,
+    )
 
 def render_scenario_tab(
     selected_row: pd.Series,
@@ -114,6 +199,7 @@ def render_scenario_tab(
     *,
     feature_map: pd.DataFrame,
     formatters: ScenarioTabFormatters,
+    theme_mode: str = "light",
 ) -> None:
     """Render the scenario tab."""
     st.subheader("가정별 변화 보기")
