@@ -6,6 +6,7 @@ import streamlit as st
 
 
 def inject_dashboard_theme(theme_mode: str = "light") -> None:
+    """Inject CAS dashboard CSS for the selected light or dark theme."""
     normalized_theme = str(theme_mode or "light").strip().lower()
 
     if normalized_theme == "dark":
@@ -2207,8 +2208,6 @@ def inject_dashboard_theme(theme_mode: str = "light") -> None:
           background-color: var(--cas-accent-soft) !important;
           color: var(--cas-accent-text-strong) !important;
         }
-
-        
         /* Multiselect dropdown final solid background fix */
         div[data-baseweb="popover"],
         div[data-baseweb="popover"] > div,
@@ -2252,7 +2251,6 @@ def inject_dashboard_theme(theme_mode: str = "light") -> None:
         div[data-baseweb="popover"] [aria-selected="true"] * {
           color: var(--cas-accent-text-strong) !important;
         }
-        
         /* Selectbox / multiselect opened menu final dark override */
         body div[data-baseweb="popover"],
         body div[data-baseweb="popover"] > div,

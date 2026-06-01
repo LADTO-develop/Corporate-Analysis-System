@@ -1130,11 +1130,18 @@ def get_feature_unit(feature: str, feature_map: pd.DataFrame) -> str:
     return str(matched.iloc[0])
 
 
-def apply_altair_cas_theme(chart: alt.Chart, theme_mode: str = "light") -> alt.Chart:
+type AltairChartLike = (
+    alt.Chart | alt.LayerChart | alt.FacetChart | alt.VConcatChart | alt.HConcatChart
+)
+
+
+def apply_altair_cas_theme(
+    chart: AltairChartLike,
+    theme_mode: str = "light",
+) -> AltairChartLike:
     """Apply CAS-controlled light/dark styling to Altair charts."""
     if theme_mode == "dark":
-        return cast(
-            alt.Chart,
+        return (
             chart.properties(
                 background="#080b12",
             )
@@ -1166,11 +1173,10 @@ def apply_altair_cas_theme(chart: alt.Chart, theme_mode: str = "light") -> alt.C
             .configure_title(
                 color="#f8fafc",
                 subtitleColor="#cbd5e1",
-            ),
+            )
         )
 
-    return cast(
-        alt.Chart,
+    return (
         chart.properties(
             background="#ffffff",
         )
@@ -1202,86 +1208,7 @@ def apply_altair_cas_theme(chart: alt.Chart, theme_mode: str = "light") -> alt.C
         .configure_title(
             color="#0f172a",
             subtitleColor="#64748b",
-        ),
-    )
-
-
-def apply_dataframe_cas_theme(styler: object) -> object:
-    """Apply CAS CSS variable based styles to pandas Styler tables."""
-    if not hasattr(styler, "set_table_styles"):
-        return styler
-
-    return styler.set_table_styles(
-        [
-            {
-                "selector": "table",
-                "props": [
-                    ("background-color", "var(--cas-panel)"),
-                    ("color", "var(--cas-text)"),
-                    ("border-color", "var(--cas-border)"),
-                ],
-            },
-            {
-                "selector": "thead th",
-                "props": [
-                    ("background-color", "var(--cas-panel-strong)"),
-                    ("color", "var(--cas-text)"),
-                    ("border-color", "var(--cas-border)"),
-                ],
-            },
-            {
-                "selector": "tbody tr",
-                "props": [
-                    ("background-color", "var(--cas-panel)"),
-                    ("color", "var(--cas-text)"),
-                ],
-            },
-            {
-                "selector": "tbody td",
-                "props": [
-                    ("background-color", "var(--cas-panel)"),
-                    ("color", "var(--cas-text)"),
-                    ("border-color", "var(--cas-border-soft)"),
-                ],
-            },
-        ],
-        overwrite=False,
-    )
-
-
-def apply_dataframe_cas_theme(styler: object) -> object:
-    """Apply CAS CSS variables to pandas Styler tables."""
-    if not hasattr(styler, "set_table_styles"):
-        return styler
-
-    return styler.set_table_styles(
-        [
-            {
-                "selector": "table",
-                "props": [
-                    ("background-color", "var(--cas-panel)"),
-                    ("color", "var(--cas-text)"),
-                    ("border-color", "var(--cas-border)"),
-                ],
-            },
-            {
-                "selector": "thead th",
-                "props": [
-                    ("background-color", "var(--cas-panel-strong)"),
-                    ("color", "var(--cas-text)"),
-                    ("border-color", "var(--cas-border)"),
-                ],
-            },
-            {
-                "selector": "tbody td",
-                "props": [
-                    ("background-color", "var(--cas-panel)"),
-                    ("color", "var(--cas-text)"),
-                    ("border-color", "var(--cas-border-soft)"),
-                ],
-            },
-        ],
-        overwrite=False,
+        )
     )
 
 
@@ -1308,7 +1235,7 @@ def build_probability_chart(
     probability: float,
     threshold: float,
     theme_mode: str = "light",
-) -> alt.Chart:
+) -> AltairChartLike:
     """Create a simple chart comparing company probability and decision threshold."""
     frame = pd.DataFrame(
         [
@@ -1337,7 +1264,9 @@ def build_probability_chart(
         )
         .properties(height=260)
     )
-    return apply_altair_cas_theme(cast(alt.Chart, chart), theme_mode)
+    themed_chart = apply_altair_cas_theme(chart, theme_mode)
+    stretch_altair_chart(themed_chart)
+    return themed_chart
 
 
 def _dashboard_table_palette(theme_mode: str = "light") -> dict[str, str]:
@@ -1561,11 +1490,8 @@ def render_overview_tab(
             if peer_chart_slice.empty:
                 st.caption("차트로 표시할 수 있는 산업 백분위 값이 없습니다.")
             else:
-                percentile_chart = apply_altair_cas_theme(
-                    cast(alt.Chart, percentile_chart),
-                    theme_mode,
-                )
-                stretch_altair_chart(percentile_chart)
+                themed_percentile_chart = apply_altair_cas_theme(percentile_chart, theme_mode)
+                stretch_altair_chart(themed_percentile_chart)
 
 
 def render_committee_view_tab(
@@ -2362,11 +2288,8 @@ def render_drivers_tab(
             if local_chart_view.empty:
                 st.caption("차트로 표시할 수 있는 기업별 SHAP 값이 없습니다.")
             else:
-                chart = apply_altair_cas_theme(
-                    cast(alt.Chart, chart),
-                    theme_mode,
-                )
-                stretch_altair_chart(chart)
+                themed_chart = apply_altair_cas_theme(chart, theme_mode)
+                stretch_altair_chart(themed_chart)
             local_table = local_view.loc[
                 :,
                 [
@@ -2455,11 +2378,11 @@ def render_drivers_tab(
     if top_feature_chart.empty:
         st.caption("차트로 표시할 수 있는 전체 SHAP 기준값이 없습니다.")
     else:
-        chart = apply_altair_cas_theme(
-            cast(alt.Chart, chart),
+        themed_chart = apply_altair_cas_theme(
+            chart,
             theme_mode,
         )
-        stretch_altair_chart(chart)
+        stretch_altair_chart(themed_chart)
     global_table = top_features.loc[
         :,
         ["rank", "표시명", "feature_group", "일반 해석 방향", "mean_abs_shap", "실제값"],
@@ -2739,11 +2662,8 @@ def render_peer_tab(
         if compare_frame.empty:
             st.caption("차트로 표시할 수 있는 숫자형 비교 값이 없습니다.")
         else:
-            compare_chart = apply_altair_cas_theme(
-                cast(alt.Chart, compare_chart),
-                theme_mode,
-            )
-            stretch_altair_chart(compare_chart)
+            themed_compare_chart = apply_altair_cas_theme(compare_chart, theme_mode)
+            stretch_altair_chart(themed_compare_chart)
     else:
         st.caption("선택한 변수의 단위가 섞여 있어 변수별 비교 카드로 나누어 표시합니다.")
         detail_cols = st.columns(2)
@@ -2796,11 +2716,8 @@ def render_peer_tab(
                 if row_chart_data.empty:
                     st.caption("이 변수는 차트로 표시할 수 있는 숫자형 비교 값이 없습니다.")
                 else:
-                    mini_chart = apply_altair_cas_theme(
-                        cast(alt.Chart, mini_chart),
-                        theme_mode,
-                    )
-                    stretch_altair_chart(mini_chart)
+                    themed_mini_chart = apply_altair_cas_theme(mini_chart, theme_mode)
+                    stretch_altair_chart(themed_mini_chart)
 
     table["산업 대비 차이"] = table.apply(
         lambda row: format_delta_with_unit(
@@ -2914,11 +2831,8 @@ def render_peer_tab(
             if gap_frame.empty:
                 st.caption("차트로 표시할 수 있는 숫자형 차이 값이 없습니다.")
             else:
-                gap_chart = apply_altair_cas_theme(
-                    cast(alt.Chart, gap_chart),
-                    theme_mode,
-                )
-                stretch_altair_chart(gap_chart)
+                themed_gap_chart = apply_altair_cas_theme(gap_chart, theme_mode)
+                stretch_altair_chart(themed_gap_chart)
         else:
             st.caption("단위가 섞여 있어 차이는 표에서 변수별로 읽는 것이 더 적절합니다.")
         st.caption("0보다 크면 선택 기업 값이 비교 기준보다 높고, 0보다 작으면 낮습니다.")
@@ -2927,11 +2841,8 @@ def render_peer_tab(
         if percentile_frame.empty:
             st.caption("차트로 표시할 수 있는 백분위 값이 없습니다.")
         else:
-            percentile_chart = apply_altair_cas_theme(
-                cast(alt.Chart, percentile_chart),
-                theme_mode,
-            )
-            stretch_altair_chart(percentile_chart)
+            themed_percentile_chart = apply_altair_cas_theme(percentile_chart, theme_mode)
+            stretch_altair_chart(themed_percentile_chart)
         st.caption("50백분위 점선을 기준으로, 오른쪽일수록 상대적으로 높은 수준입니다.")
 
     table_view = table.loc[
@@ -3097,11 +3008,8 @@ def render_industry_tab(
             )
             .properties(height=320)
         )
-        trend_chart = apply_altair_cas_theme(
-            cast(alt.Chart, trend_chart),
-            theme_mode,
-        )
-        stretch_altair_chart(trend_chart)
+        themed_trend_chart = apply_altair_cas_theme(trend_chart, theme_mode)
+        stretch_altair_chart(themed_trend_chart)
         year_summary_view = year_summary.copy()
         for column in [
             "positive_rate",
@@ -3173,11 +3081,8 @@ def render_industry_tab(
         if top_shap.empty:
             st.caption("차트로 표시할 수 있는 산업 SHAP 기준값이 없습니다.")
         else:
-            chart = apply_altair_cas_theme(
-                cast(alt.Chart, chart),
-                theme_mode,
-            )
-            stretch_altair_chart(chart)
+            themed_chart = apply_altair_cas_theme(chart, theme_mode)
+            stretch_altair_chart(themed_chart)
         top_shap_view = top_shap.loc[
             :,
             ["rank_within_group", "표시명", "일반 해석 방향", "mean_abs_shap", "mean_signed_shap"],

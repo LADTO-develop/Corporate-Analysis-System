@@ -108,11 +108,18 @@ def build_scenario_frame(
     return scenario_frame
 
 
-def apply_altair_cas_theme(chart: alt.Chart, theme_mode: str = "light") -> alt.Chart:
+type AltairChartLike = (
+    alt.Chart | alt.LayerChart | alt.FacetChart | alt.VConcatChart | alt.HConcatChart
+)
+
+
+def apply_altair_cas_theme(
+    chart: AltairChartLike,
+    theme_mode: str = "light",
+) -> AltairChartLike:
     """Apply CAS-controlled light/dark styling to Altair charts."""
     if theme_mode == "dark":
-        return cast(
-            alt.Chart,
+        return (
             chart.properties(background="#080b12")
             .configure_view(
                 strokeOpacity=0,
@@ -132,11 +139,10 @@ def apply_altair_cas_theme(chart: alt.Chart, theme_mode: str = "light") -> alt.C
             .configure_title(
                 color="#f8fafc",
                 subtitleColor="#cbd5e1",
-            ),
+            )
         )
 
-    return cast(
-        alt.Chart,
+    return (
         chart.properties(background="#ffffff")
         .configure_view(
             strokeOpacity=0,
@@ -156,43 +162,7 @@ def apply_altair_cas_theme(chart: alt.Chart, theme_mode: str = "light") -> alt.C
         .configure_title(
             color="#0f172a",
             subtitleColor="#64748b",
-        ),
-    )
-
-
-def apply_dataframe_cas_theme(styler: object) -> object:
-    """Apply CAS CSS variables to pandas Styler tables."""
-    if not hasattr(styler, "set_table_styles"):
-        return styler
-
-    return styler.set_table_styles(
-        [
-            {
-                "selector": "table",
-                "props": [
-                    ("background-color", "var(--cas-panel)"),
-                    ("color", "var(--cas-text)"),
-                    ("border-color", "var(--cas-border)"),
-                ],
-            },
-            {
-                "selector": "thead th",
-                "props": [
-                    ("background-color", "var(--cas-panel-strong)"),
-                    ("color", "var(--cas-text)"),
-                    ("border-color", "var(--cas-border)"),
-                ],
-            },
-            {
-                "selector": "tbody td",
-                "props": [
-                    ("background-color", "var(--cas-panel)"),
-                    ("color", "var(--cas-text)"),
-                    ("border-color", "var(--cas-border-soft)"),
-                ],
-            },
-        ],
-        overwrite=False,
+        )
     )
 
 
@@ -273,13 +243,13 @@ def apply_dataframe_cas_theme(styler: object, theme_mode: str = "light") -> obje
 def render_themed_dataframe(styler: object, theme_mode: str = "light") -> None:
     """Render a pandas Styler as themed HTML instead of Streamlit's white dataframe grid."""
     themed = apply_dataframe_cas_theme(styler, theme_mode)
-    if hasattr(themed, "to_html"):
-        st.markdown(
-            f"<div class='cas-themed-table-wrap'>{themed.to_html()}</div>",
-            unsafe_allow_html=True,
-        )
-    else:
-        render_themed_dataframe(styled_scenario, theme_mode)
+    if not hasattr(themed, "to_html"):
+        return
+
+    st.markdown(
+        f"<div class='cas-themed-table-wrap'>{themed.to_html()}</div>",
+        unsafe_allow_html=True,
+    )
 
 
 def render_scenario_tab(
@@ -444,11 +414,24 @@ def render_scenario_tab(
         if scenario_chart_frame.empty:
             st.caption("이 단위 그룹은 차트로 표시할 수 있는 숫자형 값이 없습니다.")
         else:
-            scenario_chart = apply_altair_cas_theme(
-                cast(alt.Chart, scenario_chart),
-                theme_mode,
+            scenario_chart = (
+                alt.Chart(scenario_chart_frame)
+                .mark_bar()
+                .encode(
+                    y=alt.Y("표시명:N", title=None, sort=None),
+                    x=alt.X("값:Q", title="값"),
+                    color=alt.Color("구분:N", title="구분"),
+                    tooltip=[
+                        alt.Tooltip("표시명:N", title="변수"),
+                        alt.Tooltip("구분:N", title="구분"),
+                        alt.Tooltip("값:Q", title="값"),
+                    ],
+                )
+                .properties(height=max(180, 32 * len(scenario_chart_frame)))
             )
-            stretch_altair_chart(scenario_chart)
+
+            themed_scenario_chart = apply_altair_cas_theme(scenario_chart, theme_mode)
+            stretch_altair_chart(themed_scenario_chart)
     scenario_table = scenario_frame.loc[
         :,
         [
