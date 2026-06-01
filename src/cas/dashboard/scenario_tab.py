@@ -18,7 +18,7 @@ from cas.dashboard.cards import (
 from cas.dashboard.chart_data import finite_chart_frame
 from cas.dashboard.data_loader import DashboardArtifacts
 from cas.dashboard.settings import COLOR_COMPANY, COLOR_MUTED, COLOR_NEUTRAL, COLOR_RISK
-from cas.dashboard.streamlit_compat import stretch_altair_chart, stretch_dataframe
+from cas.dashboard.streamlit_compat import stretch_altair_chart
 
 DEFAULT_SCENARIO_FEATURES = (
     "spec_spread",
@@ -108,12 +108,157 @@ def build_scenario_frame(
     return scenario_frame
 
 
+type AltairChartLike = (
+    alt.Chart | alt.LayerChart | alt.FacetChart | alt.VConcatChart | alt.HConcatChart
+)
+
+
+def apply_altair_cas_theme(
+    chart: AltairChartLike,
+    theme_mode: str = "light",
+) -> AltairChartLike:
+    """Apply CAS-controlled light/dark styling to Altair charts."""
+    if theme_mode == "dark":
+        return (
+            chart.properties(background="#080b12")
+            .configure_view(
+                strokeOpacity=0,
+                fill="#080b12",
+            )
+            .configure_axis(
+                labelColor="#f8fafc",
+                titleColor="#cbd5e1",
+                gridColor="rgba(250, 204, 21, 0.14)",
+                domainColor="rgba(250, 204, 21, 0.28)",
+                tickColor="rgba(250, 204, 21, 0.28)",
+            )
+            .configure_legend(
+                labelColor="#f8fafc",
+                titleColor="#cbd5e1",
+            )
+            .configure_title(
+                color="#f8fafc",
+                subtitleColor="#cbd5e1",
+            )
+        )
+
+    return (
+        chart.properties(background="#ffffff")
+        .configure_view(
+            strokeOpacity=0,
+            fill="#ffffff",
+        )
+        .configure_axis(
+            labelColor="#334155",
+            titleColor="#64748b",
+            gridColor="rgba(148, 163, 184, 0.22)",
+            domainColor="rgba(148, 163, 184, 0.34)",
+            tickColor="rgba(148, 163, 184, 0.34)",
+        )
+        .configure_legend(
+            labelColor="#334155",
+            titleColor="#64748b",
+        )
+        .configure_title(
+            color="#0f172a",
+            subtitleColor="#64748b",
+        )
+    )
+
+
+def _dashboard_table_palette(theme_mode: str = "light") -> dict[str, str]:
+    """Return concrete table colors because pandas Styler does not reliably inherit CSS vars."""
+    if str(theme_mode).lower() == "dark":
+        return {
+            "panel": "#111827",
+            "panel_strong": "#172033",
+            "card": "#0f172a",
+            "text": "#f8fafc",
+            "muted": "#cbd5e1",
+            "border": "rgba(250, 204, 21, 0.28)",
+            "border_soft": "rgba(250, 204, 21, 0.16)",
+        }
+
+    return {
+        "panel": "#ffffff",
+        "panel_strong": "#f8fafc",
+        "card": "#ffffff",
+        "text": "#0f172a",
+        "muted": "#475569",
+        "border": "rgba(148, 163, 184, 0.34)",
+        "border_soft": "rgba(148, 163, 184, 0.22)",
+    }
+
+
+def apply_dataframe_cas_theme(styler: object, theme_mode: str = "light") -> object:
+    """Apply concrete CAS light/dark colors to pandas Styler tables."""
+    if not hasattr(styler, "set_table_styles"):
+        return styler
+
+    palette = _dashboard_table_palette(theme_mode)
+
+    return styler.set_table_styles(
+        [
+            {
+                "selector": "table",
+                "props": [
+                    ("width", "100%"),
+                    ("border-collapse", "collapse"),
+                    ("background-color", palette["panel"]),
+                    ("color", palette["text"]),
+                    ("border-color", palette["border"]),
+                ],
+            },
+            {
+                "selector": "thead th",
+                "props": [
+                    ("background-color", palette["panel_strong"]),
+                    ("color", palette["text"]),
+                    ("border", f"1px solid {palette['border']}"),
+                    ("font-weight", "700"),
+                    ("padding", "0.45rem 0.55rem"),
+                    ("white-space", "nowrap"),
+                ],
+            },
+            {
+                "selector": "tbody td",
+                "props": [
+                    ("background-color", palette["panel"]),
+                    ("color", palette["text"]),
+                    ("border", f"1px solid {palette['border_soft']}"),
+                    ("padding", "0.42rem 0.55rem"),
+                ],
+            },
+            {
+                "selector": "tbody tr:nth-child(even) td",
+                "props": [
+                    ("background-color", palette["card"]),
+                ],
+            },
+        ],
+        overwrite=False,
+    )
+
+
+def render_themed_dataframe(styler: object, theme_mode: str = "light") -> None:
+    """Render a pandas Styler as themed HTML instead of Streamlit's white dataframe grid."""
+    themed = apply_dataframe_cas_theme(styler, theme_mode)
+    if not hasattr(themed, "to_html"):
+        return
+
+    st.markdown(
+        f"<div class='cas-themed-table-wrap'>{themed.to_html()}</div>",
+        unsafe_allow_html=True,
+    )
+
+
 def render_scenario_tab(
     selected_row: pd.Series,
     artifacts: DashboardArtifacts,
     *,
     feature_map: pd.DataFrame,
     formatters: ScenarioTabFormatters,
+    theme_mode: str = "light",
 ) -> None:
     """Render the scenario tab."""
     st.subheader("가정별 변화 보기")
@@ -269,7 +414,24 @@ def render_scenario_tab(
         if scenario_chart_frame.empty:
             st.caption("이 단위 그룹은 차트로 표시할 수 있는 숫자형 값이 없습니다.")
         else:
-            stretch_altair_chart(scenario_chart)
+            scenario_chart = (
+                alt.Chart(scenario_chart_frame)
+                .mark_bar()
+                .encode(
+                    y=alt.Y("표시명:N", title=None, sort=None),
+                    x=alt.X("값:Q", title="값"),
+                    color=alt.Color("구분:N", title="구분"),
+                    tooltip=[
+                        alt.Tooltip("표시명:N", title="변수"),
+                        alt.Tooltip("구분:N", title="구분"),
+                        alt.Tooltip("값:Q", title="값"),
+                    ],
+                )
+                .properties(height=max(180, 32 * len(scenario_chart_frame)))
+            )
+
+            themed_scenario_chart = apply_altair_cas_theme(scenario_chart, theme_mode)
+            stretch_altair_chart(themed_scenario_chart)
     scenario_table = scenario_frame.loc[
         :,
         [
@@ -291,10 +453,7 @@ def render_scenario_tab(
         .set_properties(subset=["일반 해석 방향"], **{"text-align": "center"})
         .hide(axis="index")
     )
-    stretch_dataframe(
-        styled_scenario,
-        hide_index=True,
-    )
+    render_themed_dataframe(styled_scenario, theme_mode)
     st.warning(
         "현재 시나리오 탭은 지표를 바꿔 보았을 때 상대적 위치가 어떻게 달라지는지 보여줍니다. "
         "기업별 예측확률을 다시 계산하는 기능은 다음 단계에서 추가할 수 있습니다."

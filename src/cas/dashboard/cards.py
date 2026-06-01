@@ -15,28 +15,38 @@ CARD_SHADOW = "var(--cas-shadow)"
 
 
 def style_direction_badge(value: object) -> str:
-    """Return CSS styles for interpretation direction badges inside tables."""
-    text = str(value)
-    base_style = "font-weight:700;text-align:center;border-radius:999px;padding:0.15rem 0.45rem;"
-    if "높을수록" in text or "O가" in text:
+    """Style feature interpretation cells with CAS theme variables."""
+    text = str(value or "").strip()
+
+    if "높을수록 대체로 긍정" in text or "긍정" in text:
         return (
-            f"{base_style}"
-            "background-color:var(--cas-success-soft);"
-            "color:var(--cas-success);"
-            "border:1px solid var(--cas-success-border);"
+            "background-color: var(--cas-success-soft); "
+            "color: var(--cas-text); "
+            "border: 1px solid var(--cas-success-border); "
+            "font-weight: 700;"
         )
-    if "낮을수록" in text or "아니오가" in text:
+
+    if "낮을수록 대체로 긍정" in text:
         return (
-            f"{base_style}"
-            "background-color:var(--cas-warning-soft);"
-            "color:var(--cas-warning);"
-            "border:1px solid var(--cas-warning-border);"
+            "background-color: var(--cas-warning-soft); "
+            "color: var(--cas-text); "
+            "border: 1px solid var(--cas-warning-border); "
+            "font-weight: 700;"
         )
+
+    if "위험" in text or "부정" in text:
+        return (
+            "background-color: var(--cas-risk-soft); "
+            "color: var(--cas-text); "
+            "border: 1px solid var(--cas-risk-border); "
+            "font-weight: 700;"
+        )
+
     return (
-        f"{base_style}"
-        "background-color:var(--cas-neutral-soft);"
-        "color:var(--cas-text);"
-        "border:1px solid var(--cas-neutral-border);"
+        "background-color: var(--cas-neutral-soft); "
+        "color: var(--cas-text); "
+        "border: 1px solid var(--cas-neutral-border); "
+        "font-weight: 700;"
     )
 
 

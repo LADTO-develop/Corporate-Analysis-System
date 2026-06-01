@@ -40,11 +40,6 @@ Rolling validation은 단일 1년 validation에 대한 과신을 줄이기 위�
 평가연도에서 반복적으로 안정적인지 확인한 뒤 final test는 마지막 확인용으로만
 사용합니다.
 
-Stage 2 에이전트 검토 큐 확장용 보조 트리거는 `full_review_trigger_73`을
-사용합니다. 이 트리거는 공식 Stage 1 판정을 덮어쓰지 않고, Stage 1에서 놓칠 수
-있는 기업을 추가 검토 대상으로 올리는 recall-oriented 신호입니다. 채택 근거와
-현재 valid/test 성능은 `docs/stage2_review_trigger_policy_ko.md`에 보존합니다.
-
 데이터와 모델 artifact 전체 재생성 순서는 아래와 같습니다.
 
 ```bash
@@ -99,13 +94,6 @@ KOSDAQ 제조업 FN rescue gate의 rolling OOT 실험은 아래 명령으로 재
 
 ```bash
 /opt/anaconda3/envs/aura/bin/python scripts/export_feature_46_manufacturing_fn_rescue_experiments.py
-```
-
-Stage 2 에이전트 검토 트리거 feature set 후보 비교는 아래 명령으로 재생성할 수
-있습니다.
-
-```bash
-/opt/anaconda3/envs/aura/bin/python scripts/export_feature_46_stage2_trigger_feature_experiments.py
 ```
 
 43-feature 기준 중간 실험 diagnostics와 Stage 2 반복 실행 산출물은 46-feature

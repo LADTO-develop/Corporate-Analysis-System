@@ -1130,6 +1130,88 @@ def get_feature_unit(feature: str, feature_map: pd.DataFrame) -> str:
     return str(matched.iloc[0])
 
 
+type AltairChartLike = (
+    alt.Chart | alt.LayerChart | alt.FacetChart | alt.VConcatChart | alt.HConcatChart
+)
+
+
+def apply_altair_cas_theme(
+    chart: AltairChartLike,
+    theme_mode: str = "light",
+) -> AltairChartLike:
+    """Apply CAS-controlled light/dark styling to Altair charts."""
+    if theme_mode == "dark":
+        return (
+            chart.properties(
+                background="#080b12",
+            )
+            .configure(
+                background="#080b12",
+            )
+            .configure_view(
+                strokeOpacity=0,
+                fill="#080b12",
+            )
+            .configure_axis(
+                labelColor="#f8fafc",
+                titleColor="#cbd5e1",
+                gridColor="rgba(250, 204, 21, 0.14)",
+                domainColor="rgba(250, 204, 21, 0.28)",
+                tickColor="rgba(250, 204, 21, 0.28)",
+            )
+            .configure_header(
+                labelColor="#f8fafc",
+                titleColor="#cbd5e1",
+            )
+            .configure_legend(
+                labelColor="#f8fafc",
+                titleColor="#cbd5e1",
+                fillColor="transparent",
+                strokeColor="transparent",
+                padding=0,
+            )
+            .configure_title(
+                color="#f8fafc",
+                subtitleColor="#cbd5e1",
+            )
+        )
+
+    return (
+        chart.properties(
+            background="#ffffff",
+        )
+        .configure(
+            background="#ffffff",
+        )
+        .configure_view(
+            strokeOpacity=0,
+            fill="#ffffff",
+        )
+        .configure_axis(
+            labelColor="#334155",
+            titleColor="#64748b",
+            gridColor="rgba(148, 163, 184, 0.22)",
+            domainColor="rgba(148, 163, 184, 0.34)",
+            tickColor="rgba(148, 163, 184, 0.34)",
+        )
+        .configure_header(
+            labelColor="#334155",
+            titleColor="#64748b",
+        )
+        .configure_legend(
+            labelColor="#334155",
+            titleColor="#64748b",
+            fillColor="transparent",
+            strokeColor="transparent",
+            padding=0,
+        )
+        .configure_title(
+            color="#0f172a",
+            subtitleColor="#64748b",
+        )
+    )
+
+
 def get_feature_direction_label(feature: str) -> str:
     """Return a user-friendly interpretation direction for a feature."""
     return cast(str, FEATURE_DIRECTION_LABELS.get(feature, "맥락에 따라 다름"))
@@ -1149,7 +1231,11 @@ def _dashboard_scenario_formatters() -> ScenarioTabFormatters:
     )
 
 
-def build_probability_chart(probability: float, threshold: float) -> alt.Chart:
+def build_probability_chart(
+    probability: float,
+    threshold: float,
+    theme_mode: str = "light",
+) -> AltairChartLike:
     """Create a simple chart comparing company probability and decision threshold."""
     frame = pd.DataFrame(
         [
@@ -1178,7 +1264,104 @@ def build_probability_chart(probability: float, threshold: float) -> alt.Chart:
         )
         .properties(height=260)
     )
-    return cast(alt.Chart, chart)
+    themed_chart = apply_altair_cas_theme(chart, theme_mode)
+    stretch_altair_chart(themed_chart)
+    return themed_chart
+
+
+def _dashboard_table_palette(theme_mode: str = "light") -> dict[str, str]:
+    """Return concrete table colors because pandas Styler does not reliably inherit CSS vars."""
+    if str(theme_mode).lower() == "dark":
+        return {
+            "panel": "#111827",
+            "panel_strong": "#172033",
+            "card": "#0f172a",
+            "text": "#f8fafc",
+            "muted": "#cbd5e1",
+            "border": "rgba(250, 204, 21, 0.28)",
+            "border_soft": "rgba(250, 204, 21, 0.16)",
+        }
+
+    return {
+        "panel": "#ffffff",
+        "panel_strong": "#f8fafc",
+        "card": "#ffffff",
+        "text": "#0f172a",
+        "muted": "#475569",
+        "border": "rgba(148, 163, 184, 0.34)",
+        "border_soft": "rgba(148, 163, 184, 0.22)",
+    }
+
+
+def apply_dataframe_cas_theme(styler: object, theme_mode: str = "light") -> object:
+    """Apply concrete CAS light/dark colors to pandas Styler tables."""
+    if not hasattr(styler, "set_table_styles"):
+        return styler
+
+    palette = _dashboard_table_palette(theme_mode)
+
+    return styler.set_table_styles(
+        [
+            {
+                "selector": "table",
+                "props": [
+                    ("width", "100%"),
+                    ("border-collapse", "collapse"),
+                    ("background-color", palette["panel"]),
+                    ("color", palette["text"]),
+                    ("border-color", palette["border"]),
+                ],
+            },
+            {
+                "selector": "thead th",
+                "props": [
+                    ("background-color", palette["panel_strong"]),
+                    ("color", palette["text"]),
+                    ("border", f"1px solid {palette['border']}"),
+                    ("font-weight", "700"),
+                    ("padding", "0.45rem 0.55rem"),
+                    ("white-space", "nowrap"),
+                ],
+            },
+            {
+                "selector": "tbody th",
+                "props": [
+                    ("background-color", palette["panel"]),
+                    ("color", palette["text"]),
+                    ("border", f"1px solid {palette['border_soft']}"),
+                    ("padding", "0.42rem 0.55rem"),
+                ],
+            },
+            {
+                "selector": "tbody td",
+                "props": [
+                    ("background-color", palette["panel"]),
+                    ("color", palette["text"]),
+                    ("border", f"1px solid {palette['border_soft']}"),
+                    ("padding", "0.42rem 0.55rem"),
+                ],
+            },
+            {
+                "selector": "tbody tr:nth-child(even) td",
+                "props": [
+                    ("background-color", palette["card"]),
+                ],
+            },
+        ],
+        overwrite=False,
+    )
+
+
+def render_themed_dataframe(styler: object, theme_mode: str = "light") -> None:
+    """Render a pandas Styler as themed HTML instead of Streamlit's white dataframe grid."""
+    themed = apply_dataframe_cas_theme(styler, theme_mode)
+    if hasattr(themed, "to_html"):
+        st.markdown(
+            f"<div class='cas-themed-table-wrap'>{themed.to_html()}</div>",
+            unsafe_allow_html=True,
+        )
+    else:
+        stretch_dataframe(themed, hide_index=True)
 
 
 def render_overview_tab(
@@ -1187,6 +1370,7 @@ def render_overview_tab(
     _model_summary: dict[str, object],
     feature_map: pd.DataFrame,
     artifacts: DashboardArtifacts,
+    theme_mode: str = "light",
 ) -> None:
     """Render the core financial signal tab."""
     st.subheader("재무 핵심 신호")
@@ -1306,7 +1490,8 @@ def render_overview_tab(
             if peer_chart_slice.empty:
                 st.caption("차트로 표시할 수 있는 산업 백분위 값이 없습니다.")
             else:
-                stretch_altair_chart(percentile_chart)
+                themed_percentile_chart = apply_altair_cas_theme(percentile_chart, theme_mode)
+                stretch_altair_chart(themed_percentile_chart)
 
 
 def render_committee_view_tab(
@@ -2004,6 +2189,7 @@ def render_committee_view_tab(
 def render_drivers_tab(
     selected_row: pd.Series,
     artifacts: DashboardArtifacts,
+    theme_mode: str = "light",
 ) -> None:
     """Render the drivers tab."""
     st.subheader("주요 영향 요인")
@@ -2102,7 +2288,8 @@ def render_drivers_tab(
             if local_chart_view.empty:
                 st.caption("차트로 표시할 수 있는 기업별 SHAP 값이 없습니다.")
             else:
-                stretch_altair_chart(chart)
+                themed_chart = apply_altair_cas_theme(chart, theme_mode)
+                stretch_altair_chart(themed_chart)
             local_table = local_view.loc[
                 :,
                 [
@@ -2127,8 +2314,8 @@ def render_drivers_tab(
                 .set_properties(subset=["일반 해석 방향"], **{"text-align": "center"})
                 .hide(axis="index")
             )
-            stretch_dataframe(styled_local, hide_index=True)
-            return
+            styled_local = apply_dataframe_cas_theme(styled_local)
+            render_themed_dataframe(styled_local, theme_mode)
 
     st.info(
         "현재는 전체 모델 기준 주요 영향 요인을 보여주고 있습니다. "
@@ -2191,7 +2378,11 @@ def render_drivers_tab(
     if top_feature_chart.empty:
         st.caption("차트로 표시할 수 있는 전체 SHAP 기준값이 없습니다.")
     else:
-        stretch_altair_chart(chart)
+        themed_chart = apply_altair_cas_theme(
+            chart,
+            theme_mode,
+        )
+        stretch_altair_chart(themed_chart)
     global_table = top_features.loc[
         :,
         ["rank", "표시명", "feature_group", "일반 해석 방향", "mean_abs_shap", "실제값"],
@@ -2208,12 +2399,14 @@ def render_drivers_tab(
         .set_properties(subset=["일반 해석 방향"], **{"text-align": "center"})
         .hide(axis="index")
     )
-    stretch_dataframe(styled_global, hide_index=True)
+    styled_global = apply_dataframe_cas_theme(styled_global)
+    render_themed_dataframe(styled_global, theme_mode)
 
 
 def render_peer_tab(
     selected_row: pd.Series,
     artifacts: DashboardArtifacts,
+    theme_mode: str = "light",
 ) -> None:
     """Render the peer comparison tab."""
     st.subheader("시장/산업 비교")
@@ -2469,7 +2662,8 @@ def render_peer_tab(
         if compare_frame.empty:
             st.caption("차트로 표시할 수 있는 숫자형 비교 값이 없습니다.")
         else:
-            stretch_altair_chart(compare_chart)
+            themed_compare_chart = apply_altair_cas_theme(compare_chart, theme_mode)
+            stretch_altair_chart(themed_compare_chart)
     else:
         st.caption("선택한 변수의 단위가 섞여 있어 변수별 비교 카드로 나누어 표시합니다.")
         detail_cols = st.columns(2)
@@ -2522,7 +2716,8 @@ def render_peer_tab(
                 if row_chart_data.empty:
                     st.caption("이 변수는 차트로 표시할 수 있는 숫자형 비교 값이 없습니다.")
                 else:
-                    stretch_altair_chart(mini_chart)
+                    themed_mini_chart = apply_altair_cas_theme(mini_chart, theme_mode)
+                    stretch_altair_chart(themed_mini_chart)
 
     table["산업 대비 차이"] = table.apply(
         lambda row: format_delta_with_unit(
@@ -2636,7 +2831,8 @@ def render_peer_tab(
             if gap_frame.empty:
                 st.caption("차트로 표시할 수 있는 숫자형 차이 값이 없습니다.")
             else:
-                stretch_altair_chart(gap_chart)
+                themed_gap_chart = apply_altair_cas_theme(gap_chart, theme_mode)
+                stretch_altair_chart(themed_gap_chart)
         else:
             st.caption("단위가 섞여 있어 차이는 표에서 변수별로 읽는 것이 더 적절합니다.")
         st.caption("0보다 크면 선택 기업 값이 비교 기준보다 높고, 0보다 작으면 낮습니다.")
@@ -2645,7 +2841,8 @@ def render_peer_tab(
         if percentile_frame.empty:
             st.caption("차트로 표시할 수 있는 백분위 값이 없습니다.")
         else:
-            stretch_altair_chart(percentile_chart)
+            themed_percentile_chart = apply_altair_cas_theme(percentile_chart, theme_mode)
+            stretch_altair_chart(themed_percentile_chart)
         st.caption("50백분위 점선을 기준으로, 오른쪽일수록 상대적으로 높은 수준입니다.")
 
     table_view = table.loc[
@@ -2667,10 +2864,8 @@ def render_peer_tab(
         .set_properties(subset=["일반 해석 방향"], **{"text-align": "center"})
         .hide(axis="index")
     )
-    stretch_dataframe(
-        styled_table,
-        hide_index=True,
-    )
+    styled_table = apply_dataframe_cas_theme(styled_table)
+    render_themed_dataframe(styled_table, theme_mode)
     st.caption(
         "`일반 해석 방향`은 재무 일반론 기준의 안내이며, 실제 평가는 산업 특성과 기업 상황에 따라 달라질 수 있습니다."
     )
@@ -2679,6 +2874,7 @@ def render_peer_tab(
 def render_industry_tab(
     selected_row: pd.Series,
     artifacts: DashboardArtifacts,
+    theme_mode: str = "light",
 ) -> None:
     """Render the industry aggregate tab."""
     default_share_label = "기본 기준선(0.5) 적용 시 고위험 판정 비중"
@@ -2812,7 +3008,8 @@ def render_industry_tab(
             )
             .properties(height=320)
         )
-        stretch_altair_chart(trend_chart)
+        themed_trend_chart = apply_altair_cas_theme(trend_chart, theme_mode)
+        stretch_altair_chart(themed_trend_chart)
         year_summary_view = year_summary.copy()
         for column in [
             "positive_rate",
@@ -2838,24 +3035,24 @@ def render_industry_tab(
         )
         year_summary_view["시장"] = year_summary_view["시장"].map(to_market_label)
         year_summary_view["산업"] = year_summary_view["산업"].map(to_industry_label)
-        stretch_dataframe(
-            year_summary_view.loc[
-                :,
-                [
-                    "시장",
-                    "산업",
-                    "회계연도",
-                    "기업 수",
-                    "투기등급 기업 수",
-                    "투기등급 비율",
-                    "산업 평균 위험확률",
-                    "중앙 위험확률",
-                    default_share_label,
-                    tuned_share_label,
-                ],
+        industry_year_table = year_summary_view.loc[
+            :,
+            [
+                "시장",
+                "산업",
+                "회계연도",
+                "기업 수",
+                "투기등급 기업 수",
+                "투기등급 비율",
+                "산업 평균 위험확률",
+                "중앙 위험확률",
+                default_share_label,
+                tuned_share_label,
             ],
-            hide_index=True,
-        )
+        ].copy()
+
+        styled_year_summary = industry_year_table.style.hide(axis="index")
+        render_themed_dataframe(styled_year_summary, theme_mode)
 
     if shap_summary is not None and not shap_summary.empty:
         st.subheader("산업 기준 주요 설명 변수")
@@ -2884,7 +3081,8 @@ def render_industry_tab(
         if top_shap.empty:
             st.caption("차트로 표시할 수 있는 산업 SHAP 기준값이 없습니다.")
         else:
-            stretch_altair_chart(chart)
+            themed_chart = apply_altair_cas_theme(chart, theme_mode)
+            stretch_altair_chart(themed_chart)
         top_shap_view = top_shap.loc[
             :,
             ["rank_within_group", "표시명", "일반 해석 방향", "mean_abs_shap", "mean_signed_shap"],
@@ -2901,7 +3099,8 @@ def render_industry_tab(
             .set_properties(subset=["일반 해석 방향"], **{"text-align": "center"})
             .hide(axis="index")
         )
-        stretch_dataframe(styled_industry, hide_index=True)
+        styled_industry = apply_dataframe_cas_theme(styled_industry)
+        render_themed_dataframe(styled_industry, theme_mode)
 
 
 def render_footer(artifacts: DashboardArtifacts, *, developer_mode: bool) -> None:
@@ -3032,12 +3231,27 @@ def main() -> None:
     """Run the credit risk Streamlit dashboard MVP."""
     load_dotenv()
     st.set_page_config(page_title="2026 상장기업 신용도 예측·분석 서비스", layout="wide")
+
+    theme_mode_label = st.sidebar.radio(
+        "화면 테마",
+        ["라이트", "다크"],
+        index=0,
+        horizontal=True,
+        key="cas_dashboard_theme_mode",
+    )
+    theme_mode = "dark" if theme_mode_label == "다크" else "light"
+
+    st.sidebar.caption(
+        "화면 색상은 이 설정을 기준으로 적용됩니다. 우측 Streamlit 기본 테마 메뉴와 다르게 보일 수 있습니다."
+    )
+
+    inject_dashboard_theme(theme_mode=theme_mode)
+
     st.title("2026 상장기업 신용도 예측·분석 서비스")
     st.caption(
         "궁금한 상장기업을 선택하면 재무 데이터, 모델 판단, 뉴스·공시 근거를 함께 살펴보고 "
         "현재 신용도를 어떻게 해석할 수 있는지 쉽게 정리해 드립니다."
     )
-    inject_dashboard_theme()
 
     preset_info = ARTIFACT_PRESETS["team_43"]
     artifact_dir_input = os.environ.get("CAS_DASHBOARD_ARTIFACT_DIR") or str(
@@ -3131,20 +3345,41 @@ def main() -> None:
         )
     with overview_tab:
         render_overview_tab(
-            selected_row, prediction_row, artifacts.model_summary, feature_map, artifacts
+            selected_row,
+            prediction_row,
+            artifacts.model_summary,
+            feature_map,
+            artifacts,
+            theme_mode=theme_mode,
         )
+
     with drivers_tab:
-        render_drivers_tab(selected_row, artifacts)
+        render_drivers_tab(
+            selected_row,
+            artifacts,
+            theme_mode=theme_mode,
+        )
+
     with peers_tab:
-        render_peer_tab(selected_row, artifacts)
+        render_peer_tab(
+            selected_row,
+            artifacts,
+            theme_mode=theme_mode,
+        )
+
     with industry_tab:
-        render_industry_tab(selected_row, artifacts)
+        render_industry_tab(
+            selected_row,
+            artifacts,
+            theme_mode=theme_mode,
+        )
     with scenario_tab:
         render_scenario_tab(
             selected_row,
             artifacts,
             feature_map=feature_map,
             formatters=_dashboard_scenario_formatters(),
+            theme_mode=theme_mode,
         )
 
     render_footer(artifacts, developer_mode=developer_mode)
