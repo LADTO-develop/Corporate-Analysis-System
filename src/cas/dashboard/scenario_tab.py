@@ -18,7 +18,7 @@ from cas.dashboard.cards import (
 from cas.dashboard.chart_data import finite_chart_frame
 from cas.dashboard.data_loader import DashboardArtifacts
 from cas.dashboard.settings import COLOR_COMPANY, COLOR_MUTED, COLOR_NEUTRAL, COLOR_RISK
-from cas.dashboard.streamlit_compat import stretch_altair_chart, stretch_dataframe
+from cas.dashboard.streamlit_compat import stretch_altair_chart
 
 DEFAULT_SCENARIO_FEATURES = (
     "spec_spread",
@@ -107,6 +107,7 @@ def build_scenario_frame(
     )
     return scenario_frame
 
+
 def apply_altair_cas_theme(chart: alt.Chart, theme_mode: str = "light") -> alt.Chart:
     """Apply CAS-controlled light/dark styling to Altair charts."""
     if theme_mode == "dark":
@@ -158,6 +159,7 @@ def apply_altair_cas_theme(chart: alt.Chart, theme_mode: str = "light") -> alt.C
         ),
     )
 
+
 def apply_dataframe_cas_theme(styler: object) -> object:
     """Apply CAS CSS variables to pandas Styler tables."""
     if not hasattr(styler, "set_table_styles"):
@@ -192,6 +194,7 @@ def apply_dataframe_cas_theme(styler: object) -> object:
         ],
         overwrite=False,
     )
+
 
 def _dashboard_table_palette(theme_mode: str = "light") -> dict[str, str]:
     """Return concrete table colors because pandas Styler does not reliably inherit CSS vars."""
@@ -277,6 +280,7 @@ def render_themed_dataframe(styler: object, theme_mode: str = "light") -> None:
         )
     else:
         render_themed_dataframe(styled_scenario, theme_mode)
+
 
 def render_scenario_tab(
     selected_row: pd.Series,

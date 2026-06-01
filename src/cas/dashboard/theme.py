@@ -105,7 +105,7 @@ def inject_dashboard_theme(theme_mode: str = "light") -> None:
     translucent surfaces, which makes them follow both Streamlit light and dark
     themes automatically.
     """
-    css ="""
+    css = """
         <style>
         :root,
         .stApp {
@@ -2362,7 +2362,6 @@ def inject_dashboard_theme(theme_mode: str = "light") -> None:
 
         </style>
         """
-    
+
     css = css.replace("__CAS_THEME_VARS__", cas_theme_vars)
     st.markdown(css, unsafe_allow_html=True)
-    

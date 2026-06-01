@@ -101,7 +101,7 @@
     "capital_impairment_ratio": -11.678040337245752,
     "net_margin": 0.0298102534716325,
     "gross_profit": 52160487.0,
-    "interest_coverage_ratio": 5.0021297642421425,
+    "interest_coverage_ratio": 5.002129764242143,
     "pretax_roa": 0.0338865031352024,
     "operating_roa": 0.0380603359151633,
     "pretax_roe": 0.0660869533668747,
@@ -139,7 +139,7 @@
     "depreciation_industry_year_pct": 0.5048543689320388
   },
   "threshold_default": 0.5,
-  "threshold_tuned": 0.3,
+  "threshold_tuned": 0.335,
   "threshold_selection_rule": "valid_max_precision_with_recall_ge_0.85",
   "threshold_recall_floor": 0.85,
   "probability_output": "calibrated_probability",
@@ -147,26 +147,26 @@
     "method": "platt_sigmoid",
     "fit_split": "valid",
     "input": "xgboost_probability_logit",
-    "coef": 0.810672977240778,
-    "intercept": -0.582550873937488,
+    "coef": 1.0468195068720043,
+    "intercept": -0.9093927834724478,
     "clip_epsilon": 1e-06,
     "probability_output": "calibrated_probability",
     "valid": {
-      "brier_raw": 0.08886972776253108,
-      "brier_calibrated": 0.08475662639892852,
-      "logloss_raw": 0.2928492425920763,
-      "logloss_calibrated": 0.2744176367715109
+      "brier_raw": 0.09745254741746529,
+      "brier_calibrated": 0.08578110604762593,
+      "logloss_raw": 0.3157927309914612,
+      "logloss_calibrated": 0.27849691511334296
     },
     "test": {
-      "brier_raw": 0.0817304172968212,
-      "brier_calibrated": 0.07583217805375887,
-      "logloss_raw": 0.2659913031272305,
-      "logloss_calibrated": 0.24695335109054414
+      "brier_raw": 0.09103218660636517,
+      "brier_calibrated": 0.07847278235994243,
+      "logloss_raw": 0.2931912736419111,
+      "logloss_calibrated": 0.25428206452945157
     },
     "note": "XGBoost raw probabilities are transformed with a validation-fitted Platt sigmoid before being shown as prob_speculative."
   },
-  "best_iteration": 341,
-  "best_score": 0.8451901143313711,
+  "best_iteration": 126,
+  "best_score": 0.8444131605978843,
   "saved_files": [
     "xgboost_model.json",
     "model_artifact_metadata.json"

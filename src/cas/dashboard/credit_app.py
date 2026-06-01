@@ -1129,6 +1129,7 @@ def get_feature_unit(feature: str, feature_map: pd.DataFrame) -> str:
         return ""
     return str(matched.iloc[0])
 
+
 def apply_altair_cas_theme(chart: alt.Chart, theme_mode: str = "light") -> alt.Chart:
     """Apply CAS-controlled light/dark styling to Altair charts."""
     if theme_mode == "dark":
@@ -1204,6 +1205,7 @@ def apply_altair_cas_theme(chart: alt.Chart, theme_mode: str = "light") -> alt.C
         ),
     )
 
+
 def apply_dataframe_cas_theme(styler: object) -> object:
     """Apply CAS CSS variable based styles to pandas Styler tables."""
     if not hasattr(styler, "set_table_styles"):
@@ -1246,6 +1248,7 @@ def apply_dataframe_cas_theme(styler: object) -> object:
         overwrite=False,
     )
 
+
 def apply_dataframe_cas_theme(styler: object) -> object:
     """Apply CAS CSS variables to pandas Styler tables."""
     if not hasattr(styler, "set_table_styles"):
@@ -1280,6 +1283,7 @@ def apply_dataframe_cas_theme(styler: object) -> object:
         ],
         overwrite=False,
     )
+
 
 def get_feature_direction_label(feature: str) -> str:
     """Return a user-friendly interpretation direction for a feature."""
@@ -1334,6 +1338,7 @@ def build_probability_chart(
         .properties(height=260)
     )
     return apply_altair_cas_theme(cast(alt.Chart, chart), theme_mode)
+
 
 def _dashboard_table_palette(theme_mode: str = "light") -> dict[str, str]:
     """Return concrete table colors because pandas Styler does not reliably inherit CSS vars."""
@@ -1428,6 +1433,7 @@ def render_themed_dataframe(styler: object, theme_mode: str = "light") -> None:
         )
     else:
         stretch_dataframe(themed, hide_index=True)
+
 
 def render_overview_tab(
     selected_row: pd.Series,
@@ -3315,6 +3321,7 @@ def render_agent_model_settings() -> None:
     if manager_sel:
         os.environ["MANAGER_AGENT_MODEL"] = manager_sel
 
+
 def main() -> None:
     """Run the credit risk Streamlit dashboard MVP."""
     load_dotenv()
@@ -3330,7 +3337,7 @@ def main() -> None:
     theme_mode = "dark" if theme_mode_label == "다크" else "light"
 
     st.sidebar.caption(
-    "화면 색상은 이 설정을 기준으로 적용됩니다. 우측 Streamlit 기본 테마 메뉴와 다르게 보일 수 있습니다."
+        "화면 색상은 이 설정을 기준으로 적용됩니다. 우측 Streamlit 기본 테마 메뉴와 다르게 보일 수 있습니다."
     )
 
     inject_dashboard_theme(theme_mode=theme_mode)
@@ -3439,7 +3446,7 @@ def main() -> None:
             feature_map,
             artifacts,
             theme_mode=theme_mode,
-    )
+        )
 
     with drivers_tab:
         render_drivers_tab(
@@ -3453,14 +3460,14 @@ def main() -> None:
             selected_row,
             artifacts,
             theme_mode=theme_mode,
-    )
+        )
 
     with industry_tab:
         render_industry_tab(
             selected_row,
             artifacts,
             theme_mode=theme_mode,
-    )
+        )
     with scenario_tab:
         render_scenario_tab(
             selected_row,
