@@ -318,12 +318,6 @@ def inject_dashboard_theme(theme_mode: str = "light") -> None:
           color: var(--cas-text) !important;
         }
 
-        div[data-baseweb="popover"] *,
-        div[data-baseweb="menu"] *,
-        ul[role="listbox"] * {
-          color: var(--cas-text) !important;
-        }
-
         /* Dataframe/table readability */
         div[data-testid="stDataFrame"],
         div[data-testid="stTable"] {
@@ -2063,6 +2057,130 @@ def inject_dashboard_theme(theme_mode: str = "light") -> None:
         table tbody td[style*="background-color"],
         .dataframe tbody td[style*="background-color"] {
           color: var(--cas-text) !important;
+        }
+
+        /* ------------------------------------------------------------------
+        CAS dark-mode final hard fixes
+        ------------------------------------------------------------------ */
+
+        /* 1) Selectbox dropdown: prevent transparent/white popover */
+        div[data-baseweb="popover"],
+        div[data-baseweb="popover"] > div,
+        div[data-baseweb="menu"],
+        div[data-baseweb="menu"] > div,
+        ul[role="listbox"],
+        div[role="listbox"] {
+          background: var(--cas-panel-strong) !important;
+          background-color: var(--cas-panel-strong) !important;
+          border: 1px solid var(--cas-border) !important;
+          color: var(--cas-text) !important;
+          box-shadow: 0 12px 32px rgba(0, 0, 0, 0.42) !important;
+        }
+
+        div[data-baseweb="popover"] *,
+        div[data-baseweb="menu"] *,
+        ul[role="listbox"] *,
+        div[role="listbox"] * {
+          color: var(--cas-text) !important;
+        }
+
+        li[role="option"],
+        div[role="option"] {
+          background: var(--cas-panel-strong) !important;
+          background-color: var(--cas-panel-strong) !important;
+          color: var(--cas-text) !important;
+        }
+
+        li[role="option"]:hover,
+        div[role="option"]:hover,
+        li[aria-selected="true"],
+        div[aria-selected="true"] {
+          background: var(--cas-accent-soft) !important;
+          background-color: var(--cas-accent-soft) !important;
+          color: var(--cas-accent-text-strong) !important;
+        }
+
+        /* 2) Inline code / status chips that were rendered as white blocks */
+        code,
+        pre,
+        kbd,
+        samp,
+        div[data-testid="stMarkdownContainer"] code {
+          background: var(--cas-panel-strong) !important;
+          color: var(--cas-accent-text-strong) !important;
+          border: 1px solid var(--cas-border) !important;
+          border-radius: 6px !important;
+          padding: 0.1rem 0.32rem !important;
+        }
+
+        /* 3) Expander header: prevent white top bar */
+        details[data-testid="stExpander"],
+        div[data-testid="stExpander"] {
+          background: var(--cas-panel) !important;
+          background-color: var(--cas-panel) !important;
+          border: 1px solid var(--cas-border) !important;
+          color: var(--cas-text) !important;
+        }
+
+        details[data-testid="stExpander"] summary,
+        div[data-testid="stExpander"] summary,
+        div[data-testid="stExpander"] > div:first-child {
+          background: var(--cas-panel-strong) !important;
+          background-color: var(--cas-panel-strong) !important;
+          color: var(--cas-text) !important;
+          border-color: var(--cas-border) !important;
+        }
+
+        div[data-testid="stExpander"] * {
+          color: var(--cas-text) !important;
+        }
+
+        /* 4) HTML table wrapper used for themed pandas Styler output */
+        .cas-themed-table-wrap {
+          width: 100%;
+          overflow-x: auto;
+          border: 1px solid var(--cas-border);
+          border-radius: 8px;
+          background: var(--cas-panel);
+          margin-top: 0.45rem;
+          margin-bottom: 0.8rem;
+        }
+
+        .cas-themed-table-wrap table {
+          width: 100%;
+          border-collapse: collapse;
+          background: var(--cas-panel) !important;
+          color: var(--cas-text) !important;
+          font-size: 0.88rem;
+        }
+
+        .cas-themed-table-wrap thead th {
+          background: var(--cas-panel-strong) !important;
+          color: var(--cas-text) !important;
+          border: 1px solid var(--cas-border) !important;
+          font-weight: 700 !important;
+          padding: 0.45rem 0.55rem !important;
+          white-space: nowrap;
+        }
+
+        .cas-themed-table-wrap tbody td,
+        .cas-themed-table-wrap tbody th {
+          background: var(--cas-panel) !important;
+          color: var(--cas-text) !important;
+          border: 1px solid var(--cas-border-soft) !important;
+          padding: 0.42rem 0.55rem !important;
+        }
+
+        .cas-themed-table-wrap tbody tr:nth-child(even) td {
+          background: var(--cas-card-bg) !important;
+        }
+
+        /* 5) Remove excessive border-like boxes from Altair legends/text areas where possible */
+        .vega-embed,
+        .vega-embed details,
+        .vega-embed summary {
+          background: transparent !important;
+          border-color: transparent !important;
         }
 
         </style>

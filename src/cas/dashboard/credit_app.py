@@ -1134,7 +1134,12 @@ def apply_altair_cas_theme(chart: alt.Chart, theme_mode: str = "light") -> alt.C
     if theme_mode == "dark":
         return cast(
             alt.Chart,
-            chart.properties(background="#080b12")
+            chart.properties(
+                background="#080b12",
+            )
+            .configure(
+                background="#080b12",
+            )
             .configure_view(
                 strokeOpacity=0,
                 fill="#080b12",
@@ -1146,9 +1151,16 @@ def apply_altair_cas_theme(chart: alt.Chart, theme_mode: str = "light") -> alt.C
                 domainColor="rgba(250, 204, 21, 0.28)",
                 tickColor="rgba(250, 204, 21, 0.28)",
             )
+            .configure_header(
+                labelColor="#f8fafc",
+                titleColor="#cbd5e1",
+            )
             .configure_legend(
                 labelColor="#f8fafc",
                 titleColor="#cbd5e1",
+                fillColor="transparent",
+                strokeColor="transparent",
+                padding=0,
             )
             .configure_title(
                 color="#f8fafc",
@@ -1158,7 +1170,12 @@ def apply_altair_cas_theme(chart: alt.Chart, theme_mode: str = "light") -> alt.C
 
     return cast(
         alt.Chart,
-        chart.properties(background="#ffffff")
+        chart.properties(
+            background="#ffffff",
+        )
+        .configure(
+            background="#ffffff",
+        )
         .configure_view(
             strokeOpacity=0,
             fill="#ffffff",
@@ -1170,9 +1187,16 @@ def apply_altair_cas_theme(chart: alt.Chart, theme_mode: str = "light") -> alt.C
             domainColor="rgba(148, 163, 184, 0.34)",
             tickColor="rgba(148, 163, 184, 0.34)",
         )
+        .configure_header(
+            labelColor="#334155",
+            titleColor="#64748b",
+        )
         .configure_legend(
             labelColor="#334155",
             titleColor="#64748b",
+            fillColor="transparent",
+            strokeColor="transparent",
+            padding=0,
         )
         .configure_title(
             color="#0f172a",
@@ -1311,6 +1335,99 @@ def build_probability_chart(
     )
     return apply_altair_cas_theme(cast(alt.Chart, chart), theme_mode)
 
+def _dashboard_table_palette(theme_mode: str = "light") -> dict[str, str]:
+    """Return concrete table colors because pandas Styler does not reliably inherit CSS vars."""
+    if str(theme_mode).lower() == "dark":
+        return {
+            "panel": "#111827",
+            "panel_strong": "#172033",
+            "card": "#0f172a",
+            "text": "#f8fafc",
+            "muted": "#cbd5e1",
+            "border": "rgba(250, 204, 21, 0.28)",
+            "border_soft": "rgba(250, 204, 21, 0.16)",
+        }
+
+    return {
+        "panel": "#ffffff",
+        "panel_strong": "#f8fafc",
+        "card": "#ffffff",
+        "text": "#0f172a",
+        "muted": "#475569",
+        "border": "rgba(148, 163, 184, 0.34)",
+        "border_soft": "rgba(148, 163, 184, 0.22)",
+    }
+
+
+def apply_dataframe_cas_theme(styler: object, theme_mode: str = "light") -> object:
+    """Apply concrete CAS light/dark colors to pandas Styler tables."""
+    if not hasattr(styler, "set_table_styles"):
+        return styler
+
+    palette = _dashboard_table_palette(theme_mode)
+
+    return styler.set_table_styles(
+        [
+            {
+                "selector": "table",
+                "props": [
+                    ("width", "100%"),
+                    ("border-collapse", "collapse"),
+                    ("background-color", palette["panel"]),
+                    ("color", palette["text"]),
+                    ("border-color", palette["border"]),
+                ],
+            },
+            {
+                "selector": "thead th",
+                "props": [
+                    ("background-color", palette["panel_strong"]),
+                    ("color", palette["text"]),
+                    ("border", f"1px solid {palette['border']}"),
+                    ("font-weight", "700"),
+                    ("padding", "0.45rem 0.55rem"),
+                    ("white-space", "nowrap"),
+                ],
+            },
+            {
+                "selector": "tbody th",
+                "props": [
+                    ("background-color", palette["panel"]),
+                    ("color", palette["text"]),
+                    ("border", f"1px solid {palette['border_soft']}"),
+                    ("padding", "0.42rem 0.55rem"),
+                ],
+            },
+            {
+                "selector": "tbody td",
+                "props": [
+                    ("background-color", palette["panel"]),
+                    ("color", palette["text"]),
+                    ("border", f"1px solid {palette['border_soft']}"),
+                    ("padding", "0.42rem 0.55rem"),
+                ],
+            },
+            {
+                "selector": "tbody tr:nth-child(even) td",
+                "props": [
+                    ("background-color", palette["card"]),
+                ],
+            },
+        ],
+        overwrite=False,
+    )
+
+
+def render_themed_dataframe(styler: object, theme_mode: str = "light") -> None:
+    """Render a pandas Styler as themed HTML instead of Streamlit's white dataframe grid."""
+    themed = apply_dataframe_cas_theme(styler, theme_mode)
+    if hasattr(themed, "to_html"):
+        st.markdown(
+            f"<div class='cas-themed-table-wrap'>{themed.to_html()}</div>",
+            unsafe_allow_html=True,
+        )
+    else:
+        stretch_dataframe(themed, hide_index=True)
 
 def render_overview_tab(
     selected_row: pd.Series,
@@ -2239,6 +2356,10 @@ def render_drivers_tab(
             if local_chart_view.empty:
                 st.caption("차트로 표시할 수 있는 기업별 SHAP 값이 없습니다.")
             else:
+                chart = apply_altair_cas_theme(
+                    cast(alt.Chart, chart),
+                    theme_mode,
+                )
                 stretch_altair_chart(chart)
             local_table = local_view.loc[
                 :,
@@ -2265,7 +2386,7 @@ def render_drivers_tab(
                 .hide(axis="index")
             )
             styled_local = apply_dataframe_cas_theme(styled_local)
-            stretch_dataframe(styled_local, hide_index=True)
+            render_themed_dataframe(styled_local, theme_mode)
 
     st.info(
         "현재는 전체 모델 기준 주요 영향 요인을 보여주고 있습니다. "
@@ -2350,7 +2471,7 @@ def render_drivers_tab(
         .hide(axis="index")
     )
     styled_global = apply_dataframe_cas_theme(styled_global)
-    stretch_dataframe(styled_global, hide_index=True)
+    render_themed_dataframe(styled_global, theme_mode)
 
 
 def render_peer_tab(
@@ -2827,10 +2948,7 @@ def render_peer_tab(
         .hide(axis="index")
     )
     styled_table = apply_dataframe_cas_theme(styled_table)
-    stretch_dataframe(
-        styled_table,
-        hide_index=True,
-    )
+    render_themed_dataframe(styled_table, theme_mode)
     st.caption(
         "`일반 해석 방향`은 재무 일반론 기준의 안내이며, 실제 평가는 산업 특성과 기업 상황에 따라 달라질 수 있습니다."
     )
@@ -3003,24 +3121,24 @@ def render_industry_tab(
         )
         year_summary_view["시장"] = year_summary_view["시장"].map(to_market_label)
         year_summary_view["산업"] = year_summary_view["산업"].map(to_industry_label)
-        stretch_dataframe(
-            year_summary_view.loc[
-                :,
-                [
-                    "시장",
-                    "산업",
-                    "회계연도",
-                    "기업 수",
-                    "투기등급 기업 수",
-                    "투기등급 비율",
-                    "산업 평균 위험확률",
-                    "중앙 위험확률",
-                    default_share_label,
-                    tuned_share_label,
-                ],
+        industry_year_table = year_summary_view.loc[
+            :,
+            [
+                "시장",
+                "산업",
+                "회계연도",
+                "기업 수",
+                "투기등급 기업 수",
+                "투기등급 비율",
+                "산업 평균 위험확률",
+                "중앙 위험확률",
+                default_share_label,
+                tuned_share_label,
             ],
-            hide_index=True,
-        )
+        ].copy()
+
+        styled_year_summary = industry_year_table.style.hide(axis="index")
+        render_themed_dataframe(styled_year_summary, theme_mode)
 
     if shap_summary is not None and not shap_summary.empty:
         st.subheader("산업 기준 주요 설명 변수")
@@ -3071,7 +3189,7 @@ def render_industry_tab(
             .hide(axis="index")
         )
         styled_industry = apply_dataframe_cas_theme(styled_industry)
-        stretch_dataframe(styled_industry, hide_index=True)
+        render_themed_dataframe(styled_industry, theme_mode)
 
 
 def render_footer(artifacts: DashboardArtifacts, *, developer_mode: bool) -> None:
